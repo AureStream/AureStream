@@ -1,35 +1,57 @@
 //! 系统级代理：连接成功后写入 OS 代理设置，断开或退出时尽量关闭。
-//! macOS：对 `networksetup -listallnetworkservices` 列出的已启用服务调用 `set*proxy`。
+//! macOS：一律通过 `osascript` + `with administrator privileges` 以管理员身份批量执行
+//!       `networksetup`（新系统修改系统代理需要 root；连接/断开各至多弹一次密码框）。
 //! Windows：写注册表 HKCU\...\Internet Settings 并通知系统刷新。
 
 use crate::commands::ProxyConfig;
+#[cfg(target_os = "macos")]
+use log::info;
 #[cfg(target_os = "macos")]
 use std::io::{BufRead, BufReader};
 #[cfg(target_os = "macos")]
 use std::process::{Command, Stdio};
 
 #[cfg(target_os = "macos")]
-fn run_networksetup(args: &[&str]) -> Result<(), String> {
-    let out = Command::new("/usr/sbin/networksetup")
-        .args(args)
+fn posix_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\"'\"'"))
+}
+
+#[cfg(target_os = "macos")]
+fn networksetup_cmdline(args: &[impl AsRef<str>]) -> String {
+    let mut line = String::from("/usr/sbin/networksetup");
+    for a in args {
+        line.push(' ');
+        line.push_str(&posix_single_quote(a.as_ref()));
+    }
+    line
+}
+
+#[cfg(target_os = "macos")]
+fn run_shell_chain_as_admin(chain: &str) -> Result<(), String> {
+    // `do shell script` 本身经 /bin/sh -c 执行；直接传入整段命令，避免 quoted form 嵌套引号边缘情况。
+    let escaped = chain.replace('\\', "\\\\").replace('"', "\\\"");
+    let applescript = format!("do shell script \"{}\" with administrator privileges", escaped);
+    let out = Command::new("/usr/bin/osascript")
+        .args(["-e", &applescript])
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .output()
-        .map_err(|e| format!("执行 networksetup 失败: {}", e))?;
+        .map_err(|e| format!("osascript 失败: {}", e))?;
     if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        return Err(format!(
-            "networksetup {} 失败: {}",
-            args.join(" "),
-            if stderr.trim().is_empty() {
-                stdout.trim().to_string()
-            } else {
-                stderr.trim().to_string()
-            }
-        ));
+        let msg = String::from_utf8_lossy(&out.stderr);
+        let lower = msg.to_lowercase();
+        if lower.contains("user canceled") || msg.contains("-128") {
+            return Err("已取消管理员授权，无法写入系统代理".to_string());
+        }
+        return Err(format!("提升权限执行失败: {}", msg.trim()));
     }
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn run_macos_networksetup_chain(chain: &str) -> Result<(), String> {
+    info!("[system-proxy] 将使用管理员权限修改系统代理（即将弹出密码框）");
+    run_shell_chain_as_admin(chain)
 }
 
 #[cfg(target_os = "macos")]
@@ -78,33 +100,37 @@ fn apply_macos(config: &ProxyConfig) -> Result<(), String> {
     let port = config.mixed_port.to_string();
     let bypass_domains = merge_bypass_with_loopback(parse_bypass_domains(&config.bypass_domains));
     let services = macos_list_network_services()?;
+    let mut cmds: Vec<String> = Vec::new();
     for svc in &services {
-        run_networksetup(&["-setwebproxy", svc, &host, &port])?;
-        run_networksetup(&["-setsecurewebproxy", svc, &host, &port])?;
-        run_networksetup(&["-setsocksfirewallproxy", svc, &host, &port])?;
-        let mut args: Vec<&str> = Vec::with_capacity(2 + bypass_domains.len());
-        args.push("-setproxybypassdomains");
-        args.push(svc.as_str());
-        for domain in &bypass_domains {
-            args.push(domain.as_str());
-        }
-        run_networksetup(&args)?;
-        run_networksetup(&["-setwebproxystate", svc, "on"])?;
-        run_networksetup(&["-setsecurewebproxystate", svc, "on"])?;
-        run_networksetup(&["-setsocksfirewallproxystate", svc, "on"])?;
+        cmds.push(networksetup_cmdline(&["-setwebproxy", svc, &host, &port]));
+        cmds.push(networksetup_cmdline(&["-setsecurewebproxy", svc, &host, &port]));
+        cmds.push(networksetup_cmdline(&["-setsocksfirewallproxy", svc, &host, &port]));
+
+        let mut bypass_line: Vec<String> =
+            vec!["-setproxybypassdomains".to_string(), svc.clone()];
+        bypass_line.extend(bypass_domains.iter().cloned());
+        let bypass_refs: Vec<&str> = bypass_line.iter().map(|s| s.as_str()).collect();
+        cmds.push(networksetup_cmdline(&bypass_refs));
+
+        cmds.push(networksetup_cmdline(&["-setwebproxystate", svc, "on"]));
+        cmds.push(networksetup_cmdline(&["-setsecurewebproxystate", svc, "on"]));
+        cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "on"]));
     }
-    Ok(())
+    let chain = cmds.join(" && ");
+    run_macos_networksetup_chain(&chain)
 }
 
 #[cfg(target_os = "macos")]
 fn clear_macos() -> Result<(), String> {
     let services = macos_list_network_services()?;
+    let mut cmds: Vec<String> = Vec::new();
     for svc in &services {
-        let _ = run_networksetup(&["-setwebproxystate", svc, "off"]);
-        let _ = run_networksetup(&["-setsecurewebproxystate", svc, "off"]);
-        let _ = run_networksetup(&["-setsocksfirewallproxystate", svc, "off"]);
+        cmds.push(networksetup_cmdline(&["-setwebproxystate", svc, "off"]));
+        cmds.push(networksetup_cmdline(&["-setsecurewebproxystate", svc, "off"]));
+        cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "off"]));
     }
-    Ok(())
+    let chain = cmds.join(" ; ");
+    run_macos_networksetup_chain(&chain)
 }
 
 /// 将 Mihomo 监听地址转换为写入系统代理的主机名（本机回环统一为 127.0.0.1）。

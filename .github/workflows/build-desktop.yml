@@ -1,0 +1,148 @@
+# 在 GitHub Actions 上构建各桌面平台安装包（与 Makefile 逻辑对齐：先拉 mihomo，再 npm run tauri build）。
+# 产物：Linux deb/rpm/AppImage、Windows NSIS (-setup.exe)、macOS dmg。
+#
+# 说明：
+# - 未调用 Makefile，便于各 Runner 原生环境；与本地 `make build-linux` 等等价。
+# - 触发：push（各分支提交跑流水线测试）、release published（打开发布并上传产物）、workflow_dispatch。
+# - macOS：aarch64（macos-latest）+ Intel x86_64（macos-15-intel；勿再用已退役的 macos-13）。
+# - 官方 JS actions 使用 Node 24 运行时（见 GitHub Actions Node 20 弃用说明）。
+
+name: Build desktop bundles
+
+on:
+  push:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-24.04
+            rust_target: x86_64-unknown-linux-gnu
+          - name: windows-x64
+            os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+          - name: macos-aarch64
+            os: macos-latest
+            rust_target: aarch64-apple-darwin
+          - name: macos-x64
+            os: macos-15-intel
+            rust_target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Linux dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl wget file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            rpm \
+            libfuse2
+
+      - name: Install NSIS (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install nsis -y
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          cache-on-failure: true
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Download mihomo (host triple)
+        shell: bash
+        run: npm run mihomo:download
+
+      - name: Build Tauri bundle
+        shell: bash
+        env:
+          RUNNER_OS_NAME: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS_NAME" == "macOS" ]]; then
+            npm run tauri build -- --ci --target ${{ matrix.rust_target }} --bundles dmg
+          else
+            npm run tauri build -- --ci --target ${{ matrix.rust_target }}
+          fi
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: AureStream-${{ matrix.name }}
+          path: ${{ runner.os == 'macOS' && format('src-tauri/target/{0}/release/bundle/dmg', matrix.rust_target) || format('src-tauri/target/{0}/release/bundle/', matrix.rust_target) }}
+          if-no-files-found: error
+
+  upload-release:
+    name: Upload assets to GitHub Release
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all bundle artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          pattern: AureStream-*
+          merge-multiple: false
+
+      - name: Collect installers for upload
+        shell: bash
+        run: |
+          mkdir -p upload
+          find release-assets -type f \( \
+            -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
+            -name '*.exe' -o -name '*.dmg' \
+          \) -print0 | while IFS= read -r -d '' f; do
+            # 避免不同子目录同名文件互相覆盖：带上平台目录前缀
+            rel="${f#release-assets/}"
+            safe="${rel//\//__}"
+            cp "$f" "upload/$safe"
+          done
+          ls -la upload/
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upload/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

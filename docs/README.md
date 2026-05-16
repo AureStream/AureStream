@@ -2,6 +2,8 @@
 
 本目录存放设计与实现说明；用户向的快速上手见仓库根目录 [README.md](../README.md)。
 
+**Git**：远程 `git@github.com:BadKid90s/AureStream.git`，默认分支 **`main`**（与 `origin/HEAD` 一致；合并/发 PR 请以 `main` 为基线）。
+
 ## 总览与规格
 
 | 文档 | 说明 |
