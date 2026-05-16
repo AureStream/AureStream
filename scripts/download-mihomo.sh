@@ -3,7 +3,9 @@ set -euo pipefail
 
 MIHOMO_VERSION="v1.19.24"
 REPO="MetaCubeX/mihomo"
-BINARIES_DIR="$(cd "$(dirname "$0")/../src-tauri/binaries" && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BINARIES_DIR="${REPO_ROOT}/src-tauri/binaries"
+mkdir -p "$BINARIES_DIR"
 
 # Mirror URL: set MIHOMO_MIRROR env to override (e.g. https://mirror.ghproxy.com)
 MIRROR="${MIHOMO_MIRROR:-https://gh-proxy.org/https://github.com}"
