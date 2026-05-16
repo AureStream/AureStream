@@ -3,7 +3,7 @@
 
 ## A Lightweight, High-Performance Proxy Powered by Mihomo
 
-![Build](https://img.shields.io/github/actions/workflow/status/BadKid90s/AureStream/ci.yml?branch=main)
+![Build](https://img.shields.io/github/actions/workflow/status/BadKid90s/AureStream/build-desktop.yml?branch=main)
 ![Release](https://img.shields.io/github/v/release/BadKid90s/AureStream)
 ![License](https://img.shields.io/github/license/BadKid90s/AureStream)
 ![Stars](https://img.shields.io/github/stars/BadKid90s/AureStream?style=social)
@@ -90,7 +90,9 @@ AureStream 是一个基于 **Mihomo** 核心开发的现代化代理客户端。
 
 ## 参与贡献
 
-欢迎通过 [Issue](https://github.com/BadKid90s/AureStream/issues) 反馈问题或提出建议；也欢迎提交 Pull Request。更详细的说明与内部文档见仓库内 [`docs/`](docs/README.md) 目录。
+默认分支为 **`main`**。克隆：`git clone git@github.com:BadKid90s/AureStream.git`，后续请基于 `main` 开分支并发起 Pull Request。
+
+欢迎通过 [Issue](https://github.com/BadKid90s/AureStream/issues) 反馈问题或提出建议；更详细的说明与内部文档见仓库内 [`docs/`](docs/README.md) 目录。
 
 ## 许可证
 
