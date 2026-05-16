@@ -1,27 +1,27 @@
-import { Home, Package, Settings, Moon, Sun, Zap } from 'lucide-react'
-import { useAppStore } from '@/stores/appStore'
-import { cn } from '@/lib/utils'
+import { Home, Package, Settings, Moon, Sun, Zap, Monitor } from "lucide-react";
+import { useAppStore } from "@/stores/appStore";
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
-  currentPage: string
-  onNavigate: (page: string) => void
+  currentPage: string;
+  onNavigate: (page: string) => void;
 }
 
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
-  const { theme, toggleTheme } = useAppStore()
+  const { theme, toggleTheme } = useAppStore();
 
   const menuItems = [
-    { id: 'dashboard', label: '首页', icon: Home },
-    { id: 'providers', label: '服务商', icon: Package },
-    { id: 'settings', label: '设置', icon: Settings },
-  ]
+    { id: "dashboard", label: "首页", icon: Home },
+    { id: "providers", label: "服务商", icon: Package },
+    { id: "settings", label: "设置", icon: Settings },
+  ];
 
   return (
     <aside
       className={cn(
-        'glass-rail flex flex-col shrink-0 w-[4.75rem]',
-        'h-[calc(100vh-1.5rem)] my-3 ml-3 rounded-3xl',
-        'relative z-10 overflow-hidden'
+        "glass-rail flex flex-col shrink-0 w-[4.75rem]",
+        "h-[calc(100vh-1.5rem)] my-3 ml-3 rounded-3xl",
+        "relative z-10 overflow-hidden",
       )}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.07] via-transparent to-primary/[0.03] pointer-events-none rounded-3xl" />
@@ -30,7 +30,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       <div className="relative flex flex-col items-center pt-5 pb-3">
         <div
           className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center shadow-lg shadow-primary/30 ring-2 ring-white/25 dark:ring-white/10"
-          title="AureProxy"
+          title="AureStream"
         >
           <Zap className="w-5 h-5 text-white" aria-hidden />
         </div>
@@ -39,8 +39,8 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       <nav className="relative flex-1 flex flex-col items-center px-2 pt-2 gap-1">
         <ul className="flex flex-col gap-1.5 w-full">
           {menuItems.map((item) => {
-            const Icon = item.icon
-            const isActive = currentPage === item.id
+            const Icon = item.icon;
+            const isActive = currentPage === item.id;
             return (
               <li key={item.id} className="w-full flex justify-center">
                 <button
@@ -49,10 +49,10 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                   aria-label={item.label}
                   title={item.label}
                   className={cn(
-                    'relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200',
+                    "relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200",
                     isActive
-                      ? 'glass-strong text-primary shadow-[0_0_0_1px_rgba(45,212,191,0.35)] scale-[1.02]'
-                      : 'text-muted-foreground hover:bg-white/15 hover:text-foreground dark:hover:bg-white/10'
+                      ? "glass-strong text-primary shadow-[0_0_0_1px_rgba(45,212,191,0.35)] scale-[1.02]"
+                      : "text-muted-foreground hover:bg-white/15 hover:text-foreground dark:hover:bg-white/10",
                   )}
                 >
                   {isActive && (
@@ -61,10 +61,13 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                       aria-hidden
                     />
                   )}
-                  <Icon className={cn('w-[19px] h-[19px]', isActive && 'scale-110')} strokeWidth={2} />
+                  <Icon
+                    className={cn("w-[19px] h-[19px]", isActive && "scale-110")}
+                    strokeWidth={2}
+                  />
                 </button>
               </li>
-            )
+            );
           })}
         </ul>
       </nav>
@@ -73,13 +76,19 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         <button
           type="button"
           onClick={toggleTheme}
-          aria-label={theme === 'light' ? '切换到深色模式' : '切换到浅色模式'}
-          title={theme === 'light' ? '深色模式' : '浅色模式'}
-          className="w-11 h-11 rounded-2xl flex items-center justify-center text-muted-foreground hover:bg-white/15 hover:text-foreground dark:hover:bg-white/10 transition-all duration-200"
+          aria-label="切换主题"
+          title={`当前主题: ${theme === "light" ? "浅色" : theme === "dark" ? "深色" : "跟随系统"}`}
+          className="w-11 h-11 rounded-2xl flex items-center justify-center text-muted-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-all duration-300 active:scale-95"
         >
-          {theme === 'light' ? <Moon className="w-[19px] h-[19px]" /> : <Sun className="w-[19px] h-[19px]" />}
+          {theme === "light" ? (
+            <Sun className="w-[19px] h-[19px]" />
+          ) : theme === "dark" ? (
+            <Moon className="w-[19px] h-[19px]" />
+          ) : (
+            <Monitor className="w-[19px] h-[19px]" />
+          )}
         </button>
       </div>
     </aside>
-  )
+  );
 }

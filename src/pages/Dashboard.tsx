@@ -1,24 +1,25 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { LeftOperationPanel } from '@/components/dashboard/LeftOperationPanel'
-import { NetworkBlock } from '@/components/dashboard/NetworkBlock'
-import { NodePickerDialog } from '@/components/dashboard/NodePickerDialog'
-import { SubscriptionBlock } from '@/components/dashboard/SubscriptionBlock'
-import { UsageBlock } from '@/components/dashboard/UsageBlock'
-import { PageShell } from '@/components/layout/PageShell'
-import { cn } from '@/lib/utils'
-import { useProxyStore } from '@/stores/appStore'
+import { useEffect, useLayoutEffect, useState } from "react";
+import { LeftOperationPanel } from "@/components/dashboard/LeftOperationPanel";
+import { NetworkBlock } from "@/components/dashboard/NetworkBlock";
+import { NodePickerDialog } from "@/components/dashboard/NodePickerDialog";
+import { SubscriptionBlock } from "@/components/dashboard/SubscriptionBlock";
+import { UsageBlock } from "@/components/dashboard/UsageBlock";
+import { PageShell } from "@/components/layout/PageShell";
+import { cn } from "@/lib/utils";
+import { useProxyStore } from "@/stores/appStore";
 
-type ProxyMode = '规则' | '全局' | '直连'
-
-const SERIES_LEN = 48
+const SERIES_LEN = 48;
 
 function emptySeries(): number[] {
-  return Array.from({ length: SERIES_LEN }, () => 0)
+  return Array.from({ length: SERIES_LEN }, () => 0);
 }
 
-export function Dashboard({ onOpenProviders }: { onOpenProviders?: () => void }) {
+export function Dashboard({
+  onOpenProviders,
+}: {
+  onOpenProviders?: () => void;
+}) {
   const {
-    nodes,
     currentProvider,
     currentNode,
     isConnected,
@@ -26,83 +27,72 @@ export function Dashboard({ onOpenProviders }: { onOpenProviders?: () => void })
     connectedIp,
     uploadSpeed,
     downloadSpeed,
-    updateSpeeds,
-  } = useProxyStore()
+    sessionUploadBytes,
+    sessionDownloadBytes,
+  } = useProxyStore();
 
-  const [nodeDialogOpen, setNodeDialogOpen] = useState(false)
-  const [proxyMode, setProxyMode] = useState<ProxyMode>('规则')
-  const [nowTick, setNowTick] = useState(() => Date.now())
-  const [uploadSeries, setUploadSeries] = useState(emptySeries)
-  const [downloadSeries, setDownloadSeries] = useState(emptySeries)
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNowTick(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
+  const [nodeDialogOpen, setNodeDialogOpen] = useState(false);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [uploadSeries, setUploadSeries] = useState(emptySeries);
+  const [downloadSeries, setDownloadSeries] = useState(emptySeries);
 
   useEffect(() => {
-    if (!isConnected) return
-    const sample = () => {
-      const dl = (Math.random() * 42 + 18) * 1024
-      const ul = (Math.random() * 32 + 8) * 1024
-      updateSpeeds(ul, dl)
-    }
-    sample()
-    const id = window.setInterval(sample, 1300)
-    return () => clearInterval(id)
-  }, [isConnected, updateSpeeds])
+    const id = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useLayoutEffect(() => {
-    setUploadSeries(emptySeries())
-    setDownloadSeries(emptySeries())
-  }, [isConnected])
+    setUploadSeries(emptySeries());
+    setDownloadSeries(emptySeries());
+  }, [isConnected]);
 
   useEffect(() => {
-    if (!isConnected) return
-    setUploadSeries((prev) => [...prev.slice(1), uploadSpeed])
-    setDownloadSeries((prev) => [...prev.slice(1), downloadSpeed])
-  }, [isConnected, uploadSpeed, downloadSpeed])
+    if (!isConnected) return;
+    setUploadSeries((prev) => [...prev.slice(1), uploadSpeed]);
+    setDownloadSeries((prev) => [...prev.slice(1), downloadSpeed]);
+  }, [isConnected, uploadSpeed, downloadSpeed]);
 
   useEffect(() => {
-    if (isConnected) return
+    if (isConnected) return;
     const id = window.setInterval(() => {
-      const t = Date.now() / 4500
-      const base = (Math.sin(t) * 0.5 + 0.5) * 4096
-      setUploadSeries((prev) => [...prev.slice(1), base * 0.35])
-      setDownloadSeries((prev) => [...prev.slice(1), base * 0.52])
-    }, 2200)
-    return () => clearInterval(id)
-  }, [isConnected])
+      const t = Date.now() / 4500;
+      const base = (Math.sin(t) * 0.5 + 0.5) * 4096;
+      setUploadSeries((prev) => [...prev.slice(1), base * 0.35]);
+      setDownloadSeries((prev) => [...prev.slice(1), base * 0.52]);
+    }, 2200);
+    return () => clearInterval(id);
+  }, [isConnected]);
 
-  const availableNodes = useMemo(() => {
-    if (!currentProvider) return []
-    return nodes.filter((n) => n.providerId === currentProvider.id && n.enabled)
-  }, [nodes, currentProvider])
+  /** 内核由订阅 YAML 驱动；nodes 表可能未写入，不因「零节点」禁止连接 */
+  const canConnect = Boolean(currentProvider);
 
-  const canConnect = Boolean(currentProvider) && availableNodes.length > 0
-
-  const trafficUsed = currentProvider?.trafficUsedGB
+  const sessionUploadGb = isConnected
+    ? sessionUploadBytes / 1024 ** 3
+    : undefined;
+  const sessionDownloadGb = isConnected
+    ? sessionDownloadBytes / 1024 ** 3
+    : undefined;
 
   return (
-    <PageShell fillHeight className="max-w-7xl" title="首页" subtitle="连接状态与订阅概览">
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+    <PageShell fillHeight className="max-w-7xl" title="首页">
+      <div className="relative flex w-full min-h-0 overflow-hidden">
         {/* 中轴光晕背景 */}
         <div
           className={cn(
-            'pointer-events-none absolute inset-0 transition-opacity duration-1000',
-            isConnected ? 'opacity-100' : 'opacity-60',
+            "pointer-events-none absolute inset-0 transition-opacity duration-1000",
+            isConnected ? "opacity-100" : "opacity-60",
           )}
           aria-hidden
           style={{
             background:
-              'radial-gradient(ellipse 50% 70% at 50% 50%, color-mix(in srgb, var(--color-primary) 10%, transparent) 0%, transparent 70%)',
+              "radial-gradient(ellipse 50% 70% at 50% 50%, color-mix(in srgb, var(--color-primary) 10%, transparent) 0%, transparent 70%)",
           }}
         />
 
         {/* 黄金分割双栏 */}
-        <div className="relative grid w-full grid-cols-1 items-center gap-6 lg:grid-cols-[61.8%_38.2%] lg:gap-0">
-          {/* 左栏 61.8%：操作区 */}
-          <section className="flex min-h-0 flex-col justify-center lg:pr-8">
+        <div className="relative grid w-full grid-cols-1 gap-4 md:grid-cols-[55%_45%] md:gap-0 lg:grid-cols-[61.8%_38.2%]">
+          {/* 左栏：操作区 */}
+          <section className="flex min-h-0 flex-col justify-start md:pr-6 lg:pr-8">
             <LeftOperationPanel
               isConnected={isConnected}
               canConnect={canConnect}
@@ -111,29 +101,33 @@ export function Dashboard({ onOpenProviders }: { onOpenProviders?: () => void })
               downloadSpeed={downloadSpeed}
               uploadSpeed={uploadSpeed}
               currentNode={currentNode}
-              proxyMode={proxyMode}
-              onProxyModeChange={setProxyMode}
               onOpenNodePicker={() => setNodeDialogOpen(true)}
             />
           </section>
 
-          {/* 右栏 38.2%：信息展示区 */}
-          <section className="flex min-h-0 flex-col gap-6 px-4 lg:border-l lg:border-border/30 lg:pl-8">
-            <SubscriptionBlock provider={currentProvider} onOpenProviders={onOpenProviders} />
+          {/* 右栏：信息展示区 */}
+          <section className="flex min-h-0 flex-col gap-3 px-4 md:border-l md:border-border/30 md:pl-6 lg:gap-4 lg:pl-8">
+            <SubscriptionBlock
+              provider={currentProvider}
+              onOpenProviders={onOpenProviders}
+            />
             <div className="border-t border-border/20" />
             <NetworkBlock connectedIp={connectedIp} />
             <div className="border-t border-border/20" />
             <UsageBlock
-              uploadTotal={trafficUsed != null ? trafficUsed * 0.25 : undefined}
-              downloadTotal={trafficUsed}
+              uploadTotal={sessionUploadGb}
+              downloadTotal={sessionDownloadGb}
               uploadSeries={uploadSeries}
               downloadSeries={downloadSeries}
             />
           </section>
         </div>
 
-        <NodePickerDialog open={nodeDialogOpen} onOpenChange={setNodeDialogOpen} />
+        <NodePickerDialog
+          open={nodeDialogOpen}
+          onOpenChange={setNodeDialogOpen}
+        />
       </div>
     </PageShell>
-  )
+  );
 }

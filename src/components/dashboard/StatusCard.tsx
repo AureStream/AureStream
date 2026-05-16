@@ -1,17 +1,24 @@
-import { ArrowUpCircle, ArrowDownCircle, Activity, Wifi, WifiOff } from 'lucide-react'
-import { useProxyStore } from '@/stores/appStore'
-import { getLatencyColor } from '@/types'
+import {
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Activity,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { useProxyStore } from "@/stores/appStore";
+import { getLatencyColor } from "@/types";
 
 export function StatusCard() {
-  const { currentNode, isConnected, uploadSpeed, downloadSpeed } = useProxyStore()
+  const { currentNode, isConnected, uploadSpeed, downloadSpeed } =
+    useProxyStore();
 
   const formatSpeed = (bytesPerSecond: number): string => {
-    if (bytesPerSecond === 0) return '0 B/s'
-    const k = 1024
-    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-    const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k))
-    return `${(bytesPerSecond / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
-  }
+    if (bytesPerSecond === 0) return "0 B/s";
+    const k = 1024;
+    const sizes = ["B/s", "KB/s", "MB/s", "GB/s"];
+    const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+    return `${(bytesPerSecond / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
 
   return (
     <div className="glass rounded-2xl p-6 space-y-5">
@@ -27,7 +34,9 @@ export function StatusCard() {
           ) : (
             <>
               <WifiOff className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">未连接</span>
+              <span className="text-sm font-medium text-muted-foreground">
+                未连接
+              </span>
             </>
           )}
         </div>
@@ -36,8 +45,10 @@ export function StatusCard() {
       {currentNode && (
         <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-black/5 dark:bg-white/5">
           <span className="text-sm text-muted-foreground">延迟</span>
-          <span className={`text-2xl font-bold ${getLatencyColor(currentNode.delay)}`}>
-            {currentNode.delay !== undefined ? `${currentNode.delay}ms` : '--'}
+          <span
+            className={`text-2xl font-bold ${getLatencyColor(currentNode.delay)}`}
+          >
+            {currentNode.delay !== undefined ? `${currentNode.delay}ms` : "--"}
           </span>
         </div>
       )}
@@ -48,8 +59,12 @@ export function StatusCard() {
             <ArrowUpCircle className="w-5 h-5 text-blue-500" />
           </div>
           <div>
-            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">上传</div>
-            <div className="text-sm font-semibold">{formatSpeed(uploadSpeed)}</div>
+            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              上传
+            </div>
+            <div className="text-sm font-semibold">
+              {formatSpeed(uploadSpeed)}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3 p-3 rounded-xl bg-black/5 dark:bg-white/5">
@@ -57,11 +72,15 @@ export function StatusCard() {
             <ArrowDownCircle className="w-5 h-5 text-indigo-500" />
           </div>
           <div>
-            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">下载</div>
-            <div className="text-sm font-semibold">{formatSpeed(downloadSpeed)}</div>
+            <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              下载
+            </div>
+            <div className="text-sm font-semibold">
+              {formatSpeed(downloadSpeed)}
+            </div>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

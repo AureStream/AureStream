@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "mihomoproxy",
+  "productName": "AureStream",
   "version": "0.1.0",
-  "identifier": "com.root.mihomoproxy",
+  "identifier": "com.root.aurestream",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "mihomoproxy",
-        "width": 800,
-        "height": 600
+        "title": "AureStream",
+        "width": 1000,
+        "height": 800,
+        "resizable": false,
+        "skipTaskbar": false
       }
     ],
     "security": {
@@ -30,6 +32,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "externalBin": ["binaries/mihomo"],
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      }
+    }
   }
 }

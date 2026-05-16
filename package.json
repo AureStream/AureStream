@@ -1,5 +1,5 @@
 {
-  "name": "aureproxy",
+  "name": "aurestream",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -28,7 +28,12 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "tauri:build:win": "tauri build --target x86_64-pc-windows-msvc",
+    "tauri:build:win-arm64": "tauri build --target aarch64-pc-windows-msvc",
+    "mihomo:download": "bash scripts/download-mihomo.sh",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -38,13 +43,17 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@tailwindcss/postcss": "^4.3.0",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-store": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
+    "tauri-plugin-mihomo-api": "github:clash-verge-rev/tauri-plugin-mihomo",
     "zustand": "^5.0.13"
   },
   "_devDependencies_zh": {
@@ -53,15 +62,19 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^25.7.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.5.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.14",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.6"
   }
 }

@@ -1,14 +1,14 @@
-import * as React from 'react'
-import { cn } from '@/lib/utils'
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
 export interface PageShellProps {
-  children: React.ReactNode
-  className?: string
-  contentClassName?: string
-  /** 与仪表盘单页布局配合：占用 MainContent 内剩余高度并沿用 min-h-0 传递 */
-  fillHeight?: boolean
-  title?: string
-  subtitle?: string
+  children: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
+  /** 首页等：至少铺满主内容可视高度，超出部分交由 MainContent 滚动层滚动 */
+  fillHeight?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 export function PageShell({
@@ -17,16 +17,14 @@ export function PageShell({
   contentClassName,
   fillHeight,
   title,
-  subtitle,
 }: PageShellProps) {
-  const showHeader = Boolean(title ?? subtitle)
+  const showHeader = Boolean(title);
 
   return (
     <div
       className={cn(
-        'w-full max-w-4xl mx-auto',
-        fillHeight && 'flex flex-1 min-h-0 flex-col h-full',
-        className
+        "mx-auto w-full max-w-4xl flex flex-col h-full min-h-0",
+        className,
       )}
     >
       {showHeader && (
@@ -38,19 +36,17 @@ export function PageShell({
               </span>
             </h1>
           ) : null}
-          {subtitle ? (
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
-          ) : null}
         </header>
       )}
       <div
         className={cn(
-          fillHeight && 'flex flex-1 min-h-0 flex-col overflow-hidden',
-          contentClassName
+          "flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-2 [scrollbar-gutter:stable] [padding-bottom:max(2rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:[padding-bottom:max(3rem,env(safe-area-inset-bottom,0px)+0.75rem)]",
+          fillHeight && "flex w-full flex-col",
+          contentClassName,
         )}
       >
         {children}
       </div>
     </div>
-  )
+  );
 }

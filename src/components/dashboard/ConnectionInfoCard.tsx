@@ -1,96 +1,105 @@
-import { useMemo, useState } from 'react'
-import { ChevronRight, RefreshCw, ServerOff } from 'lucide-react'
+import { useMemo, useState } from "react";
+import { ChevronRight, RefreshCw, ServerOff } from "lucide-react";
 
-import { Button } from '@/components/ui/button'
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { cn } from '@/lib/utils'
-import type { Node, Provider } from '@/types'
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+import type { Node, Provider } from "@/types";
 
 /** 大屏幕下左右两栏等高、对称拉伸 */
 export const CONNECTION_CARD_STRETCH_CLASS =
-  'flex h-full min-h-[min(32rem,55vh)] flex-col border-border bg-card shadow-sm'
+  "flex h-full min-h-[min(32rem,55vh)] flex-col border-border bg-card shadow-sm";
 
 /**
  * 「核心柱」槽位高度：仅保留时长行占位，断开/连接同高；顶栏不再垫大块留白。
  */
-const MIN_DURATION_BLOCK_H = '1.75rem'
-const PILL_WRAP_MIN_H = '2.125rem'
-const NODE_ROW_MIN_H = '4.75rem'
+const MIN_DURATION_BLOCK_H = "1.75rem";
+const PILL_WRAP_MIN_H = "2.125rem";
+const NODE_ROW_MIN_H = "4.75rem";
 
-const CAPTION_TONE = 'text-[11px] font-normal uppercase tracking-[0.12em] text-muted-foreground/80'
+const CAPTION_TONE =
+  "text-[11px] font-normal uppercase tracking-[0.12em] text-muted-foreground/80";
 
 /** 与 store 中的 bytes/s 一致的展示（同 StatusCard / Dashboard） */
 function formatSpeed(bytesPerSecond: number): string {
-  if (bytesPerSecond === 0) return '0 KB/s'
-  const k = 1024
-  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-  const i = Math.min(Math.floor(Math.log(bytesPerSecond) / Math.log(k)), sizes.length - 1)
-  const v = bytesPerSecond / Math.pow(k, i)
-  const decimals = i >= 2 ? 1 : i === 1 ? 1 : 0
-  return `${v.toFixed(decimals)} ${sizes[i]}`
+  if (bytesPerSecond === 0) return "0 KB/s";
+  const k = 1024;
+  const sizes = ["B/s", "KB/s", "MB/s", "GB/s"];
+  const i = Math.min(
+    Math.floor(Math.log(bytesPerSecond) / Math.log(k)),
+    sizes.length - 1,
+  );
+  const v = bytesPerSecond / Math.pow(k, i);
+  const decimals = i >= 2 ? 1 : i === 1 ? 1 : 0;
+  return `${v.toFixed(decimals)} ${sizes[i]}`;
 }
 
 function formatDuration(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
-  const s = totalSeconds % 60
-  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
 /** 拆分节点展示名：首段视作国家/地区，其余为辅 */
 function parseNodeLabels(node?: Node): {
-  flag: string
-  primary: string
-  secondary: string
+  flag: string;
+  primary: string;
+  secondary: string;
 } {
   if (!node?.name) {
-    return { flag: '🌐', primary: '未选择', secondary: '' }
+    return { flag: "🌐", primary: "未选择", secondary: "" };
   }
-  const parts = node.name.split(/·|•/).map((p) => p.trim()).filter(Boolean)
-  const primary = parts[0] ?? node.name
-  const secondary = parts.slice(1, 3).join(' · ') || node.server
+  const parts = node.name
+    .split(/·|•/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const primary = parts[0] ?? node.name;
+  const secondary = parts.slice(1, 3).join(" · ") || node.server;
   const flagMap: Record<string, string> = {
-    中国: '🇨🇳',
-    香港: '🇭🇰',
-    台湾: '🇹🇼',
-    臺灣: '🇹🇼',
-    日本: '🇯🇵',
-    东京: '🇯🇵',
-    東京: '🇯🇵',
-    新加坡: '🇸🇬',
-    美国: '🇺🇸',
-    英國: '🇬🇧',
-    英国: '🇬🇧',
-    韩国: '🇰🇷',
-    韓國: '🇰🇷',
-    德国: '🇩🇪',
-    法國: '🇫🇷',
-    法国: '🇫🇷',
-  }
-  const flag = flagMap[primary] ?? '🌐'
-  return { flag, primary, secondary }
+    中国: "🇨🇳",
+    香港: "🇭🇰",
+    台湾: "🇹🇼",
+    臺灣: "🇹🇼",
+    日本: "🇯🇵",
+    东京: "🇯🇵",
+    東京: "🇯🇵",
+    新加坡: "🇸🇬",
+    美国: "🇺🇸",
+    英國: "🇬🇧",
+    英国: "🇬🇧",
+    韩国: "🇰🇷",
+    韓國: "🇰🇷",
+    德国: "🇩🇪",
+    法國: "🇫🇷",
+    法国: "🇫🇷",
+  };
+  const flag = flagMap[primary] ?? "🌐";
+  return { flag, primary, secondary };
 }
 
 function truncateLabel(s: string, max = 26): string {
-  const t = s.trim()
-  if (t.length <= max) return t
-  return `${t.slice(0, max - 1)}…`
+  const t = s.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
 }
 
 /** ISO 3166-1 alpha-2 → 区域指示符旗帜（非政治含义，仅 UI） */
 function regionCodeToFlag(region: string): string {
-  if (!/^[A-Za-z]{2}$/.test(region)) return '🌐'
-  const upper = region.toUpperCase()
-  const A = 0x1f1e6
-  const chars = [...upper].map((c) => String.fromCodePoint(A + (c.charCodeAt(0) - 0x41)))
-  return chars.join('')
+  if (!/^[A-Za-z]{2}$/.test(region)) return "🌐";
+  const upper = region.toUpperCase();
+  const A = 0x1f1e6;
+  const chars = [...upper].map((c) =>
+    String.fromCodePoint(A + (c.charCodeAt(0) - 0x41)),
+  );
+  return chars.join("");
 }
 
 /**
@@ -98,86 +107,92 @@ function regionCodeToFlag(region: string): string {
  * `refreshKey` 变化时前端重新读取 navigator（状态刷新，不调接口）。
  */
 function detectRegionFromNavigator(refreshKey: number): {
-  flag: string
-  regionLabel: string
-  subHint: string
-  ok: boolean
+  flag: string;
+  regionLabel: string;
+  subHint: string;
+  ok: boolean;
 } {
-  void refreshKey
-  if (typeof navigator === 'undefined') {
+  void refreshKey;
+  if (typeof navigator === "undefined") {
     return {
-      flag: '🌐',
-      regionLabel: '无法检测',
-      subHint: '非浏览器环境，无法读取系统语言与地区。',
+      flag: "🌐",
+      regionLabel: "无法检测",
+      subHint: "非浏览器环境，无法读取系统语言与地区。",
       ok: false,
-    }
+    };
   }
 
   const tryLocaleStrings = [
-    ...(typeof navigator.language === 'string' && navigator.language.trim()
+    ...(typeof navigator.language === "string" && navigator.language.trim()
       ? [navigator.language.trim()]
       : []),
-    ...((navigator.languages ?? []).filter((s): s is string => typeof s === 'string')),
-  ]
+    ...(navigator.languages ?? []).filter(
+      (s): s is string => typeof s === "string",
+    ),
+  ];
 
-  let regionSubtag: string | null = null
-  let sourceLocale = ''
+  let regionSubtag: string | null = null;
+  let sourceLocale = "";
 
   for (const loc of tryLocaleStrings) {
-    const m = /^[a-z]{2,3}-([a-z]{2}|\d{3})\b/i.exec(loc)
+    const m = /^[a-z]{2,3}-([a-z]{2}|\d{3})\b/i.exec(loc);
     if (m) {
-      regionSubtag = m[1].toUpperCase()
-      sourceLocale = loc
-      break
+      regionSubtag = m[1].toUpperCase();
+      sourceLocale = loc;
+      break;
     }
   }
 
   if (!regionSubtag) {
     return {
-      flag: '🌐',
-      regionLabel: '无法检测',
+      flag: "🌐",
+      regionLabel: "无法检测",
       subHint:
-        '系统首选语言不含地区代码。可在系统设置中配置区域或使用「刷新」重新读取。',
+        "系统首选语言不含地区代码。可在系统设置中配置区域或使用「刷新」重新读取。",
       ok: false,
-    }
+    };
   }
 
-  let localized = ''
-  const displayLocales = [...new Set([sourceLocale, navigator.language, 'zh-CN', 'en'])]
+  let localized = "";
+  const displayLocales = [
+    ...new Set([sourceLocale, navigator.language, "zh-CN", "en"]),
+  ];
   try {
-    const dn = new Intl.DisplayNames(displayLocales, { type: 'region' })
-    localized = dn.of(regionSubtag) ?? ''
+    const dn = new Intl.DisplayNames(displayLocales, { type: "region" });
+    localized = dn.of(regionSubtag) ?? "";
   } catch {
-    localized = ''
+    localized = "";
   }
 
   if (!localized.trim()) {
-    localized = regionSubtag
+    localized = regionSubtag;
   }
 
-  const flag = /^[A-Z]{2}$/.test(regionSubtag) ? regionCodeToFlag(regionSubtag) : '🌐'
+  const flag = /^[A-Z]{2}$/.test(regionSubtag)
+    ? regionCodeToFlag(regionSubtag)
+    : "🌐";
 
   return {
     flag,
     regionLabel: localized,
     subHint: `由系统语言地区子标签 «${regionSubtag}» 推断，可能与实际地理位置不一致。`,
     ok: true,
-  }
+  };
 }
 
 export interface ConnectionInfoCardProps {
-  className?: string
-  isConnected: boolean
-  canConnect: boolean
-  currentProvider: Provider | null | undefined
-  availableNodes: Node[]
-  currentNode?: Node
-  connectedAt?: number
-  nowTick: number
-  downloadSpeed: number
-  uploadSpeed: number
-  onOpenProviders?: () => void
-  onOpenNodePicker: () => void
+  className?: string;
+  isConnected: boolean;
+  canConnect: boolean;
+  currentProvider: Provider | null | undefined;
+  availableNodes: Node[];
+  currentNode?: Node;
+  connectedAt?: number;
+  nowTick: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  onOpenProviders?: () => void;
+  onOpenNodePicker: () => void;
 }
 
 export function ConnectionInfoCard({
@@ -194,45 +209,51 @@ export function ConnectionInfoCard({
   onOpenProviders,
   onOpenNodePicker,
 }: ConnectionInfoCardProps) {
-  const [regionSnap, setRegionSnap] = useState(0)
+  const [regionSnap, setRegionSnap] = useState(0);
 
   const elapsedSec =
-    isConnected && connectedAt ? Math.max(0, Math.floor((nowTick - connectedAt) / 1000)) : 0
+    isConnected && connectedAt
+      ? Math.max(0, Math.floor((nowTick - connectedAt) / 1000))
+      : 0;
 
   const activeNode =
-    currentNode ?? (availableNodes.length > 0 ? availableNodes[0] : undefined)
-  const nodeLine = parseNodeLabels(activeNode)
+    currentNode ?? (availableNodes.length > 0 ? availableNodes[0] : undefined);
+  const nodeLine = parseNodeLabels(activeNode);
 
   /** 不与上方「国旗 + primary」重复的辅信息（caption 后缀） */
   const mutedNodeMeta = (() => {
-    if (!activeNode) return ''
-    if (typeof activeNode.delay === 'number') {
-      return truncateLabel(`${activeNode.delay} ms`, 42)
+    if (!activeNode) return "";
+    if (typeof activeNode.delay === "number") {
+      return truncateLabel(`${activeNode.delay} ms`, 42);
     }
-    return truncateLabel(`${activeNode.server}:${activeNode.port}`, 42)
-  })()
+    return truncateLabel(`${activeNode.server}:${activeNode.port}`, 42);
+  })();
 
   /** 单行 muted：次级信息，与「出口节点」caption 并排，整块最多两行（caption 行 + 粗体节点名）。 */
-  const captionSuffix = mutedNodeMeta ? ` · ${mutedNodeMeta}` : ''
+  const captionSuffix = mutedNodeMeta ? ` · ${mutedNodeMeta}` : "";
 
   const pickerTitle = activeNode
-    ? `${activeNode.name}\n${activeNode.server}:${activeNode.port}${activeNode.delay != null ? `\n${activeNode.delay} ms` : ''}`
-    : ''
+    ? `${activeNode.name}\n${activeNode.server}:${activeNode.port}${activeNode.delay != null ? `\n${activeNode.delay} ms` : ""}`
+    : "";
 
-  const noProvider = !currentProvider
-  const noNodesForProvider = Boolean(currentProvider) && availableNodes.length === 0
+  const noProvider = !currentProvider;
+  const noNodesForProvider =
+    Boolean(currentProvider) && availableNodes.length === 0;
 
-  const localRegion = useMemo(() => detectRegionFromNavigator(regionSnap), [regionSnap])
+  const localRegion = useMemo(
+    () => detectRegionFromNavigator(regionSnap),
+    [regionSnap],
+  );
 
-  let gateTitle = '准备就绪'
-  let gateBody = '选择节点后点击下方按钮即可连接代理。'
+  let gateTitle = "准备就绪";
+  let gateBody = "选择节点后点击下方按钮即可连接代理。";
 
   if (noProvider) {
-    gateTitle = '尚未设置订阅'
-    gateBody = '请先在「服务商」页面启用当前订阅，同步节点后即可在此发起连接。'
+    gateTitle = "尚未设置订阅";
+    gateBody = "请先在「服务商」页面启用当前订阅，同步节点后即可在此发起连接。";
   } else if (noNodesForProvider) {
-    gateTitle = '当前无可选节点'
-    gateBody = '该订阅下暂时没有可用节点，请检查订阅或尝试重新导入。'
+    gateTitle = "当前无可选节点";
+    gateBody = "该订阅下暂时没有可用节点，请检查订阅或尝试重新导入。";
   }
 
   return (
@@ -241,7 +262,9 @@ export function ConnectionInfoCard({
         <div className="flex flex-col gap-2">
           <CardTitle className="text-base">连接操作</CardTitle>
           <CardDescription>
-            {isConnected ? '会话时长、速率与出口节点' : '本地区域参考与节点选择'}
+            {isConnected
+              ? "会话时长、速率与出口节点"
+              : "本地区域参考与节点选择"}
           </CardDescription>
         </div>
       </CardHeader>
@@ -270,15 +293,15 @@ export function ConnectionInfoCard({
           {/* 速率胶囊 */}
           <div
             className={cn(
-              'flex shrink-0 items-center justify-center overflow-hidden px-1',
-              !isConnected && 'pointer-events-none select-none'
+              "flex shrink-0 items-center justify-center overflow-hidden px-1",
+              !isConnected && "pointer-events-none select-none",
             )}
             style={{ minHeight: PILL_WRAP_MIN_H }}
           >
             <div
               className={cn(
-                'inline-flex max-w-full items-center gap-2.5 rounded-full border border-border/70 bg-muted/45 px-3.5 py-1.5 text-[11px] tabular-nums text-muted-foreground',
-                !isConnected && 'invisible'
+                "inline-flex max-w-full items-center gap-2.5 rounded-full border border-border/70 bg-muted/45 px-3.5 py-1.5 text-[11px] tabular-nums text-muted-foreground",
+                !isConnected && "invisible",
               )}
               aria-hidden={!isConnected}
             >
@@ -288,7 +311,11 @@ export function ConnectionInfoCard({
                 </span>
                 <span>{formatSpeed(downloadSpeed)}</span>
               </span>
-              <Separator orientation="vertical" className="h-3.5 bg-border/80" decorative />
+              <Separator
+                orientation="vertical"
+                className="h-3.5 bg-border/80"
+                decorative
+              />
               <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
                 <span className="text-foreground/70" aria-hidden>
                   ↑
@@ -305,7 +332,9 @@ export function ConnectionInfoCard({
                 className="flex min-h-0 w-full items-center gap-2 rounded-xl border border-border/60 bg-muted/25 px-3 py-2"
                 aria-live="polite"
               >
-                <span className={cn(CAPTION_TONE, 'shrink-0')}>当前国家估算</span>
+                <span className={cn(CAPTION_TONE, "shrink-0")}>
+                  当前国家估算
+                </span>
                 <span className="text-lg leading-none" aria-hidden>
                   {localRegion.flag}
                 </span>
@@ -341,7 +370,10 @@ export function ConnectionInfoCard({
                 role="presentation"
                 className="flex w-full shrink-0 items-center gap-2 rounded-md bg-muted/25 px-2 py-1 text-muted-foreground"
               >
-                <span className="select-none text-[11px] leading-none" aria-hidden>
+                <span
+                  className="select-none text-[11px] leading-none"
+                  aria-hidden
+                >
                   {nodeLine.flag}
                 </span>
                 <span className="min-w-0 truncate text-[11px] font-normal leading-snug tracking-tight">
@@ -353,7 +385,7 @@ export function ConnectionInfoCard({
                 variant="outline"
                 disabled={!canConnect}
                 title={pickerTitle || undefined}
-                aria-label={`出口节点 · ${activeNode?.name ?? '未选择'}。打开节点选择。`}
+                aria-label={`出口节点 · ${activeNode?.name ?? "未选择"}。打开节点选择。`}
                 onClick={() => onOpenNodePicker()}
                 className="group flex h-auto min-h-[4.75rem] w-full flex-row items-center justify-start gap-3 whitespace-normal rounded-xl px-3 py-2.5 text-left font-normal"
               >
@@ -361,8 +393,10 @@ export function ConnectionInfoCard({
                   className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-muted-foreground"
                   aria-hidden
                 >
-                  {nodeLine.flag !== '🌐' ? (
-                    <span className="select-none text-base leading-none">{nodeLine.flag}</span>
+                  {nodeLine.flag !== "🌐" ? (
+                    <span className="select-none text-base leading-none">
+                      {nodeLine.flag}
+                    </span>
                   ) : (
                     <span className="select-none px-1 text-center text-[10px] font-medium leading-snug tracking-tight">
                       节点
@@ -371,7 +405,9 @@ export function ConnectionInfoCard({
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5 text-left">
                   <span className="flex min-w-0 max-w-full items-baseline truncate text-left leading-tight">
-                    <span className={cn(CAPTION_TONE, 'shrink-0')}>出口节点</span>
+                    <span className={cn(CAPTION_TONE, "shrink-0")}>
+                      出口节点
+                    </span>
                     {captionSuffix ? (
                       <span className="min-w-0 truncate text-[11px] font-normal normal-case tracking-normal text-muted-foreground/90 tabular-nums">
                         {captionSuffix}
@@ -379,7 +415,7 @@ export function ConnectionInfoCard({
                     ) : null}
                   </span>
                   <span className="truncate text-sm font-semibold text-foreground">
-                    {activeNode?.name ?? '未选择'}
+                    {activeNode?.name ?? "未选择"}
                   </span>
                 </span>
                 <span
@@ -408,8 +444,12 @@ export function ConnectionInfoCard({
                       <ServerOff className="size-5" aria-hidden />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <p className="text-sm font-semibold text-foreground">{gateTitle}</p>
-                      <p className="text-pretty text-sm text-muted-foreground">{gateBody}</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {gateTitle}
+                      </p>
+                      <p className="text-pretty text-sm text-muted-foreground">
+                        {gateBody}
+                      </p>
                     </div>
                   </div>
                   {noProvider && onOpenProviders ? (
@@ -429,5 +469,5 @@ export function ConnectionInfoCard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

@@ -1,138 +1,251 @@
-import { Package, RefreshCw, Pencil, Trash2, Wifi, WifiOff } from 'lucide-react'
-import type { Provider } from '@/types'
+import {
+  Package,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  Clock,
+  CalendarClock,
+  Loader2,
+  HardDrive,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Provider } from "@/types";
 
 interface ProviderCardProps {
-  provider: Provider
-  isActive?: boolean
-  onSetActive: (provider: Provider) => void
-  onEdit: (provider: Provider) => void
-  onDelete: (id: string) => void
-  onRefresh: (id: string) => void
-  onToggleEnabled: (id: string, enabled: boolean) => void
+  provider: Provider;
+  isActive?: boolean;
+  isRefreshing?: boolean;
+  onSetActive: (provider: Provider) => void;
+  onEdit: (provider: Provider) => void;
+  onDelete: (id: string) => void;
+  onRefresh: (id: string) => void;
+}
+
+function formatTrafficGB(gb?: number): string {
+  if (gb == null || !Number.isFinite(gb)) return "—";
+  return `${gb.toFixed(1)}`;
+}
+
+function formatExpiry(iso?: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function formatLastSubscriptionUpdate(raw?: string): string {
+  if (!raw?.trim()) return "暂无";
+  const d = new Date(raw.trim());
+  if (Number.isNaN(d.getTime())) return raw.trim();
+  return d.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export function ProviderCard({
   provider,
   isActive = false,
+  isRefreshing = false,
   onSetActive,
   onEdit,
   onDelete,
   onRefresh,
-  onToggleEnabled,
 }: ProviderCardProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
+  const trafficTotal = provider.trafficTotalGB;
+  const trafficUsed = provider.trafficUsedGB;
+  const trafficRemaining =
+    trafficTotal != null && trafficTotal > 0 && trafficUsed != null
+      ? Math.max(0, trafficTotal - trafficUsed)
+      : undefined;
+  const trafficPct =
+    trafficTotal != null &&
+    trafficTotal > 0 &&
+    trafficUsed != null &&
+    Number.isFinite(trafficUsed)
+      ? Math.min(100, Math.max(0, (trafficUsed / trafficTotal) * 100))
+      : undefined;
 
   return (
-    <div className="glass rounded-2xl overflow-hidden group transition-all duration-300 hover:scale-[1.02]">
-      {/* Colored top bar */}
-      <div className="h-1.5 bg-gradient-to-r from-primary via-indigo-500 to-primary/50" />
-
-      <div className="p-3.5 sm:p-4 md:p-5 space-y-3 sm:space-y-3.5 md:space-y-4">
-        {/* Header */}
-        <div className="flex flex-col gap-3 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between">
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-md sm:rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <Package className="w-[0.9375rem] h-[0.9375rem] sm:w-4 sm:h-4 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-semibold text-xs sm:text-sm truncate">{provider.name}</h3>
-              {provider.group && (
-                <span className="text-[10px] sm:text-[11px] text-muted-foreground block truncate">
-                  {provider.group}
-                </span>
-              )}
-            </div>
-          </div>
-          {/* Status badge — clickable toggle */}
-          <button
-            type="button"
-            onClick={() => onToggleEnabled(provider.id, !provider.enabled)}
-            className={`inline-flex shrink-0 self-start min-[380px]:self-auto items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-medium transition-colors cursor-pointer ${
-              provider.enabled
-                ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                : 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20'
-            }`}
-          >
-            {provider.enabled ? (
-              <><Wifi className="w-2.5 h-2.5" /> 启用</>
-            ) : (
-              <><WifiOff className="w-2.5 h-2.5" /> 禁用</>
-            )}
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-black/5 dark:bg-white/5 text-center min-w-0">
-            <div className="text-base sm:text-lg font-bold text-foreground tabular-nums">
-              {provider.nodeCount}
-            </div>
-            <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">节点数量</div>
-          </div>
-          <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-black/5 dark:bg-white/5 text-center min-w-0">
-            <div className="text-[10px] sm:text-xs font-medium text-foreground leading-tight break-words px-0.5">
-              {formatDate(provider.lastUpdated)}
-            </div>
-            <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">更新时间</div>
+    <div
+      onClick={() => onSetActive(provider)}
+      className={cn(
+        "glass rounded-2xl overflow-hidden transition-all duration-300 h-full relative cursor-pointer",
+        isActive
+          ? "ring-1 ring-primary/30 shadow-[0_0_24px_rgba(59,130,246,0.1)]"
+          : "hover:shadow-[var(--shadow-glass-hover)]",
+      )}
+    >
+      {/* 使用中 - 左上角 45° 斜贴条 */}
+      {isActive && (
+        <div className="absolute top-3 -left-8 z-10 pointer-events-none">
+          <div className="bg-gradient-to-r from-primary to-indigo-500 text-white text-[10px] font-medium py-1 px-10 rotate-[-45deg] shadow-md">
+            使用中
           </div>
         </div>
+      )}
 
-        <div className="pt-0.5">
-          {isActive ? (
-            <div className="w-full rounded-xl border border-primary/35 bg-primary/10 py-2.5 text-center text-[11px] sm:text-xs font-semibold text-primary">
-              当前订阅 · 使用中
-            </div>
+      {/* 右上角操作按钮 */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRefresh(provider.id);
+          }}
+          disabled={isRefreshing}
+          className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors touch-manipulation disabled:opacity-50"
+          aria-label="刷新订阅"
+        >
+          {isRefreshing ? (
+            <Loader2
+              className="w-4 h-4 text-muted-foreground animate-spin"
+              strokeWidth={2.5}
+            />
           ) : (
-            <button
-              type="button"
-              disabled={!provider.enabled}
-              onClick={() => onSetActive(provider)}
-              className="w-full rounded-xl bg-gradient-to-r from-primary to-indigo-600 py-2.5 text-[11px] sm:text-xs font-semibold text-white shadow-md shadow-primary/25 transition-all hover:opacity-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 touch-manipulation"
-            >
-              设为当前订阅
-            </button>
+            <RefreshCw
+              className="w-4 h-4 text-muted-foreground"
+              strokeWidth={2.5}
+            />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(provider);
+          }}
+          className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors touch-manipulation"
+          aria-label="编辑"
+        >
+          <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(provider.id);
+          }}
+          className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors touch-manipulation"
+          aria-label="删除"
+        >
+          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+        </button>
+      </div>
+
+      {/* 顶部装饰条 */}
+      <div
+        className={cn(
+          "h-1 transition-colors duration-300",
+          isActive
+            ? "bg-gradient-to-r from-primary via-indigo-500 to-primary"
+            : "bg-gradient-to-r from-primary/40 via-indigo-500/30 to-transparent",
+        )}
+      />
+
+      <div className="p-4 sm:p-5 flex flex-col gap-3.5 h-full">
+        {/* 头部：名称 */}
+        <div className="flex items-center gap-2.5 min-w-0 pt-1">
+          <div
+            className={cn(
+              "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-300",
+              isActive ? "bg-primary/15" : "bg-muted/50",
+            )}
+          >
+            <Package
+              className={cn(
+                "w-4.5 h-4.5",
+                isActive ? "text-primary" : "text-muted-foreground",
+              )}
+              strokeWidth={1.75}
+            />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm truncate text-foreground">
+              {provider.name}
+            </h3>
+          </div>
+        </div>
+
+        {/* 订阅信息行 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted/40 text-[11px] text-muted-foreground">
+            <CalendarClock
+              className="w-3 h-3 opacity-60 shrink-0"
+              aria-hidden
+            />
+            <span className="text-muted-foreground/85">更新订阅</span>
+            <span className="font-medium tabular-nums text-foreground/90">
+              {formatLastSubscriptionUpdate(provider.lastUpdated)}
+            </span>
+          </span>
+          {provider.expiresAt && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted/40 text-[11px] text-muted-foreground">
+              <Clock className="w-3 h-3 opacity-60" />
+              {formatExpiry(provider.expiresAt)}
+            </span>
+          )}
+          {provider.autoUpdateInterval && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/8 text-primary text-[11px]">
+              <RefreshCw className="w-3 h-3" />每 {provider.autoUpdateInterval}m
+            </span>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col min-[340px]:flex-row items-stretch min-[340px]:items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onRefresh(provider.id)}
-            className="flex min-[340px]:flex-1 w-full items-center justify-center gap-1.5 py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors touch-manipulation"
-          >
-            <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-            更新订阅
-          </button>
-          <div className="flex items-center justify-center gap-2 min-[340px]:justify-end shrink-0">
-            <button
-              type="button"
-              onClick={() => onEdit(provider)}
-              className="flex-1 min-[340px]:flex-none p-2 rounded-lg sm:rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors touch-manipulation inline-flex justify-center"
-              aria-label="编辑服务商"
-            >
-              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(provider.id)}
-              className="flex-1 min-[340px]:flex-none p-2 rounded-lg sm:rounded-xl hover:bg-red-500/10 transition-colors touch-manipulation inline-flex justify-center"
-              aria-label="删除服务商"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-red-400" />
-            </button>
-          </div>
+        {/* 流量信息 */}
+        <div className="flex-1 flex flex-col justify-center">
+          {trafficTotal != null ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-[11px] text-muted-foreground">
+                  流量使用
+                </span>
+                <span className="text-xs tabular-nums">
+                  <span className="font-semibold text-foreground">
+                    {formatTrafficGB(trafficUsed)}
+                  </span>
+                  <span> GB / </span>
+                  <span className="text-foreground">
+                    {formatTrafficGB(trafficTotal)} GB
+                  </span>
+                </span>
+              </div>
+              <div className="relative h-1.5 w-full rounded-full bg-muted/50 overflow-hidden">
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 rounded-full transition-all duration-500",
+                    trafficPct != null && trafficPct > 90
+                      ? "bg-red-400"
+                      : trafficPct != null && trafficPct > 70
+                        ? "bg-yellow-400"
+                        : "bg-primary",
+                  )}
+                  style={{ width: `${trafficPct ?? 0}%` }}
+                />
+              </div>
+              {trafficRemaining != null && (
+                <p className="text-[11px] text-muted-foreground">
+                  剩余{" "}
+                  <span className="font-medium text-foreground tabular-nums">
+                    {trafficRemaining.toFixed(1)} GB
+                  </span>
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60">
+              <HardDrive className="w-3.5 h-3.5" />
+              <span>暂无流量信息</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }

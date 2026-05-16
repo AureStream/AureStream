@@ -46,5 +46,11 @@ coverage
 # Rust / Cargo artifacts (see also src-tauri/.gitignore)
 target/
 
-# Cargo lockfile backups (keep src-tauri/Cargo.lock tracked for reproducible Tauri builds)
+# Mihomo sidecar binaries (download via scripts/download-mihomo.sh)
+src-tauri/binaries/
+
+# Cargo：不提交 lockfile（由本地 / CI `cargo generate-lockfile` 生成）
+src-tauri/Cargo.lock
+
+# Cargo lockfile backups
 *.lock.bak

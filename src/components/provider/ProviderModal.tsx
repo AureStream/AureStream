@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -8,84 +9,100 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import type { Provider } from '@/types'
+} from "@/components/ui/dialog";
+import type { Provider } from "@/types";
 
 interface ProviderModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSave: (provider: Omit<Provider, 'id' | 'nodeCount' | 'lastUpdated'>) => void
-  editingProvider?: Provider | null
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (
+    provider: Omit<Provider, "id" | "nodeCount" | "lastUpdated">,
+  ) => void | Promise<void>;
+  editingProvider?: Provider | null;
 }
 
-export function ProviderModal({ open, onOpenChange, onSave, editingProvider }: ProviderModalProps) {
-  const [name, setName] = useState('')
-  const [url, setUrl] = useState('')
-  const [group, setGroup] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [errors, setErrors] = useState<{ name?: string; url?: string }>({})
+const AUTO_UPDATE_OPTIONS = [
+  { label: "不自动更新", value: undefined },
+  { label: "每 30 分钟", value: 30 },
+  { label: "每 1 小时", value: 60 },
+  { label: "每 2 小时", value: 120 },
+  { label: "每 6 小时", value: 360 },
+  { label: "每 12 小时", value: 720 },
+  { label: "每 24 小时", value: 1440 },
+];
+
+export function ProviderModal({
+  open,
+  onOpenChange,
+  onSave,
+  editingProvider,
+}: ProviderModalProps) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [autoUpdateInterval, setAutoUpdateInterval] = useState<
+    number | undefined
+  >(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; url?: string }>({});
 
   useEffect(() => {
     if (editingProvider) {
-      setName(editingProvider.name)
-      setUrl(editingProvider.url)
-      setGroup(editingProvider.group || '')
+      setName(editingProvider.name);
+      setUrl(editingProvider.url);
+      setAutoUpdateInterval(editingProvider.autoUpdateInterval);
     } else {
-      setName('')
-      setUrl('')
-      setGroup('')
+      setName("");
+      setUrl("");
+      setAutoUpdateInterval(undefined);
     }
-    setErrors({})
-  }, [editingProvider, open])
+    setErrors({});
+  }, [editingProvider, open]);
 
   const validateForm = (): boolean => {
-    const newErrors: { name?: string; url?: string } = {}
+    const newErrors: { name?: string; url?: string } = {};
 
     if (!name.trim()) {
-      newErrors.name = '请输入服务商名称'
+      newErrors.name = "请输入服务商名称";
     }
 
     if (!url.trim()) {
-      newErrors.url = '请输入订阅链接'
+      newErrors.url = "请输入订阅链接";
     } else if (!isValidUrl(url)) {
-      newErrors.url = '请输入有效的 URL'
+      newErrors.url = "请输入有效的 URL";
     }
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const isValidUrl = (urlString: string): boolean => {
     try {
-      new URL(urlString)
-      return true
+      new URL(urlString);
+      return true;
     } catch {
-      return false
+      return false;
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    if (!validateForm()) return
+    if (!validateForm()) return;
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      onSave({
+      await onSave({
         name: name.trim(),
         url: url.trim(),
-        group: group.trim() || undefined,
-        enabled: editingProvider?.enabled ?? true,
-      })
+        autoUpdateInterval,
+      });
 
-      onOpenChange(false)
+      onOpenChange(false);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -93,12 +110,10 @@ export function ProviderModal({ open, onOpenChange, onSave, editingProvider }: P
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-lg">
-              {editingProvider ? '编辑服务商' : '添加服务商'}
+              {editingProvider ? "编辑服务商" : "添加服务商"}
             </DialogTitle>
             <DialogDescription>
-              {editingProvider
-                ? '修改服务商信息'
-                : '添加新的订阅服务商'}
+              {editingProvider ? "修改服务商信息" : "添加新的订阅服务商"}
             </DialogDescription>
           </DialogHeader>
 
@@ -138,37 +153,48 @@ export function ProviderModal({ open, onOpenChange, onSave, editingProvider }: P
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="group">分组</Label>
-              <Input
-                id="group"
-                value={group}
-                onChange={(e) => setGroup(e.target.value)}
-                placeholder="例如：默认"
+              <Label htmlFor="autoUpdate">定时更新</Label>
+              <select
+                id="autoUpdate"
+                value={autoUpdateInterval ?? ""}
+                onChange={(e) =>
+                  setAutoUpdateInterval(
+                    e.target.value ? Number(e.target.value) : undefined,
+                  )
+                }
                 disabled={isLoading}
-                className="h-10 rounded-xl"
-              />
+                className="h-10 rounded-xl border border-input bg-background text-foreground px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {AUTO_UPDATE_OPTIONS.map((opt) => (
+                  <option key={opt.label} value={opt.value ?? ""}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <DialogFooter>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              disabled={isLoading}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            >
-              取消
-            </button>
+            {!isLoading && (
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              >
+                取消
+              </button>
+            )}
             <button
               type="submit"
               disabled={isLoading}
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white text-sm font-medium shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white text-sm font-medium shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 inline-flex items-center gap-2"
             >
-              {isLoading ? '保存中...' : editingProvider ? '保存修改' : '添加'}
+              {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isLoading ? "下载中..." : editingProvider ? "保存修改" : "添加"}
             </button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

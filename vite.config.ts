@@ -14,6 +14,28 @@ export default defineConfig(async () => ({
     },
   },
 
+  // Pre-bundle heavy dependencies at dev server startup instead of on first request.
+  // This eliminates the 3-4s first-load compilation stall.
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "zustand",
+      "sonner",
+      "lucide-react",
+      "clsx",
+      "tailwind-merge",
+      "class-variance-authority",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-progress",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-toggle",
+      "@radix-ui/react-toggle-group",
+      "tauri-plugin-mihomo-api",
+    ],
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

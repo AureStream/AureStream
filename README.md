@@ -1,98 +1,56 @@
-# AureProxy
+# AureStream
 
-基于 mihomo 内核的跨平台代理软件，使用 Tauri + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui 构建。
+> 一款简洁易用的桌面端网络代理客户端，帮助你在本机安全、便捷地管理代理连接与订阅。
 
-## 功能特性
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-### 仪表盘
-- **黄金比例双栏布局**: 左栏 (61.8%) 操作区 + 右栏 (38.2%) 信息展示区，单视口无滚动
-- **连接控制**: 大型圆形按钮，呼吸动画区分连接/未连接状态，同一 DOM 元素平滑过渡
-- **代理模式**: 规则 / 全局 / 直连 三种模式，横向卡片选择
-- **节点信息**: 胶囊式展示当前节点、服务器地址、类型、延迟
-- **实时速率**: 上传/下载速度胶囊组件
+---
 
-### 右栏信息
-- **订阅信息**: 供应商名称、总/已用/剩余流量、环形进度图、到期时间
-- **网络信息**: IP、国家、城市、ASN、组织
-- **用量信息**: 上传/下载/总计 + SVG Catmull-Rom 平滑波浪面积图
+## 简介
 
-### 服务商管理
-- 添加 / 编辑 / 删除服务商
-- 启用 / 禁用订阅
-- 设为当前订阅
-- 更新订阅
+AureStream 提供统一的图形界面，用于开关代理、切换规则与节点、管理服务商订阅，并查看连接与流量等相关信息。支持在常见桌面系统上运行；关闭主窗口后可保留在系统托盘，随时唤回。
 
-### 通用
-- 浅色 / 深色主题切换
-- Glassmorphism 设计风格
-- 节点选择对话框 (延迟显示、一键测速)
+## 配置与数据目录
 
-## 技术栈
+应用捆绑标识符为 **`com.root.aurestream`**。以下内容相对「应用配置目录」与「本地数据目录」表述（均由 Tauri 按平台解析，与上述 identifier 对齐）：
 
-| 技术 | 用途 |
-|------|------|
-| Tauri 2.0 | 桌面框架 |
-| React 19 + TypeScript | 前端 |
-| Vite 7 | 构建工具 |
-| Tailwind CSS v4 | 样式框架 |
-| shadcn/ui (Radix) | UI 组件库 |
-| Zustand 5 | 状态管理 |
-| mihomo | 代理内核 |
+- **配置目录**：`aurestream.yaml`（后端主配置）、`subscriptions/`、`runtime/aurestream-mihomo.yaml`（运行时 Mihomo 配置）等；
+- **本地数据目录**：`mihomo-work/`（内核工作区与 geodata）。
 
-## 开发
+常见绝对路径示意（仅供参考，以当前系统为准）：
 
-```bash
-# 安装依赖
-npm install
+| 平台    | 配置目录示意 |
+| ------- | ------------- |
+| macOS   | `~/Library/Application Support/com.root.aurestream/` |
+| Windows | `%APPDATA%\com.root.aurestream\` |
+| Linux   | `~/.config/com.root.aurestream/` |
 
-# 前端开发服务器
-npm run dev
+## 预览
 
-# Tauri 桌面开发
-npm run dev:desktop
+界面截图可在后续版本补充至此（欢迎通过 PR 提供）。
 
-# 生产构建
-npm run build
-```
+## 主要功能
 
-## 项目结构
+- **连接与模式**：一键连接，支持规则 / 全局 / 直连等常用模式  
+- **订阅与节点**：管理多个服务商与订阅，选择节点、查看延迟、批量测速  
+- **状态展示**：集中查看当前节点、速率、订阅余量与网络信息  
+- **外观**：浅色 / 深色主题，界面清晰易读  
+- **系统托盘**：关闭窗口后驻留后台，从托盘快速打开主界面  
 
-```
-src/
-├── components/
-│   ├── dashboard/            # 仪表盘组件
-│   │   ├── ConnectButton.tsx
-│   │   ├── LeftOperationPanel.tsx
-│   │   ├── SubscriptionBlock.tsx
-│   │   ├── NetworkBlock.tsx
-│   │   ├── UsageBlock.tsx
-│   │   ├── NodePickerDialog.tsx
-│   │   └── TrafficUsageRing.tsx
-│   ├── provider/             # 服务商管理
-│   │   ├── ProviderCard.tsx
-│   │   └── ProviderModal.tsx
-│   ├── layout/               # 布局
-│   │   └── PageShell.tsx
-│   └── ui/                   # shadcn 基础组件
-├── pages/
-│   ├── Dashboard.tsx         # 首页
-│   ├── Providers.tsx         # 服务商管理
-│   └── Settings.tsx          # 设置
-├── stores/
-│   └── appStore.ts           # Zustand 全局状态
-├── types/
-│   └── index.ts
-└── lib/
-    └── utils.ts
-```
+## 下载
 
-## 数据存储
+若已发布安装包，请在 [**Releases**](https://github.com/BadKid90s/aureproxy/releases) 中选择适合你系统的版本下载安装。
 
-配置文件位于：
-- **Windows**: `%APPDATA%\AureProxy\config.json`
-- **macOS**: `~/Library/Application Support/AureProxy/config.json`
-- **Linux**: `~/.config/aureproxy/config.json`
+具体支持的平台与安装方式以发布说明为准。
+
+## 参与贡献
+
+欢迎通过 [Issue](https://github.com/BadKid90s/aureproxy/issues) 反馈问题或提出建议；也欢迎提交 Pull Request。更详细的说明与内部文档见仓库内 [`docs/`](docs/README.md) 目录。
 
 ## 许可证
 
-MIT License
+本项目以 [MIT 许可证](https://opensource.org/licenses/MIT) 开源。
+
+## 声明
+
+请确保在**遵守当地法律法规**的前提下使用本软件；开发者不对用户的使用行为及其后果承担责任。
