@@ -38,6 +38,9 @@ dist-ssr
 # OS
 .DS_Store
 
+# 本地打的 macOS 安装包（勿提交大体积二进制）
+/*.dmg
+
 # Test & coverage
 coverage
 *.lcov
