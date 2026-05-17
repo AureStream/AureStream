@@ -411,7 +411,10 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     await deleteProviderIpc(id);
     const newProviders = get().providers.filter((p) => p.id !== id);
     let currentProvider = get().currentProvider;
-    if (currentProvider?.id === id) currentProvider = undefined;
+    if (currentProvider?.id === id) {
+      // 删除当前使用的订阅后，自动选第一个剩余订阅
+      currentProvider = newProviders.length > 0 ? newProviders[0] : undefined;
+    }
     const sel = normalizeCurrentSubscriptionSelection(
       newProviders,
       currentProvider,
