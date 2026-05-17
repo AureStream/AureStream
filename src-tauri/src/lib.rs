@@ -128,11 +128,11 @@ pub fn run() {
                     .filter(|metadata| metadata.target() != "mihomo"),
                     // 控制台输出（dev 模式可见，排除 mihomo）
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout)
-                        .filter(|metadata| metadata.target() != "mihomo"),
+                        .filter(|metadata| metadata.target() != "mihomo" && !metadata.target().starts_with("sqlx")),
                 ])
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .max_file_size(5_000_000)
-                .level(log::LevelFilter::Info)
+                .level(log::LevelFilter::Debug)
                 .build(),
         )
         .plugin(tauri_plugin_autostart::Builder::new().build())

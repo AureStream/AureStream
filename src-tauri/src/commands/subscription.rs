@@ -212,6 +212,7 @@ async fn race_user_agents(
         return Err(vec!["未配置任何 User-Agent 候选（请联系开发者）".to_string()]);
     }
 
+    let t_race = std::time::Instant::now();
     let mut failures: Vec<String> = Vec::new();
     let mut set = JoinSet::new();
 
@@ -252,9 +253,10 @@ async fn race_user_agents(
                 }
                 Ok(Ok((content, dbg, hm, redirects))) => {
                     tracing::info!(
-                        "[subscription] 下载成功 ua={} redirects={}",
+                        "[subscription] 下载成功 ua={} redirects={} ({:.0}ms)",
                         ua,
-                        redirects
+                        redirects,
+                        t_race.elapsed().as_millis()
                     );
                     remember_subscription_ua(provider_id, &ua);
                     downloaded = Some((content, dbg, hm, redirects));
@@ -471,6 +473,13 @@ pub async fn download_subscription(
     provider_id: String,
     url: String,
 ) -> Result<DownloadResult, String> {
+    let t0 = std::time::Instant::now();
+    tracing::debug!(
+        provider_id = %provider_id,
+        "[subscription] 开始下载: {}",
+        url
+    );
+
     let config_dir = app
         .path()
         .app_config_dir()
@@ -488,7 +497,7 @@ pub async fn download_subscription(
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
-        .connect_timeout(Duration::from_secs(15))
+        .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(30))
         .gzip(true)
         .build()
@@ -496,6 +505,7 @@ pub async fn download_subscription(
 
     let base_url = reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
 
+    let t_fetch = std::time::Instant::now();
     let (content, debug_headers, header_meta, redirect_count, _winning_ua) =
         match race_user_agents(&client, &base_url, &provider_id).await {
             Ok(ok) => ok,
@@ -511,8 +521,16 @@ pub async fn download_subscription(
                 return Err(msg);
             }
         };
+    tracing::debug!(
+        provider_id = %provider_id,
+        "[subscription] HTTP 下载+校验完成 ({:.0}ms), redirects={}, content_len={}",
+        t_fetch.elapsed().as_millis(),
+        redirect_count,
+        content.len()
+    );
 
     let file_path = sub_dir.join(format!("{}.yaml", provider_id));
+    let t_write = std::time::Instant::now();
     tokio::fs::write(&file_path, &content)
         .await
         .map_err(|e| format!("Failed to write file: {}", e))?;
@@ -530,6 +548,12 @@ pub async fn download_subscription(
             "订阅解析未得到可用节点，保留数据库既有节点"
         );
     }
+    tracing::debug!(
+        provider_id = %provider_id,
+        "[subscription] 文件写入+解析+入库完成 ({:.0}ms), endpoints={}",
+        t_write.elapsed().as_millis(),
+        endpoints.len()
+    );
 
     let node_count_db = endpoint_repo::count_by_source(rt.pool(), &provider_id)
         .await
@@ -626,6 +650,11 @@ pub async fn download_subscription(
     tracing::info!(
         "[subscription] Returning DownloadResult: meta={:?}",
         result.meta
+    );
+    tracing::debug!(
+        provider_id = %provider_id,
+        "[subscription] 下载流程完成，总耗时 {:.0}ms",
+        t0.elapsed().as_millis()
     );
     Ok(result)
 }

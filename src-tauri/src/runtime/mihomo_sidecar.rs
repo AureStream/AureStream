@@ -148,6 +148,9 @@ impl MihomoSidecar {
         config_path: PathBuf,
         proxy_cfg_on_ready: ProxyConfig,
     ) -> Result<(), String> {
+        let t0 = std::time::Instant::now();
+        tracing::debug!("[mihomo.startup] 开始启动 sidecar");
+
         if !config_path.is_file() {
             return Err("运行配置不存在".into());
         }
@@ -168,9 +171,13 @@ impl MihomoSidecar {
         {
             let mut guard = self.inner.lock().await;
             if let Some(MihomoChild { child }) = guard.take() {
+                tracing::debug!("[mihomo.startup] 终止已有 sidecar 进程");
                 let _ = child.kill();
             }
         }
+        tracing::debug!("[mihomo.startup] 工作目录准备完成 ({:.0}ms)", t0.elapsed().as_millis());
+
+        let t_spawn = std::time::Instant::now();
 
         let cfg_str = config_path
             .to_str()
@@ -198,6 +205,7 @@ impl MihomoSidecar {
                 tracing::error!("[mihomo] spawn 失败: {}", e);
                 format!("启动 Mihomo 进程失败: {}", e)
             })?;
+        tracing::debug!("[mihomo.startup] sidecar spawn 完成 ({:.0}ms)", t_spawn.elapsed().as_millis());
 
         let mihomo_log_dir = app
             .path()
@@ -251,7 +259,9 @@ impl MihomoSidecar {
             }
             return Err(e);
         }
+        tracing::debug!("[mihomo.startup] controller 就绪 ({:.0}ms)", t0.elapsed().as_millis());
 
+        let t_proxy = std::time::Instant::now();
         match tokio::task::spawn_blocking(move || {
             crate::commands::system_proxy::apply_platform(&proxy_cfg_on_ready)
         })
@@ -259,6 +269,7 @@ impl MihomoSidecar {
         {
             Ok(Ok(())) => {
                 self.system_proxy_managed.store(true, Ordering::SeqCst);
+                tracing::debug!("[mihomo.startup] 系统代理设置完成 ({:.0}ms)", t_proxy.elapsed().as_millis());
             }
             Ok(Err(err)) => {
                 tracing::warn!(
@@ -269,6 +280,7 @@ impl MihomoSidecar {
             Err(join_err) => tracing::error!("[system-proxy] 启用任务失败: {:?}", join_err),
         }
 
+        tracing::debug!("[mihomo.startup] 启动完成，总耗时 {:.0}ms", t0.elapsed().as_millis());
         Ok(())
     }
 
