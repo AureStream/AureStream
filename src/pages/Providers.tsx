@@ -63,8 +63,10 @@ export function Providers() {
         if (result.success) {
           toast.success(`「${providerData.name}」订阅添加成功`);
         } else {
-          toast.error(`「${providerData.name}」已添加，但订阅同步失败`, {
-            description: userFacingMessage("subscription"),
+          // 订阅下载失败则回滚，不允许添加无效服务商
+          await deleteProvider(id);
+          toast.error(`「${providerData.name}」添加失败`, {
+            description: "订阅下载失败，请检查链接是否正确",
           });
         }
       }
