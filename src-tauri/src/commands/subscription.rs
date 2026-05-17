@@ -128,7 +128,7 @@ const SUBSCRIPTION_USER_AGENTS: &[&str] = &[
 ];
 
 /// 单次 UA 尝试上限（与 reqwest 整体超时一致，便于并行竞速时快速失败）。
-const SUBSCRIPTION_FETCH_ATTEMPT_SECS: u64 = 10;
+const SUBSCRIPTION_FETCH_ATTEMPT_SECS: u64 = 30;
 
 /// 进程内记住「provider -> 上次成功的 UA」，避免下次盲 parallel。
 static LAST_SUCCESS_UA_BY_PROVIDER: LazyLock<Mutex<HashMap<String, String>>> =
@@ -488,8 +488,8 @@ pub async fn download_subscription(
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
-        .connect_timeout(Duration::from_secs(3))
-        .timeout(Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(30))
         .gzip(true)
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
