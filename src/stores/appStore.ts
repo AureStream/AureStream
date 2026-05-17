@@ -447,6 +447,13 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     if (!node || !get().isConnected) return;
     try {
       await selectNodeForGroup(AURESTREAM_NODE_SELECTOR, node.name);
+      // 关闭已有连接，强制后续请求立即走新节点
+      try {
+        const { closeAllConnections } = await import("tauri-plugin-mihomo-api");
+        await closeAllConnections();
+      } catch {
+        // closeAllConnections 失败不影响节点切换本身
+      }
     } catch (e) {
       console.error("切换节点失败:", e);
     }

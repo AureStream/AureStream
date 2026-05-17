@@ -11,14 +11,14 @@ use std::io::{BufRead, BufReader, Read};
 #[cfg(target_os = "macos")]
 use std::process::Command;
 #[cfg(target_os = "macos")]
-use std::sync::OnceLock;
+use std::sync::Mutex;
 #[cfg(target_os = "macos")]
 use security_framework::authorization::{Authorization, Flags as AuthFlags};
 #[cfg(target_os = "macos")]
 use security_framework_sys::authorization::AuthorizationExternalForm;
 
 #[cfg(target_os = "macos")]
-static SYSTEM_PROXY_AUTH: OnceLock<AuthorizationExternalForm> = OnceLock::new();
+static SYSTEM_PROXY_AUTH: Mutex<Option<AuthorizationExternalForm>> = Mutex::new(None);
 
 #[cfg(target_os = "macos")]
 fn posix_single_quote(s: &str) -> String {
@@ -38,9 +38,16 @@ fn networksetup_cmdline(args: &[impl AsRef<str>]) -> String {
 /// 获取已缓存的授权，或创建新授权（首次调用弹出密码对话框）
 #[cfg(target_os = "macos")]
 fn get_or_create_auth() -> Result<Authorization, String> {
-    if let Some(external) = SYSTEM_PROXY_AUTH.get() {
-        return Authorization::try_from(*external)
-            .map_err(|e| format!("从缓存恢复授权失败: {}", e));
+    if let Ok(mut guard) = SYSTEM_PROXY_AUTH.lock() {
+        if let Some(external) = guard.as_ref() {
+            match Authorization::try_from(*external) {
+                Ok(auth) => return Ok(auth),
+                Err(e) => {
+                    tracing::warn!("[system-proxy] 缓存授权恢复失败({})，重新获取", e);
+                    *guard = None;
+                }
+            }
+        }
     }
 
     info!("[system-proxy] 正在请求管理员权限以修改系统代理（仅此一次）");
@@ -62,8 +69,9 @@ fn get_or_create_auth() -> Result<Authorization, String> {
         .make_external_form()
         .map_err(|e| format!("序列化授权失败: {}", e))?;
 
-    // OnceLock::set 可能因竞态失败，此时另一个线程已存储，忽略即可
-    let _ = SYSTEM_PROXY_AUTH.set(external);
+    if let Ok(mut guard) = SYSTEM_PROXY_AUTH.lock() {
+        *guard = Some(external);
+    }
 
     Ok(auth)
 }
