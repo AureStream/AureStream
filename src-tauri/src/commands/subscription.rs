@@ -483,8 +483,11 @@ pub async fn download_subscription(
 
     // Build a client that does NOT follow redirects automatically,
     // so we can capture headers (like subscription-userinfo) from the initial response.
+    // Bypass system proxy: subscriptions must be fetched directly,
+    // otherwise after proxy is connected requests loop through mihomo.
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
         .connect_timeout(Duration::from_secs(3))
         .timeout(Duration::from_secs(10))
         .gzip(true)
