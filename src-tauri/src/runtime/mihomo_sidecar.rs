@@ -112,20 +112,31 @@ impl MihomoSidecar {
 
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+
+        tracing::info!(
+            "[mihomo] sidecar 已 spawn，等待 External Controller 就绪（最长 90s，首启下载规则库可能较慢）"
+        );
 
         loop {
             if std::time::Instant::now() >= deadline {
                 break;
             }
             match client.get("http://127.0.0.1:9090/version").send().await {
-                Ok(r) if r.status().is_success() => return Ok(()),
+                Ok(r) if r.status().is_success() => {
+                    tracing::info!("[mihomo] External Controller 已就绪");
+                    return Ok(());
+                }
                 _ => tokio::time::sleep(std::time::Duration::from_millis(250)).await,
             }
         }
 
+        tracing::error!(
+            "[mihomo] 等待 127.0.0.1:9090/version 超时（90s），侧进程已终止。请查看应用日志目录中的 mihomo.log"
+        );
+
         Err(
-            "等待 Mihomo API 就绪超时（已轮询约 30 秒）。常见原因：1）首次 GEOIP/GEOSITE 需下载 geodata，可能超过 30 秒；2）127.0.0.1:9090 被占用；3）内核因配置或订阅 YAML 错误已退出——请查看日志目录 mihomo.log。"
+            "等待 Mihomo API 就绪超时（已轮询约 90 秒）。常见原因：1）首次启动需下载 GEOIP/GEOSITE，耗时较长；2）127.0.0.1:9090 被占用；3）配置或订阅 YAML 有误导致内核退出——请查看日志目录 mihomo.log。"
                 .to_string(),
         )
     }
@@ -183,7 +194,10 @@ impl MihomoSidecar {
 
         let (mut rx, child) = sidecar
             .spawn()
-            .map_err(|e| format!("启动 Mihomo 进程失败: {}", e))?;
+            .map_err(|e| {
+                tracing::error!("[mihomo] spawn 失败: {}", e);
+                format!("启动 Mihomo 进程失败: {}", e)
+            })?;
 
         let mihomo_log_dir = app
             .path()
@@ -230,6 +244,7 @@ impl MihomoSidecar {
         }
 
         if let Err(e) = Self::wait_for_controller_ready().await {
+            tracing::error!("[mihomo] 就绪等待失败: {}", e);
             let mut guard = self.inner.lock().await;
             if let Some(MihomoChild { child }) = guard.take() {
                 let _ = child.kill();

@@ -25,6 +25,11 @@ pub async fn start_runtime_engine(
     rt.spawn_sidecar_with_config(&app, PathBuf::from(runtime_config_path), proxy_cfg)
         .await
         .map_err(|e| {
+            tracing::error!(
+                target: "aurestream_lib::commands::mihomo_kernel",
+                error = %e,
+                "启动运行时引擎失败（侧进程未就绪或 spawn 失败）"
+            );
             if let Ok(mut status) = proxy_state.status.lock() {
                 status.is_running = false;
             }

@@ -1,10 +1,9 @@
 use crate::bootstrap;
-use crate::config::AureConfigState;
+use crate::config::{AureConfigState, ProviderEntry};
 use crate::runtime::RuntimeManager;
 use crate::storage::{endpoint_repo, subscription_repo};
 use crate::subscription::ParserRegistry;
 use base64::Engine;
-use log::{debug, info};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
@@ -210,7 +209,7 @@ async fn fetch_subscription_with_redirects(
         let resolved = current_url
             .join(location_str)
             .map_err(|e| format!("解析跳转 URL 失败: {e}"))?;
-        info!(
+        tracing::info!(
             "[subscription] Redirect {} -> {}",
             response.status(),
             resolved
@@ -312,7 +311,7 @@ pub async fn download_subscription(
         .await;
         match attempt {
             Ok(Ok((content, dbg, hm, redirects))) => {
-                info!(
+                tracing::info!(
                     "[subscription] 下载成功（沿用上次 UA）ua={} redirects={}",
                     pref, redirects
                 );
@@ -328,7 +327,6 @@ pub async fn download_subscription(
                     "沿用上次 UA 在 {}s 内未完成",
                     SUBSCRIPTION_REMEMBERED_UA_SECS
                 );
-                tracing::warn!("[subscription] {}", last_err);
             }
         }
     }
@@ -361,7 +359,7 @@ pub async fn download_subscription(
                         tracing::warn!("[subscription] {}", last_err);
                     }
                     Ok(Ok((content, dbg, hm, redirects))) => {
-                        info!(
+                        tracing::info!(
                             "[subscription] 下载成功 ua={} redirects={}",
                             ua, redirects
                         );
@@ -428,21 +426,21 @@ pub async fn download_subscription(
     // Use header meta, or fall back to parsing YAML content
     let meta = header_meta.or_else(|| parse_yaml_meta(&content));
 
-    debug!("[subscription] URL: {}", url);
-    debug!("[subscription] Redirects followed: {}", redirect_count);
-    debug!("[subscription] All headers collected:");
+    tracing::debug!("[subscription] URL: {}", url);
+    tracing::debug!("[subscription] Redirects followed: {}", redirect_count);
+    tracing::debug!("[subscription] All headers collected:");
     for (k, v) in &debug_headers {
-        debug!("[subscription]   {} = {}", k, v);
+        tracing::debug!("[subscription]   {} = {}", k, v);
     }
-    debug!("[subscription] header_meta: {:?}", meta);
-    debug!("[subscription] content length: {} bytes", content.len());
+    tracing::debug!("[subscription] header_meta: {:?}", meta);
+    tracing::debug!("[subscription] content length: {} bytes", content.len());
     if content.len() > 200 {
-        debug!(
+        tracing::debug!(
             "[subscription] content preview: {}",
             String::from_utf8_lossy(&content[..200])
         );
     } else {
-        debug!(
+        tracing::debug!(
             "[subscription] content: {}",
             String::from_utf8_lossy(&content)
         );
@@ -462,7 +460,7 @@ pub async fn download_subscription(
             dt.to_rfc3339()
         });
 
-        info!(
+        tracing::info!(
             "[subscription] provider_id={}, traffic_total={:?}, traffic_used={:?}, expires_at={:?}",
             provider_id, traffic_total, traffic_used, expires_at
         );
@@ -506,7 +504,7 @@ pub async fn download_subscription(
         meta,
         debug_headers,
     };
-    info!(
+    tracing::info!(
         "[subscription] Returning DownloadResult: meta={:?}",
         result.meta
     );

@@ -3,7 +3,7 @@ import { Package, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ProviderCard } from "@/components/provider/ProviderCard";
 import { ProviderModal } from "@/components/provider/ProviderModal";
-import { downloadSubscription } from "@/lib/api";
+import { logErrorDetail, userFacingMessage } from "@/lib/userErrors";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,27 +51,26 @@ export function Providers() {
         });
         toast.success(`「${providerData.name}」已更新`);
       } else {
-        await downloadSubscription(id, providerData.url);
-        // 下载成功，添加 provider
         const newProvider: Provider = {
           ...providerData,
           id,
           nodeCount: 0,
           lastUpdated,
         };
+        // 先写入配置并 upsert subscriptions，再下载节点，避免 endpoints 外键失败
         await addProvider(newProvider);
-        // 从 DB 刷新以获取订阅元数据
         const result = await fetchAndSaveSubscription(id);
         if (result.success) {
           toast.success(`「${providerData.name}」订阅添加成功`);
         } else {
-          toast.success(`「${providerData.name}」添加成功，但元数据更新失败`);
+          toast.error(`「${providerData.name}」已添加，但订阅同步失败`, {
+            description: userFacingMessage("subscription"),
+          });
         }
       }
     } catch (e) {
-      toast.error(
-        `订阅下载失败：${e instanceof Error ? e.message : String(e)}`,
-      );
+      logErrorDetail("Providers.handleSave.download", e);
+      toast.error(userFacingMessage("subscription_download"));
     }
 
     setEditingProvider(null);
@@ -103,7 +102,9 @@ export function Providers() {
     if (result.success) {
       toast.success(`「${name}」订阅已更新`);
     } else {
-      toast.error(`「${name}」更新失败：${result.error}`);
+      toast.error(`「${name}」订阅更新失败`, {
+        description: userFacingMessage("subscription"),
+      });
     }
   };
 

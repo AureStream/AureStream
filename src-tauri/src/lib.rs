@@ -142,7 +142,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(move |app| {
             if let Ok(log_dir) = app.path().app_log_dir() {
-                eprintln!("[aurestream] 日志目录: {}", log_dir.display());
+                tracing::info!("日志目录: {}", log_dir.display());
             }
             tracing::info!("AureStream 启动中...");
             let app_dir = app.path().app_data_dir().map_err(|e| {
