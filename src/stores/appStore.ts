@@ -18,6 +18,7 @@ import {
   updateProxyConfig,
   updateTrayMenu,
 } from "@/lib/api";
+import { logErrorDetail, userFacingMessage } from "@/lib/userErrors";
 import {
   loadPersistedSettings,
   savePersistedSettings,
@@ -579,6 +580,7 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       } catch {
         // ignore
       }
+      logErrorDetail("proxy.connect", e);
       set({ isConnecting: false });
       throw e;
     }
@@ -807,9 +809,8 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
 
       return { success: true };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(`Failed to fetch subscription for ${id}:`, msg);
-      return { success: false, error: msg };
+      logErrorDetail("proxy.fetchAndSaveSubscription", e);
+      return { success: false, error: userFacingMessage("subscription") };
     } finally {
       const ids = new Set(get().refreshingIds);
       ids.delete(id);

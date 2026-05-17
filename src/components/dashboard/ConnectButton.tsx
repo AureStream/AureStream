@@ -3,6 +3,7 @@ import { useId } from "react";
 import { cn } from "@/lib/utils";
 import { useProxyStore } from "@/stores/appStore";
 import { toast } from "sonner";
+import { logErrorDetail, userFacingMessage } from "@/lib/userErrors";
 
 const SIZE_MAP = {
   sm: {
@@ -53,7 +54,8 @@ export function ConnectButton({
       try {
         await disconnect();
       } catch (e) {
-        toast.error(`断开失败：${e instanceof Error ? e.message : String(e)}`);
+        logErrorDetail("ConnectButton.disconnect", e);
+        toast.error(userFacingMessage("disconnect"));
       }
       return;
     }
@@ -61,7 +63,8 @@ export function ConnectButton({
     try {
       await connect();
     } catch (e) {
-      toast.error(`连接失败：${e instanceof Error ? e.message : String(e)}`);
+      logErrorDetail("ConnectButton.connect", e);
+      toast.error(userFacingMessage("connect"));
     }
   };
 

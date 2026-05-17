@@ -1,6 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Provider, Node } from "@/types";
 
+/** Tauri invoke 常见 rejection 为字符串；统一成可读文案供 Toast 展示 */
+export function formatInvokeError(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message;
+  if (
+    e &&
+    typeof e === "object" &&
+    "message" in e &&
+    typeof (e as { message: unknown }).message === "string"
+  ) {
+    return (e as { message: string }).message;
+  }
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 export interface ProxyConfig {
   listen: string;
   mixed_port: number;
