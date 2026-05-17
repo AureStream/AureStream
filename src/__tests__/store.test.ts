@@ -24,10 +24,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    buildAureStreamMihomoConfig: vi
+    buildRuntimeConfig: vi
       .fn()
       .mockResolvedValue("/mock/runtime/aurestream-mihomo.yaml"),
-    startMihomoKernel: vi.fn().mockResolvedValue(undefined),
+    startRuntimeEngine: vi.fn().mockResolvedValue(undefined),
     stopProxy: vi.fn().mockResolvedValue("ok"),
   };
 });

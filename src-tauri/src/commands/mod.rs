@@ -5,7 +5,7 @@ pub mod provider;
 pub mod proxy;
 pub mod settings;
 pub mod subscription;
-mod system_proxy;
+pub(crate) mod system_proxy;
 
 use serde::{Deserialize, Serialize};
 use std::net::TcpListener;

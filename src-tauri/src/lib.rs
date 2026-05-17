@@ -1,9 +1,20 @@
+pub mod adapter;
+mod bootstrap;
 mod commands;
 mod config;
+pub mod error;
+pub mod ipc;
+pub mod models;
+pub mod network;
+pub mod runtime;
+pub mod subscription;
+pub mod storage;
 
-use commands::builtin_config::build_aurestream_mihomo_config;
+use std::sync::Arc;
+
+use commands::builtin_config::build_runtime_config;
 use commands::mihomo_kernel::{
-    download_geodata, start_mihomo_kernel, stop_mihomo_kernel, MihomoKernelState,
+    prefetch_rule_assets, start_runtime_engine, stop_runtime_engine,
 };
 use commands::provider::{
     add_provider, delete_provider, get_nodes, get_nodes_by_provider, get_providers,
@@ -18,7 +29,6 @@ use commands::subscription::{
     delete_subscription_file, download_subscription, get_subscription_path,
 };
 use config::AureConfigState;
-use log::info;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 use tauri::{Emitter, Manager, Runtime, Window};
@@ -36,18 +46,18 @@ use tauri::{Emitter, Manager, Runtime, Window};
 /// [`AppHandle::set_activation_policy`]: https://docs.rs/tauri/latest/tauri/struct.AppHandle.html#method.set_activation_policy
 fn enter_tray_mode<R: Runtime>(window: &Window<R>) {
     if let Err(e) = window.hide() {
-        log::warn!("进入托盘模式时隐藏窗口失败: {}", e);
+        tracing::warn!(error = %e, "进入托盘模式时隐藏窗口失败");
     }
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     if let Err(e) = window.set_skip_taskbar(true) {
-        log::warn!("进入托盘模式时 set_skip_taskbar(true) 失败: {}", e);
+        tracing::warn!(error = %e, "进入托盘模式时 set_skip_taskbar(true) 失败");
     }
     #[cfg(target_os = "macos")]
     if let Err(e) = window
         .app_handle()
         .set_activation_policy(ActivationPolicy::Accessory)
     {
-        log::warn!("进入托盘模式时设置 ActivationPolicy 失败: {}", e);
+        tracing::warn!(error = %e, "进入托盘模式时设置 ActivationPolicy 失败");
     }
 }
 
@@ -55,15 +65,15 @@ fn enter_tray_mode<R: Runtime>(window: &Window<R>) {
 fn show_main_window<R: Runtime>(app: &tauri::AppHandle<R>) {
     #[cfg(target_os = "macos")]
     if let Err(e) = app.set_activation_policy(ActivationPolicy::Regular) {
-        log::warn!("显示主窗口时设置 ActivationPolicy 失败: {}", e);
+        tracing::warn!(error = %e, "显示主窗口时设置 ActivationPolicy 失败");
     }
     if let Some(window) = app.get_webview_window("main") {
         #[cfg(any(target_os = "windows", target_os = "linux"))]
         if let Err(e) = window.set_skip_taskbar(false) {
-            log::warn!("显示主窗口时 set_skip_taskbar(false) 失败: {}", e);
+            tracing::warn!(error = %e, "显示主窗口时 set_skip_taskbar(false) 失败");
         }
         if let Err(e) = window.show() {
-            log::warn!("显示主窗口失败: {}", e);
+            tracing::warn!(error = %e, "显示主窗口失败");
         }
         let _ = window.set_focus();
     }
@@ -103,12 +113,11 @@ fn ensure_loopback_in_no_proxy_env() {
 pub fn run() {
     ensure_loopback_in_no_proxy_env();
 
+    // 必须先注册 log 插件：其它插件若抢先初始化全局 logger，会导致
+    // PluginInitialization("log", "attempted to set a logger after...") panic。
+    // 勿在 Builder 之前手动 tracing_subscriber::init / try_init。
+
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::Builder::new().build())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_mihomo::Builder::new().build())
-        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -126,22 +135,66 @@ pub fn run() {
                 .level(log::LevelFilter::Info)
                 .build(),
         )
+        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_mihomo::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .setup(move |app| {
             if let Ok(log_dir) = app.path().app_log_dir() {
                 eprintln!("[aurestream] 日志目录: {}", log_dir.display());
             }
-            info!("AureStream 启动中...");
+            tracing::info!("AureStream 启动中...");
+            let app_dir = app.path().app_data_dir().map_err(|e| {
+                format!("无法解析应用数据目录: {e}")
+            })?;
+            std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建应用数据目录失败: {e}"))?;
+            let db_path = app_dir.join("aurestream.db");
+            let pool = tauri::async_runtime::block_on(storage::database::connect_pool(&db_path))
+                .map_err(|e| format!("数据库初始化失败: {e}"))?;
+
             let config_state = AureConfigState::load(app.handle())?;
+            let cfg_snapshot = {
+                let cfg = config_state.get();
+                cfg.clone()
+            };
+            tauri::async_runtime::block_on(bootstrap::migrate_aure_yaml_to_sqlite(
+                &pool,
+                &cfg_snapshot,
+            ))
+            .map_err(|e| format!("SQLite 引导迁移失败: {e}"))?;
+
+            let local_dir = app.path().app_local_data_dir().map_err(|e| {
+                format!("无法解析本地数据目录: {e}")
+            })?;
+            std::fs::create_dir_all(&local_dir)
+                .map_err(|e| format!("创建本地数据目录失败: {e}"))?;
+            let mihomo_work = local_dir.join("mihomo-work");
+            let _ = std::fs::create_dir_all(&mihomo_work);
+
+            let (core, mihomo): (Arc<dyn adapter::CoreAdapter>, Option<Arc<adapter::MihomoAdapter>>) =
+                match adapter::MihomoAdapter::new(mihomo_work) {
+                    Ok(a) => {
+                        let arc = Arc::new(a);
+                        let core: Arc<dyn adapter::CoreAdapter> = arc.clone();
+                        (core, Some(arc))
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "MihomoAdapter 初始化失败，使用 NoopCoreAdapter");
+                        (Arc::new(adapter::NoopCoreAdapter), None)
+                    }
+                };
+            app.manage(runtime::RuntimeManager::new(pool, core, mihomo));
+
             app.manage(config_state);
             app.manage(ProxyState::default());
-            app.manage(MihomoKernelState::default());
-            info!("应用状态初始化完成");
+            tracing::info!("应用状态初始化完成");
 
             // 后台异步预下载 GeoIP/GeoSite（不阻塞启动）
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = download_geodata(app_handle).await {
-                    log::warn!("GeoData 预下载失败: {}", e);
+                if let Err(e) = prefetch_rule_assets(app_handle).await {
+                    tracing::warn!(error = %e, "规则路由资源预下载失败");
                 }
             });
 
@@ -220,10 +273,10 @@ pub fn run() {
             download_subscription,
             get_subscription_path,
             delete_subscription_file,
-            build_aurestream_mihomo_config,
-            start_mihomo_kernel,
-            stop_mihomo_kernel,
-            download_geodata,
+            build_runtime_config,
+            start_runtime_engine,
+            stop_runtime_engine,
+            prefetch_rule_assets,
             load_app_settings,
             save_app_settings,
         ])
@@ -231,9 +284,8 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
-                use commands::mihomo_kernel::{stop_mihomo_sidecar, MihomoKernelState};
-                if let Some(mihomo) = app_handle.try_state::<MihomoKernelState>() {
-                    let _ = tauri::async_runtime::block_on(stop_mihomo_sidecar(&*mihomo));
+                if let Some(rt) = app_handle.try_state::<runtime::RuntimeManager>() {
+                    let _ = tauri::async_runtime::block_on(rt.stop_sidecar());
                 }
             }
         });

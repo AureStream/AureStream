@@ -1,5 +1,5 @@
-use crate::commands::mihomo_kernel::{stop_mihomo_sidecar, MihomoKernelState};
 use crate::commands::{allocate_high_random_port, ProxyConfig, ProxyStatus};
+use crate::runtime::RuntimeManager;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -34,10 +34,10 @@ pub fn start_proxy(state: State<ProxyState>) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn stop_proxy(
+    rt: State<'_, RuntimeManager>,
     proxy_state: State<'_, ProxyState>,
-    mihomo_state: State<'_, MihomoKernelState>,
 ) -> Result<String, String> {
-    stop_mihomo_sidecar(&mihomo_state).await?;
+    rt.stop_sidecar().await?;
     let mut config = proxy_state.config.lock().map_err(|e| e.to_string())?;
     let mut status = proxy_state.status.lock().map_err(|e| e.to_string())?;
     status.is_running = false;

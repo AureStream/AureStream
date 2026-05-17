@@ -1,8 +1,16 @@
+use crate::bootstrap;
 use crate::config::AureConfigState;
+use crate::runtime::RuntimeManager;
+use crate::storage::{endpoint_repo, subscription_repo};
+use crate::subscription::ParserRegistry;
 use base64::Engine;
 use log::{debug, info};
 use serde::Serialize;
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
+use tokio::task::JoinSet;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,9 +120,159 @@ fn try_decode_base64(content: &[u8]) -> Option<Vec<u8>> {
     Some(decoded)
 }
 
+/// 网关错误时常因 UA 而异；把你这边「verge 500 / Meta 成功」的场景前置 Meta，减少一次无效往返。
+const SUBSCRIPTION_USER_AGENTS: &[&str] = &[
+    "ClashMetaForAndroid/2.10.1.meta",
+    "clash-verge/v2.2.3",
+    "FlClash/v0.8.0",
+    "clash",
+];
+
+/// 单次 UA 尝试上限（与 reqwest 整体超时一致，便于并行竞速时快速失败）。
+const SUBSCRIPTION_FETCH_ATTEMPT_SECS: u64 = 10;
+
+/// 若该订阅上次成功过，优先单独拉一次以常见情况下只发 1 个请求。
+const SUBSCRIPTION_REMEMBERED_UA_SECS: u64 = 10;
+
+/// 进程内记住「provider -> 上次成功的 UA」，避免下次盲 parallel。
+static LAST_SUCCESS_UA_BY_PROVIDER: LazyLock<Mutex<HashMap<String, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn remember_subscription_ua(provider_id: &str, ua: &str) {
+    if let Ok(mut g) = LAST_SUCCESS_UA_BY_PROVIDER.lock() {
+        g.insert(provider_id.to_string(), ua.to_string());
+    }
+}
+
+fn remembered_ua_for_provider(provider_id: &str) -> Option<String> {
+    let g = LAST_SUCCESS_UA_BY_PROVIDER.lock().ok()?;
+    g.get(provider_id).cloned()
+}
+
+/// 避免把网关错误页写入本地文件：粗略判断是否为代理节点列表。
+fn subscription_body_looks_like_proxy_list(content: &[u8]) -> bool {
+    let Ok(s) = std::str::from_utf8(content) else {
+        return false;
+    };
+    let t = s.trim_start_matches('\u{feff}').trim_start();
+    let lower = t.to_ascii_lowercase();
+    if lower.contains("proxies:") || lower.contains("\"proxies\"") {
+        return true;
+    }
+    for line in t.lines().take(800) {
+        let x = line.trim_start();
+        if x.starts_with("vmess://")
+            || x.starts_with("vless://")
+            || x.starts_with("trojan://")
+            || x.starts_with("ss://")
+        {
+            return true;
+        }
+    }
+    if t.starts_with("- ")
+        && (lower.contains("type:") || lower.contains("\ntype:"))
+    {
+        return true;
+    }
+    false
+}
+
+async fn fetch_subscription_with_redirects(
+    client: &reqwest::Client,
+    start_url: &reqwest::Url,
+    user_agent: &str,
+) -> Result<(reqwest::StatusCode, Vec<u8>, Vec<(String, String)>, Option<SubscriptionMeta>, u32), String>
+{
+    let mut current_url = start_url.clone();
+    let mut response = client
+        .get(current_url.clone())
+        .header(reqwest::header::USER_AGENT, user_agent)
+        .send()
+        .await
+        .map_err(|e| format!("请求订阅失败: {e}"))?;
+
+    let mut debug_headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("<binary>").to_string()))
+        .collect();
+
+    let mut header_meta = find_subscription_meta(response.headers());
+    let mut redirect_count = 0u32;
+
+    while response.status().is_redirection() && redirect_count < 10 {
+        let Some(location) = response.headers().get(reqwest::header::LOCATION) else {
+            break;
+        };
+        let location_str = location
+            .to_str()
+            .map_err(|e| format!("无效的跳转 Location: {e}"))?;
+        let resolved = current_url
+            .join(location_str)
+            .map_err(|e| format!("解析跳转 URL 失败: {e}"))?;
+        info!(
+            "[subscription] Redirect {} -> {}",
+            response.status(),
+            resolved
+        );
+        response = client
+            .get(resolved.clone())
+            .header(reqwest::header::USER_AGENT, user_agent)
+            .send()
+            .await
+            .map_err(|e| format!("跟随跳转失败: {e}"))?;
+        current_url = resolved;
+        for (k, v) in response.headers().iter() {
+            debug_headers.push((k.to_string(), v.to_str().unwrap_or("<binary>").to_string()));
+        }
+        if header_meta.is_none() {
+            header_meta = find_subscription_meta(response.headers());
+        }
+        redirect_count += 1;
+    }
+
+    let status = response.status();
+    if header_meta.is_none() {
+        header_meta = find_subscription_meta(response.headers());
+    }
+
+    let body = response
+        .bytes()
+        .await
+        .map_err(|e| format!("读取订阅正文失败: {e}"))?
+        .to_vec();
+
+    Ok((status, body, debug_headers, header_meta, redirect_count))
+}
+
+/// 拉取并校验：HTTP 成功且正文像订阅（避免把错误页写入本地）。
+async fn fetch_validated_subscription(
+    client: &reqwest::Client,
+    base_url: &reqwest::Url,
+    ua: &str,
+) -> Result<(Vec<u8>, Vec<(String, String)>, Option<SubscriptionMeta>, u32), String> {
+    let (status, body, dbg, hm, redirects) =
+        fetch_subscription_with_redirects(client, base_url, ua).await?;
+    if !status.is_success() {
+        let preview = String::from_utf8_lossy(&body[..body.len().min(256)]);
+        return Err(format!("HTTP {status}（UA: {ua}）: {}", preview.trim()));
+    }
+    let content_candidate = try_decode_base64(&body).unwrap_or_else(|| body.clone());
+    if !subscription_body_looks_like_proxy_list(&content_candidate) {
+        let preview =
+            String::from_utf8_lossy(&content_candidate[..content_candidate.len().min(200)]);
+        return Err(format!(
+            "正文不像订阅配置（UA: {ua}）: {}",
+            preview.trim()
+        ));
+    }
+    Ok((content_candidate, dbg, hm, redirects))
+}
+
 #[tauri::command]
 pub async fn download_subscription(
     app: AppHandle,
+    rt: State<'_, RuntimeManager>,
     state: State<'_, AureConfigState>,
     provider_id: String,
     url: String,
@@ -133,86 +291,139 @@ pub async fn download_subscription(
     // so we can capture headers (like subscription-userinfo) from the initial response.
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(std::time::Duration::from_secs(15))
-        .timeout(std::time::Duration::from_secs(60))
+        .connect_timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(10))
+        .gzip(true)
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
     let base_url = reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
 
-    let mut response = client
-        .get(url.clone())
-        .header("User-Agent", "clash-verge/v2.2.3")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch subscription: {}", e))?;
+    let mut last_err = String::new();
+    let mut downloaded: Option<(Vec<u8>, Vec<(String, String)>, Option<SubscriptionMeta>, u32)> =
+        None;
 
-    // Collect headers from the initial response
-    let mut debug_headers: Vec<(String, String)> = response
-        .headers()
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("<binary>").to_string()))
-        .collect();
-
-    // Parse subscription-userinfo header (might be on the initial response before redirect)
-    // Search for any header ending with "subscription-userinfo" (may have prefix like x-amz-meta-)
-    let mut header_meta = find_subscription_meta(response.headers());
-
-    // Follow redirects manually (up to 10)
-    let mut redirect_count = 0;
-    let mut current_url = base_url;
-    while response.status().is_redirection() && redirect_count < 10 {
-        if let Some(location) = response.headers().get("location") {
-            let location_str = location
-                .to_str()
-                .map_err(|e| format!("Invalid redirect location: {}", e))?;
-            // Resolve relative URLs against the current URL
-            let resolved = current_url
-                .join(location_str)
-                .map_err(|e| format!("Failed to resolve redirect URL: {}", e))?;
-            info!(
-                "[subscription] Redirect {} -> {}",
-                response.status(),
-                resolved
-            );
-            response = client
-                .get(resolved.clone())
-                .header("User-Agent", "clash-verge/v2.2.3")
-                .send()
-                .await
-                .map_err(|e| format!("Failed to follow redirect: {}", e))?;
-            current_url = resolved;
-            // Collect headers from redirect response too
-            for (k, v) in response.headers().iter() {
-                let key = k.to_string();
-                let val = v.to_str().unwrap_or("<binary>").to_string();
-                debug_headers.push((key.clone(), val));
+    // 1) 热路径：同一订阅上次成功的 UA 单独拉一次（多数情况仅 1 次 HTTP）
+    if let Some(pref) = remembered_ua_for_provider(&provider_id) {
+        let attempt = tokio::time::timeout(
+            Duration::from_secs(SUBSCRIPTION_REMEMBERED_UA_SECS),
+            fetch_validated_subscription(&client, &base_url, &pref),
+        )
+        .await;
+        match attempt {
+            Ok(Ok((content, dbg, hm, redirects))) => {
+                info!(
+                    "[subscription] 下载成功（沿用上次 UA）ua={} redirects={}",
+                    pref, redirects
+                );
+                remember_subscription_ua(&provider_id, &pref);
+                downloaded = Some((content, dbg, hm, redirects));
             }
-            // Also check for subscription-userinfo on redirect responses
-            if header_meta.is_none() {
-                header_meta = find_subscription_meta(response.headers());
+            Ok(Err(e)) => {
+                last_err = e.clone();
+                tracing::warn!("[subscription] 沿用上次 UA 失败 ua={} {}", pref, e);
             }
-            redirect_count += 1;
-        } else {
-            break;
+            Err(_) => {
+                last_err = format!(
+                    "沿用上次 UA 在 {}s 内未完成",
+                    SUBSCRIPTION_REMEMBERED_UA_SECS
+                );
+                tracing::warn!("[subscription] {}", last_err);
+            }
         }
     }
 
-    let raw_content = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read response body: {}", e))?;
+    // 2) 并行竞速：wall-clock 接近「最先成功的 UA」，而非串行累加
+    if downloaded.is_none() {
+        let mut set = JoinSet::new();
+        for ua in SUBSCRIPTION_USER_AGENTS {
+            let client = client.clone();
+            let url = base_url.clone();
+            let ua = *ua;
+            set.spawn(async move {
+                let attempt = tokio::time::timeout(
+                    Duration::from_secs(SUBSCRIPTION_FETCH_ATTEMPT_SECS),
+                    fetch_validated_subscription(&client, &url, ua),
+                )
+                .await;
+                (ua, attempt)
+            });
+        }
 
-    // Try base64 decode; if it fails, use raw content
-    let content: Vec<u8> = match try_decode_base64(&raw_content) {
-        Some(decoded) => decoded,
-        None => raw_content.to_vec(),
-    };
+        while let Some(joined) = set.join_next().await {
+            match joined {
+                Ok((ua, attempt)) => match attempt {
+                    Err(_) => {
+                        last_err = format!(
+                            "UA {ua} 在 {}s 内未完成（连接或读_body 过慢）",
+                            SUBSCRIPTION_FETCH_ATTEMPT_SECS
+                        );
+                        tracing::warn!("[subscription] {}", last_err);
+                    }
+                    Ok(Ok((content, dbg, hm, redirects))) => {
+                        info!(
+                            "[subscription] 下载成功 ua={} redirects={}",
+                            ua, redirects
+                        );
+                        remember_subscription_ua(&provider_id, ua);
+                        downloaded = Some((content, dbg, hm, redirects));
+                        set.abort_all();
+                        break;
+                    }
+                    Ok(Err(e)) => {
+                        last_err = e.clone();
+                        tracing::warn!("[subscription] ua={} {}", ua, e);
+                    }
+                },
+                Err(e) => {
+                    if e.is_cancelled() {
+                        continue;
+                    }
+                    last_err = format!("订阅下载任务异常: {e}");
+                    tracing::warn!("[subscription] {}", last_err);
+                }
+            }
+        }
+    }
+
+    let (content, debug_headers, header_meta, redirect_count) =
+        downloaded.ok_or_else(|| {
+            format!(
+                "订阅下载失败（已尝试多种 User-Agent）。最后一次：{}",
+                last_err
+            )
+        })?;
 
     let file_path = sub_dir.join(format!("{}.yaml", provider_id));
     tokio::fs::write(&file_path, &content)
         .await
         .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let registry = ParserRegistry::default();
+    let endpoints = registry.ingest_subscription_bytes(&content, &provider_id);
+    if !endpoints.is_empty() {
+        endpoint_repo::replace_for_source(rt.pool(), &provider_id, &endpoints)
+            .await
+            .map_err(|e| format!("同步节点到数据库失败: {e}"))?;
+    } else {
+        tracing::warn!(
+            provider_id = %provider_id,
+            "订阅解析未得到可用节点，保留数据库既有节点"
+        );
+    }
+
+    let node_count_db = endpoint_repo::count_by_source(rt.pool(), &provider_id)
+        .await
+        .map_err(|e| format!("读取节点数量失败: {e}"))?;
+
+    state.get_mut_and_save(|cfg| {
+        if let Some(p) = cfg.providers.iter_mut().find(|p| p.id == provider_id) {
+            p.node_count = node_count_db.max(0) as usize;
+            if !endpoints.is_empty() {
+                p.nodes.clear();
+            }
+        }
+    })?;
 
     // Use header meta, or fall back to parsing YAML content
     let meta = header_meta.or_else(|| parse_yaml_meta(&content));
@@ -271,6 +482,22 @@ pub async fn download_subscription(
                 provider.last_updated = chrono::Utc::now().to_rfc3339();
             }
         })?;
+    }
+
+    let snapshot = {
+        let cfg = state.get();
+        cfg.providers
+            .iter()
+            .find(|p| p.id == provider_id)
+            .cloned()
+    };
+    if let Some(pe) = snapshot {
+        let now = chrono::Utc::now().timestamp();
+        let mut sub = bootstrap::provider_entry_to_subscription(&pe, now);
+        sub.node_count = node_count_db;
+        subscription_repo::upsert(rt.pool(), &sub)
+            .await
+            .map_err(|e| format!("更新订阅记录失败: {e}"))?;
     }
 
     let result = DownloadResult {

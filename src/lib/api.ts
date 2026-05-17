@@ -136,27 +136,25 @@ export async function deleteSubscriptionFile(
   return await invoke<void>("delete_subscription_file", { providerId });
 }
 
-export async function buildAureStreamMihomoConfig(
-  providerId: string,
-): Promise<string> {
-  return await invoke<string>("build_aurestream_mihomo_config", { providerId });
+export async function buildRuntimeConfig(providerId: string): Promise<string> {
+  return await invoke<string>("build_runtime_config", { providerId });
 }
 
-/** 启动或重启 Mihomo sidecar（使用 buildAureStreamMihomoConfig 生成的配置绝对路径） */
-export async function startMihomoKernel(
-  patchedConfigPath: string,
+/** 启动或重启本地代理内核侧进程（使用 buildRuntimeConfig 生成的配置绝对路径） */
+export async function startRuntimeEngine(
+  runtimeConfigPath: string,
 ): Promise<void> {
-  return await invoke<void>("start_mihomo_kernel", { patchedConfigPath });
+  return await invoke<void>("start_runtime_engine", { runtimeConfigPath });
 }
 
-/** 结束由应用拉起的 Mihomo 进程 */
-export async function stopMihomoKernel(): Promise<void> {
-  return await invoke<void>("stop_mihomo_kernel");
+/** 结束由应用拉起的本地代理内核进程 */
+export async function stopRuntimeEngine(): Promise<void> {
+  return await invoke<void>("stop_runtime_engine");
 }
 
-/** 预下载 GeoIP/GeoSite 文件到 mihomo 工作目录 */
-export async function downloadGeodata(): Promise<void> {
-  return await invoke<void>("download_geodata");
+/** 预下载规则路由数据库（GeoIP/GeoSite 等）到运行时工作目录 */
+export async function prefetchRuleAssets(): Promise<void> {
+  return await invoke<void>("prefetch_rule_assets");
 }
 
 // --- App settings & latency cache ---

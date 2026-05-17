@@ -153,7 +153,7 @@ fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port
 /// 写入 `runtime/aurestream-mihomo.yaml`：`proxy-providers.type: file` 的 `path` 为 **`mihomo-work/subscriptions/<provider_id>.yaml`**（内核 `-d` 下，符合 SAFE_PATH）。
 /// 数据源仍为应用配置目录下 `subscriptions/<provider_id>.yaml`（按 `download_subscription` 写入），此处每次生成配置时做一次复制以同步最新内容。
 #[tauri::command]
-pub async fn build_aurestream_mihomo_config(
+pub async fn build_runtime_config(
     app: AppHandle,
     provider_id: String,
     proxy_state: State<'_, ProxyState>,

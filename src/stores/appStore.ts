@@ -12,8 +12,8 @@ import {
   deleteSubscriptionFile,
   getSubscriptionPath,
   testNodeLatency,
-  buildAureStreamMihomoConfig,
-  startMihomoKernel,
+  buildRuntimeConfig,
+  startRuntimeEngine,
   stopProxy,
   updateProxyConfig,
   updateTrayMenu,
@@ -27,17 +27,13 @@ import {
 } from "@/lib/persistStore";
 import {
   reloadConfig,
-  delayGroup,
   getGroupByName,
-  getProxies,
   selectNodeForGroup,
 } from "tauri-plugin-mihomo-api";
 import {
   AURESTREAM_NODE_SELECTOR,
   DEFAULT_PROXY_BYPASS_DOMAINS,
-  MIHOMO_LATENCY_TEST_URL,
 } from "@/constants/mihomo";
-import { mihomoProxiesToNodes } from "@/lib/mihomoSubscriptionNodes";
 
 /** 本地持久化测速：订阅 id + 节点 id（与 Mihomo 叶子代理名一致） */
 function nodeLatencyCacheKey(providerId: string, nodeId: string): string {
@@ -294,8 +290,8 @@ interface ProxyStore {
   setCurrentNode: (node?: Node) => void;
   /** 选择节点并在已连接时同步到 Mihomo Selector */
   applyNodeSelection: (node?: Node) => Promise<void>;
-  /** 从内核 `/proxies` 拉取叶子代理，填充当前订阅的节点列表 */
-  refreshSubscriptionNodesFromMihomo: () => Promise<void>;
+  /** 从 SQLite endpoints 同步节点列表（与 Mihomo /proxies 解耦） */
+  refreshSubscriptionNodesFromDb: () => Promise<void>;
   setNodes: (nodes: Node[]) => void;
   updateNodeDelay: (nodeId: string, delay: number) => void;
   connect: () => Promise<void>;
@@ -455,44 +451,48 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     }
   },
 
-  refreshSubscriptionNodesFromMihomo: async () => {
+  refreshSubscriptionNodesFromDb: async () => {
     const { currentProvider } = get();
     if (!currentProvider) return;
-    // 一键测速进行中：避免 /proxies 里陈旧的 history.delay 写回列表，盖住正在重测的状态
     if (get().isTestingLatency) return;
     try {
-      const raw = await getProxies();
-      const leafNodes = mihomoProxiesToNodes(raw, currentProvider.id);
+      const freshAll = await getNodes();
+      const cache = get().nodeLatencyByKey;
+      const merged = freshAll.map((n) => ({
+        ...n,
+        delay: cache[nodeLatencyCacheKey(n.providerId, n.id)] ?? n.delay,
+      }));
+
       let groupNow: string | undefined;
-      try {
-        const grp = await getGroupByName(AURESTREAM_NODE_SELECTOR);
-        groupNow = grp?.now;
-      } catch {
-        // 内核尚未建好组时可忽略
+      if (get().isConnected) {
+        try {
+          const grp = await getGroupByName(AURESTREAM_NODE_SELECTOR);
+          groupNow = grp?.now;
+        } catch {
+          /* 内核未就绪 */
+        }
       }
-      const state = get();
-      const prevById = new Map(state.nodes.map((n) => [n.id, n]));
-      const cache = state.nodeLatencyByKey;
-      const merged = leafNodes.map((n) => {
-        const old = prevById.get(n.id);
-        const cached = cache[nodeLatencyCacheKey(currentProvider.id, n.id)];
-        return {
-          ...n,
-          // 优先本会话内存 → 持久化测速缓存 → Mihomo history（history 常为陈旧值，不应覆盖用户刚测的结果）
-          delay: old?.delay ?? cached ?? n.delay,
-        };
-      });
-      const prev = state.currentNode;
+
+      const cpId = currentProvider.id;
+      const prev = get().currentNode;
       let next: Node | undefined;
-      if (prev && merged.some((n) => n.id === prev.id)) {
-        next = merged.find((n) => n.id === prev.id)!;
-      } else if (groupNow && merged.some((n) => n.id === groupNow)) {
-        next = merged.find((n) => n.id === groupNow)!;
-      } else if (merged.length > 0) {
-        next = merged[0];
+      if (
+        prev &&
+        merged.some((n) => n.id === prev.id && n.providerId === cpId)
+      ) {
+        next = merged.find((n) => n.id === prev.id && n.providerId === cpId);
+      } else if (
+        groupNow &&
+        merged.some((n) => n.name === groupNow && n.providerId === cpId)
+      ) {
+        next = merged.find((n) => n.name === groupNow && n.providerId === cpId);
+      } else {
+        next = merged.find((n) => n.providerId === cpId);
       }
+
       set({ nodes: merged, currentNode: next });
-      if (next && groupNow !== next.name) {
+
+      if (next && get().isConnected && groupNow !== next.name) {
         try {
           await selectNodeForGroup(AURESTREAM_NODE_SELECTOR, next.name);
         } catch (e) {
@@ -500,7 +500,7 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
         }
       }
     } catch (e) {
-      console.error("从 Mihomo 刷新订阅节点失败:", e);
+      console.error("从数据库刷新节点失败:", e);
     }
   },
 
@@ -547,12 +547,12 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       await startProxy();
 
       // 对齐 external-controller、启动 Mihomo sidecar（内部轮询 API 就绪）
-      const runtimePath = await buildAureStreamMihomoConfig(currentProvider.id);
-      await startMihomoKernel(runtimePath);
+      const runtimePath = await buildRuntimeConfig(currentProvider.id);
+      await startRuntimeEngine(runtimePath);
 
       // 刷新节点列表，若首次为空（provider 尚未加载），重试最多 5 次
       for (let i = 0; i < 5; i++) {
-        await get().refreshSubscriptionNodesFromMihomo();
+        await get().refreshSubscriptionNodesFromDb();
         if (get().nodes.length > 0) break;
         await new Promise((r) => setTimeout(r, 500));
       }
@@ -699,42 +699,6 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     });
 
     try {
-      // 如果已连接，先测试内核组内的节点
-      if (get().isConnected) {
-        try {
-          const delays = await delayGroup(
-            AURESTREAM_NODE_SELECTOR,
-            MIHOMO_LATENCY_TEST_URL,
-            8000,
-            false,
-          );
-          set((state) => {
-            const cp = state.currentProvider;
-            const nextCache = { ...state.nodeLatencyByKey };
-            const nodes = state.nodes.map((n) => {
-              const measured = delays[n.name] as number | undefined;
-              const delay = measured ?? n.delay;
-              if (cp && typeof measured === "number") {
-                nextCache[nodeLatencyCacheKey(cp.id, n.id)] = measured;
-              }
-              return { ...n, delay };
-            });
-            const cur = state.currentNode;
-            const currentNode =
-              cur && nodes.find((x) => x.id === cur.id)
-                ? { ...nodes.find((x) => x.id === cur.id)! }
-                : cur;
-            // 不在此阶段取消 pending：内核 group 结果可能是陈旧延迟；各行仍以刷新图标等待逐节点 TCP 测速落盘后再展示
-            return {
-              nodes,
-              currentNode,
-              nodeLatencyByKey: nextCache,
-            };
-          });
-        } catch (groupError) {
-          console.warn("Failed to test group latency:", groupError);
-        }
-      }
 
       // 获取当前订阅的节点列表
       const currentProvider = get().currentProvider;
@@ -827,14 +791,14 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
         get().currentNode,
       );
       set({ providers, ...sel });
+      await get().refreshSubscriptionNodesFromDb();
 
       if (get().isConnected && get().currentProvider?.id === id) {
         try {
           const sp = await getSubscriptionPath(id);
           if (sp) {
-            const runtimePath = await buildAureStreamMihomoConfig(id);
+            const runtimePath = await buildRuntimeConfig(id);
             await reloadConfig(true, runtimePath);
-            await get().refreshSubscriptionNodesFromMihomo();
           }
         } catch (e) {
           console.error("订阅更新后 reload 内核失败:", e);
@@ -857,19 +821,16 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     set({ currentProvider: provider, currentNode: undefined });
     if (!provider) return;
 
-    // 确保订阅文件存在；已连接时对运行中的内核发送 reload（使用补丁后的路径）
     try {
       const path = await getSubscriptionPath(provider.id);
-      if (path) {
-        const runtimePath = await buildAureStreamMihomoConfig(provider.id);
-        if (get().isConnected) {
-          await reloadConfig(true, runtimePath);
-          await get().refreshSubscriptionNodesFromMihomo();
-        }
+      if (path && get().isConnected) {
+        const runtimePath = await buildRuntimeConfig(provider.id);
+        await reloadConfig(true, runtimePath);
       }
     } catch (e) {
       console.error("Failed to reload mihomo config:", e);
     }
+    await get().refreshSubscriptionNodesFromDb();
   },
 
   initAutoUpdateTimers: () => {
