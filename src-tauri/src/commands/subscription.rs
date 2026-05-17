@@ -130,9 +130,6 @@ const SUBSCRIPTION_USER_AGENTS: &[&str] = &[
 /// 单次 UA 尝试上限（与 reqwest 整体超时一致，便于并行竞速时快速失败）。
 const SUBSCRIPTION_FETCH_ATTEMPT_SECS: u64 = 10;
 
-/// 若该订阅上次成功过，优先单独拉一次以常见情况下只发 1 个请求。
-const SUBSCRIPTION_REMEMBERED_UA_SECS: u64 = 10;
-
 /// 进程内记住「provider -> 上次成功的 UA」，避免下次盲 parallel。
 static LAST_SUCCESS_UA_BY_PROVIDER: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -146,6 +143,204 @@ fn remember_subscription_ua(provider_id: &str, ua: &str) {
 fn remembered_ua_for_provider(provider_id: &str) -> Option<String> {
     let g = LAST_SUCCESS_UA_BY_PROVIDER.lock().ok()?;
     g.get(provider_id).cloned()
+}
+
+/// 限制单条失败详情长度，避免 HTML 错误页撑爆前端 Toast。
+const SUBSCRIPTION_ERR_DETAIL_MAX: usize = 280;
+
+fn truncate_err_detail(s: &str) -> String {
+    let t = s.trim().replace('\r', " ").replace('\n', " ");
+    if t.chars().count() <= SUBSCRIPTION_ERR_DETAIL_MAX {
+        t
+    } else {
+        let mut out = String::new();
+        for ch in t.chars().take(SUBSCRIPTION_ERR_DETAIL_MAX) {
+            out.push(ch);
+        }
+        out.push('…');
+        out
+    }
+}
+
+fn push_attempt_failure(failures: &mut Vec<String>, ua_label: &str, detail: &str) {
+    failures.push(format!(
+        "• {} {}",
+        ua_label,
+        truncate_err_detail(detail)
+    ));
+}
+
+/// 上次成功的 UA 优先，其后为内置列表；按 `as_str()` 去重。
+fn subscription_ua_attempt_list(provider_id: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    if let Some(pref) = remembered_ua_for_provider(provider_id) {
+        out.push(pref);
+    }
+    for &ua in SUBSCRIPTION_USER_AGENTS {
+        if !out.iter().any(|s| s.as_str() == ua) {
+            out.push(ua.to_string());
+        }
+    }
+    out
+}
+
+fn ua_failure_label(provider_id: &str, ua: &str) -> String {
+    if remembered_ua_for_provider(provider_id).as_deref() == Some(ua) {
+        format!("沿用上次成功 UA「{ua}」")
+    } else {
+        format!("UA「{ua}」")
+    }
+}
+
+/// 并行竞速多种 User-Agent，首个校验通过者胜出；`Ok` 末元为获胜 UA。
+async fn race_user_agents(
+    client: &reqwest::Client,
+    base_url: &reqwest::Url,
+    provider_id: &str,
+) -> Result<
+    (
+        Vec<u8>,
+        Vec<(String, String)>,
+        Option<SubscriptionMeta>,
+        u32,
+        String,
+    ),
+    Vec<String>,
+> {
+    let attempts = subscription_ua_attempt_list(provider_id);
+    if attempts.is_empty() {
+        return Err(vec!["未配置任何 User-Agent 候选（请联系开发者）".to_string()]);
+    }
+
+    let mut failures: Vec<String> = Vec::new();
+    let mut set = JoinSet::new();
+
+    for ua in attempts {
+        let client = client.clone();
+        let url = base_url.clone();
+        set.spawn(async move {
+            let attempt = tokio::time::timeout(
+                Duration::from_secs(SUBSCRIPTION_FETCH_ATTEMPT_SECS),
+                fetch_validated_subscription(&client, &url, &ua),
+            )
+            .await;
+            (ua, attempt)
+        });
+    }
+
+    let mut downloaded: Option<(Vec<u8>, Vec<(String, String)>, Option<SubscriptionMeta>, u32)> =
+        None;
+    let mut winning_ua: Option<String> = None;
+
+    while let Some(joined) = set.join_next().await {
+        match joined {
+            Ok((ua, attempt)) => match attempt {
+                Err(_) => {
+                    let label = ua_failure_label(provider_id, &ua);
+                    push_attempt_failure(
+                        &mut failures,
+                        &label,
+                        &format!(
+                            "{SUBSCRIPTION_FETCH_ATTEMPT_SECS}s 内未完成（连接或读取过慢）"
+                        ),
+                    );
+                    tracing::warn!(
+                        "[subscription] {} 在 {}s 内未完成",
+                        label,
+                        SUBSCRIPTION_FETCH_ATTEMPT_SECS
+                    );
+                }
+                Ok(Ok((content, dbg, hm, redirects))) => {
+                    tracing::info!(
+                        "[subscription] 下载成功 ua={} redirects={}",
+                        ua,
+                        redirects
+                    );
+                    remember_subscription_ua(provider_id, &ua);
+                    downloaded = Some((content, dbg, hm, redirects));
+                    winning_ua = Some(ua);
+                    set.abort_all();
+                    break;
+                }
+                Ok(Err(e)) => {
+                    let label = ua_failure_label(provider_id, &ua);
+                    push_attempt_failure(&mut failures, &label, &e);
+                    tracing::warn!("[subscription] {} {}", label, e);
+                }
+            },
+            Err(e) => {
+                if e.is_cancelled() {
+                    continue;
+                }
+                push_attempt_failure(&mut failures, "并行任务", &format!("异常: {e}"));
+                tracing::warn!("[subscription] 订阅下载任务异常: {e}");
+            }
+        }
+    }
+
+    match (downloaded, winning_ua) {
+        (Some((content, dbg, hm, redirects)), Some(ua)) => {
+            Ok((content, dbg, hm, redirects, ua))
+        }
+        _ => Err(failures),
+    }
+}
+
+fn stub_provider_entry(id: &str, url: &str) -> ProviderEntry {
+    ProviderEntry {
+        id: id.to_string(),
+        name: id.to_string(),
+        url: url.to_string(),
+        last_updated: String::new(),
+        node_count: 0,
+        traffic_total_gb: None,
+        traffic_used_gb: None,
+        expires_at: None,
+        auto_update_interval: None,
+        nodes: Vec::new(),
+    }
+}
+
+/// `endpoints.source_id` 外键指向 `subscriptions.id`，写入节点前必须先有订阅行。
+async fn ensure_subscription_row_before_endpoints(
+    rt: &RuntimeManager,
+    state: &AureConfigState,
+    provider_id: &str,
+    url: &str,
+) -> Result<(), String> {
+    let entry = state
+        .get()
+        .providers
+        .iter()
+        .find(|p| p.id == provider_id)
+        .cloned()
+        .unwrap_or_else(|| stub_provider_entry(provider_id, url));
+    let now = chrono::Utc::now().timestamp();
+    let sub = bootstrap::provider_entry_to_subscription(&entry, now);
+    subscription_repo::upsert(rt.pool(), &sub)
+        .await
+        .map_err(|e| format!("写入 subscriptions 失败（节点外键依赖）: {e}"))
+}
+
+fn format_all_download_failures(failures: &[String]) -> String {
+    const MAX_TOTAL_CHARS: usize = 4500;
+    if failures.is_empty() {
+        return "订阅下载失败：未能收集到各次尝试的具体错误（请联系开发者或查看日志）。"
+            .to_string();
+    }
+    let header = "订阅下载失败，已尝试多种 User-Agent，原因如下：";
+    let body = failures.join("\n");
+    let suffix = "\n（详情过长已截断，完整原因见日志。）";
+    let combined = format!("{header}\n{body}");
+    if combined.len() <= MAX_TOTAL_CHARS {
+        return combined;
+    }
+    let budget = MAX_TOTAL_CHARS.saturating_sub(header.len() + suffix.len());
+    let mut end = budget.min(body.len());
+    while end > 0 && !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{header}\n{}…{suffix}", &body[..end])
 }
 
 /// 避免把网关错误页写入本地文件：粗略判断是否为代理节点列表。
@@ -298,99 +493,21 @@ pub async fn download_subscription(
 
     let base_url = reqwest::Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
 
-    let mut last_err = String::new();
-    let mut downloaded: Option<(Vec<u8>, Vec<(String, String)>, Option<SubscriptionMeta>, u32)> =
-        None;
-
-    // 1) 热路径：同一订阅上次成功的 UA 单独拉一次（多数情况仅 1 次 HTTP）
-    if let Some(pref) = remembered_ua_for_provider(&provider_id) {
-        let attempt = tokio::time::timeout(
-            Duration::from_secs(SUBSCRIPTION_REMEMBERED_UA_SECS),
-            fetch_validated_subscription(&client, &base_url, &pref),
-        )
-        .await;
-        match attempt {
-            Ok(Ok((content, dbg, hm, redirects))) => {
-                tracing::info!(
-                    "[subscription] 下载成功（沿用上次 UA）ua={} redirects={}",
-                    pref, redirects
+    let (content, debug_headers, header_meta, redirect_count, _winning_ua) =
+        match race_user_agents(&client, &base_url, &provider_id).await {
+            Ok(ok) => ok,
+            Err(failures) => {
+                let msg = format_all_download_failures(&failures);
+                tracing::error!(
+                    target: "aurestream_lib::commands::subscription",
+                    provider_id = %provider_id,
+                    url = %url,
+                    "\n[subscription] 订阅下载失败汇总：\n{}",
+                    msg
                 );
-                remember_subscription_ua(&provider_id, &pref);
-                downloaded = Some((content, dbg, hm, redirects));
+                return Err(msg);
             }
-            Ok(Err(e)) => {
-                last_err = e.clone();
-                tracing::warn!("[subscription] 沿用上次 UA 失败 ua={} {}", pref, e);
-            }
-            Err(_) => {
-                last_err = format!(
-                    "沿用上次 UA 在 {}s 内未完成",
-                    SUBSCRIPTION_REMEMBERED_UA_SECS
-                );
-            }
-        }
-    }
-
-    // 2) 并行竞速：wall-clock 接近「最先成功的 UA」，而非串行累加
-    if downloaded.is_none() {
-        let mut set = JoinSet::new();
-        for ua in SUBSCRIPTION_USER_AGENTS {
-            let client = client.clone();
-            let url = base_url.clone();
-            let ua = *ua;
-            set.spawn(async move {
-                let attempt = tokio::time::timeout(
-                    Duration::from_secs(SUBSCRIPTION_FETCH_ATTEMPT_SECS),
-                    fetch_validated_subscription(&client, &url, ua),
-                )
-                .await;
-                (ua, attempt)
-            });
-        }
-
-        while let Some(joined) = set.join_next().await {
-            match joined {
-                Ok((ua, attempt)) => match attempt {
-                    Err(_) => {
-                        last_err = format!(
-                            "UA {ua} 在 {}s 内未完成（连接或读_body 过慢）",
-                            SUBSCRIPTION_FETCH_ATTEMPT_SECS
-                        );
-                        tracing::warn!("[subscription] {}", last_err);
-                    }
-                    Ok(Ok((content, dbg, hm, redirects))) => {
-                        tracing::info!(
-                            "[subscription] 下载成功 ua={} redirects={}",
-                            ua, redirects
-                        );
-                        remember_subscription_ua(&provider_id, ua);
-                        downloaded = Some((content, dbg, hm, redirects));
-                        set.abort_all();
-                        break;
-                    }
-                    Ok(Err(e)) => {
-                        last_err = e.clone();
-                        tracing::warn!("[subscription] ua={} {}", ua, e);
-                    }
-                },
-                Err(e) => {
-                    if e.is_cancelled() {
-                        continue;
-                    }
-                    last_err = format!("订阅下载任务异常: {e}");
-                    tracing::warn!("[subscription] {}", last_err);
-                }
-            }
-        }
-    }
-
-    let (content, debug_headers, header_meta, redirect_count) =
-        downloaded.ok_or_else(|| {
-            format!(
-                "订阅下载失败（已尝试多种 User-Agent）。最后一次：{}",
-                last_err
-            )
-        })?;
+        };
 
     let file_path = sub_dir.join(format!("{}.yaml", provider_id));
     tokio::fs::write(&file_path, &content)
@@ -400,6 +517,7 @@ pub async fn download_subscription(
     let registry = ParserRegistry::default();
     let endpoints = registry.ingest_subscription_bytes(&content, &provider_id);
     if !endpoints.is_empty() {
+        ensure_subscription_row_before_endpoints(&rt, &*state, &provider_id, &url).await?;
         endpoint_repo::replace_for_source(rt.pool(), &provider_id, &endpoints)
             .await
             .map_err(|e| format!("同步节点到数据库失败: {e}"))?;
@@ -482,21 +600,19 @@ pub async fn download_subscription(
         })?;
     }
 
-    let snapshot = {
-        let cfg = state.get();
-        cfg.providers
-            .iter()
-            .find(|p| p.id == provider_id)
-            .cloned()
-    };
-    if let Some(pe) = snapshot {
-        let now = chrono::Utc::now().timestamp();
-        let mut sub = bootstrap::provider_entry_to_subscription(&pe, now);
-        sub.node_count = node_count_db;
-        subscription_repo::upsert(rt.pool(), &sub)
-            .await
-            .map_err(|e| format!("更新订阅记录失败: {e}"))?;
-    }
+    let snapshot = state
+        .get()
+        .providers
+        .iter()
+        .find(|p| p.id == provider_id)
+        .cloned();
+    let base_entry = snapshot.unwrap_or_else(|| stub_provider_entry(&provider_id, &url));
+    let now_ts = chrono::Utc::now().timestamp();
+    let mut sub_row = bootstrap::provider_entry_to_subscription(&base_entry, now_ts);
+    sub_row.node_count = node_count_db;
+    subscription_repo::upsert(rt.pool(), &sub_row)
+        .await
+        .map_err(|e| format!("更新订阅记录失败: {e}"))?;
 
     let result = DownloadResult {
         path: file_path.to_string_lossy().to_string(),
