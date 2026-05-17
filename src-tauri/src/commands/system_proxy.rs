@@ -1,15 +1,24 @@
 //! 系统级代理：连接成功后写入 OS 代理设置，断开或退出时尽量关闭。
-//! macOS：一律通过 `osascript` + `with administrator privileges` 以管理员身份批量执行
-//!       `networksetup`（新系统修改系统代理需要 root；连接/断开各至多弹一次密码框）。
+//! macOS：通过 Security.framework `AuthorizationCreate` 获取一次管理员授权，后续开/关代理
+//!       均复用同一授权（不再弹密码框）。仅在首次需要特权时弹出系统密码对话框。
 //! Windows：写注册表 HKCU\...\Internet Settings 并通知系统刷新。
 
 use crate::commands::ProxyConfig;
 #[cfg(target_os = "macos")]
 use log::info;
 #[cfg(target_os = "macos")]
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 #[cfg(target_os = "macos")]
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(target_os = "macos")]
+use std::sync::OnceLock;
+#[cfg(target_os = "macos")]
+use security_framework::authorization::{Authorization, Flags as AuthFlags};
+#[cfg(target_os = "macos")]
+use security_framework_sys::authorization::AuthorizationExternalForm;
+
+#[cfg(target_os = "macos")]
+static SYSTEM_PROXY_AUTH: OnceLock<AuthorizationExternalForm> = OnceLock::new();
 
 #[cfg(target_os = "macos")]
 fn posix_single_quote(s: &str) -> String {
@@ -26,32 +35,74 @@ fn networksetup_cmdline(args: &[impl AsRef<str>]) -> String {
     line
 }
 
+/// 获取已缓存的授权，或创建新授权（首次调用弹出密码对话框）
 #[cfg(target_os = "macos")]
-fn run_shell_chain_as_admin(chain: &str) -> Result<(), String> {
-    // `do shell script` 本身经 /bin/sh -c 执行；直接传入整段命令，避免 quoted form 嵌套引号边缘情况。
-    let escaped = chain.replace('\\', "\\\\").replace('"', "\\\"");
-    let applescript = format!("do shell script \"{}\" with administrator privileges", escaped);
-    let out = Command::new("/usr/bin/osascript")
-        .args(["-e", &applescript])
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .output()
-        .map_err(|e| format!("osascript 失败: {}", e))?;
-    if !out.status.success() {
-        let msg = String::from_utf8_lossy(&out.stderr);
-        let lower = msg.to_lowercase();
-        if lower.contains("user canceled") || msg.contains("-128") {
-            return Err("已取消管理员授权，无法写入系统代理".to_string());
+fn get_or_create_auth() -> Result<Authorization, String> {
+    if let Some(external) = SYSTEM_PROXY_AUTH.get() {
+        return Authorization::try_from(*external)
+            .map_err(|e| format!("从缓存恢复授权失败: {}", e));
+    }
+
+    info!("[system-proxy] 正在请求管理员权限以修改系统代理（仅此一次）");
+    let auth = Authorization::new(
+        None,
+        None,
+        AuthFlags::INTERACTION_ALLOWED | AuthFlags::EXTEND_RIGHTS,
+    )
+    .map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("-60005") || msg.to_lowercase().contains("cancel") {
+            "已取消管理员授权，无法修改系统代理".to_string()
+        } else {
+            format!("获取系统授权失败: {}", msg)
         }
-        return Err(format!("提升权限执行失败: {}", msg.trim()));
+    })?;
+
+    let external = auth
+        .make_external_form()
+        .map_err(|e| format!("序列化授权失败: {}", e))?;
+
+    // OnceLock::set 可能因竞态失败，此时另一个线程已存储，忽略即可
+    let _ = SYSTEM_PROXY_AUTH.set(external);
+
+    Ok(auth)
+}
+
+/// 通过已缓存的授权执行 shell 命令链，等待其完成并检查输出
+#[cfg(target_os = "macos")]
+fn run_shell_chain_with_auth(chain: &str) -> Result<(), String> {
+    let auth = get_or_create_auth()?;
+
+    let mut pipe = auth
+        .execute_with_privileges_piped("/bin/sh", ["-c", chain], AuthFlags::default())
+        .map_err(|e| format!("执行管理员命令失败: {}", e))?;
+
+    let mut output = String::new();
+    pipe.read_to_string(&mut output)
+        .map_err(|e| format!("读取命令输出失败: {}", e))?;
+
+    let trimmed = output.trim();
+    if !trimmed.is_empty() {
+        // networksetup 执行成功的输出通常为空；有输出多为错误
+        tracing::warn!("[system-proxy] networksetup 输出: {}", trimmed);
     }
     Ok(())
 }
 
+/// 无管理员权限直接执行 shell 命令（用于关闭代理的首选方式）
 #[cfg(target_os = "macos")]
-fn run_macos_networksetup_chain(chain: &str) -> Result<(), String> {
-    info!("[system-proxy] 将使用管理员权限修改系统代理（即将弹出密码框）");
-    run_shell_chain_as_admin(chain)
+fn run_shell_chain_direct(chain: &str) -> Result<(), String> {
+    let out = Command::new("/bin/sh")
+        .args(["-c", chain])
+        .output()
+        .map_err(|e| format!("执行 shell 命令失败: {}", e))?;
+    if !out.status.success() {
+        return Err(format!(
+            "命令执行失败: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -117,7 +168,7 @@ fn apply_macos(config: &ProxyConfig) -> Result<(), String> {
         cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "on"]));
     }
     let chain = cmds.join(" && ");
-    run_macos_networksetup_chain(&chain)
+    run_shell_chain_with_auth(&chain)
 }
 
 #[cfg(target_os = "macos")]
@@ -130,7 +181,12 @@ fn clear_macos() -> Result<(), String> {
         cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "off"]));
     }
     let chain = cmds.join(" ; ");
-    run_macos_networksetup_chain(&chain)
+    // 关闭代理优先尝试无管理员权限
+    if run_shell_chain_direct(&chain).is_ok() {
+        return Ok(());
+    }
+    // 回退到管理员权限（复用首次的授权，不弹框）
+    run_shell_chain_with_auth(&chain)
 }
 
 /// 将 Mihomo 监听地址转换为写入系统代理的主机名（本机回环统一为 127.0.0.1）。
