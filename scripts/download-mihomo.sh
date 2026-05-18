@@ -1,78 +1,109 @@
 #!/usr/bin/env bash
+# 下载 Mihomo 内核二进制到 src-tauri/binaries/，按 Tauri externalBin 命名规则命名。
+# 用法: bash scripts/download-mihomo.sh [version]
+#   version 可选，默认从 GitHub latest redirect 获取。
+
 set -euo pipefail
 
-MIHOMO_VERSION="v1.19.24"
 REPO="MetaCubeX/mihomo"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BINARIES_DIR="${REPO_ROOT}/src-tauri/binaries"
+BINARIES_DIR="src-tauri/binaries"
+VERSION="${1:-}"
+
 mkdir -p "$BINARIES_DIR"
 
-# Mirror URL: set MIHOMO_MIRROR env to override (e.g. https://mirror.ghproxy.com)
-MIRROR="${MIHOMO_MIRROR:-https://gh-proxy.org/https://github.com}"
-BASE_URL="${MIRROR}/${REPO}/releases/download/${MIHOMO_VERSION}"
+# ── 检测平台和架构 ──────────────────────────────────────────
 
-detect_platform() {
-  local os arch ext target_triple
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
 
-  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  arch="$(uname -m)"
+case "$OS" in
+  linux)   PLATFORM="linux"  ;;
+  darwin)  PLATFORM="darwin" ;;
+  mingw*|msys*|cygwin*) PLATFORM="windows" ;;
+  *) echo "不支持的操作系统: $OS"; exit 1 ;;
+esac
 
-  case "$os" in
-    mingw*|msys*|cygwin*|windows*) os="windows"; ext="zip" ;;
-    darwin*)  os="darwin";  ext="gz"  ;;
-    linux*)   os="linux";   ext="gz"  ;;
-    *) echo "Unsupported OS: $os" >&2; exit 1 ;;
-  esac
+case "$ARCH" in
+  x86_64|amd64)  ARCH_NAME="amd64"; RUST_TARGET="x86_64" ;;
+  aarch64|arm64) ARCH_NAME="arm64"; RUST_TARGET="aarch64" ;;
+  *) echo "不支持的架构: $ARCH"; exit 1 ;;
+esac
 
-  case "$arch" in
-    x86_64|amd64)  arch="amd64"; target_triple="x86_64" ;;
-    aarch64|arm64) arch="arm64";  target_triple="aarch64" ;;
-    *) echo "Unsupported architecture: $arch" >&2; exit 1 ;;
-  esac
+# ── Tauri externalBin 命名 ──────────────────────────────────
 
-  case "$os" in
-    windows) target_triple="${target_triple}-pc-windows-msvc" ;;
-    darwin)  target_triple="${target_triple}-apple-darwin" ;;
-    linux)   target_triple="${target_triple}-unknown-linux-gnu" ;;
-  esac
+case "$PLATFORM" in
+  linux)
+    RUST_TRIPLE="${RUST_TARGET}-unknown-linux-gnu"
+    SUFFIX=""
+    ;;
+  darwin)
+    RUST_TRIPLE="${RUST_TARGET}-apple-darwin"
+    SUFFIX=""
+    ;;
+  windows)
+    RUST_TRIPLE="${RUST_TARGET}-pc-windows-msvc"
+    SUFFIX=".exe"
+    ;;
+esac
 
-  local asset_name="mihomo-${os}-${arch}-${MIHOMO_VERSION}.${ext}"
-  echo "${os} ${ext} ${asset_name} ${target_triple}"
-}
+DEST="$BINARIES_DIR/mihomo-${RUST_TRIPLE}${SUFFIX}"
 
-main() {
-  read -r os ext asset_name target_triple <<< "$(detect_platform)"
-  local download_url="${BASE_URL}/${asset_name}"
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
+# 已存在则跳过
+if [ -f "$DEST" ]; then
+  echo "mihomo 已存在: $DEST，跳过下载"
+  exit 0
+fi
 
-  echo "Downloading mihomo ${MIHOMO_VERSION} for ${target_triple}..."
-  echo "URL: ${download_url}"
+# ── 获取版本号 ──────────────────────────────────────────────
 
-  if command -v curl &>/dev/null; then
-    curl -fSL --progress-bar -o "${tmp_dir}/${asset_name}" "$download_url"
-  elif command -v wget &>/dev/null; then
-    wget --show-progress -O "${tmp_dir}/${asset_name}" "$download_url"
-  else
-    echo "Error: curl or wget required" >&2; exit 1
+if [ -z "$VERSION" ]; then
+  echo "获取最新 release 版本..."
+  # 方式 1：跟踪重定向从最终 URL 提取 tag
+  FINAL_URL=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
+  if [ -n "$FINAL_URL" ]; then
+    VERSION=$(echo "$FINAL_URL" | sed -n 's|.*/tag/\([^/]*\)$|\1|p')
   fi
-
-  if [ "$os" = "windows" ]; then
-    unzip -oq "${tmp_dir}/${asset_name}" -d "${tmp_dir}/extracted"
-    local exe_path
-    exe_path="$(find "${tmp_dir}/extracted" -name 'mihomo*.exe' -type f | head -1)"
-    [ -z "$exe_path" ] && { echo "Error: .exe not found in archive" >&2; exit 1; }
-    cp "$exe_path" "${BINARIES_DIR}/mihomo-${target_triple}.exe"
-    echo "Installed: ${BINARIES_DIR}/mihomo-${target_triple}.exe"
-  else
-    gunzip -c "${tmp_dir}/${asset_name}" > "${tmp_dir}/mihomo"
-    chmod +x "${tmp_dir}/mihomo"
-    cp "${tmp_dir}/mihomo" "${BINARIES_DIR}/mihomo-${target_triple}"
-    echo "Installed: ${BINARIES_DIR}/mihomo-${target_triple}"
+  # 方式 2：API fallback
+  if [ -z "$VERSION" ]; then
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)"[^"]*$/\1/')
   fi
+  if [ -z "$VERSION" ]; then
+    echo "无法获取最新版本号，请手动指定: bash scripts/download-mihomo.sh <version>"
+    exit 1
+  fi
+fi
 
-  rm -rf "$tmp_dir"
-  echo "Done! mihomo ${MIHOMO_VERSION} is ready."
-}
+echo "下载 Mihomo $VERSION ($PLATFORM/$ARCH_NAME)..."
 
-main "$@"
+# ── 构建下载 URL ────────────────────────────────────────────
+
+ASSET_NAME="mihomo-${PLATFORM}-${ARCH_NAME}-${VERSION}.gz"
+if [ "$PLATFORM" = "windows" ]; then
+  ASSET_NAME="mihomo-${PLATFORM}-${ARCH_NAME}-${VERSION}.zip"
+fi
+
+DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$ASSET_NAME"
+
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "下载: $DOWNLOAD_URL"
+curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$ASSET_NAME"
+
+# ── 解压 ────────────────────────────────────────────────────
+
+if [ "$PLATFORM" = "windows" ]; then
+  unzip -o "$TMP_DIR/$ASSET_NAME" -d "$TMP_DIR"
+  # zip 内文件名可能是 mihomo-windows-amd64.exe 或 mihomo.exe
+  EXTRACTED=$(find "$TMP_DIR" -maxdepth 1 -name "mihomo*.exe" -print -quit)
+  if [ -z "$EXTRACTED" ]; then
+    echo "错误: zip 中未找到 mihomo 可执行文件"
+    exit 1
+  fi
+  mv "$EXTRACTED" "$DEST"
+else
+  gunzip -c "$TMP_DIR/$ASSET_NAME" > "$DEST"
+fi
+
+chmod +x "$DEST"
+echo "已下载: $DEST ($(du -h "$DEST" | cut -f1))"

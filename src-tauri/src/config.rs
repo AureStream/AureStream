@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use tauri::{AppHandle, Manager};
 
-use crate::commands::DEFAULT_PROXY_BYPASS_DOMAINS;
+use crate::models::proxy_config::DEFAULT_PROXY_BYPASS_DOMAINS;
 
 fn default_theme() -> String {
     "light".to_string()
@@ -115,12 +115,6 @@ impl AureConfigState {
 
     pub fn get(&self) -> MutexGuard<'_, AureConfig> {
         self.inner.lock().expect("AureConfigState mutex poisoned")
-    }
-
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<(), String> {
-        let config = self.get();
-        self.save_inner(&config)
     }
 
     fn save_inner(&self, config: &AureConfig) -> Result<(), String> {

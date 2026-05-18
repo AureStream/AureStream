@@ -1,73 +1,109 @@
 import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useRef, useState } from "react";
+import { useProxyStore } from "@/stores/appStore";
 
 interface NetworkInfo {
   ip: string;
-  country: string;
   city: string;
+  region: string;
+  country: string;
   asn: string;
   org: string;
 }
 
-function resolveNetworkInfo(ip?: string): NetworkInfo | null {
-  if (!ip) return null;
-  const hash = ip.split(".").reduce((a, b) => a + parseInt(b, 10), 0);
-  const locations: NetworkInfo[] = [
-    {
-      ip,
-      country: "香港 HK",
-      city: "中环 Central",
-      asn: "AS20473",
-      org: "Vultr Holdings",
-    },
-    {
-      ip,
-      country: "日本 JP",
-      city: "东京 Tokyo",
-      asn: "AS2497",
-      org: "IIJ Internet Initiative",
-    },
-    {
-      ip,
-      country: "新加坡 SG",
-      city: "新加坡 Singapore",
-      asn: "AS14061",
-      org: "DigitalOcean LLC",
-    },
-    {
-      ip,
-      country: "美国 US",
-      city: "洛杉矶 Los Angeles",
-      asn: "AS13335",
-      org: "Cloudflare Inc.",
-    },
-    {
-      ip,
-      country: "台湾 TW",
-      city: "台北 Taipei",
-      asn: "AS3462",
-      org: "Chunghwa Telecom",
-    },
-  ];
-  return locations[hash % locations.length];
+function parseOrg(org: string): { asn: string; org: string } {
+  const match = org.match(/^(AS\d+)\s+(.+)$/);
+  if (match) {
+    return { asn: match[1], org: match[2] };
+  }
+  return { asn: "", org };
 }
 
 const INFO_ROWS: { key: keyof NetworkInfo; label: string }[] = [
   { key: "ip", label: "IP" },
-  { key: "country", label: "国家" },
   { key: "city", label: "城市" },
+  { key: "region", label: "区域" },
+  { key: "country", label: "国家" },
   { key: "asn", label: "ASN" },
   { key: "org", label: "组织" },
 ];
 
 export function NetworkBlock({
-  connectedIp,
   className,
 }: {
   connectedIp?: string;
   className?: string;
 }) {
-  const info = resolveNetworkInfo(connectedIp);
+  const isConnected = useProxyStore((s) => s.isConnected);
+  const nodeId = useProxyStore((s) => s.currentNode?.id);
+  const [info, setInfo] = useState<NetworkInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const fetchId = useRef(0);
+  const prevConnected = useRef(isConnected);
+
+  useEffect(() => {
+    let cancelled = false;
+    const id = ++fetchId.current;
+
+    async function fetchIpInfo() {
+      setLoading(true);
+      setError(false);
+      try {
+        const resp = await fetch("https://ipinfo.io/json");
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (cancelled || fetchId.current !== id) return;
+        const { asn, org } = parseOrg(data.org || "");
+        setInfo({
+          ip: data.ip || "",
+          city: data.city || "",
+          region: data.region || "",
+          country: data.country || "",
+          asn,
+          org,
+        });
+      } catch {
+        if (!cancelled && fetchId.current === id) setError(true);
+      } finally {
+        if (!cancelled && fetchId.current === id) setLoading(false);
+      }
+    }
+
+    // 仅切换节点（连接状态未变）：等待 mihomo 完成 selector 切换 + closeConnections
+    const nodeSwitch =
+      isConnected && prevConnected.current === isConnected && nodeId;
+    const delay = nodeSwitch ? 1200 : 0;
+
+    const timer = setTimeout(fetchIpInfo, delay);
+
+    prevConnected.current = isConnected;
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isConnected, nodeId]);
+
+  const valueNode = (key: keyof NetworkInfo) => {
+    if (loading && !info) {
+      return (
+        <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
+      );
+    }
+    const val = info?.[key];
+    if (!val && loading) {
+      return (
+        <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
+      );
+    }
+    return (
+      <span className="text-xs font-medium tabular-nums text-foreground">
+        {val || "-"}
+      </span>
+    );
+  };
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
@@ -78,27 +114,21 @@ export function NetworkBlock({
         <span className="text-sm font-semibold text-foreground">网络信息</span>
       </div>
 
-      {info ? (
-        <div className="flex flex-col gap-2 min-h-[7rem]">
-          {INFO_ROWS.map(({ key, label }) => (
-            <div key={key} className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{label}</span>
-              <span className="text-xs font-medium tabular-nums text-foreground">
-                {info[key]}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/15 px-4 py-5 text-center min-h-[7rem] justify-center">
-          <p className="text-xs font-medium text-muted-foreground">
-            无网络信息
+      <div className="flex flex-col gap-2 min-h-[7rem]">
+        {INFO_ROWS.map(({ key, label }) => (
+          <div key={key} className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground shrink-0">
+              {label}
+            </span>
+            {valueNode(key)}
+          </div>
+        ))}
+        {error && !info && (
+          <p className="text-[11px] text-muted-foreground/60 mt-1">
+            获取失败，切换节点或连接后重试
           </p>
-          <p className="text-[11px] text-muted-foreground/70">
-            连接后显示 IP、地区与运营商
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

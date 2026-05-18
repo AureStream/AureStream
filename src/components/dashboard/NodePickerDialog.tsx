@@ -27,7 +27,7 @@ export function NodePickerDialog({
     currentProvider,
     currentNode,
     applyNodeSelection,
-    refreshSubscriptionNodesFromMihomo,
+    refreshSubscriptionNodesFromDb,
     testLatency,
     isTestingLatency,
     latencyPendingByNodeId,
@@ -93,14 +93,9 @@ export function NodePickerDialog({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !isConnected) return;
-    void refreshSubscriptionNodesFromMihomo();
-  }, [
-    open,
-    isConnected,
-    currentProvider?.id,
-    refreshSubscriptionNodesFromMihomo,
-  ]);
+    if (!open) return;
+    void refreshSubscriptionNodesFromDb();
+  }, [open, currentProvider?.id, refreshSubscriptionNodesFromDb]);
 
   const handlePick = (id: string) => {
     const node = displayList.find((n) => n.id === id);

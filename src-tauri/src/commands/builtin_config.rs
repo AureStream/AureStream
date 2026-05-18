@@ -2,16 +2,15 @@
 //! Mihomo 要求 `path` 必须位于 `-d` 工作目录（及其 SAFE_PATHS）之下，因此从应用配置目录的订阅文件**复制**到 `mihomo-work/subscriptions/` 再写入配置。
 
 use super::allocate_high_random_port;
-use super::mihomo_constants::LATENCY_TEST_URL;
+use super::mihomo_constants::{
+    AURESTREAM_NODE_SELECTOR, EXTERNAL_CONTROLLER, GEODATA, LATENCY_TEST_URL,
+};
 use super::proxy::ProxyState;
 use serde_yaml::{Mapping, Value};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
-/// 与模板中 proxy-groups.name 一致，供前端 selectNodeForGroup / getGroupByName 使用
-pub const AURESTREAM_NODE_SELECTOR: &str = "AureStream_Node_Selector";
 const PROXY_PROVIDER_KEY: &str = "AureStream_Sub";
-const EXTERNAL_CONTROLLER: &str = "127.0.0.1:9090";
 
 fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port: u16) -> Value {
     let mut root = Mapping::new();
@@ -43,34 +42,12 @@ fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port
     );
 
     let mut geox_url = Mapping::new();
-    geox_url.insert(
-        Value::String("geoip".to_string()),
-        Value::String(
-            "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.db"
-                .to_string(),
-        ),
-    );
-    geox_url.insert(
-        Value::String("geoip-lite".to_string()),
-        Value::String(
-            "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip-lite.db"
-                .to_string(),
-        ),
-    );
-    geox_url.insert(
-        Value::String("mmdb".to_string()),
-        Value::String(
-            "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
-                .to_string(),
-        ),
-    );
-    geox_url.insert(
-        Value::String("geosite".to_string()),
-        Value::String(
-            "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
-                .to_string(),
-        ),
-    );
+    for entry in GEODATA {
+        geox_url.insert(
+            Value::String(entry.geox_key.to_string()),
+            Value::String(entry.url.to_string()),
+        );
+    }
     root.insert(
         Value::String("geox-url".to_string()),
         Value::Mapping(geox_url),
@@ -153,7 +130,7 @@ fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port
 /// 写入 `runtime/aurestream-mihomo.yaml`：`proxy-providers.type: file` 的 `path` 为 **`mihomo-work/subscriptions/<provider_id>.yaml`**（内核 `-d` 下，符合 SAFE_PATH）。
 /// 数据源仍为应用配置目录下 `subscriptions/<provider_id>.yaml`（按 `download_subscription` 写入），此处每次生成配置时做一次复制以同步最新内容。
 #[tauri::command]
-pub async fn build_aurestream_mihomo_config(
+pub async fn build_runtime_config(
     app: AppHandle,
     provider_id: String,
     proxy_state: State<'_, ProxyState>,
@@ -161,7 +138,7 @@ pub async fn build_aurestream_mihomo_config(
     let (listen, mixed_port) = {
         let mut config = proxy_state.config.lock().map_err(|e| e.to_string())?;
         let status = proxy_state.status.lock().map_err(|e| e.to_string())?;
-        config.listen = "127.0.0.1".to_string();
+        config.listen = super::mihomo_constants::DEFAULT_LISTEN_ADDR.to_string();
         if !status.is_running || config.mixed_port == 0 {
             config.mixed_port = allocate_high_random_port()?;
         }
@@ -185,7 +162,7 @@ pub async fn build_aurestream_mihomo_config(
         .path()
         .app_local_data_dir()
         .map_err(|e| format!("无法获取本地数据目录: {}", e))?
-        .join("mihomo-work");
+        .join(super::mihomo_constants::MIHOMO_WORK_DIR);
     let mirrored_subscriptions = work_dir.join("subscriptions");
     tokio::fs::create_dir_all(&mirrored_subscriptions)
         .await

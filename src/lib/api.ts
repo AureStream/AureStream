@@ -1,6 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Provider, Node } from "@/types";
 
+/** Tauri invoke 常见 rejection 为字符串；统一成可读文案供 Toast 展示 */
+export function formatInvokeError(e: unknown): string {
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message;
+  if (
+    e &&
+    typeof e === "object" &&
+    "message" in e &&
+    typeof (e as { message: unknown }).message === "string"
+  ) {
+    return (e as { message: string }).message;
+  }
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 export interface ProxyConfig {
   listen: string;
   mixed_port: number;
@@ -136,27 +155,20 @@ export async function deleteSubscriptionFile(
   return await invoke<void>("delete_subscription_file", { providerId });
 }
 
-export async function buildAureStreamMihomoConfig(
-  providerId: string,
-): Promise<string> {
-  return await invoke<string>("build_aurestream_mihomo_config", { providerId });
+export async function buildRuntimeConfig(providerId: string): Promise<string> {
+  return await invoke<string>("build_runtime_config", { providerId });
 }
 
-/** 启动或重启 Mihomo sidecar（使用 buildAureStreamMihomoConfig 生成的配置绝对路径） */
-export async function startMihomoKernel(
-  patchedConfigPath: string,
+/** 启动或重启本地代理内核侧进程（使用 buildRuntimeConfig 生成的配置绝对路径） */
+export async function startRuntimeEngine(
+  runtimeConfigPath: string,
 ): Promise<void> {
-  return await invoke<void>("start_mihomo_kernel", { patchedConfigPath });
+  return await invoke<void>("start_runtime_engine", { runtimeConfigPath });
 }
 
-/** 结束由应用拉起的 Mihomo 进程 */
-export async function stopMihomoKernel(): Promise<void> {
-  return await invoke<void>("stop_mihomo_kernel");
-}
-
-/** 预下载 GeoIP/GeoSite 文件到 mihomo 工作目录 */
-export async function downloadGeodata(): Promise<void> {
-  return await invoke<void>("download_geodata");
+/** 结束由应用拉起的本地代理内核进程 */
+export async function stopRuntimeEngine(): Promise<void> {
+  return await invoke<void>("stop_runtime_engine");
 }
 
 // --- App settings & latency cache ---
