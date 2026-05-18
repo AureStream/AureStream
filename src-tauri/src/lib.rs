@@ -7,14 +7,14 @@ pub mod ipc;
 pub mod models;
 mod network;
 pub mod runtime;
-pub mod subscription;
 pub mod storage;
+pub mod subscription;
 
 use std::sync::Arc;
 
 use commands::builtin_config::build_runtime_config;
 use commands::mihomo_kernel::{start_runtime_engine, stop_runtime_engine};
-use models::proxy_config::ProxyState;
+use config::AureConfigState;
 use ipc::connection::{
     get_proxy_config, get_proxy_status, set_current_node, start_proxy, stop_proxy,
     update_proxy_config,
@@ -22,11 +22,11 @@ use ipc::connection::{
 use ipc::node::{get_nodes, get_nodes_by_provider, test_all_nodes_latency, test_node_latency};
 use ipc::settings::{load_app_settings, save_app_settings};
 use ipc::subscription::{
-    add_provider, delete_provider, delete_subscription_file, download_subscription,
-    get_providers, get_subscription_path, update_provider,
+    add_provider, delete_provider, delete_subscription_file, download_subscription, get_providers,
+    get_subscription_path, update_provider,
 };
 use ipc::tray::update_tray_menu;
-use config::AureConfigState;
+use models::proxy_config::ProxyState;
 use storage::database;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
@@ -111,17 +111,17 @@ fn init_storage(app: &AppHandle) -> Result<(sqlx::SqlitePool, AureConfigState), 
 
     let config_state = AureConfigState::load(app)?;
     let cfg_snapshot = { config_state.get().clone() };
-    tauri::async_runtime::block_on(bootstrap::migrate_aure_yaml_to_sqlite(
-        &pool,
-        &cfg_snapshot,
-    ))
-    .map_err(|e| format!("SQLite 引导迁移失败: {e}"))?;
+    tauri::async_runtime::block_on(bootstrap::migrate_aure_yaml_to_sqlite(&pool, &cfg_snapshot))
+        .map_err(|e| format!("SQLite 引导迁移失败: {e}"))?;
 
     Ok((pool, config_state))
 }
 
 /// 初始化运行时目录与内核适配器。
-fn init_runtime(app: &AppHandle, pool: sqlx::SqlitePool) -> Result<runtime::RuntimeManager, String> {
+fn init_runtime(
+    app: &AppHandle,
+    pool: sqlx::SqlitePool,
+) -> Result<runtime::RuntimeManager, String> {
     let local_dir = app
         .path()
         .app_local_data_dir()
@@ -130,18 +130,20 @@ fn init_runtime(app: &AppHandle, pool: sqlx::SqlitePool) -> Result<runtime::Runt
     let mihomo_work = local_dir.join(adapter::mihomo::constants::MIHOMO_WORK_DIR);
     let _ = std::fs::create_dir_all(&mihomo_work);
 
-    let (core, mihomo): (Arc<dyn adapter::CoreAdapter>, Option<Arc<adapter::MihomoAdapter>>) =
-        match adapter::MihomoAdapter::new(mihomo_work) {
-            Ok(a) => {
-                let arc = Arc::new(a);
-                let core: Arc<dyn adapter::CoreAdapter> = arc.clone();
-                (core, Some(arc))
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "MihomoAdapter 初始化失败，使用 NoopCoreAdapter");
-                (Arc::new(adapter::NoopCoreAdapter), None)
-            }
-        };
+    let (core, mihomo): (
+        Arc<dyn adapter::CoreAdapter>,
+        Option<Arc<adapter::MihomoAdapter>>,
+    ) = match adapter::MihomoAdapter::new(mihomo_work) {
+        Ok(a) => {
+            let arc = Arc::new(a);
+            let core: Arc<dyn adapter::CoreAdapter> = arc.clone();
+            (core, Some(arc))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "MihomoAdapter 初始化失败，使用 NoopCoreAdapter");
+            (Arc::new(adapter::NoopCoreAdapter), None)
+        }
+    };
     Ok(runtime::RuntimeManager::new(pool, core, mihomo))
 }
 
@@ -154,6 +156,9 @@ pub fn run() {
     // 勿在 Builder 之前手动 tracing_subscriber::init / try_init。
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app);
+        }))
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -163,8 +168,11 @@ pub fn run() {
                     })
                     .filter(|metadata| metadata.target() != "mihomo"),
                     // 控制台输出（dev 模式可见，排除 mihomo）
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout)
-                        .filter(|metadata| metadata.target() != "mihomo" && !metadata.target().starts_with("sqlx")),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout).filter(
+                        |metadata| {
+                            metadata.target() != "mihomo" && !metadata.target().starts_with("sqlx")
+                        },
+                    ),
                 ])
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .max_file_size(5_000_000)
@@ -262,11 +270,15 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::Exit = event {
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::Exit => {
                 if let Some(rt) = app_handle.try_state::<runtime::RuntimeManager>() {
                     let _ = tauri::async_runtime::block_on(rt.stop_sidecar());
                 }
             }
+            tauri::RunEvent::Reopen { .. } => {
+                show_main_window(app_handle);
+            }
+            _ => {}
         });
 }
