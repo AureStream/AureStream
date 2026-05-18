@@ -7,6 +7,8 @@ name: Build desktop bundles
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
