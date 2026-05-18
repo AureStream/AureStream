@@ -14,7 +14,6 @@ mod linux;
 /// 通用辅助函数（跨平台共享）。
 pub(crate) mod common {
     /// 将 Mihomo 监听地址转换为写入系统代理的主机名（本机回环统一为 127.0.0.1）。
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
     pub fn system_proxy_host(bind: &str) -> String {
         match bind {
             "0.0.0.0" | "::" | "[::]" => "127.0.0.1".to_string(),
