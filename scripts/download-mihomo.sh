@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 下载 Mihomo 内核二进制到 src-tauri/binaries/，按 Tauri externalBin 命名规则命名。
 # 用法: bash scripts/download-mihomo.sh [version]
-#   version 可选，默认从 GitHub API 获取最新 release。
+#   version 可选，默认从 GitHub latest redirect 获取。
 
 set -euo pipefail
 
@@ -58,9 +58,17 @@ fi
 
 if [ -z "$VERSION" ]; then
   echo "获取最新 release 版本..."
-  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+  # 跟踪 /releases/latest 重定向，从 Location header 提取 tag
+  LATEST_URL=$(curl -fsSI -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
+  if [ -n "$LATEST_URL" ]; then
+    VERSION=$(echo "$LATEST_URL" | grep -oE '[^/]+$')
+  fi
+  # fallback: API（可能被限流）
   if [ -z "$VERSION" ]; then
-    echo "无法获取最新版本号"
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/' || true)
+  fi
+  if [ -z "$VERSION" ]; then
+    echo "无法获取最新版本号，请手动指定: bash scripts/download-mihomo.sh <version>"
     exit 1
   fi
 fi
