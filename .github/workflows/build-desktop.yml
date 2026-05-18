@@ -160,9 +160,20 @@ jobs:
           done
           ls -la release-files/
 
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          # 从 tag 提取版本号
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          # 替换模板中的版本占位符
+          sed "s/\${VERSION}/$VERSION/g" .github/RELEASE_TEMPLATE.md > release-notes.md
+
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
