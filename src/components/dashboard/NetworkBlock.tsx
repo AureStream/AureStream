@@ -1,7 +1,7 @@
 import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { useProxyStore } from "@/stores/appStore";
+import { useProxyStore, useAppStore } from "@/stores/appStore";
 
 interface NetworkInfo {
   ip: string;
@@ -37,6 +37,7 @@ export function NetworkBlock({
 }) {
   const isConnected = useProxyStore((s) => s.isConnected);
   const nodeId = useProxyStore((s) => s.currentNode?.id);
+  const proxyMode = useAppStore((s) => s.proxyMode);
   const [info, setInfo] = useState<NetworkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -51,7 +52,9 @@ export function NetworkBlock({
       setLoading(true);
       setError(false);
       try {
-        const resp = await fetch("https://ipinfo.io/json");
+        const resp = await fetch(`https://ipinfo.io/json?t=${Date.now()}`, {
+          cache: "no-store",
+        });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         if (cancelled || fetchId.current !== id) return;
@@ -71,10 +74,8 @@ export function NetworkBlock({
       }
     }
 
-    // 仅切换节点（连接状态未变）：等待 mihomo 完成 selector 切换 + closeConnections
-    const nodeSwitch =
-      isConnected && prevConnected.current === isConnected && nodeId;
-    const delay = nodeSwitch ? 1200 : 0;
+    // 如果处于连接状态，无论是刚连接、切换节点还是改变代理模式，都给予一定延迟等待内核和路由生效
+    const delay = isConnected ? 1500 : 0;
 
     const timer = setTimeout(fetchIpInfo, delay);
 
@@ -84,7 +85,7 @@ export function NetworkBlock({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [isConnected, nodeId]);
+  }, [isConnected, nodeId, proxyMode]);
 
   const valueNode = (key: keyof NetworkInfo) => {
     if (loading && !info) {
