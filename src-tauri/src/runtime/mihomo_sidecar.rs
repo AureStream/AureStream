@@ -10,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 use crate::adapter::mihomo::constants::EXTERNAL_CONTROLLER;
-use crate::commands::ProxyConfig;
+use crate::models::proxy_config::ProxyConfig;
 
 pub(crate) struct MihomoChild {
     pub(crate) child: tauri_plugin_shell::process::CommandChild,

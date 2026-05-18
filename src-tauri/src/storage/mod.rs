@@ -1,5 +1,6 @@
 //! SQLite 持久化：连接池、迁移与 Repository。
 
+pub mod app_state_repo;
 pub mod database;
 pub mod endpoint_repo;
 pub mod subscription_repo;

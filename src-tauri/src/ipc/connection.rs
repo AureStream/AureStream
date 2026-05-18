@@ -1,6 +1,6 @@
 //! 连接管理命令：代理启停、状态查询。
 
-use crate::commands::{allocate_high_random_port, ProxyConfig, ProxyState};
+use crate::models::proxy_config::{allocate_high_random_port, ProxyConfig, ProxyState};
 use crate::runtime::RuntimeManager;
 use serde::Serialize;
 use tauri::State;

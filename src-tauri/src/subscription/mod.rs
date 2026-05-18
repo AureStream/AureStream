@@ -10,4 +10,5 @@ pub mod normalizer;
 pub mod protocol;
 pub mod registry;
 
+pub use cache::SubscriptionCache;
 pub use registry::ParserRegistry;

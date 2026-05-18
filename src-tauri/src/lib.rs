@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use commands::builtin_config::build_runtime_config;
 use commands::mihomo_kernel::{start_runtime_engine, stop_runtime_engine};
-use commands::proxy::ProxyState;
+use models::proxy_config::ProxyState;
 use ipc::connection::{
     get_proxy_config, get_proxy_status, set_current_node, start_proxy, stop_proxy,
     update_proxy_config,

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use tauri::{AppHandle, Manager};
 
-use crate::commands::DEFAULT_PROXY_BYPASS_DOMAINS;
+use crate::models::proxy_config::DEFAULT_PROXY_BYPASS_DOMAINS;
 
 fn default_theme() -> String {
     "light".to_string()

@@ -16,7 +16,7 @@ use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 
 use crate::adapter::{CoreAdapter, MihomoAdapter};
-use crate::commands::ProxyConfig;
+use crate::models::proxy_config::ProxyConfig;
 use crate::error::AppError;
 use crate::models::{AppEvent, ConnectionState, RuntimePolicy, RuntimeProfile, RuntimeSession};
 use tauri::AppHandle;

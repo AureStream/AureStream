@@ -1,6 +1,6 @@
 //! 首次启动：将 `aurestream.yaml` 中的 providers / nodes 导入 SQLite（subscriptions / endpoints）。
 
-use crate::commands::{bytes_to_gb, gb_to_bytes};
+use crate::models::proxy_config::{bytes_to_gb, gb_to_bytes};
 use crate::config::AureConfig;
 use crate::error::AppError;
 use crate::models::endpoint::{AuthInfo, Endpoint, EndpointMetadata, Protocol, TransportInfo};

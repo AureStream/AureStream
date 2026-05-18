@@ -1,4 +1,5 @@
 pub mod endpoint;
+pub mod proxy_config;
 pub mod raw_proxy;
 pub mod subscription;
 pub mod state;

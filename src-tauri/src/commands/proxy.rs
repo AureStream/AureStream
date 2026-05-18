@@ -1,16 +1,3 @@
-use crate::commands::{ProxyConfig, ProxyStatus};
-use std::sync::Mutex;
+//! ProxyState re-export（已迁移至 models::proxy_config）。
 
-pub struct ProxyState {
-    pub config: Mutex<ProxyConfig>,
-    pub status: Mutex<ProxyStatus>,
-}
-
-impl Default for ProxyState {
-    fn default() -> Self {
-        Self {
-            config: Mutex::new(ProxyConfig::default()),
-            status: Mutex::new(ProxyStatus::default()),
-        }
-    }
-}
+pub use crate::models::proxy_config::ProxyState;

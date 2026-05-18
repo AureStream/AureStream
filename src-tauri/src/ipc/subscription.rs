@@ -236,9 +236,9 @@ pub async fn download_subscription(
     let meta = header_meta.or_else(|| parse_yaml_meta(&content));
 
     if let Some(ref meta) = meta {
-        let traffic_total = meta.total_bytes.map(|b| crate::commands::bytes_to_gb(b as i64));
+        let traffic_total = meta.total_bytes.map(|b| crate::models::proxy_config::bytes_to_gb(b as i64));
         let traffic_used = match (meta.upload_bytes, meta.download_bytes) {
-            (Some(up), Some(down)) => Some(crate::commands::bytes_to_gb((up + down) as i64)),
+            (Some(up), Some(down)) => Some(crate::models::proxy_config::bytes_to_gb((up + down) as i64)),
             _ => None,
         };
         let expires_at = meta.expire_timestamp.map(|ts| {

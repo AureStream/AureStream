@@ -1,4 +1,4 @@
-use crate::commands::ProxyConfig;
+use crate::models::proxy_config::ProxyConfig;
 use crate::error::AppError;
 
 pub struct ProxyManager;
