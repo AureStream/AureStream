@@ -24,10 +24,12 @@ impl EventBus {
         let _ = tx.send(ev);
     }
 
+    /// 订阅控制频道（低频：连接状态、内核启停、错误）。
     pub fn subscribe_control(&self) -> broadcast::Receiver<AppEvent> {
         self.control.subscribe()
     }
 
+    /// 订阅遥测频道（高频：流量、延迟、内核日志）。
     pub fn subscribe_telemetry(&self) -> broadcast::Receiver<AppEvent> {
         self.telemetry.subscribe()
     }

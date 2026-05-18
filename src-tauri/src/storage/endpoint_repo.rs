@@ -174,17 +174,7 @@ fn row_to_endpoint(row: &sqlx::sqlite::SqliteRow) -> Result<Endpoint, AppError> 
 }
 
 fn parse_protocol(s: &str) -> Result<Protocol, AppError> {
-    match s {
-        "ss" => Ok(Protocol::Ss),
-        "vmess" => Ok(Protocol::Vmess),
-        "vless" => Ok(Protocol::Vless),
-        "trojan" => Ok(Protocol::Trojan),
-        "tuic" => Ok(Protocol::Tuic),
-        "hysteria2" => Ok(Protocol::Hysteria2),
-        "socks5" => Ok(Protocol::Socks5),
-        "http" => Ok(Protocol::Http),
-        _ => Err(AppError::protocol(s, "未知协议")),
-    }
+    Protocol::parse(s).ok_or_else(|| AppError::protocol(s, "未知协议"))
 }
 
 fn parse_network(s: &str) -> Option<TransportNetwork> {

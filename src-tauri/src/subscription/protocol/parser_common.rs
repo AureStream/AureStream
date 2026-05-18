@@ -13,7 +13,7 @@ pub fn endpoint_from_raw(raw: &RawProxyNode, source_id: &str) -> Result<Endpoint
         return Err(AppError::other("server/port 无效"));
     }
 
-    let mut ep = Endpoint {
+    let ep = Endpoint {
         id: name.to_string(),
         name: name.to_string(),
         protocol: raw.protocol.clone(),
@@ -28,7 +28,7 @@ pub fn endpoint_from_raw(raw: &RawProxyNode, source_id: &str) -> Result<Endpoint
         source_id: source_id.to_string(),
         unique_hash: String::new(),
         raw: Some(raw.extra.clone()),
-    };
-    ep.unique_hash = ep.compute_unique_hash();
+    }
+    .with_hash();
     Ok(ep)
 }

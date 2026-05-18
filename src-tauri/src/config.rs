@@ -117,12 +117,6 @@ impl AureConfigState {
         self.inner.lock().expect("AureConfigState mutex poisoned")
     }
 
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<(), String> {
-        let config = self.get();
-        self.save_inner(&config)
-    }
-
     fn save_inner(&self, config: &AureConfig) -> Result<(), String> {
         let text = serde_yaml::to_string(config).map_err(|e| format!("序列化配置失败: {}", e))?;
 

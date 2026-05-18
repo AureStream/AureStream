@@ -1,11 +1,7 @@
 pub mod builtin_config;
 pub mod mihomo_constants;
 pub mod mihomo_kernel;
-pub mod provider;
 pub mod proxy;
-pub mod settings;
-pub mod subscription;
-pub(crate) mod system_proxy;
 
 use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
@@ -23,22 +19,31 @@ pub struct ProxyConfig {
 impl Default for ProxyConfig {
     fn default() -> Self {
         Self {
-            listen: "127.0.0.1".to_string(),
+            listen: mihomo_constants::DEFAULT_LISTEN_ADDR.to_string(),
             mixed_port: 0,
             bypass_domains: DEFAULT_PROXY_BYPASS_DOMAINS.to_string(),
         }
     }
 }
 
-/// 分配一个随机可用端口，用于本地回环监听。
 pub(crate) fn allocate_high_random_port() -> Result<u16, String> {
     let listener =
-        TcpListener::bind(("127.0.0.1", 0)).map_err(|e| format!("分配本地端口失败: {}", e))?;
+        TcpListener::bind((mihomo_constants::DEFAULT_LISTEN_ADDR, 0)).map_err(|e| format!("分配本地端口失败: {}", e))?;
     let port = listener
         .local_addr()
         .map_err(|e| format!("读取本地端口失败: {}", e))?
         .port();
     Ok(port)
+}
+
+const GB_BYTES: f64 = 1024.0 * 1024.0 * 1024.0;
+
+pub(crate) fn gb_to_bytes(gb: f64) -> i64 {
+    (gb * GB_BYTES) as i64
+}
+
+pub(crate) fn bytes_to_gb(b: i64) -> f64 {
+    b as f64 / GB_BYTES
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,40 +65,4 @@ impl Default for ProxyStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Provider {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-    pub last_updated: String,
-    pub node_count: usize,
-    #[serde(rename = "trafficTotalGB")]
-    pub traffic_total_gb: Option<f64>,
-    #[serde(rename = "trafficUsedGB")]
-    pub traffic_used_gb: Option<f64>,
-    pub expires_at: Option<String>,
-    pub auto_update_interval: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Node {
-    pub id: String,
-    pub name: String,
-    pub provider_id: String,
-    #[serde(alias = "node_type")]
-    pub r#type: String,
-    pub server: String,
-    pub port: u16,
-    pub delay: Option<u32>,
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LatencyResult {
-    pub node_id: String,
-    pub delay: Option<u32>,
-    pub error: Option<String>,
-}
+pub use proxy::ProxyState;

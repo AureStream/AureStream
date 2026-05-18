@@ -1,5 +1,9 @@
-//! IPC 薄层占位。
+//! IPC 命令层：Tauri `#[tauri::command]` 函数。
 //!
-//! 后续在此聚合 `#[tauri::command]`，替换零散 `commands/*`，并与 [`crate::runtime::RuntimeManager`]、[`crate::storage`] 对齐。
-//!
-//! 规划：`connection_commands` · `subscription_commands` · `node_commands` · `settings_commands` · `tray_commands`。
+//! 每个子模块对应前端的一类操作。命令函数是薄包装，核心逻辑在 [`crate::runtime::RuntimeManager`] 和 [`crate::storage`] 中。
+
+pub mod connection;
+pub mod node;
+pub mod settings;
+pub mod subscription;
+pub mod tray;

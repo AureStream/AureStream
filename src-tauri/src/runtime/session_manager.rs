@@ -16,7 +16,7 @@ impl SessionManager {
         *self.current.lock().await = None;
     }
 
-    pub async fn get(&self) -> Option<RuntimeSession> {
+    pub async fn current(&self) -> Option<RuntimeSession> {
         self.current.lock().await.clone()
     }
 }

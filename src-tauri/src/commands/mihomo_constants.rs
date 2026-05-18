@@ -1,4 +1,5 @@
-//! Mihomo health-check URL（内置规则 / 内核侧），与前端说明对齐。
+//! Mihomo 内核共享常量 — 重新导出 [`crate::adapter::mihomo::constants`]。
+//!
+//! 此文件仅为向后兼容，新代码应直接从 `adapter::mihomo::constants` 导入。
 
-/// HTTPS 204，避免纯 HTTP 80 在部分网络/hosts 下误指向本机并刷 `localhost:80` 告警。
-pub const LATENCY_TEST_URL: &str = "https://www.gstatic.com/generate_204";
+pub use crate::adapter::mihomo::constants::*;

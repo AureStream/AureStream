@@ -1,5 +1,6 @@
 //! 首次启动：将 `aurestream.yaml` 中的 providers / nodes 导入 SQLite（subscriptions / endpoints）。
 
+use crate::commands::{bytes_to_gb, gb_to_bytes};
 use crate::config::AureConfig;
 use crate::error::AppError;
 use crate::models::endpoint::{AuthInfo, Endpoint, EndpointMetadata, Protocol, TransportInfo};
@@ -23,12 +24,8 @@ pub fn provider_entry_to_subscription(
     p: &crate::config::ProviderEntry,
     now: i64,
 ) -> Subscription {
-    let traffic_total = p
-        .traffic_total_gb
-        .map(|gb| (gb * 1024.0 * 1024.0 * 1024.0) as i64);
-    let traffic_download = p
-        .traffic_used_gb
-        .map(|gb| (gb * 1024.0 * 1024.0 * 1024.0) as i64);
+    let traffic_total = p.traffic_total_gb.map(gb_to_bytes);
+    let traffic_download = p.traffic_used_gb.map(gb_to_bytes);
     Subscription {
         id: p.id.clone(),
         name: p.name.clone(),
@@ -55,17 +52,7 @@ pub fn provider_entry_to_subscription(
 }
 
 fn protocol_from_node_type(s: &str) -> Protocol {
-    match s.to_lowercase().as_str() {
-        "ss" | "shadowsocks" => Protocol::Ss,
-        "vmess" => Protocol::Vmess,
-        "vless" => Protocol::Vless,
-        "trojan" => Protocol::Trojan,
-        "tuic" => Protocol::Tuic,
-        "hysteria2" | "hy2" => Protocol::Hysteria2,
-        "socks5" | "socks" => Protocol::Socks5,
-        "http" => Protocol::Http,
-        _ => Protocol::Vmess,
-    }
+    Protocol::parse(s).unwrap_or(Protocol::Vmess)
 }
 
 pub fn node_entry_to_endpoint(
@@ -73,7 +60,7 @@ pub fn node_entry_to_endpoint(
     source_id: &str,
 ) -> Endpoint {
     let protocol = protocol_from_node_type(&entry.node_type);
-    let mut ep = Endpoint {
+    Endpoint {
         id: entry.id.clone(),
         name: entry.name.clone(),
         protocol,
@@ -91,28 +78,23 @@ pub fn node_entry_to_endpoint(
         source_id: source_id.to_string(),
         unique_hash: String::new(),
         raw: None,
-    };
-    ep.unique_hash = ep.compute_unique_hash();
-    ep
+    }
+    .with_hash()
 }
 
-pub fn subscription_to_provider(s: &Subscription) -> crate::commands::Provider {
+pub fn subscription_to_provider(s: &Subscription) -> crate::models::Provider {
     let last_updated = chrono::DateTime::from_timestamp(s.updated_at, 0)
         .map(|d| d.to_rfc3339())
         .unwrap_or_default();
 
-    crate::commands::Provider {
+    crate::models::Provider {
         id: s.id.clone(),
         name: s.name.clone(),
         url: s.url.clone(),
         last_updated,
         node_count: s.node_count.max(0) as usize,
-        traffic_total_gb: s
-            .traffic_total
-            .map(|b| b as f64 / (1024.0 * 1024.0 * 1024.0)),
-        traffic_used_gb: s.traffic_upload.zip(s.traffic_download).map(|(u, d)| {
-            (u + d) as f64 / (1024.0 * 1024.0 * 1024.0)
-        }),
+        traffic_total_gb: s.traffic_total.map(bytes_to_gb),
+        traffic_used_gb: s.traffic_upload.zip(s.traffic_download).map(|(u, d)| bytes_to_gb(u + d)),
         expires_at: s.expire_at.and_then(|ts| {
             chrono::DateTime::from_timestamp(ts, 0).map(|d| d.to_rfc3339())
         }),
@@ -124,8 +106,8 @@ pub fn subscription_to_provider(s: &Subscription) -> crate::commands::Provider {
     }
 }
 
-pub fn endpoint_to_node(ep: &Endpoint) -> crate::commands::Node {
-    crate::commands::Node {
+pub fn endpoint_to_node(ep: &Endpoint) -> crate::models::Node {
+    crate::models::Node {
         id: ep.id.clone(),
         name: ep.name.clone(),
         provider_id: ep.source_id.clone(),

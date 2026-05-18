@@ -97,6 +97,7 @@ impl ParserRegistry {
     }
 
     /// 订阅字节 → Endpoint：格式无法识别返回空；单节点失败跳过。
+    /// 自动执行：Normalizer（地区推测）→ Deduplicator（unique_hash 去重）。
     pub fn ingest_subscription_bytes(&self, content: &[u8], source_id: &str) -> Vec<Endpoint> {
         let raws = match self.parse_raw_nodes(content, source_id) {
             Ok(v) => v,
@@ -108,11 +109,14 @@ impl ParserRegistry {
         let mut out = Vec::with_capacity(raws.len());
         for raw in raws {
             match self.raw_to_endpoint(&raw, source_id) {
-                Ok(ep) => out.push(ep),
+                Ok(mut ep) => {
+                    super::normalizer::normalize_endpoint(&mut ep);
+                    out.push(ep);
+                }
                 Err(e) => tracing::warn!(name = %raw.canonical.name, error = %e, "跳过节点"),
             }
         }
-        out
+        super::deduplicator::dedup_endpoints(out)
     }
 }
 

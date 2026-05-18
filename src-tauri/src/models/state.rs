@@ -5,11 +5,10 @@ use serde::{Deserialize, Serialize};
 /// 状态转换规则：
 /// ```text
 /// Disconnected → Connecting → Connected ↔ Switching
-///                           ↓                ↓
-///                         Error ← Reconnecting
+///                           ↓
+///                         Error
 ///                           ↓
 ///                       Disconnected
-/// Testing 可从 Connected 进入并返回 Connected
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -18,9 +17,7 @@ pub enum ConnectionState {
     Disconnected,
     Connecting,
     Connected,
-    Testing,
     Switching,
-    Reconnecting,
     Error,
 }
 
@@ -30,9 +27,7 @@ impl ConnectionState {
             ConnectionState::Disconnected => "disconnected",
             ConnectionState::Connecting => "connecting",
             ConnectionState::Connected => "connected",
-            ConnectionState::Testing => "testing",
             ConnectionState::Switching => "switching",
-            ConnectionState::Reconnecting => "reconnecting",
             ConnectionState::Error => "error",
         }
     }

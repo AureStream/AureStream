@@ -6,12 +6,13 @@ use async_trait::async_trait;
 
 use crate::adapter::CoreControlPlane;
 use crate::error::AppError;
-use crate::models::{LatencySample, RuntimePolicy, RuntimeProfile, TrafficStats};
+use crate::models::{LatencySample, RuntimePolicy, RuntimeProfile, RoutingMode, TrafficStats};
 
 use super::api_client::MihomoApiClient;
 use super::config_gen;
+use super::constants::{EXTERNAL_CONTROLLER, LATENCY_TEST_URL};
 
-/// Mihomo 适配器骨架：**生成运行时 YAML** + **调用 External Controller**。
+/// Mihomo 适配器：**生成运行时 YAML** + **调用 External Controller**。
 ///
 /// Sidecar 进程启动请复用或迁移 `commands::mihomo_kernel`，成功后调用 [`Self::set_sidecar_running`]。
 pub struct MihomoAdapter {
@@ -24,10 +25,7 @@ pub struct MihomoAdapter {
 
 impl MihomoAdapter {
     pub fn new(work_dir: PathBuf) -> Result<Self, AppError> {
-        let api = MihomoApiClient::new(format!(
-            "http://{}",
-            super::constants::DEFAULT_EXTERNAL_CONTROLLER
-        ))?;
+        let api = MihomoApiClient::new(format!("http://{EXTERNAL_CONTROLLER}"))?;
         Ok(Self {
             work_dir,
             runtime_file: "aurestream-runtime.yaml",
@@ -48,6 +46,37 @@ impl MihomoAdapter {
     pub fn set_sidecar_running(&self, running: bool) {
         self.sidecar_running.store(running, Ordering::SeqCst);
     }
+
+    /// 生成完整运行时配置（含 proxy-providers、geox-url、routing rules）并写入磁盘。
+    ///
+    /// - `subscription_file`: 原始订阅 YAML 路径
+    /// - `provider_id`: 订阅 ID（用于复制到 work_dir）
+    /// - `profile`: 运行时配置
+    pub async fn build_and_write_config(
+        &self,
+        subscription_file: &std::path::Path,
+        provider_id: &str,
+        profile: &RuntimeProfile,
+    ) -> Result<PathBuf, AppError> {
+        tokio::fs::create_dir_all(&self.work_dir)
+            .await
+            .map_err(AppError::Io)?;
+
+        // 复制订阅到 mihomo 工作目录
+        let abs_sub_path =
+            config_gen::mirror_subscription_to_workdir(subscription_file, &self.work_dir, provider_id)
+                .await?;
+
+        // 生成完整配置
+        let yaml = config_gen::generate_full_config(&abs_sub_path, profile)?;
+        let path = self.runtime_config_path();
+        tokio::fs::write(&path, yaml.as_bytes())
+            .await
+            .map_err(AppError::Io)?;
+
+        tracing::info!(path = %path.display(), "已写入 Mihomo 完整运行时配置");
+        Ok(path)
+    }
 }
 
 #[async_trait]
@@ -56,14 +85,16 @@ impl crate::adapter::CoreControlPlane for MihomoAdapter {
         tokio::fs::create_dir_all(&self.work_dir)
             .await
             .map_err(AppError::Io)?;
-        let yaml = config_gen::runtime_profile_to_yaml(profile)?;
+
+        // 生成骨架配置（无 subscription file 时的 fallback）
+        let yaml = config_gen::generate_full_config("", profile)?;
         let path = self.runtime_config_path();
         tokio::fs::write(&path, yaml.as_bytes())
             .await
             .map_err(AppError::Io)?;
         tracing::info!(
             path = %path.display(),
-            "已写入 Mihomo 运行时配置；请启动 sidecar（例如 `mihomo -d <work_dir> -f aurestream-runtime.yaml`）并调用 set_sidecar_running(true)"
+            "已写入 Mihomo 运行时配置（骨架模式，无 subscription provider）"
         );
         Ok(())
     }
@@ -75,7 +106,7 @@ impl crate::adapter::CoreControlPlane for MihomoAdapter {
 
     async fn reload(&self, profile: &RuntimeProfile) -> Result<(), AppError> {
         self.start(profile).await?;
-        // TODO: PUT /configs 或进程信号重载，依你采用的 Mihomo 版本而定
+        // TODO: PUT /configs 进行热重载
         Ok(())
     }
 
@@ -83,20 +114,22 @@ impl crate::adapter::CoreControlPlane for MihomoAdapter {
         if !self.is_running() {
             return Err(AppError::CoreNotRunning);
         }
-        let _ = node_id;
-        Err(AppError::CoreApiError(
-            "select_node：请将 node_id 映射为 Mihomo proxy 名后调用 PUT /proxies/AureStream_Node_Selector".into(),
-        ))
+        // node_id 即 Mihomo proxy 名称，直接切换 selector
+        self.api
+            .switch_node(super::constants::AURESTREAM_NODE_SELECTOR, node_id)
+            .await
     }
 
     async fn apply_policy(&self, policy: &RuntimePolicy) -> Result<(), AppError> {
         if !self.is_running() {
             return Err(AppError::CoreNotRunning);
         }
-        let _ = policy;
-        Err(AppError::CoreApiError(
-            "apply_policy：请映射 RoutingMode → PATCH /configs 或等价 API".into(),
-        ))
+        let mode = match policy.routing_mode {
+            RoutingMode::RuleBased => "rule",
+            RoutingMode::FullTunnel => "global",
+            RoutingMode::Direct => "direct",
+        };
+        self.api.set_mode(mode).await
     }
 
     fn is_running(&self) -> bool {
@@ -121,15 +154,29 @@ impl crate::adapter::CoreTelemetryPlane for MihomoAdapter {
         if !self.is_running() {
             return Err(AppError::CoreNotRunning);
         }
-        Err(AppError::CoreApiError(format!(
-            "test_latency：请将节点 `{node_id}` 映射为 Mihomo outbound 名并请求 /proxies/{{name}}/delay"
-        )))
+        match self
+            .api
+            .test_node_delay(node_id, LATENCY_TEST_URL, 5000)
+            .await
+        {
+            Ok(delay) => Ok(LatencySample {
+                node_id: node_id.to_string(),
+                delay: Some(delay),
+                error: None,
+            }),
+            Err(e) => Ok(LatencySample {
+                node_id: node_id.to_string(),
+                delay: None,
+                error: Some(e.to_string()),
+            }),
+        }
     }
 
     async fn test_all_latency(&self, node_ids: &[String]) -> Result<Vec<LatencySample>, AppError> {
-        let _ = node_ids;
-        Err(AppError::CoreApiError(
-            "test_all_latency：请映射节点名后调用 Mihomo 组延迟或循环 /proxies/{{name}}/delay".into(),
-        ))
+        let mut results = Vec::with_capacity(node_ids.len());
+        for node_id in node_ids {
+            results.push(self.test_latency(node_id).await?);
+        }
+        Ok(results)
     }
 }

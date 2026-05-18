@@ -1,5 +1,5 @@
-//! Mihomo sidecar 进程：`spawn` / `stop` / geodata 预下载。
-//! 由 [`crate::runtime::RuntimeManager`] 持有，替代散的 [`crate::commands::MihomoKernelState`]。
+//! Mihomo sidecar 进程：`spawn` / `stop`。
+//! 由 [`crate::runtime::RuntimeManager`] 持有。
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,30 +9,12 @@ use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
+use crate::adapter::mihomo::constants::EXTERNAL_CONTROLLER;
 use crate::commands::ProxyConfig;
 
 pub(crate) struct MihomoChild {
     pub(crate) child: tauri_plugin_shell::process::CommandChild,
 }
-
-pub const GEODATA_URLS: &[(&str, &str)] = &[
-    (
-        "geoip.db",
-        "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.db",
-    ),
-    (
-        "geoip-lite.db",
-        "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip-lite.db",
-    ),
-    (
-        "country.mmdb",
-        "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
-    ),
-    (
-        "geosite.dat",
-        "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
-    ),
-];
 
 pub struct MihomoSidecar {
     pub(crate) inner: Mutex<Option<MihomoChild>>,
@@ -49,60 +31,6 @@ impl Default for MihomoSidecar {
 }
 
 impl MihomoSidecar {
-    /// 预下载 GeoIP/GeoSite 等到 `app_local_data_dir()/mihomo-work`
-    pub async fn prefetch_rule_assets(app: AppHandle) -> Result<(), String> {
-        let work_dir = app
-            .path()
-            .app_local_data_dir()
-            .map_err(|e| format!("无法获取本地数据目录: {}", e))?
-            .join("mihomo-work");
-        tokio::fs::create_dir_all(&work_dir)
-            .await
-            .map_err(|e| format!("创建工作目录失败: {}", e))?;
-
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
-            .build()
-            .map_err(|e| format!("构建 HTTP 客户端失败: {}", e))?;
-
-        for (filename, url) in GEODATA_URLS {
-            let dest = work_dir.join(filename);
-            if dest.exists() {
-                continue;
-            }
-            tracing::info!("[geodata] 下载 {} ...", filename);
-            match client.get(*url).send().await {
-                Ok(resp) => {
-                    if !resp.status().is_success() {
-                        tracing::warn!(
-                            "[geodata] 下载 {} 失败: HTTP {}",
-                            filename,
-                            resp.status()
-                        );
-                        continue;
-                    }
-                    let bytes = resp
-                        .bytes()
-                        .await
-                        .map_err(|e| format!("读取 {} 失败: {}", filename, e))?;
-                    tokio::fs::write(&dest, &bytes)
-                        .await
-                        .map_err(|e| format!("写入 {} 失败: {}", filename, e))?;
-                    tracing::info!(
-                        "[geodata] {} 下载完成 ({} bytes)",
-                        filename,
-                        bytes.len()
-                    );
-                }
-                Err(e) => {
-                    tracing::error!("[geodata] 下载 {} 失败: {}", filename, e);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     async fn wait_for_controller_ready() -> Result<(), String> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(2))
@@ -122,7 +50,7 @@ impl MihomoSidecar {
             if std::time::Instant::now() >= deadline {
                 break;
             }
-            match client.get("http://127.0.0.1:9090/version").send().await {
+            match client.get(format!("http://{EXTERNAL_CONTROLLER}/version")).send().await {
                 Ok(r) if r.status().is_success() => {
                     tracing::info!("[mihomo] External Controller 已就绪");
                     return Ok(());
@@ -159,7 +87,7 @@ impl MihomoSidecar {
             .path()
             .app_local_data_dir()
             .map_err(|e| format!("无法获取本地数据目录: {}", e))?
-            .join("mihomo-work");
+            .join(crate::adapter::mihomo::constants::MIHOMO_WORK_DIR);
         tokio::fs::create_dir_all(&work_dir)
             .await
             .map_err(|e| format!("创建工作目录失败: {}", e))?;
@@ -263,7 +191,7 @@ impl MihomoSidecar {
 
         let t_proxy = std::time::Instant::now();
         match tokio::task::spawn_blocking(move || {
-            crate::commands::system_proxy::apply_platform(&proxy_cfg_on_ready)
+            crate::network::system_proxy::apply_platform(&proxy_cfg_on_ready)
         })
         .await
         {
@@ -297,7 +225,7 @@ impl MihomoSidecar {
         };
 
         if kill_result.is_ok() && self.system_proxy_managed.load(Ordering::SeqCst) {
-            match tokio::task::spawn_blocking(|| crate::commands::system_proxy::clear_platform()).await
+            match tokio::task::spawn_blocking(|| crate::network::system_proxy::clear_platform()).await
             {
                 Ok(Ok(())) => {
                     self.system_proxy_managed.store(false, Ordering::SeqCst);

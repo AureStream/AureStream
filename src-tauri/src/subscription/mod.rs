@@ -10,8 +10,4 @@ pub mod normalizer;
 pub mod protocol;
 pub mod registry;
 
-pub use cache::SubscriptionCache;
-pub use deduplicator::dedup_endpoints;
-pub use fetcher::fetch_subscription_bytes;
-pub use normalizer::normalize_endpoint;
 pub use registry::ParserRegistry;

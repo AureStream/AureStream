@@ -7,12 +7,6 @@ use tauri::{AppHandle, State};
 use crate::commands::proxy::ProxyState;
 use crate::runtime::RuntimeManager;
 
-/// 预下载规则路由数据库（GeoIP/GeoSite 等）到运行时工作目录。
-#[tauri::command]
-pub async fn prefetch_rule_assets(app: AppHandle) -> Result<(), String> {
-    crate::runtime::prefetch_rule_assets(app).await
-}
-
 /// 启动（或重启）本地代理内核：`-f` 为运行时 YAML，`-d` 为 `app_local_data_dir()/mihomo-work`。
 #[tauri::command]
 pub async fn start_runtime_engine(

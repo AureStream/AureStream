@@ -9,10 +9,6 @@ mod proxy_manager;
 mod session_manager;
 mod state_machine;
 
-pub use core_manager::CoreManager;
-pub use event_bus::EventBus;
-pub use mihomo_sidecar::MihomoSidecar;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -26,14 +22,12 @@ use crate::models::{AppEvent, ConnectionState, RuntimePolicy, RuntimeProfile, Ru
 use tauri::AppHandle;
 use uuid::Uuid;
 
+use self::core_manager::CoreManager;
+use self::event_bus::EventBus;
+use self::mihomo_sidecar::MihomoSidecar;
 use self::proxy_manager::ProxyManager;
 use self::session_manager::SessionManager;
-use self::state_machine::ensure_can_connect;
-
-/// 规则路由数据库预下载（供 IPC `prefetch_rule_assets` 调用）。
-pub async fn prefetch_rule_assets(app: tauri::AppHandle) -> Result<(), String> {
-    MihomoSidecar::prefetch_rule_assets(app).await
-}
+use self::state_machine::{ensure_can_connect, ensure_can_disconnect, ensure_can_switch};
 
 #[derive(Clone)]
 pub struct RuntimeManager {
@@ -67,28 +61,16 @@ impl RuntimeManager {
         }
     }
 
-    pub fn mihomo_adapter(&self) -> Option<&Arc<MihomoAdapter>> {
-        self.inner.mihomo.as_ref()
-    }
-
     pub fn pool(&self) -> &SqlitePool {
         &self.inner.pool
     }
 
-    pub fn events(&self) -> &EventBus {
-        &self.inner.events
-    }
-
-    pub fn core(&self) -> &CoreManager {
-        &self.inner.core
-    }
-
-    pub async fn connection_state(&self) -> ConnectionState {
+    pub async fn state(&self) -> ConnectionState {
         *self.inner.state.lock().await
     }
 
     pub async fn session(&self) -> Option<RuntimeSession> {
-        self.inner.session.get().await
+        self.inner.session.current().await
     }
 
     /// 使用 `build_runtime_config` 等生成的 YAML 启动侧进程，并在就绪后尝试系统代理。
@@ -181,9 +163,7 @@ impl RuntimeManager {
     pub async fn stop(&self, clear_system_proxy: bool) -> Result<(), AppError> {
         {
             let mut st = self.inner.state.lock().await;
-            if !st.can_disconnect() {
-                return Ok(());
-            }
+            ensure_can_disconnect(*st)?;
             *st = ConnectionState::Disconnected;
         }
 
@@ -205,12 +185,7 @@ impl RuntimeManager {
 
     pub async fn switch_node(&self, node_id: &str) -> Result<(), AppError> {
         let st = *self.inner.state.lock().await;
-        if !st.can_switch() {
-            return Err(AppError::InvalidStateTransition {
-                from: st.as_str().to_string(),
-                to: ConnectionState::Switching.as_str().to_string(),
-            });
-        }
+        ensure_can_switch(st)?;
         self.inner.core.adapter().select_node(node_id).await
     }
 

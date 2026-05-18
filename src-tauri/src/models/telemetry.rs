@@ -7,9 +7,12 @@ pub struct TrafficStats {
     pub download_total: u64,
 }
 
-/// 单节点延迟测试结果（遥测面）
+/// 单节点延迟测试结果（遥测面 + IPC 统一类型）
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LatencySample {
     pub node_id: String,
-    pub latency_ms: Option<u32>,
+    pub delay: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }

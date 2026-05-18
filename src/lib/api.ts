@@ -171,11 +171,6 @@ export async function stopRuntimeEngine(): Promise<void> {
   return await invoke<void>("stop_runtime_engine");
 }
 
-/** 预下载规则路由数据库（GeoIP/GeoSite 等）到运行时工作目录 */
-export async function prefetchRuleAssets(): Promise<void> {
-  return await invoke<void>("prefetch_rule_assets");
-}
-
 // --- App settings & latency cache ---
 
 export interface AppSettings {

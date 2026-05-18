@@ -47,6 +47,20 @@ impl Protocol {
             Protocol::Http => "http",
         }
     }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "ss" | "shadowsocks" => Some(Protocol::Ss),
+            "vmess" => Some(Protocol::Vmess),
+            "vless" => Some(Protocol::Vless),
+            "trojan" => Some(Protocol::Trojan),
+            "tuic" => Some(Protocol::Tuic),
+            "hysteria2" | "hy2" => Some(Protocol::Hysteria2),
+            "socks5" | "socks" => Some(Protocol::Socks5),
+            "http" => Some(Protocol::Http),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -127,5 +141,11 @@ impl Endpoint {
         hasher.update(self.transport.path.as_deref().unwrap_or("").as_bytes());
         hasher.update(self.transport.sni.as_deref().unwrap_or("").as_bytes());
         hex::encode(hasher.finalize())
+    }
+
+    /// 计算并设置 `unique_hash`，返回自身。
+    pub fn with_hash(mut self) -> Self {
+        self.unique_hash = self.compute_unique_hash();
+        self
     }
 }
