@@ -1,11 +1,7 @@
-# 在 GitHub Actions 上构建各桌面平台安装包（与 Makefile 逻辑对齐：先拉 mihomo，再 npm run tauri build）。
-# 产物：Linux deb/rpm/AppImage、Windows NSIS (-setup.exe)、macOS dmg。
+# 构建各桌面平台安装包产物。
+# 产物：Linux deb/rpm/AppImage、Windows NSIS (-setup.exe)、macOS dmg（x86_64 + aarch64）。
 #
-# 说明：
-# - 未调用 Makefile，便于各 Runner 原生环境；与本地 `make build-linux` 等等价。
-# - 触发：push（各分支提交跑流水线测试）、release published（打开发布并上传产物）、workflow_dispatch。
-# - macOS：aarch64（macos-latest）+ Intel x86_64（macos-15-intel；勿再用已退役的 macos-13）。
-# - 官方 JS actions 使用 Node 24 运行时（见 GitHub Actions Node 20 弃用说明）。
+# 触发：workflow_dispatch（手动）、release published（自动上传到 Release）。
 
 name: Build desktop bundles
 
@@ -104,7 +100,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: AureStream-${{ matrix.name }}
-          path: ${{ runner.os == 'macOS' && format('src-tauri/target/{0}/release/bundle/dmg', matrix.rust_target) || format('src-tauri/target/{0}/release/bundle/', matrix.rust_target) }}
+          path: |
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.rpm
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
           if-no-files-found: error
 
   upload-release:
@@ -130,7 +131,6 @@ jobs:
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
             -name '*.exe' -o -name '*.dmg' \
           \) -print0 | while IFS= read -r -d '' f; do
-            # 避免不同子目录同名文件互相覆盖：带上平台目录前缀
             rel="${f#release-assets/}"
             safe="${rel//\//__}"
             cp "$f" "upload/$safe"
