@@ -58,14 +58,14 @@ fi
 
 if [ -z "$VERSION" ]; then
   echo "获取最新 release 版本..."
-  # 跟踪 /releases/latest 重定向，从 Location header 提取 tag
-  LATEST_URL=$(curl -fsSI -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
-  if [ -n "$LATEST_URL" ]; then
-    VERSION=$(echo "$LATEST_URL" | grep -oE '[^/]+$')
+  # 方式 1：跟踪重定向从最终 URL 提取 tag
+  FINAL_URL=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" 2>/dev/null || true)
+  if [ -n "$FINAL_URL" ]; then
+    VERSION=$(echo "$FINAL_URL" | sed -n 's|.*/tag/\([^/]*\)$|\1|p')
   fi
-  # fallback: API（可能被限流）
+  # 方式 2：API fallback
   if [ -z "$VERSION" ]; then
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/' || true)
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)"[^"]*$/\1/')
   fi
   if [ -z "$VERSION" ]; then
     echo "无法获取最新版本号，请手动指定: bash scripts/download-mihomo.sh <version>"
@@ -94,7 +94,13 @@ curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$ASSET_NAME"
 
 if [ "$PLATFORM" = "windows" ]; then
   unzip -o "$TMP_DIR/$ASSET_NAME" -d "$TMP_DIR"
-  mv "$TMP_DIR/mihomo.exe" "$DEST"
+  # zip 内文件名可能是 mihomo-windows-amd64.exe 或 mihomo.exe
+  EXTRACTED=$(find "$TMP_DIR" -maxdepth 1 -name "mihomo*.exe" -print -quit)
+  if [ -z "$EXTRACTED" ]; then
+    echo "错误: zip 中未找到 mihomo 可执行文件"
+    exit 1
+  fi
+  mv "$EXTRACTED" "$DEST"
 else
   gunzip -c "$TMP_DIR/$ASSET_NAME" > "$DEST"
 fi
