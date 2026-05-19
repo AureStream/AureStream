@@ -198,7 +198,7 @@ export function UsageBlock({
         </div>
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          className="flex-1 min-h-[3rem] w-full"
+          className="flex-1 min-h-[3rem] max-h-[8rem] w-full"
           preserveAspectRatio="none"
           aria-hidden
         >
