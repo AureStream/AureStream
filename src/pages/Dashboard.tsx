@@ -106,7 +106,7 @@ export function Dashboard({
           </section>
 
           {/* 右栏：信息展示区 */}
-          <section className="flex min-h-0 flex-col gap-2 px-4 md:border-l md:border-border/30 md:pl-6 lg:gap-2.5 lg:pl-8">
+          <section className="flex min-h-0 flex-col gap-2 pl-4 pr-4 md:pr-0 md:border-l md:border-border/30 md:pl-6 lg:gap-2.5 lg:pl-8">
             <SubscriptionBlock
               provider={currentProvider}
               onOpenProviders={onOpenProviders}
