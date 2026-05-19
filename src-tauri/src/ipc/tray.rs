@@ -1,12 +1,12 @@
 //! 托盘命令：更新系统托盘菜单。
 //!
 //! 菜单固定为 3 项：显示主界面、状态/节点名（Submenu）、退出应用。
-//! 节点分组每组最多 10 个，选中节点前显示 ✓。
+//! 节点分组每组最多 10 个，选中节点使用系统原生 CheckMenuItem 标记。
 
 use crate::models::Node;
 use tauri::AppHandle;
 
-const MAX_NAME_LEN: usize = 20;
+const MAX_NAME_LEN: usize = 10;
 const GROUP_SIZE: usize = 10;
 
 fn truncate_name(name: &str) -> String {
@@ -17,19 +17,22 @@ fn truncate_name(name: &str) -> String {
     }
 }
 
-/// 为单个节点创建 MenuItem，选中节点前加 ✓
+/// 为单个节点创建 CheckMenuItem，系统原生勾选标记保证对齐
 fn node_menu_item(
     app: &AppHandle,
     node: &Node,
     current_node_id: &Option<String>,
-) -> Result<tauri::menu::MenuItem<tauri::Wry>, String> {
-    let display_name = if current_node_id.as_deref() == Some(&node.id) {
-        format!("✓ {}", node.name)
-    } else {
-        format!("  {}", node.name)
-    };
-    tauri::menu::MenuItem::with_id(app, format!("node_{}", node.id), &display_name, true, None::<&str>)
-        .map_err(|e| e.to_string())
+) -> Result<tauri::menu::CheckMenuItem<tauri::Wry>, String> {
+    let checked = current_node_id.as_deref() == Some(&node.id);
+    tauri::menu::CheckMenuItem::with_id(
+        app,
+        format!("node_{}", node.id),
+        &node.name,
+        true,
+        checked,
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -56,7 +59,7 @@ pub async fn update_tray_menu(
             .unwrap_or_else(|| "节点".to_string());
 
         let node_submenu = if nodes.len() <= GROUP_SIZE {
-            let items: Vec<tauri::menu::MenuItem<_>> = nodes
+            let items: Vec<tauri::menu::CheckMenuItem<_>> = nodes
                 .iter()
                 .map(|n| node_menu_item(&app, n, &current_node_id))
                 .collect::<Result<_, _>>()?;
@@ -70,7 +73,7 @@ pub async fn update_tray_menu(
                 let first = chunk.first().map(|n| truncate_name(&n.name)).unwrap_or_default();
                 let last = chunk.last().map(|n| truncate_name(&n.name)).unwrap_or_default();
                 let label = format!("分组 {} ({} - {})", gi + 1, first, last);
-                let chunk_items: Vec<tauri::menu::MenuItem<_>> = chunk
+                let chunk_items: Vec<tauri::menu::CheckMenuItem<_>> = chunk
                     .iter()
                     .map(|n| node_menu_item(&app, n, &current_node_id))
                     .collect::<Result<_, _>>()?;
