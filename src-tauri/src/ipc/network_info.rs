@@ -16,55 +16,8 @@ pub struct NetworkInfo {
     pub org: String,
 }
 
-const IP_SB_URL: &str = "https://api.ip.sb/geoip";
 const IP_API_URL: &str = "http://ip-api.com/json/?lang=zh-CN";
 const TIMEOUT_SECS: u64 = 5;
-
-/// 从 api.ip.sb/geoip 获取网络信息
-async fn fetch_from_ip_sb(client: &reqwest::Client) -> Result<NetworkInfo, String> {
-    let resp = client
-        .get(IP_SB_URL)
-        .timeout(std::time::Duration::from_secs(TIMEOUT_SECS))
-        .send()
-        .await
-        .map_err(|e| format!("ip.sb 请求失败: {e}"))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("ip.sb 返回 HTTP {}", resp.status()));
-    }
-
-    let data: serde_json::Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("ip.sb 解析失败: {e}"))?;
-
-    // asn 可能是数字或字符串
-    let asn = data["asn"]
-        .as_str()
-        .map(|s| s.to_string())
-        .or_else(|| data["asn"].as_u64().map(|n| format!("AS{n}")))
-        .unwrap_or_default();
-
-    let org = data["asn_organization"]
-        .as_str()
-        .or(data["organization"].as_str())
-        .or(data["isp"].as_str())
-        .unwrap_or_default()
-        .to_string();
-
-    Ok(NetworkInfo {
-        ip: data["ip"].as_str().unwrap_or_default().to_string(),
-        city: data["city"].as_str().unwrap_or_default().to_string(),
-        region: data["region"]
-            .as_str()
-            .or(data["region_name"].as_str())
-            .unwrap_or_default()
-            .to_string(),
-        country: data["country"].as_str().unwrap_or_default().to_string(),
-        asn,
-        org,
-    })
-}
 
 /// 从 ip-api.com 获取网络信息
 async fn fetch_from_ip_api(client: &reqwest::Client) -> Result<NetworkInfo, String> {
@@ -108,7 +61,6 @@ async fn fetch_from_ip_api(client: &reqwest::Client) -> Result<NetworkInfo, Stri
 }
 
 /// 获取网络信息：代理连接时走代理网络，否则直连。
-/// 优先 ip.sb，失败则回退 ip-api.com。
 #[tauri::command]
 pub async fn get_network_info(
     proxy_state: State<'_, ProxyState>,
@@ -132,26 +84,12 @@ pub async fn get_network_info(
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
-    match fetch_from_ip_sb(&client).await {
-        Ok(info) => {
-            tracing::info!(
-                "网络信息获取成功 (ip.sb, connected={}): ip={}, country={}",
-                is_running,
-                info.ip,
-                info.country
-            );
-            Ok(info)
-        }
-        Err(e) => {
-            tracing::warn!("ip.sb 失败: {}，回退到 ip-api.com", e);
-            let info = fetch_from_ip_api(&client).await?;
-            tracing::info!(
-                "网络信息获取成功 (ip-api.com, connected={}): ip={}, country={}",
-                is_running,
-                info.ip,
-                info.country
-            );
-            Ok(info)
-        }
-    }
+    let info = fetch_from_ip_api(&client).await?;
+    tracing::info!(
+        "网络信息获取成功 (ip-api.com, connected={}): ip={}, country={}",
+        is_running,
+        info.ip,
+        info.country
+    );
+    Ok(info)
 }
