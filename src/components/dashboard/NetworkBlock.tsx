@@ -119,7 +119,7 @@ export function NetworkBlock({
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 min-h-[7rem]">
+      <div className="flex flex-1 min-h-0 flex-col justify-between">
         {INFO_ROWS.map(({ key, label }) => (
           <div key={key} className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground shrink-0">

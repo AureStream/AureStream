@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -154,7 +155,7 @@ export function ProviderModal({
 
             <div className="grid gap-2">
               <Label htmlFor="autoUpdate">定时更新</Label>
-              <select
+              <Select
                 id="autoUpdate"
                 value={autoUpdateInterval ?? ""}
                 onChange={(e) =>
@@ -163,14 +164,13 @@ export function ProviderModal({
                   )
                 }
                 disabled={isLoading}
-                className="h-10 rounded-xl border border-input bg-background text-foreground px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {AUTO_UPDATE_OPTIONS.map((opt) => (
                   <option key={opt.label} value={opt.value ?? ""}>
                     {opt.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 

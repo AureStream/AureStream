@@ -51,7 +51,6 @@ export function NodePickerDialog({
       arr.sort((a, b) => {
         const da = a.delay;
         const db = b.delay;
-        // 连接超时的节点排在最后
         if (a.delayError && !b.delayError) return 1;
         if (!a.delayError && b.delayError) return -1;
         if (a.delayError && b.delayError) {
@@ -110,55 +109,87 @@ export function NodePickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg flex flex-col max-h-[min(85dvh,36rem)] p-0 gap-0 overflow-hidden border-border">
-        <div className="border-b border-border p-6 pb-4">
+      <DialogContent className="max-w-lg flex flex-col max-h-[85dvh] p-0 gap-0 overflow-hidden border-border">
+
+        {/* Header：标题行 + 描述与操作按钮行 */}
+        <div className="border-b border-border p-4 pb-3">
           <DialogHeader className="mb-0 space-y-1.5">
-            <div className="flex items-center justify-between gap-2 pr-10">
+            {/* 行 1：标题（为右侧关闭 X 留 pr-10） */}
+            <div className="pr-10">
               <DialogTitle className="leading-tight">节点列表</DialogTitle>
+            </div>
+
+            {/* 行 2：描述（左）+ 操作按钮（右） */}
+            <div className="flex items-center justify-between gap-2">
+              <DialogDescription className="text-xs">
+                {currentProvider
+                  ? isConnected
+                    ? "选择要使用的节点，测速结果为当前组内节点的延迟"
+                    : "请先连接代理以从内核查阅订阅节点"
+                  : "请先选择供应商"}
+              </DialogDescription>
+
               {list.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSortBy((s) => (s === "name" ? "delay" : "name"))
-                  }
-                  disabled={isTestingLatency}
-                  title={
-                    isTestingLatency
-                      ? "测速结束后可切换排序"
-                      : sortBy === "name"
-                        ? "当前按名称排序，点击切换为按延迟"
-                        : "当前按延迟排序，点击切换为按名称"
-                  }
-                  className={cn(
-                    "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors",
-                    "bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/15",
-                    "disabled:opacity-50 disabled:pointer-events-none",
-                  )}
-                >
-                  {sortBy === "name" ? (
-                    <>
-                      <ArrowDownAZ className="size-3.5 shrink-0" aria-hidden />
-                      <span>名称</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDown01 className="size-3.5 shrink-0" aria-hidden />
-                      <span>延迟</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {/* 测速按钮 */}
+                  <button
+                    type="button"
+                    onClick={() => void testLatency()}
+                    disabled={isTestingLatency}
+                    title={isTestingLatency ? "测速中..." : "一键测速"}
+                    className={cn(
+                      "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors",
+                      "bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/15",
+                      "disabled:opacity-50 disabled:pointer-events-none",
+                    )}
+                  >
+                    {isTestingLatency ? (
+                      <RefreshCw className="size-3.5 shrink-0 animate-spin" aria-hidden />
+                    ) : (
+                      <Activity className="size-3.5 shrink-0" aria-hidden />
+                    )}
+                    <span>{isTestingLatency ? "测速中" : "测速"}</span>
+                  </button>
+
+                  {/* 排序切换按钮 */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSortBy((s) => (s === "name" ? "delay" : "name"))
+                    }
+                    disabled={isTestingLatency}
+                    title={
+                      isTestingLatency
+                        ? "测速结束后可切换排序"
+                        : sortBy === "name"
+                          ? "当前按名称排序，点击切换为按延迟"
+                          : "当前按延迟排序，点击切换为按名称"
+                    }
+                    className={cn(
+                      "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors",
+                      "bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/15",
+                      "disabled:opacity-50 disabled:pointer-events-none",
+                    )}
+                  >
+                    {sortBy === "name" ? (
+                      <>
+                        <ArrowDownAZ className="size-3.5 shrink-0" aria-hidden />
+                        <span>名称</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDown01 className="size-3.5 shrink-0" aria-hidden />
+                        <span>延迟</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
-            <DialogDescription className="text-xs">
-              {currentProvider
-                ? isConnected
-                  ? "选择要使用的节点，测速结果为当前组内节点的延迟"
-                  : "请先连接代理以从内核查阅订阅节点"
-                : "请先选择供应商"}
-            </DialogDescription>
           </DialogHeader>
         </div>
 
+        {/* 节点列表 */}
         <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
           {list.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8 px-4">
@@ -188,7 +219,6 @@ export function NodePickerDialog({
                           : "hover:bg-black/5 dark:hover:bg-white/10 text-foreground",
                       )}
                     >
-                      {/* 单选框指示器 */}
                       <span
                         className={cn(
                           "inline-flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
@@ -234,27 +264,6 @@ export function NodePickerDialog({
               })}
             </ul>
           )}
-        </div>
-
-        <div className="shrink-0 border-t border-border p-4 flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void testLatency()}
-              disabled={isTestingLatency || list.length === 0}
-              className="flex-1 py-2.5 rounded-xl bg-accent text-accent-foreground font-medium text-sm hover:bg-primary/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Activity className="w-4 h-4" />
-              {isTestingLatency ? "测速中..." : "一键测速"}
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="flex-1 py-2.5 rounded-xl border border-border bg-background font-medium text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-all"
-            >
-              完成
-            </button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

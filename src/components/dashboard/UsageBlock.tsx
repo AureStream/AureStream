@@ -178,9 +178,9 @@ export function UsageBlock({
         </div>
       </div>
 
-      {/* 波浪面积图 — 固定高度防抖 */}
-      <div className="overflow-hidden rounded-lg border border-border bg-muted/25 px-2 py-3">
-        <div className="mb-2 flex items-center justify-center gap-4 text-[10px] text-muted-foreground">
+      {/* 波浪面积图 — 随容器自适应高度 */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-lg border border-border bg-muted/25 px-2 py-3">
+        <div className="mb-2 shrink-0 flex items-center justify-center gap-4 text-[10px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span
               className="inline-block size-2 rounded-full bg-primary"
@@ -198,7 +198,7 @@ export function UsageBlock({
         </div>
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          className="h-[4.5rem] w-full"
+          className="flex-1 min-h-[2rem] w-full"
           preserveAspectRatio="none"
           aria-hidden
         >

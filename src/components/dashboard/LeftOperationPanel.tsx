@@ -99,12 +99,13 @@ export function LeftOperationPanel({
   const nodeLine = parseNodeLabels(currentNode);
 
   return (
-    <div className="flex h-full flex-col items-center justify-start gap-7 sm:gap-9 px-4 pt-6 sm:pt-9">
-      {/* 区域 1：连接时长 / 未连接提示 */}
-      <div className="relative flex h-[3rem] w-full max-w-[28rem] shrink-0 items-center justify-center px-2">
+    <div className="flex h-full flex-col items-center px-4 pt-4 pb-4 sm:pt-6 sm:pb-6 gap-3 sm:gap-4">
+
+      {/* 区域 1：连接时长 / 未连接提示 — grid overlay，高度由内容决定 */}
+      <div className="grid w-full max-w-[28rem] shrink-0 place-items-center px-2">
         <p
           className={cn(
-            "absolute inset-0 flex items-center justify-center text-2xl font-semibold tabular-nums leading-none tracking-tight text-foreground transition-opacity duration-300 sm:text-3xl lg:text-[2.5rem]",
+            "col-start-1 row-start-1 text-center text-2xl font-semibold tabular-nums leading-none tracking-tight text-foreground transition-opacity duration-300 sm:text-3xl lg:text-[2.5rem]",
             isConnected
               ? "z-10 opacity-100"
               : "z-0 pointer-events-none opacity-0",
@@ -115,7 +116,7 @@ export function LeftOperationPanel({
         </p>
         <p
           className={cn(
-            "absolute inset-0 flex items-center justify-center px-1 text-center text-xs leading-snug text-muted-foreground transition-opacity duration-300 sm:text-sm",
+            "col-start-1 row-start-1 text-center text-xs leading-snug text-muted-foreground transition-opacity duration-300 sm:text-sm",
             !isConnected
               ? "z-10 opacity-100"
               : "z-0 pointer-events-none opacity-0",
@@ -126,8 +127,8 @@ export function LeftOperationPanel({
         </p>
       </div>
 
-      {/* 区域 2：连接按钮 + 文字 */}
-      <div className="flex h-[14rem] sm:h-[17rem] lg:h-[20rem] shrink-0 items-center justify-center">
+      {/* 区域 2：连接按钮 — flex-1 填充剩余高度，按钮居中 */}
+      <div className="flex w-full flex-1 min-h-[8rem] items-center justify-center">
         <ConnectButton
           disabled={!canConnect}
           size="default"
@@ -154,11 +155,11 @@ export function LeftOperationPanel({
         />
       </div>
 
-      {/* 区域 3：实时速率 / 未连接提示 */}
-      <div className="relative flex h-[2.5rem] w-full max-w-[28rem] shrink-0 items-center justify-center px-2">
+      {/* 区域 3：实时速率 / 未连接提示 — grid overlay */}
+      <div className="grid w-full max-w-[28rem] shrink-0 place-items-center px-2">
         <div
           className={cn(
-            "absolute inset-0 flex items-center justify-center transition-opacity duration-300",
+            "col-start-1 row-start-1 flex items-center justify-center transition-opacity duration-300",
             isConnected
               ? "z-10 opacity-100"
               : "z-0 pointer-events-none opacity-0",
@@ -167,22 +168,14 @@ export function LeftOperationPanel({
         >
           <div className="inline-flex items-center gap-2.5 rounded-full border border-border/70 bg-muted/45 px-3 py-1.5 text-xs tabular-nums text-muted-foreground sm:gap-3 sm:px-4 sm:py-2 sm:text-sm">
             <span className="inline-flex items-center gap-1.5">
-              <span className="text-foreground/70" aria-hidden>
-                ↓
-              </span>
+              <span className="text-foreground/70" aria-hidden>↓</span>
               <span className="font-medium text-foreground">
                 {formatSpeed(downloadSpeed)}
               </span>
             </span>
-            <Separator
-              orientation="vertical"
-              className="h-4 bg-border/80"
-              decorative
-            />
+            <Separator orientation="vertical" className="h-4 bg-border/80" decorative />
             <span className="inline-flex items-center gap-1.5">
-              <span className="text-foreground/70" aria-hidden>
-                ↑
-              </span>
+              <span className="text-foreground/70" aria-hidden>↑</span>
               <span className="font-medium text-foreground">
                 {formatSpeed(uploadSpeed)}
               </span>
@@ -191,7 +184,7 @@ export function LeftOperationPanel({
         </div>
         <p
           className={cn(
-            "absolute inset-0 flex items-center justify-center px-1 text-center text-[11px] leading-snug text-muted-foreground transition-opacity duration-300 sm:text-xs",
+            "col-start-1 row-start-1 text-center text-[11px] leading-snug text-muted-foreground transition-opacity duration-300 sm:text-xs",
             !isConnected
               ? "z-10 opacity-100"
               : "z-0 pointer-events-none opacity-0",
@@ -202,11 +195,11 @@ export function LeftOperationPanel({
         </p>
       </div>
 
-      {/* 区域 4：代理模式 ↔ 节点信息 */}
-      <div className="relative flex h-[5.5rem] w-full max-w-[28rem] shrink-0 items-center justify-center">
+      {/* 区域 4：代理模式 ↔ 节点信息 — grid overlay */}
+      <div className="grid w-full max-w-[28rem] shrink-0">
         <div
           className={cn(
-            "absolute inset-0 flex items-center justify-center px-2 transition-opacity duration-300",
+            "col-start-1 row-start-1 flex w-full items-center px-2 transition-opacity duration-300",
             isConnected
               ? "z-10 opacity-100"
               : "pointer-events-none z-0 opacity-0",
@@ -234,7 +227,6 @@ export function LeftOperationPanel({
                 )}
               </div>
             </div>
-
             <div className="flex w-[20%] items-center justify-end gap-1">
               {useProxyStore.getState().isTestingLatency ? (
                 <Loader2 className="size-3 animate-spin text-muted-foreground" />
@@ -258,10 +250,10 @@ export function LeftOperationPanel({
 
         <div
           className={cn(
-            "absolute inset-0 flex items-center justify-center px-2 transition-opacity duration-300",
-            isConnected
-              ? "pointer-events-none z-0 opacity-0"
-              : "z-10 opacity-100",
+            "col-start-1 row-start-1 flex w-full items-center px-2 transition-opacity duration-300",
+            !isConnected
+              ? "z-10 opacity-100"
+              : "pointer-events-none z-0 opacity-0",
           )}
           aria-hidden={isConnected}
         >
