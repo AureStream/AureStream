@@ -208,6 +208,7 @@ export interface NetworkInfo {
   country: string;
   asn: string;
   org: string;
+  fetchMode: string;
 }
 
 export async function getNetworkInfo(): Promise<NetworkInfo> {
