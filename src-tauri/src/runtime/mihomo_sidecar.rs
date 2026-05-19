@@ -30,6 +30,24 @@ impl Default for MihomoSidecar {
     }
 }
 
+/// 进程级析构兜底：Ctrl+C / 异常退出时尽力终止 sidecar，避免孤儿进程占用端口。
+impl Drop for MihomoSidecar {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = self.inner.try_lock() {
+            if let Some(MihomoChild { child }) = guard.take() {
+                #[cfg(target_os = "windows")]
+                {
+                    let pid = child.pid();
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .output();
+                }
+                let _ = child.kill();
+            }
+        }
+    }
+}
+
 impl MihomoSidecar {
     async fn wait_for_controller_ready() -> Result<(), String> {
         let client = reqwest::Client::builder()
@@ -100,6 +118,14 @@ impl MihomoSidecar {
             let mut guard = self.inner.lock().await;
             if let Some(MihomoChild { child }) = guard.take() {
                 tracing::debug!("[mihomo.startup] 终止已有 sidecar 进程");
+                // Windows 上先通过 PID 强制终止，再用 child.kill() 兜底
+                #[cfg(target_os = "windows")]
+                {
+                    let pid = child.pid();
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .output();
+                }
                 let _ = child.kill();
             }
         }
@@ -216,6 +242,13 @@ impl MihomoSidecar {
         let kill_result = {
             let mut guard = self.inner.lock().await;
             if let Some(MihomoChild { child }) = guard.take() {
+                #[cfg(target_os = "windows")]
+                {
+                    let pid = child.pid();
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .output();
+                }
                 child
                     .kill()
                     .map_err(|e| format!("终止 Mihomo 进程失败: {}", e))

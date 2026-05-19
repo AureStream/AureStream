@@ -30,6 +30,7 @@ pub struct Node {
     pub r#type: String,
     pub server: String,
     pub port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delay: Option<u32>,
     pub enabled: bool,
 }

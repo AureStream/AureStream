@@ -247,9 +247,7 @@ export function LeftOperationPanel({
                 >
                   {currentNode.delay} ms
                 </span>
-              ) : (
-                <span className="text-[9px] text-muted-foreground">未测速</span>
-              )}
+              ) : null}
               <ChevronRight
                 className="size-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground"
                 aria-hidden

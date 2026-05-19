@@ -12,6 +12,7 @@ pub struct TrafficStats {
 #[serde(rename_all = "camelCase")]
 pub struct LatencySample {
     pub node_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub delay: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,

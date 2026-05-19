@@ -43,12 +43,12 @@ export function NodeSelect({ onSelect }: NodeSelectProps) {
           {availableNodes.map((node) => {
             const delayDisplay = node.delayError
               ? "超时"
-              : node.delay !== undefined
+              : node.delay != null
                 ? `${node.delay}ms`
-                : "--";
+                : null;
             return (
               <option key={node.id} value={node.id}>
-                {node.name} | 延迟: {delayDisplay}
+                {node.name}{delayDisplay ? ` | 延迟: ${delayDisplay}` : ""}
               </option>
             );
           })}

@@ -163,15 +163,26 @@ pub fn run() {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
-                    // 应用日志写入文件（排除 mihomo 标签的输出）
+                    // 应用日志写入文件（排除 Mihomo、HTTP 库等高频 DEBUG 日志）
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                         file_name: Some("aurestream".to_string()),
                     })
-                    .filter(|metadata| metadata.target() != "mihomo"),
-                    // 控制台输出（dev 模式可见，排除 mihomo）
+                    .filter(|metadata| {
+                        metadata.target() != "mihomo"
+                            && !metadata.target().starts_with("reqwest")
+                            && !metadata.target().starts_with("hyper_util")
+                            && !metadata.target().starts_with("hyper")
+                            && !metadata.target().starts_with("tower")
+                    }),
+                    // 控制台输出（dev 模式可见，同上过滤）
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout).filter(
                         |metadata| {
-                            metadata.target() != "mihomo" && !metadata.target().starts_with("sqlx")
+                            metadata.target() != "mihomo"
+                                && !metadata.target().starts_with("sqlx")
+                                && !metadata.target().starts_with("reqwest")
+                                && !metadata.target().starts_with("hyper_util")
+                                && !metadata.target().starts_with("hyper")
+                                && !metadata.target().starts_with("tower")
                         },
                     ),
                 ])
@@ -269,7 +280,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| match event {
-            tauri::RunEvent::Exit => {
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                 if let Some(rt) = app_handle.try_state::<runtime::RuntimeManager>() {
                     let _ = tauri::async_runtime::block_on(rt.stop_sidecar());
                 }
