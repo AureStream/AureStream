@@ -14,6 +14,7 @@ pub struct NetworkInfo {
     pub country: String,
     pub asn: String,
     pub org: String,
+    pub fetch_mode: String,
 }
 
 const IP_API_URL: &str = "http://ip-api.com/json/?lang=zh-CN";
@@ -57,6 +58,7 @@ async fn fetch_from_ip_api(client: &reqwest::Client) -> Result<NetworkInfo, Stri
         country: data["country"].as_str().unwrap_or_default().to_string(),
         asn: asn.to_string(),
         org: org.to_string(),
+        fetch_mode: String::new(),
     })
 }
 
@@ -73,21 +75,28 @@ pub async fn get_network_info(
 
     let mut client_builder = reqwest::Client::builder();
 
-    if is_running && mixed_port > 0 {
+    let fetch_mode = if is_running && mixed_port > 0 {
         let proxy_url = format!("http://{}:{}", DEFAULT_LISTEN_ADDR, mixed_port);
         let proxy = reqwest::Proxy::all(&proxy_url)
             .map_err(|e| format!("配置代理失败: {}", e))?;
         client_builder = client_builder.proxy(proxy);
-    }
+        "代理".to_string()
+    } else {
+        client_builder = client_builder.no_proxy();
+        "直连".to_string()
+    };
 
     let client = client_builder
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
-    let info = fetch_from_ip_api(&client).await?;
+    let mut info = fetch_from_ip_api(&client).await?;
+    info.fetch_mode = fetch_mode;
+    
     tracing::info!(
-        "网络信息获取成功 (ip-api.com, connected={}): ip={}, country={}",
+        "网络信息获取成功 (ip-api.com, connected={}, mode={}): ip={}, country={}",
         is_running,
+        info.fetch_mode,
         info.ip,
         info.country
     );

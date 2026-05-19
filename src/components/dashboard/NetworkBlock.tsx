@@ -5,6 +5,7 @@ import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { getNetworkInfo, type NetworkInfo } from "@/lib/api";
 
 const INFO_ROWS: { key: keyof NetworkInfo; label: string }[] = [
+  { key: "fetchMode", label: "获取方式" },
   { key: "ip", label: "IP" },
   { key: "city", label: "城市" },
   { key: "region", label: "区域" },
@@ -76,6 +77,22 @@ export function NetworkBlock({
       return (
         <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
       );
+    }
+    if (key === "fetchMode") {
+      if (val === "代理") {
+        return (
+          <span className="inline-flex items-center rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500 ring-1 ring-inset ring-emerald-500/20">
+            代理
+          </span>
+        );
+      }
+      if (val === "直连") {
+        return (
+          <span className="inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-500 ring-1 ring-inset ring-blue-500/20">
+            直连
+          </span>
+        );
+      }
     }
     return (
       <span className="text-xs font-medium tabular-nums text-foreground">
