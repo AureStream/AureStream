@@ -172,9 +172,9 @@ export function NodePickerDialog({
                 const active = currentNode?.id === node.id;
                 const delayText = node.delayError
                   ? "连接超时"
-                  : node.delay !== undefined
+                  : node.delay != null
                     ? `${node.delay}ms`
-                    : "未测速";
+                    : null;
                 const rowPending = Boolean(latencyPendingByNodeId[node.id]);
                 return (
                   <li key={node.id}>
@@ -216,7 +216,7 @@ export function NodePickerDialog({
                             className="size-3.5 animate-spin text-muted-foreground"
                             aria-hidden
                           />
-                        ) : (
+                        ) : delayText ? (
                           <span
                             className={
                               node.delayError
@@ -226,7 +226,7 @@ export function NodePickerDialog({
                           >
                             {delayText}
                           </span>
-                        )}
+                        ) : null}
                       </span>
                     </button>
                   </li>

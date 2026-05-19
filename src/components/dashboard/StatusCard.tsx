@@ -48,7 +48,7 @@ export function StatusCard() {
           <span
             className={`text-2xl font-bold ${getLatencyColor(currentNode.delay)}`}
           >
-            {currentNode.delay !== undefined ? `${currentNode.delay}ms` : "--"}
+            {currentNode.delay != null ? `${currentNode.delay}ms` : null}
           </span>
         </div>
       )}

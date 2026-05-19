@@ -579,12 +579,21 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
         connectedAt: Date.now(),
       });
 
-      // 连接成功后，后台仅测试当前节点的延迟（不阻塞 UI、不持久化结果）
+      // 同步初始节点到 Mihomo Selector（connect 流程中 isConnected 为 true 前 refreshSubscriptionNodesFromDb 跳过了同步）
       const currentNode = get().currentNode;
+      if (currentNode) {
+        try {
+          await selectNodeForGroup(AURESTREAM_NODE_SELECTOR, currentNode.name);
+        } catch (e) {
+          console.warn("初始节点同步失败:", e);
+        }
+      }
+
+      // 连接成功后，后台仅测试当前节点的延迟（不阻塞 UI、不持久化结果）
       if (currentNode) {
         testNodeLatency(currentNode.id, currentNode.server, currentNode.port)
           .then((result) => {
-            if (result.delay !== undefined) {
+            if (result.delay != null) {
               set((state) => ({
                 nodes: state.nodes.map((n) =>
                   n.id === currentNode.id ? { ...n, delay: result.delay, delayError: undefined } : n,
