@@ -1,4 +1,8 @@
 use serde::Serialize;
+use tauri::State;
+
+use crate::adapter::mihomo::constants::DEFAULT_LISTEN_ADDR;
+use crate::models::proxy_config::ProxyState;
 
 /// 网络信息（前端 camelCase 序列化）
 #[derive(Serialize, Clone, Default)]
@@ -103,20 +107,50 @@ async fn fetch_from_ip_api(client: &reqwest::Client) -> Result<NetworkInfo, Stri
     })
 }
 
-/// 获取网络信息：优先 ip.sb，失败则回退 ip-api.com
+/// 获取网络信息：代理连接时走代理网络，否则直连。
+/// 优先 ip.sb，失败则回退 ip-api.com。
 #[tauri::command]
-pub async fn get_network_info() -> Result<NetworkInfo, String> {
-    let client = reqwest::Client::new();
+pub async fn get_network_info(
+    proxy_state: State<'_, ProxyState>,
+) -> Result<NetworkInfo, String> {
+    let (is_running, mixed_port) = {
+        let status = proxy_state.status.lock().map_err(|e| e.to_string())?;
+        let config = proxy_state.config.lock().map_err(|e| e.to_string())?;
+        (status.is_running, config.mixed_port)
+    };
+
+    let mut client_builder = reqwest::Client::builder();
+
+    if is_running && mixed_port > 0 {
+        let proxy_url = format!("http://{}:{}", DEFAULT_LISTEN_ADDR, mixed_port);
+        let proxy = reqwest::Proxy::all(&proxy_url)
+            .map_err(|e| format!("配置代理失败: {}", e))?;
+        client_builder = client_builder.proxy(proxy);
+    }
+
+    let client = client_builder
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
     match fetch_from_ip_sb(&client).await {
         Ok(info) => {
-            tracing::info!("网络信息获取成功 (ip.sb, connected={connected}): ip={}, country={}", info.ip, info.country);
+            tracing::info!(
+                "网络信息获取成功 (ip.sb, connected={}): ip={}, country={}",
+                is_running,
+                info.ip,
+                info.country
+            );
             Ok(info)
         }
         Err(e) => {
-            tracing::warn!("ip.sb 失败: {e}，回退到 ip-api.com");
+            tracing::warn!("ip.sb 失败: {}，回退到 ip-api.com", e);
             let info = fetch_from_ip_api(&client).await?;
-            tracing::info!("网络信息获取成功 (ip-api.com, connected={connected}): ip={}, country={}", info.ip, info.country);
+            tracing::info!(
+                "网络信息获取成功 (ip-api.com, connected={}): ip={}, country={}",
+                is_running,
+                info.ip,
+                info.country
+            );
             Ok(info)
         }
     }
