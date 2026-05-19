@@ -8,6 +8,7 @@ import { useAppStore, useProxyStore } from "@/stores/appStore";
 import { loadPersistedState } from "@/lib/persistStore";
 import { Toaster } from "@/components/ui/sonner";
 import { listen } from "@tauri-apps/api/event";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 function applyTheme(theme: string) {
   const root = document.documentElement;
@@ -26,6 +27,7 @@ function applyTheme(theme: string) {
 
 function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
+  const [isInitializing, setIsInitializing] = useState(true);
   const { theme } = useAppStore();
 
   useEffect(() => {
@@ -77,6 +79,8 @@ function App() {
       } catch (e) {
         console.warn("自动连接失败:", e);
       }
+
+      setIsInitializing(false);
     };
 
     init();
@@ -127,6 +131,7 @@ function App() {
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <MainContent>{renderPage()}</MainContent>
       <Toaster richColors />
+      <LoadingScreen visible={isInitializing} />
     </div>
   );
 }

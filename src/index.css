@@ -298,3 +298,56 @@ body::before {
 .animate-fade-in-up {
   animation: fade-in-up 0.7s ease-out forwards;
 }
+
+/* Loading screen animations */
+@keyframes loading-spin-outer {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-spin-middle {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes loading-spin-inner {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-orb-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.93); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes loading-bg-pulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); }
+}
+
+@keyframes loading-bg-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(20px, -15px) scale(1.1); }
+  66% { transform: translate(-15px, 20px) scale(0.95); }
+}
+
+.animate-loading-spin-outer {
+  animation: loading-spin-outer 9s linear infinite;
+}
+
+.animate-loading-spin-middle {
+  animation: loading-spin-middle 4s linear infinite;
+}
+
+.animate-loading-spin-inner {
+  animation: loading-spin-inner 6s linear infinite;
+}
+
+.animate-loading-orb-pulse {
+  animation: loading-orb-pulse 2.6s ease-in-out infinite;
+}
+
+.animate-loading-bg-pulse {
+  animation: loading-bg-pulse 5s ease-in-out infinite;
+}
+
+.animate-loading-bg-drift {
+  animation: loading-bg-drift 8s ease-in-out infinite;
+}
