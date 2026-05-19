@@ -174,7 +174,7 @@ pub fn apply(config: &ProxyConfig) -> Result<(), String> {
         cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "on"]));
     }
     let chain = cmds.join(" && ");
-    run_shell_chain_with_auth(&chain)
+    run_shell_chain_direct(&chain)
 }
 
 pub fn clear() -> Result<(), String> {
@@ -186,8 +186,5 @@ pub fn clear() -> Result<(), String> {
         cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "off"]));
     }
     let chain = cmds.join(" ; ");
-    if run_shell_chain_direct(&chain).is_ok() {
-        return Ok(());
-    }
-    run_shell_chain_with_auth(&chain)
+    run_shell_chain_direct(&chain)
 }
