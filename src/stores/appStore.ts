@@ -448,24 +448,17 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
   setCurrentNode: (node) => set({ currentNode: node }),
 
   applyNodeSelection: async (node) => {
-    const t0 = performance.now();
     set({ currentNode: node });
     if (!node || !get().isConnected) return;
     try {
-      console.debug(`[node.switch] 开始切换节点: ${node.name}`);
-      const t1 = performance.now();
       await selectNodeForGroup(AURESTREAM_NODE_SELECTOR, node.name);
-      console.debug(`[node.switch] selectNodeForGroup 完成 (${(performance.now() - t1).toFixed(0)}ms)`);
       // 关闭已有连接，强制后续请求立即走新节点
       try {
-        const t2 = performance.now();
         const { closeAllConnections } = await import("tauri-plugin-mihomo-api");
         await closeAllConnections();
-        console.debug(`[node.switch] closeAllConnections 完成 (${(performance.now() - t2).toFixed(0)}ms)`);
       } catch {
         // closeAllConnections 失败不影响节点切换本身
       }
-      console.debug(`[node.switch] 节点切换总耗时 ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (e) {
       console.error("切换节点失败:", e);
     }

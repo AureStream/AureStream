@@ -109,10 +109,15 @@ pub async fn get_network_info() -> Result<NetworkInfo, String> {
     let client = reqwest::Client::new();
 
     match fetch_from_ip_sb(&client).await {
-        Ok(info) => Ok(info),
+        Ok(info) => {
+            tracing::info!("网络信息获取成功 (ip.sb, connected={connected}): ip={}, country={}", info.ip, info.country);
+            Ok(info)
+        }
         Err(e) => {
-            tracing::warn!("ip.sb 失败 ({e})，回退到 ip-api.com");
-            fetch_from_ip_api(&client).await
+            tracing::warn!("ip.sb 失败: {e}，回退到 ip-api.com");
+            let info = fetch_from_ip_api(&client).await?;
+            tracing::info!("网络信息获取成功 (ip-api.com, connected={connected}): ip={}, country={}", info.ip, info.country);
+            Ok(info)
         }
     }
 }
