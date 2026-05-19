@@ -44,7 +44,7 @@ pub fn apply(config: &ProxyConfig) -> Result<(), String> {
         return Err("系统代理端口未就绪，请重新连接".to_string());
     }
     let host = system_proxy_host(&config.listen);
-    let proxy_server = format!("{}:{}", host, config.mixed_port);
+    let proxy_server = format!("socks={}:{}", host, config.mixed_port);
     let bypass = parse_bypass_domains_windows(&config.bypass_domains);
 
     use winreg::enums::*;
