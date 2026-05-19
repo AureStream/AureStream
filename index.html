@@ -10,31 +10,11 @@
   <style>
     body {
       margin: 0;
-      background-color: #fafafa;
+      background-color: #f4f7fc;
     }
     @media (prefers-color-scheme: dark) {
       body {
-        background-color: #09090b;
-      }
-    }
-    #root:empty {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    #root:empty::after {
-      content: "";
-      width: 32px;
-      height: 32px;
-      border: 3px solid rgba(45, 212, 191, 0.2);
-      border-top-color: rgb(45, 212, 191);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      100% {
-        transform: rotate(360deg);
+        background-color: #181818;
       }
     }
   </style>
