@@ -101,38 +101,50 @@ fn run_shell_chain_direct(chain: &str) -> Result<(), String> {
 }
 
 fn macos_list_network_services() -> Result<Vec<String>, String> {
-    let out = Command::new("/usr/sbin/networksetup")
-        .arg("-listallnetworkservices")
+    // 1. 使用 scutil --nwi 获取当前活跃的网络接口 (例如 en0)
+    let nwi_out = Command::new("/usr/sbin/scutil")
+        .arg("--nwi")
         .output()
-        .map_err(|e| format!("列出网络服务失败: {}", e))?;
-    if !out.status.success() {
-        return Err(format!(
-            "networksetup -listallnetworkservices 失败: {}",
-            String::from_utf8_lossy(&out.stderr)
-        ));
+        .map_err(|e| format!("scutil 失败: {}", e))?;
+    let nwi_str = String::from_utf8_lossy(&nwi_out.stdout);
+    let mut active_ifaces = Vec::new();
+    for line in nwi_str.lines() {
+        if line.starts_with("Network interfaces:") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() > 2 {
+                for i in 2..parts.len() {
+                    active_ifaces.push(parts[i].trim().trim_matches(',').to_string());
+                }
+            }
+        }
     }
-    let reader = BufReader::new(out.stdout.as_slice());
+
+    // 2. 使用 networksetup -listallhardwareports 将接口 (en0) 映射回服务名 (Wi-Fi)
+    let hw_out = Command::new("/usr/sbin/networksetup")
+        .arg("-listallhardwareports")
+        .output()
+        .map_err(|e| format!("networksetup 失败: {}", e))?;
+    let hw_str = String::from_utf8_lossy(&hw_out.stdout);
     let mut services = Vec::new();
-    for (i, line) in reader.lines().enumerate() {
-        let line = line.map_err(|e| format!("读取 networksetup 输出失败: {}", e))?;
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
+    let mut current_port = String::new();
+    for line in hw_str.lines() {
+        if line.starts_with("Hardware Port: ") {
+            current_port = line.trim_start_matches("Hardware Port: ").trim().to_string();
+        } else if line.starts_with("Device: ") {
+            let device = line.trim_start_matches("Device: ").trim().to_string();
+            if active_ifaces.contains(&device) {
+                services.push(current_port.clone());
+            }
         }
-        if i == 0 && line.contains("asterisk") {
-            continue;
-        }
-        if line.starts_with('*') {
-            continue;
-        }
-        if line.ends_with('*') {
-            continue;
-        }
-        services.push(line.to_string());
     }
+    
+    services.dedup();
     if services.is_empty() {
-        return Err("未发现可用的网络服务（无法设置系统代理）".to_string());
+        // 退避策略：如果找不到活跃接口，至少设置常见的网络服务
+        services.push("Wi-Fi".to_string());
+        services.push("Ethernet".to_string());
     }
+    
     Ok(services)
 }
 
@@ -174,7 +186,7 @@ pub fn apply(config: &ProxyConfig) -> Result<(), String> {
         cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "on"]));
     }
     let chain = cmds.join(" && ");
-    run_shell_chain_with_auth(&chain)
+    run_shell_chain_direct(&chain)
 }
 
 pub fn clear() -> Result<(), String> {
@@ -186,8 +198,5 @@ pub fn clear() -> Result<(), String> {
         cmds.push(networksetup_cmdline(&["-setsocksfirewallproxystate", svc, "off"]));
     }
     let chain = cmds.join(" ; ");
-    if run_shell_chain_direct(&chain).is_ok() {
-        return Ok(());
-    }
-    run_shell_chain_with_auth(&chain)
+    run_shell_chain_direct(&chain)
 }
