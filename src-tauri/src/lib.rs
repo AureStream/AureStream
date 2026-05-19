@@ -19,6 +19,7 @@ use ipc::connection::{
     get_proxy_config, get_proxy_status, set_current_node, start_proxy, stop_proxy,
     update_proxy_config,
 };
+use ipc::network_info::get_network_info;
 use ipc::node::{get_nodes, get_nodes_by_provider, test_all_nodes_latency, test_node_latency};
 use ipc::settings::{load_app_settings, save_app_settings};
 use ipc::subscription::{
@@ -267,6 +268,7 @@ pub fn run() {
             stop_runtime_engine,
             load_app_settings,
             save_app_settings,
+            get_network_info,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

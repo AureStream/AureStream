@@ -12,6 +12,9 @@ pub const EXTERNAL_CONTROLLER: &str = "127.0.0.1:9090";
 /// 本地回环监听地址。
 pub const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1";
 
+/// 默认混合代理端口。
+pub const DEFAULT_MIXED_PORT: u16 = 7890;
+
 /// Mihomo 运行时工作目录名。
 pub const MIHOMO_WORK_DIR: &str = "mihomo-work";
 

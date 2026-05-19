@@ -41,8 +41,11 @@ export function NodeSelect({ onSelect }: NodeSelectProps) {
         >
           <option value="">请选择节点</option>
           {availableNodes.map((node) => {
-            const delayDisplay =
-              node.delay !== undefined ? `${node.delay}ms` : "--";
+            const delayDisplay = node.delayError
+              ? "超时"
+              : node.delay !== undefined
+                ? `${node.delay}ms`
+                : "--";
             return (
               <option key={node.id} value={node.id}>
                 {node.name} | 延迟: {delayDisplay}
