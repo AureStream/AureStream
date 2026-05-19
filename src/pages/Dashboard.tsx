@@ -119,6 +119,7 @@ export function Dashboard({
               downloadTotal={sessionDownloadGb}
               uploadSeries={uploadSeries}
               downloadSeries={downloadSeries}
+              className="flex-1 min-h-0"
             />
           </section>
         </div>
