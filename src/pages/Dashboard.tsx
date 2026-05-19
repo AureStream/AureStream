@@ -110,10 +110,11 @@ export function Dashboard({
             <SubscriptionBlock
               provider={currentProvider}
               onOpenProviders={onOpenProviders}
+              className="flex-1 min-h-0"
             />
-            <div className="border-t border-border/20" />
-            <NetworkBlock connectedIp={connectedIp} />
-            <div className="border-t border-border/20" />
+            <div className="shrink-0 border-t border-border/20" />
+            <NetworkBlock connectedIp={connectedIp} className="flex-1 min-h-0" />
+            <div className="shrink-0 border-t border-border/20" />
             <UsageBlock
               uploadTotal={sessionUploadGb}
               downloadTotal={sessionDownloadGb}

@@ -48,7 +48,7 @@ export function SubscriptionBlock({
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       {provider ? (
-        <div className="flex flex-col gap-2.5 min-h-[7.5rem] lg:min-h-[9rem]">
+        <div className="flex flex-1 min-h-0 flex-col gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <CreditCard className="size-4 text-primary" strokeWidth={1.75} />
@@ -105,7 +105,7 @@ export function SubscriptionBlock({
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/15 px-4 py-4 text-center min-h-[7.5rem] lg:min-h-[9rem] justify-center">
+        <div className="flex flex-1 min-h-0 flex-col items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/15 px-4 py-4 text-center justify-center">
           <p className="text-xs font-medium text-muted-foreground">
             尚未选择供应商
           </p>
