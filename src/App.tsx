@@ -123,7 +123,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden gap-3 pr-3">
+    <div className="flex h-screen bg-background overflow-hidden gap-3 ">
       <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
       <MainContent>{renderPage()}</MainContent>
       <Toaster richColors />
