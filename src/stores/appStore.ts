@@ -587,17 +587,36 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
             if (result.delay !== undefined) {
               set((state) => ({
                 nodes: state.nodes.map((n) =>
-                  n.id === currentNode.id ? { ...n, delay: result.delay } : n,
+                  n.id === currentNode.id ? { ...n, delay: result.delay, delayError: undefined } : n,
                 ),
                 currentNode:
                   state.currentNode?.id === currentNode.id
-                    ? { ...state.currentNode, delay: result.delay }
+                    ? { ...state.currentNode, delay: result.delay, delayError: undefined }
+                    : state.currentNode,
+              }));
+            } else {
+              set((state) => ({
+                nodes: state.nodes.map((n) =>
+                  n.id === currentNode.id ? { ...n, delay: undefined, delayError: true } : n,
+                ),
+                currentNode:
+                  state.currentNode?.id === currentNode.id
+                    ? { ...state.currentNode, delay: undefined, delayError: true }
                     : state.currentNode,
               }));
             }
           })
           .catch((e) => {
             console.warn("连接后当前节点测速失败:", e);
+            set((state) => ({
+              nodes: state.nodes.map((n) =>
+                n.id === currentNode.id ? { ...n, delay: undefined, delayError: true } : n,
+              ),
+              currentNode:
+                state.currentNode?.id === currentNode.id
+                  ? { ...state.currentNode, delay: undefined, delayError: true }
+                  : state.currentNode,
+            }));
           });
       }
     } catch (e) {
@@ -709,12 +728,12 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       }
       const nodes = state.nodes.map((n) =>
         listIds.has(n.id) && n.providerId === cpId
-          ? { ...n, delay: undefined }
+          ? { ...n, delay: undefined, delayError: undefined }
           : n,
       );
       let currentNode = state.currentNode;
       if (currentNode && listIds.has(currentNode.id)) {
-        currentNode = { ...currentNode, delay: undefined };
+        currentNode = { ...currentNode, delay: undefined, delayError: undefined };
       }
       const initialPending: Record<string, boolean> = {};
       for (const n of list0) initialPending[n.id] = true;
@@ -766,7 +785,14 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
               const nextPending = { ...state.latencyPendingByNodeId };
               delete nextPending[node.id];
               if (result.delay === undefined) {
-                return { latencyPendingByNodeId: nextPending };
+                return {
+                  nodes: state.nodes.map((n) =>
+                    n.id === node.id
+                      ? { ...n, delay: undefined, delayError: true }
+                      : n,
+                  ),
+                  latencyPendingByNodeId: nextPending,
+                };
               }
               return {
                 nodes: state.nodes.map((n) =>
@@ -794,7 +820,14 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
             set((state) => {
               const nextPending = { ...state.latencyPendingByNodeId };
               delete nextPending[node.id];
-              return { latencyPendingByNodeId: nextPending };
+              return {
+                nodes: state.nodes.map((n) =>
+                  n.id === node.id
+                    ? { ...n, delay: undefined, delayError: true }
+                    : n,
+                ),
+                latencyPendingByNodeId: nextPending,
+              };
             });
           }
         }

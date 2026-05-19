@@ -22,6 +22,8 @@ export interface Node {
   server: string;
   port: number;
   delay?: number;
+  /** 测速失败（如连接超时） */
+  delayError?: boolean;
   enabled: boolean;
 }
 
