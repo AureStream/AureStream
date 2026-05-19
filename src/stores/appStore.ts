@@ -448,24 +448,17 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
   setCurrentNode: (node) => set({ currentNode: node }),
 
   applyNodeSelection: async (node) => {
-    const t0 = performance.now();
     set({ currentNode: node });
     if (!node || !get().isConnected) return;
     try {
-      console.debug(`[node.switch] 开始切换节点: ${node.name}`);
-      const t1 = performance.now();
       await selectNodeForGroup(AURESTREAM_NODE_SELECTOR, node.name);
-      console.debug(`[node.switch] selectNodeForGroup 完成 (${(performance.now() - t1).toFixed(0)}ms)`);
       // 关闭已有连接，强制后续请求立即走新节点
       try {
-        const t2 = performance.now();
         const { closeAllConnections } = await import("tauri-plugin-mihomo-api");
         await closeAllConnections();
-        console.debug(`[node.switch] closeAllConnections 完成 (${(performance.now() - t2).toFixed(0)}ms)`);
       } catch {
         // closeAllConnections 失败不影响节点切换本身
       }
-      console.debug(`[node.switch] 节点切换总耗时 ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (e) {
       console.error("切换节点失败:", e);
     }
@@ -586,12 +579,46 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
         connectedAt: Date.now(),
       });
 
-      // 连接成功后，后台自动触发一轮测速（不阻塞 UI、不持久化结果）
-      get()
-        .testLatency(true)
-        .catch((e) => {
-          console.warn("连接后自动测速失败:", e);
-        });
+      // 连接成功后，后台仅测试当前节点的延迟（不阻塞 UI、不持久化结果）
+      const currentNode = get().currentNode;
+      if (currentNode) {
+        testNodeLatency(currentNode.id, currentNode.server, currentNode.port)
+          .then((result) => {
+            if (result.delay !== undefined) {
+              set((state) => ({
+                nodes: state.nodes.map((n) =>
+                  n.id === currentNode.id ? { ...n, delay: result.delay, delayError: undefined } : n,
+                ),
+                currentNode:
+                  state.currentNode?.id === currentNode.id
+                    ? { ...state.currentNode, delay: result.delay, delayError: undefined }
+                    : state.currentNode,
+              }));
+            } else {
+              set((state) => ({
+                nodes: state.nodes.map((n) =>
+                  n.id === currentNode.id ? { ...n, delay: undefined, delayError: true } : n,
+                ),
+                currentNode:
+                  state.currentNode?.id === currentNode.id
+                    ? { ...state.currentNode, delay: undefined, delayError: true }
+                    : state.currentNode,
+              }));
+            }
+          })
+          .catch((e) => {
+            console.warn("连接后当前节点测速失败:", e);
+            set((state) => ({
+              nodes: state.nodes.map((n) =>
+                n.id === currentNode.id ? { ...n, delay: undefined, delayError: true } : n,
+              ),
+              currentNode:
+                state.currentNode?.id === currentNode.id
+                  ? { ...state.currentNode, delay: undefined, delayError: true }
+                  : state.currentNode,
+            }));
+          });
+      }
     } catch (e) {
       stopMihomoTrafficPoll();
       try {
@@ -701,12 +728,12 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       }
       const nodes = state.nodes.map((n) =>
         listIds.has(n.id) && n.providerId === cpId
-          ? { ...n, delay: undefined }
+          ? { ...n, delay: undefined, delayError: undefined }
           : n,
       );
       let currentNode = state.currentNode;
       if (currentNode && listIds.has(currentNode.id)) {
-        currentNode = { ...currentNode, delay: undefined };
+        currentNode = { ...currentNode, delay: undefined, delayError: undefined };
       }
       const initialPending: Record<string, boolean> = {};
       for (const n of list0) initialPending[n.id] = true;
@@ -730,55 +757,85 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
 
       if (list.length === 0) return;
 
-      // 逐个测试每个节点并即时更新UI
-      for (const node of list) {
-        set((state) => ({
-          latencyPendingByNodeId: {
-            ...state.latencyPendingByNodeId,
-            [node.id]: true,
-          },
-        }));
-        try {
-          const result = await testNodeLatency(node.id, node.server, node.port);
-          const cp = get().currentProvider;
-          set((state) => {
-            const nextPending = { ...state.latencyPendingByNodeId };
-            delete nextPending[node.id];
-            if (result.delay === undefined) {
-              return { latencyPendingByNodeId: nextPending };
-            }
-            return {
-              nodes: state.nodes.map((n) =>
-                n.id === node.id ? { ...n, delay: result.delay } : n,
-              ),
-              currentNode:
-                state.currentNode?.id === node.id
-                  ? { ...state.currentNode, delay: result.delay }
-                  : state.currentNode,
-              nodeLatencyByKey: cp
-                ? {
-                    ...state.nodeLatencyByKey,
-                    [nodeLatencyCacheKey(cp.id, node.id)]:
-                      result.delay as number,
-                  }
-                : state.nodeLatencyByKey,
-              latencyPendingByNodeId: nextPending,
-            };
-          });
-        } catch (nodeError) {
-          console.warn(
-            `Failed to test latency for node ${node.name}:`,
-            nodeError,
-          );
-          set((state) => {
-            const nextPending = { ...state.latencyPendingByNodeId };
-            delete nextPending[node.id];
-            return { latencyPendingByNodeId: nextPending };
-          });
+      // 分批次测试节点，每批最多 3 个并发
+      const BATCH_SIZE = 3;
+      for (let i = 0; i < list.length; i += BATCH_SIZE) {
+        const batch = list.slice(i, i + BATCH_SIZE);
+
+        set((state) => {
+          const nextPending = { ...state.latencyPendingByNodeId };
+          for (const node of batch) nextPending[node.id] = true;
+          return { latencyPendingByNodeId: nextPending };
+        });
+
+        const results = await Promise.allSettled(
+          batch.map((node) =>
+            testNodeLatency(node.id, node.server, node.port),
+          ),
+        );
+
+        for (let j = 0; j < batch.length; j++) {
+          const node = batch[j];
+          const settled = results[j];
+
+          if (settled.status === "fulfilled") {
+            const result = settled.value;
+            const cp = get().currentProvider;
+            set((state) => {
+              const nextPending = { ...state.latencyPendingByNodeId };
+              delete nextPending[node.id];
+              if (result.delay === undefined) {
+                return {
+                  nodes: state.nodes.map((n) =>
+                    n.id === node.id
+                      ? { ...n, delay: undefined, delayError: true }
+                      : n,
+                  ),
+                  latencyPendingByNodeId: nextPending,
+                };
+              }
+              return {
+                nodes: state.nodes.map((n) =>
+                  n.id === node.id ? { ...n, delay: result.delay } : n,
+                ),
+                currentNode:
+                  state.currentNode?.id === node.id
+                    ? { ...state.currentNode, delay: result.delay }
+                    : state.currentNode,
+                nodeLatencyByKey: cp
+                  ? {
+                      ...state.nodeLatencyByKey,
+                      [nodeLatencyCacheKey(cp.id, node.id)]:
+                        result.delay as number,
+                    }
+                  : state.nodeLatencyByKey,
+                latencyPendingByNodeId: nextPending,
+              };
+            });
+          } else {
+            console.warn(
+              `Failed to test latency for node ${node.name}:`,
+              settled.reason,
+            );
+            set((state) => {
+              const nextPending = { ...state.latencyPendingByNodeId };
+              delete nextPending[node.id];
+              return {
+                nodes: state.nodes.map((n) =>
+                  n.id === node.id
+                    ? { ...n, delay: undefined, delayError: true }
+                    : n,
+                ),
+                latencyPendingByNodeId: nextPending,
+              };
+            });
+          }
         }
 
-        // 短暂延迟以改善用户体验
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        // 批次间短暂延迟
+        if (i + BATCH_SIZE < list.length) {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
       }
     } catch (e) {
       console.error("Failed to start latency testing:", e);

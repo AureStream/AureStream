@@ -1,7 +1,6 @@
 //! 代理配置与状态共享类型（从 commands/ 迁移）。
 
 use serde::{Deserialize, Serialize};
-use std::net::TcpListener;
 
 use crate::adapter::mihomo::constants::DEFAULT_LISTEN_ADDR;
 
@@ -42,16 +41,6 @@ impl Default for ProxyStatus {
             download_bytes: 0,
         }
     }
-}
-
-pub fn allocate_high_random_port() -> Result<u16, String> {
-    let listener = TcpListener::bind((DEFAULT_LISTEN_ADDR, 0))
-        .map_err(|e| format!("分配本地端口失败: {}", e))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| format!("读取本地端口失败: {}", e))?
-        .port();
-    Ok(port)
 }
 
 const GB_BYTES: f64 = 1024.0 * 1024.0 * 1024.0;

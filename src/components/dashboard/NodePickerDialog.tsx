@@ -51,6 +51,12 @@ export function NodePickerDialog({
       arr.sort((a, b) => {
         const da = a.delay;
         const db = b.delay;
+        // 连接超时的节点排在最后
+        if (a.delayError && !b.delayError) return 1;
+        if (!a.delayError && b.delayError) return -1;
+        if (a.delayError && b.delayError) {
+          return a.name.localeCompare(b.name, "zh-Hans-CN");
+        }
         if (da === undefined && db === undefined) {
           return a.name.localeCompare(b.name, "zh-Hans-CN");
         }
@@ -164,8 +170,11 @@ export function NodePickerDialog({
             <ul className="flex flex-col gap-1">
               {displayList.map((node) => {
                 const active = currentNode?.id === node.id;
-                const delayText =
-                  node.delay !== undefined ? `${node.delay}ms` : "未测速";
+                const delayText = node.delayError
+                  ? "连接超时"
+                  : node.delay !== undefined
+                    ? `${node.delay}ms`
+                    : "未测速";
                 const rowPending = Boolean(latencyPendingByNodeId[node.id]);
                 return (
                   <li key={node.id}>
@@ -208,7 +217,13 @@ export function NodePickerDialog({
                             aria-hidden
                           />
                         ) : (
-                          <span className={getLatencyColor(node.delay)}>
+                          <span
+                            className={
+                              node.delayError
+                                ? "text-red-500"
+                                : getLatencyColor(node.delay)
+                            }
+                          >
                             {delayText}
                           </span>
                         )}

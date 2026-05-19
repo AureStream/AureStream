@@ -1,9 +1,8 @@
 //! 内置 Clash/Mihomo 运行时配置：`proxy-providers` 使用本地 YAML（type: file）+ 固定规则与单一 Selector。
 //! Mihomo 要求 `path` 必须位于 `-d` 工作目录（及其 SAFE_PATHS）之下，因此从应用配置目录的订阅文件**复制**到 `mihomo-work/subscriptions/` 再写入配置。
 
-use super::allocate_high_random_port;
 use super::mihomo_constants::{
-    AURESTREAM_NODE_SELECTOR, EXTERNAL_CONTROLLER, GEODATA, LATENCY_TEST_URL,
+    AURESTREAM_NODE_SELECTOR, DEFAULT_MIXED_PORT, EXTERNAL_CONTROLLER, GEODATA, LATENCY_TEST_URL,
 };
 use super::proxy::ProxyState;
 use serde_yaml::{Mapping, Value};
@@ -137,10 +136,9 @@ pub async fn build_runtime_config(
 ) -> Result<String, String> {
     let (listen, mixed_port) = {
         let mut config = proxy_state.config.lock().map_err(|e| e.to_string())?;
-        let status = proxy_state.status.lock().map_err(|e| e.to_string())?;
         config.listen = super::mihomo_constants::DEFAULT_LISTEN_ADDR.to_string();
-        if !status.is_running || config.mixed_port == 0 {
-            config.mixed_port = allocate_high_random_port()?;
+        if config.mixed_port == 0 {
+            config.mixed_port = DEFAULT_MIXED_PORT;
         }
         (config.listen.clone(), config.mixed_port)
     };

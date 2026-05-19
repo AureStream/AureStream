@@ -1,24 +1,8 @@
-import { Globe } from "lucide-react";
+import { Globe, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useRef, useState } from "react";
-import { useProxyStore } from "@/stores/appStore";
-
-interface NetworkInfo {
-  ip: string;
-  city: string;
-  region: string;
-  country: string;
-  asn: string;
-  org: string;
-}
-
-function parseOrg(org: string): { asn: string; org: string } {
-  const match = org.match(/^(AS\d+)\s+(.+)$/);
-  if (match) {
-    return { asn: match[1], org: match[2] };
-  }
-  return { asn: "", org };
-}
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useProxyStore, useAppStore } from "@/stores/appStore";
+import { getNetworkInfo, type NetworkInfo } from "@/lib/api";
 
 const INFO_ROWS: { key: keyof NetworkInfo; label: string }[] = [
   { key: "ip", label: "IP" },
@@ -37,54 +21,49 @@ export function NetworkBlock({
 }) {
   const isConnected = useProxyStore((s) => s.isConnected);
   const nodeId = useProxyStore((s) => s.currentNode?.id);
+  const proxyMode = useAppStore((s) => s.proxyMode);
   const [info, setInfo] = useState<NetworkInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const fetchId = useRef(0);
-  const prevConnected = useRef(isConnected);
 
-  useEffect(() => {
-    let cancelled = false;
-    const id = ++fetchId.current;
-
-    async function fetchIpInfo() {
-      setLoading(true);
-      setError(false);
-      try {
-        const resp = await fetch("https://ipinfo.io/json");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        if (cancelled || fetchId.current !== id) return;
-        const { asn, org } = parseOrg(data.org || "");
-        setInfo({
-          ip: data.ip || "",
-          city: data.city || "",
-          region: data.region || "",
-          country: data.country || "",
-          asn,
-          org,
-        });
-      } catch {
-        if (!cancelled && fetchId.current === id) setError(true);
-      } finally {
-        if (!cancelled && fetchId.current === id) setLoading(false);
-      }
+  const doFetch = useCallback(async (id: number) => {
+    setLoading(true);
+    try {
+      const data = await getNetworkInfo();
+      if (fetchId.current !== id) return;
+      setInfo(data);
+    } catch {
+      // 失败后重试一次（代理路由可能尚未生效）
+      setTimeout(async () => {
+        try {
+          const data = await getNetworkInfo();
+          if (fetchId.current !== id) return;
+          setInfo(data);
+        } catch {
+          // 静默失败
+        } finally {
+          if (fetchId.current === id) setLoading(false);
+        }
+      }, 2000);
+      return;
+    } finally {
+      if (fetchId.current === id) setLoading(false);
     }
+  }, []);
 
-    // 仅切换节点（连接状态未变）：等待 mihomo 完成 selector 切换 + closeConnections
-    const nodeSwitch =
-      isConnected && prevConnected.current === isConnected && nodeId;
-    const delay = nodeSwitch ? 1200 : 0;
+  // 自动刷新：连接/断开、切换节点、切换代理模式
+  useEffect(() => {
+    const id = ++fetchId.current;
+    const delay = isConnected ? 1500 : 0;
+    const timer = setTimeout(() => doFetch(id), delay);
+    return () => clearTimeout(timer);
+  }, [isConnected, nodeId, proxyMode, doFetch]);
 
-    const timer = setTimeout(fetchIpInfo, delay);
-
-    prevConnected.current = isConnected;
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [isConnected, nodeId]);
+  // 手动刷新
+  const handleRefresh = useCallback(() => {
+    const id = ++fetchId.current;
+    doFetch(id);
+  }, [doFetch]);
 
   const valueNode = (key: keyof NetworkInfo) => {
     if (loading && !info) {
@@ -112,6 +91,15 @@ export function NetworkBlock({
           <Globe className="size-4 text-primary" strokeWidth={1.75} />
         </div>
         <span className="text-sm font-semibold text-foreground">网络信息</span>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading}
+          className="ml-auto size-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          title="刷新网络信息"
+        >
+          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+        </button>
       </div>
 
       <div className="flex flex-col gap-2 min-h-[7rem]">
@@ -123,11 +111,6 @@ export function NetworkBlock({
             {valueNode(key)}
           </div>
         ))}
-        {error && !info && (
-          <p className="text-[11px] text-muted-foreground/60 mt-1">
-            获取失败，切换节点或连接后重试
-          </p>
-        )}
       </div>
     </div>
   );

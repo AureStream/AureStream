@@ -1,6 +1,7 @@
 //! 连接管理命令：代理启停、状态查询。
 
-use crate::models::proxy_config::{allocate_high_random_port, ProxyConfig, ProxyState};
+use crate::adapter::mihomo::constants::DEFAULT_MIXED_PORT;
+use crate::models::proxy_config::{ProxyConfig, ProxyState};
 use crate::runtime::RuntimeManager;
 use serde::Serialize;
 use tauri::State;
@@ -14,22 +15,22 @@ pub struct ProxyStatus {
     pub download_bytes: u64,
 }
 
+/// 准备代理端口（不启动进程，仅分配端口）。
+/// 实际进程启停由 [`crate::commands::mihomo_kernel::start_runtime_engine`] 负责。
 #[tauri::command]
 pub async fn start_proxy(proxy_state: State<'_, ProxyState>) -> Result<String, String> {
-    let (listen, mixed_port) = {
+    let mixed_port = {
         let mut config = proxy_state.config.lock().map_err(|e| e.to_string())?;
-        let status = proxy_state.status.lock().map_err(|e| e.to_string())?;
-        config.listen = crate::adapter::mihomo::constants::DEFAULT_LISTEN_ADDR.to_string();
-        if !status.is_running || config.mixed_port == 0 {
-            config.mixed_port = allocate_high_random_port()?;
+        if config.mixed_port == 0 {
+            config.mixed_port = DEFAULT_MIXED_PORT;
         }
-        (config.listen.clone(), config.mixed_port)
+        config.mixed_port
     };
-    {
-        let mut status = proxy_state.status.lock().map_err(|e| e.to_string())?;
-        status.is_running = true;
-    }
-    Ok(format!("{}:{}", listen, mixed_port))
+    Ok(format!(
+        "{}:{}",
+        crate::adapter::mihomo::constants::DEFAULT_LISTEN_ADDR,
+        mixed_port
+    ))
 }
 
 #[tauri::command]
