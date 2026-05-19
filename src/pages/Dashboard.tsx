@@ -75,7 +75,7 @@ export function Dashboard({
 
   return (
     <PageShell fillHeight className="max-w-7xl" title="首页">
-      <div className="relative flex w-full min-h-0 overflow-hidden">
+      <div className="relative flex w-full flex-1 min-h-0 overflow-hidden">
         {/* 中轴光晕背景 */}
         <div
           className={cn(
@@ -90,9 +90,9 @@ export function Dashboard({
         />
 
         {/* 黄金分割双栏 */}
-        <div className="relative grid w-full grid-cols-1 gap-4 md:grid-cols-[55%_45%] md:gap-0 lg:grid-cols-[61.8%_38.2%]">
+        <div className="relative grid w-full h-full grid-cols-1 gap-4 md:grid-cols-[55%_45%] md:gap-0 lg:grid-cols-[61.8%_38.2%]">
           {/* 左栏：操作区 */}
-          <section className="flex min-h-0 flex-col justify-start md:pr-6 lg:pr-8">
+          <section className="flex h-full min-h-0 flex-col md:pr-6 lg:pr-8">
             <LeftOperationPanel
               isConnected={isConnected}
               canConnect={canConnect}
@@ -106,7 +106,7 @@ export function Dashboard({
           </section>
 
           {/* 右栏：信息展示区 */}
-          <section className="flex min-h-0 flex-col gap-2 pl-4 pr-4 md:pr-0 md:border-l md:border-border/30 md:pl-6 lg:gap-2.5 lg:pl-8">
+          <section className="flex h-full min-h-0 flex-col overflow-y-auto gap-2 pl-4 pr-4 md:pr-0 md:border-l md:border-border/30 md:pl-6 lg:gap-2.5 lg:pl-8">
             <SubscriptionBlock
               provider={currentProvider}
               onOpenProviders={onOpenProviders}
