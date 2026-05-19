@@ -35,7 +35,7 @@
 }
 
 .dark {
-  --color-background: #000000;
+  --color-background: #181818;
   --color-foreground: #f8fafc;
   --color-card: rgba(15, 15, 20, 0.7);
   --color-card-foreground: #f8fafc;
