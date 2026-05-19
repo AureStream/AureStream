@@ -932,16 +932,18 @@ useProxyStore.subscribe((state, prevState) => {
   if (
     state.currentProvider?.id !== prevState.currentProvider?.id ||
     state.nodes !== prevState.nodes ||
-    state.isConnected !== prevState.isConnected
+    state.isConnected !== prevState.isConnected ||
+    state.currentNode?.id !== prevState.currentNode?.id
   ) {
+    const currentNodeId = state.currentNode?.id ?? null;
     if (!state.currentProvider) {
-      updateTrayMenu([], state.isConnected).catch(console.error);
+      updateTrayMenu([], state.isConnected, currentNodeId).catch(console.error);
       return;
     }
     const currentNodes = state.nodes.filter(
       (n) => n.providerId === state.currentProvider!.id && n.enabled,
     );
-    updateTrayMenu(currentNodes, state.isConnected).catch(console.error);
+    updateTrayMenu(currentNodes, state.isConnected, currentNodeId).catch(console.error);
   }
 });
 

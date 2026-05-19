@@ -85,8 +85,9 @@ export async function getProviders(): Promise<Provider[]> {
 export async function updateTrayMenu(
   nodes: Node[],
   isConnected: boolean,
+  currentNodeId: string | null,
 ): Promise<void> {
-  return await invoke<void>("update_tray_menu", { nodes, isConnected });
+  return await invoke<void>("update_tray_menu", { nodes, isConnected, currentNodeId });
 }
 
 export async function getNodes(): Promise<Node[]> {

@@ -198,18 +198,14 @@ pub fn run() {
             app.manage(ProxyState::default());
             tracing::info!("应用状态初始化完成");
 
-            // 托盘菜单
+            // 托盘菜单（固定 3 项：显示主界面、状态、退出应用）
             let show_i =
                 tauri::menu::MenuItem::with_id(app, "show", "显示主界面", true, None::<&str>)?;
-            let switch_i = tauri::menu::Submenu::with_items(
-                app,
-                "切换节点",
-                true,
-                &[] as &[&dyn tauri::menu::IsMenuItem<_>],
-            )?;
+            let not_connected =
+                tauri::menu::MenuItem::with_id(app, "not_connected", "未连接", false, None::<&str>)?;
             let quit_i =
                 tauri::menu::MenuItem::with_id(app, "quit", "退出应用", true, None::<&str>)?;
-            let menu = tauri::menu::Menu::with_items(app, &[&show_i, &switch_i, &quit_i])?;
+            let menu = tauri::menu::Menu::with_items(app, &[&show_i, &not_connected, &quit_i])?;
 
             tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -277,9 +273,6 @@ pub fn run() {
                 if let Some(rt) = app_handle.try_state::<runtime::RuntimeManager>() {
                     let _ = tauri::async_runtime::block_on(rt.stop_sidecar());
                 }
-            }
-            tauri::RunEvent::Reopen { .. } => {
-                show_main_window(app_handle);
             }
             _ => {}
         });
