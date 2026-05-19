@@ -2,23 +2,7 @@ import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { useProxyStore, useAppStore } from "@/stores/appStore";
-
-interface NetworkInfo {
-  ip: string;
-  city: string;
-  region: string;
-  country: string;
-  asn: string;
-  org: string;
-}
-
-function parseOrg(org: string): { asn: string; org: string } {
-  const match = org.match(/^(AS\d+)\s+(.+)$/);
-  if (match) {
-    return { asn: match[1], org: match[2] };
-  }
-  return { asn: "", org };
-}
+import { getNetworkInfo, type NetworkInfo } from "@/lib/api";
 
 const INFO_ROWS: { key: keyof NetworkInfo; label: string }[] = [
   { key: "ip", label: "IP" },
@@ -42,7 +26,6 @@ export function NetworkBlock({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const fetchId = useRef(0);
-  const prevConnected = useRef(isConnected);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,23 +35,12 @@ export function NetworkBlock({
       setLoading(true);
       setError(false);
       try {
-        const resp = await fetch(`https://ipinfo.io/json?t=${Date.now()}`, {
-          cache: "no-store",
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await getNetworkInfo();
         if (cancelled || fetchId.current !== id) return;
-        const { asn, org } = parseOrg(data.org || "");
-        setInfo({
-          ip: data.ip || "",
-          city: data.city || "",
-          region: data.region || "",
-          country: data.country || "",
-          asn,
-          org,
-        });
+        setInfo(data);
       } catch {
-        if (!cancelled && fetchId.current === id) setError(true);
+        if (!cancelled && fetchId.current !== id) return;
+        setError(true);
       } finally {
         if (!cancelled && fetchId.current === id) setLoading(false);
       }
@@ -78,8 +50,6 @@ export function NetworkBlock({
     const delay = isConnected ? 1500 : 0;
 
     const timer = setTimeout(fetchIpInfo, delay);
-
-    prevConnected.current = isConnected;
 
     return () => {
       cancelled = true;

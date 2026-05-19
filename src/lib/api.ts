@@ -197,3 +197,18 @@ export async function saveLatencyCache(
 ): Promise<void> {
   return await invoke<void>("save_latency_cache", { cache });
 }
+
+// --- Network info ---
+
+export interface NetworkInfo {
+  ip: string;
+  city: string;
+  region: string;
+  country: string;
+  asn: string;
+  org: string;
+}
+
+export async function getNetworkInfo(): Promise<NetworkInfo> {
+  return await invoke<NetworkInfo>("get_network_info");
+}
