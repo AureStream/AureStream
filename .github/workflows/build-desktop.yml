@@ -112,7 +112,6 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_DIR="src-tauri/target/${{ matrix.rust_target }}/release"
-          BUNDLE_DIR="src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis"
           PORTABLE_DIR=$(mktemp -d)
 
           cp "$RELEASE_DIR/AureStream.exe" "$PORTABLE_DIR/"
@@ -124,9 +123,11 @@ jobs:
 
           VERSION=$(grep '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"([^"]+)".*/\1/')
           ZIP_NAME="AureStream_${VERSION}_windows_x64_portable.zip"
+          ZIP_PATH="$RELEASE_DIR/bundle/$ZIP_NAME"
           cd "$PORTABLE_DIR"
-          7z a "$BUNDLE_DIR/$ZIP_NAME" *
-          echo "便携版: $BUNDLE_DIR/$ZIP_NAME"
+          7z a "$ZIP_PATH" *
+          ls -lh "$ZIP_PATH"
+          echo "便携版: $ZIP_PATH"
 
       - name: Collect release assets
         shell: bash
@@ -136,16 +137,19 @@ jobs:
           mkdir -p release-files
           find "$BUNDLE_DIR" -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
+            -name '*.nsis.zip' -o \
             -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
           \) -exec cp {} release-files/ \;
           echo "=== release-files ==="
           ls -lh release-files/
+          echo "=== file count ==="
+          find release-files -type f | wc -l
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: AureStream-${{ matrix.name }}
-          path: release-files/*
+          path: release-files/
           if-no-files-found: error
 
       - name: Upload to GitHub Release
@@ -154,7 +158,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            release-files/* \
-            --repo "${{ github.repository }}" \
-            --clobber
+          echo "=== uploading files ==="
+          ls -lh release-files/
+          for f in release-files/*; do
+            echo "Uploading: $f"
+            gh release upload "${{ github.event.release.tag_name }}" \
+              "$f" \
+              --repo "${{ github.repository }}" \
+              --clobber
+          done
