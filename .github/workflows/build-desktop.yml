@@ -37,6 +37,8 @@ jobs:
             rust_target: x86_64-apple-darwin
 
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -122,48 +124,28 @@ jobs:
           7z a "$BUNDLE_DIR/$ZIP_NAME" *
           echo "便携版: $BUNDLE_DIR/$ZIP_NAME"
 
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="src-tauri/target/${{ matrix.rust_target }}/release/bundle"
+          mkdir -p release-files
+          find "$BUNDLE_DIR" -type f \( \
+            -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
+            -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
+          \) -exec cp {} release-files/ \;
+          echo "=== release-files ==="
+          ls -lh release-files/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: AureStream-${{ matrix.name }}
-          path: |
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.deb
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.rpm
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.AppImage
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*portable*.zip
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
+          path: release-files/*
           if-no-files-found: error
 
-  upload-release:
-    name: Upload assets to GitHub Release
-    needs: build
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-          pattern: AureStream-*
-          merge-multiple: false
-
-      - name: Collect release assets
-        shell: bash
-        run: |
-          mkdir -p release-files
-          find artifacts -type f \( \
-            -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
-            -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
-          \) -print0 | while IFS= read -r -d '' f; do
-            cp "$f" "release-files/"
-          done
-          echo "=== release-files ==="
-          ls -lh release-files/
-
       - name: Upload to GitHub Release
+        if: github.event_name == 'release'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
