@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export interface PageShellProps {
   children: React.ReactNode;
@@ -18,12 +19,14 @@ export function PageShell({
   fillHeight,
   title,
 }: PageShellProps) {
-  const showHeader = Boolean(title);
+  const isMobile = useIsMobile();
+  const showHeader = Boolean(title) && !isMobile;
 
   return (
     <div
       className={cn(
         "mx-auto w-full max-w-4xl flex flex-col h-full min-h-0",
+        isMobile && "h-auto min-h-full",
         className,
       )}
     >
@@ -40,7 +43,9 @@ export function PageShell({
       )}
       <div
         className={cn(
-          "flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-2 [scrollbar-gutter:stable] [padding-bottom:max(2rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:[padding-bottom:max(3rem,env(safe-area-inset-bottom,0px)+0.75rem)]",
+          isMobile 
+            ? "flex-1 w-full"
+            : "flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-2 [scrollbar-gutter:stable] [padding-bottom:max(2rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:[padding-bottom:max(3rem,env(safe-area-inset-bottom,0px)+0.75rem)]",
           fillHeight && "flex w-full flex-col",
           contentClassName,
         )}
@@ -50,3 +55,4 @@ export function PageShell({
     </div>
   );
 }
+

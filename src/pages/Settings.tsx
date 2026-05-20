@@ -5,13 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageShell } from "@/components/layout/PageShell";
 import { useAppStore } from "@/stores/appStore";
-import { cn } from "@/lib/utils";
 import { getVersion, type MihomoVersion } from "tauri-plugin-mihomo-api";
 
 export function Settings() {
   const {
     theme,
-    setTheme,
+    toggleTheme,
     proxyBypassDomains,
     setProxyBypassDomains,
     autoStart,
@@ -41,17 +40,17 @@ export function Settings() {
     description: string;
     children: ReactNode;
   }) => (
-    <div className="glass rounded-2xl p-5 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
+    <div className="liquid-glass-card p-4 sm:p-5 flex flex-row items-center justify-between gap-3 sm:gap-4">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
           <Icon className="w-4 h-4 text-primary" />
         </div>
-        <div>
-          <div className="font-medium text-sm">{title}</div>
-          <div className="text-xs text-muted-foreground">{description}</div>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-sm truncate">{title}</div>
+          <div className="text-xs text-muted-foreground truncate">{description}</div>
         </div>
       </div>
-      {children}
+      <div className="flex justify-end shrink-0">{children}</div>
     </div>
   );
 
@@ -64,34 +63,31 @@ export function Settings() {
             title="外观主题"
             description="选择跟随系统、浅色或深色模式"
           >
-            <div className="flex rounded-xl bg-black/5 dark:bg-white/10 p-1 gap-1">
-              {[
-                { id: "system", label: "跟随系统", icon: Monitor },
-                { id: "light", label: "浅色", icon: Sun },
-                { id: "dark", label: "深色", icon: Moon },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() =>
-                    theme !== t.id &&
-                    setTheme(t.id as "system" | "light" | "dark")
-                  }
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border outline-none",
-                    theme === t.id
-                      ? "bg-white text-primary shadow-sm border-black/5 dark:bg-primary dark:text-primary-foreground dark:border-primary/20"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
-                  )}
-                >
-                  <t.icon className="w-3.5 h-3.5" />
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 border border-border/40 hover:scale-[1.03] active:scale-95 transition-all select-none duration-200"
+            >
+              {theme === "system" ? (
+                <>
+                  <Monitor className="w-4 h-4 text-primary" />
+                  <span>跟随系统</span>
+                </>
+              ) : theme === "light" ? (
+                <>
+                  <Sun className="w-4 h-4 text-amber-500 animate-spin" style={{ animationDuration: "12s" }} />
+                  <span>浅色模式</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-indigo-400" />
+                  <span>深色模式</span>
+                </>
+              )}
+            </button>
           </SettingRow>
 
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="liquid-glass-card p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Globe className="w-5 h-5 text-primary" />
@@ -126,7 +122,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="liquid-glass-card p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Zap className="w-5 h-5 text-primary" />
@@ -178,7 +174,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="liquid-glass-card p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Info className="w-5 h-5 text-primary" />

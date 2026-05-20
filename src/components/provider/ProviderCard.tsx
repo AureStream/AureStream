@@ -76,9 +76,9 @@ export function ProviderCard({
     <div
       onClick={() => onSetActive(provider)}
       className={cn(
-        "glass rounded-2xl overflow-hidden transition-all duration-300 h-full relative cursor-pointer",
+        "liquid-glass-card overflow-hidden transition-all duration-300 h-full relative cursor-pointer",
         isActive
-          ? "ring-1 ring-primary/30 shadow-[0_0_24px_rgba(59,130,246,0.1)]"
+          ? "ring-1 ring-primary/30 shadow-[0_0_24px_rgba(59,130,246,0.15)]"
           : "hover:shadow-[var(--shadow-glass-hover)]",
       )}
     >
