@@ -164,9 +164,11 @@ jobs:
           ls -lh release-files/
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release-files/**
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            release-files/* \
+            --repo "${{ github.repository }}" \
+            --clobber
