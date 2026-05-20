@@ -1,7 +1,7 @@
 {
   "name": "aurestream",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "_说明": "_ 开头的顶层字段不参与运行逻辑，仅占位说明；pnpm / npm / yarn 会静默忽略不识别的键（若你的工具报错，可删去 _ 前缀字段或改为 readme）。",
   "_scripts_zh": {
