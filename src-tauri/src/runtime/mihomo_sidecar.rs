@@ -37,9 +37,12 @@ impl Drop for MihomoSidecar {
             if let Some(MihomoChild { child }) = guard.take() {
                 #[cfg(target_os = "windows")]
                 {
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
                     let pid = child.pid();
                     let _ = std::process::Command::new("taskkill")
                         .args(["/F", "/PID", &pid.to_string()])
+                        .creation_flags(CREATE_NO_WINDOW)
                         .output();
                 }
                 let _ = child.kill();
@@ -121,9 +124,12 @@ impl MihomoSidecar {
                 // Windows 上先通过 PID 强制终止，再用 child.kill() 兜底
                 #[cfg(target_os = "windows")]
                 {
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
                     let pid = child.pid();
                     let _ = std::process::Command::new("taskkill")
                         .args(["/F", "/PID", &pid.to_string()])
+                        .creation_flags(CREATE_NO_WINDOW)
                         .output();
                 }
                 let _ = child.kill();
@@ -244,9 +250,12 @@ impl MihomoSidecar {
             if let Some(MihomoChild { child }) = guard.take() {
                 #[cfg(target_os = "windows")]
                 {
+                    use std::os::windows::process::CommandExt;
+                    const CREATE_NO_WINDOW: u32 = 0x08000000;
                     let pid = child.pid();
                     let _ = std::process::Command::new("taskkill")
                         .args(["/F", "/PID", &pid.to_string()])
+                        .creation_flags(CREATE_NO_WINDOW)
                         .output();
                 }
                 child
