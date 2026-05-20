@@ -457,16 +457,16 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       providers: get().providers.map((p) => (p.id === id ? merged : p)),
     });
     // 更新自动更新定时器
-    if (updates.autoUpdateInterval !== undefined) {
+    if (updates.autoUpdateInterval !== undefined && updates.autoUpdateInterval !== null) {
       if (updates.autoUpdateInterval) {
         setupAutoUpdateTimer(
           id,
           updates.autoUpdateInterval,
           get().fetchAndSaveSubscription,
         );
-      } else {
-        clearAutoUpdateTimer(id);
       }
+    } else if (updates.autoUpdateInterval === null || ("autoUpdateInterval" in updates && updates.autoUpdateInterval === undefined)) {
+      clearAutoUpdateTimer(id);
     }
     // 同步 currentProvider
     if (get().currentProvider?.id === id) {

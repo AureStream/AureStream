@@ -5,12 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageShell } from "@/components/layout/PageShell";
 import { useAppStore } from "@/stores/appStore";
+import { cn } from "@/lib/utils";
 import { getVersion, type MihomoVersion } from "tauri-plugin-mihomo-api";
 
 export function Settings() {
   const {
     theme,
-    toggleTheme,
+    setTheme,
     proxyBypassDomains,
     setProxyBypassDomains,
     autoStart,
@@ -63,28 +64,41 @@ export function Settings() {
             title="外观主题"
             description="选择跟随系统、浅色或深色模式"
           >
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 border border-border/40 hover:scale-[1.03] active:scale-95 transition-all select-none duration-200"
-            >
-              {theme === "system" ? (
-                <>
-                  <Monitor className="w-4 h-4 text-primary" />
-                  <span>跟随系统</span>
-                </>
-              ) : theme === "light" ? (
-                <>
-                  <Sun className="w-4 h-4 text-amber-500 animate-spin" style={{ animationDuration: "12s" }} />
-                  <span>浅色模式</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4 text-indigo-400" />
-                  <span>深色模式</span>
-                </>
-              )}
-            </button>
+            {/* Three-segment theme picker */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08]">
+              {([
+                { value: "system", icon: Monitor, label: "系统", activeColor: "text-primary" },
+                { value: "light",  icon: Sun,     label: "亮色", activeColor: "text-amber-500" },
+                { value: "dark",   icon: Moon,    label: "暗色", activeColor: "text-indigo-400" },
+              ] as const).map(({ value, icon: Icon, label, activeColor }) => {
+                const active = theme === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={active}
+                    className={cn(
+                      "relative flex items-center justify-center w-9 h-8 rounded-lg transition-all duration-200 select-none",
+                      active
+                        ? "bg-white dark:bg-white/10 shadow-sm"
+                        : "hover:bg-black/[0.05] dark:hover:bg-white/[0.06]",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "w-4 h-4 transition-colors duration-200",
+                        active ? activeColor : "text-muted-foreground",
+                        value === "light" && active && "animate-spin",
+                      )}
+                      style={value === "light" && active ? { animationDuration: "12s" } : undefined}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </SettingRow>
 
           <div className="liquid-glass-card p-4 space-y-3">

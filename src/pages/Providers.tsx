@@ -187,7 +187,7 @@ export function Providers() {
             if (!open) setDeleteTargetId(null);
           }}
         >
-          <AlertDialogContent className="sm:max-w-[440px] liquid-glass-card !rounded-2xl">
+          <AlertDialogContent className="sm:max-w-[440px]">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-lg">
                 删除服务商

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { Button, type ButtonProps } from "@/components/ui/button";
+import { type ButtonProps } from "@/components/ui/button";
 
 interface AlertDialogProps {
   open?: boolean;
@@ -54,7 +54,7 @@ const AlertDialogContent = React.forwardRef<
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         className={cn(
-          "relative w-full max-w-lg liquid-glass-card rounded-2xl p-6 shadow-2xl [&:active]:transform-none",
+          "relative w-full max-w-lg bg-[#fafbfc]/95 dark:bg-[#13131c]/95 backdrop-blur-2xl border border-black/10 dark:border-white/10 rounded-2xl p-6 shadow-2xl transition-all duration-300 [&:active]:transform-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -131,13 +131,15 @@ const AlertDialogDescription = React.forwardRef<
 AlertDialogDescription.displayName = "AlertDialogDescription";
 
 const AlertDialogCancel = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "ghost", size = "default", ...props }, ref) => (
-    <Button
+  ({ className, ...props }, ref) => (
+    <button
       ref={ref}
       type="button"
-      variant={variant}
-      size={size}
-      className={cn("bg-black/5 dark:bg-white/5 text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10", className)}
+      className={cn(
+        "flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] border text-center justify-center inline-flex items-center",
+        "bg-black/[0.04] dark:bg-white/[0.04] text-muted-foreground hover:text-foreground hover:bg-black/[0.08] dark:hover:bg-white/[0.08] border-black/5 dark:border-white/5",
+        className
+      )}
       {...props}
     />
   ),
@@ -145,15 +147,14 @@ const AlertDialogCancel = React.forwardRef<HTMLButtonElement, ButtonProps>(
 AlertDialogCancel.displayName = "AlertDialogCancel";
 
 const AlertDialogAction = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "destructive", size = "default", ...props }, ref) => (
-    <Button
+  ({ className, ...props }, ref) => (
+    <button
       ref={ref}
       type="button"
-      variant={variant}
-      size={size}
       className={cn(
-        "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 hover:scale-[1.02] active:scale-95 transition-all duration-200",
-        className,
+        "flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 active:scale-[0.98] text-center justify-center inline-flex items-center",
+        "bg-gradient-to-r from-red-500 to-rose-600 shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/35 hover:scale-[1.02]",
+        className
       )}
       {...props}
     />
