@@ -78,12 +78,11 @@ export function ConnectButton({
       {/* 呼吸光晕 — 同一元素，仅切换动画类名 */}
       <div
         className={cn(
-          "absolute rounded-full transition-all duration-1000 ease-in-out",
+          "absolute rounded-full transition-all duration-1000 ease-in-out blur-3xl",
           dims.glow,
-          "bg-primary/25 dark:bg-primary/20 blur-2xl",
           isConnected && !isDisconnecting
-            ? "animate-breathing-active"
-            : "animate-breathing-idle",
+            ? "bg-gradient-to-r from-cyan-500/40 via-blue-500/40 to-indigo-500/40 animate-breathing-active"
+            : "bg-slate-400/20 dark:bg-slate-800/30 animate-breathing-idle",
         )}
         style={{
           left: "50%",
@@ -107,10 +106,10 @@ export function ConnectButton({
           "relative z-10 flex flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
           "cursor-pointer",
           dims.outer,
-          "glass-strong group",
+          "backdrop-blur-2xl border group",
           isConnected && !isDisconnecting
-            ? "border-primary/30 shadow-[0_0_48px_rgba(59,130,246,0.35),0_0_96px_rgba(59,130,246,0.12)]"
-            : "border-border/60 shadow-[0_4px_24px_rgba(0,0,0,0.06)]",
+            ? "border-cyan-500/30 bg-cyan-500/10 dark:bg-cyan-500/5 shadow-[0_0_50px_rgba(6,182,212,0.35),0_0_100px_rgba(59,130,246,0.15)]"
+            : "border-slate-200/60 dark:border-neutral-800/60 bg-white/60 dark:bg-neutral-900/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] hover:border-primary/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]",
           !isConnected && !isConnecting && "opacity-90 hover:opacity-100",
           busy && "border-primary/20",
         )}
@@ -151,10 +150,10 @@ export function ConnectButton({
             "relative z-10 flex shrink-0 flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
             dims.inner,
             isConnected && !isDisconnecting
-              ? "bg-gradient-to-br from-primary to-blue-500 shadow-lg"
+              ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)]"
               : busy
-                ? "bg-gradient-to-br from-primary/60 to-blue-500/60"
-                : "bg-gradient-to-br from-gray-300 to-gray-200 dark:from-gray-700 dark:to-gray-600 shadow-md",
+                ? "bg-gradient-to-tr from-indigo-600/70 via-blue-500/70 to-cyan-400/70"
+                : "bg-gradient-to-tr from-slate-200/90 to-slate-50 dark:from-neutral-900 dark:to-neutral-850/90 shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/30 dark:border-neutral-800/30",
           )}
         >
           <Power
@@ -162,10 +161,10 @@ export function ConnectButton({
               "relative z-10 shrink-0 transition-all duration-700 ease-in-out",
               dims.icon,
               isConnected && !isDisconnecting
-                ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]"
+                ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] scale-105"
                 : busy
                   ? "text-white/90"
-                  : "text-gray-500 dark:text-gray-400",
+                  : "text-slate-400 dark:text-slate-500 group-hover:text-primary dark:group-hover:text-primary-foreground group-hover:scale-105",
             )}
             strokeWidth={2}
           />
@@ -174,8 +173,8 @@ export function ConnectButton({
               "max-w-[95%] text-center transition-all duration-700 ease-in-out",
               dims.captionInner,
               busy && "text-white/85",
-              !busy && isConnected && "text-white/95",
-              !busy && !isConnected && "text-gray-600 dark:text-gray-300",
+              !busy && isConnected && "text-white/95 font-bold tracking-wide",
+              !busy && !isConnected && "text-slate-500 dark:text-slate-400 group-hover:text-primary dark:group-hover:text-primary-foreground font-semibold",
             )}
           >
             {isDisconnecting
