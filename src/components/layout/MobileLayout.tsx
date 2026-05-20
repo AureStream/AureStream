@@ -91,12 +91,12 @@ export function MobileLayout({ children, currentPage, onNavigate }: MobileLayout
         style={{ bottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
       >
         <nav className="relative flex w-full max-w-[360px] h-[64px] items-center justify-between p-1.5 liquid-glass-dock pointer-events-auto">
-          {/* Liquid Sliding Pill Background */}
+          {/* Sliding Pill */}
           <div
-            className="absolute top-1.5 bottom-1.5 left-1.5 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/25 dark:border-primary/20 liquid-pill-active shadow-[0_0_12px_rgba(59,130,246,0.15)]"
+            className="absolute top-1.5 bottom-1.5 rounded-full bg-primary/10 dark:bg-primary/20 border border-primary/25 dark:border-primary/20 liquid-pill-active shadow-[0_0_12px_rgba(59,130,246,0.15)]"
             style={{
-              width: "calc(33.333% - 8px)",
-              transform: `translate3d(${activeIndex * 100}%, 0, 0)`,
+              width: "calc((100% - 20px) / 3)",
+              left: `calc(6px + ${activeIndex} * (100% - 8px) / 3)`,
             }}
           />
 
@@ -118,7 +118,7 @@ export function MobileLayout({ children, currentPage, onNavigate }: MobileLayout
                 <Icon
                   className={cn(
                     "w-[20px] h-[20px] transition-transform duration-300",
-                    isActive && "scale-110 translate-y-[-2px]"
+                    isActive && "scale-110"
                   )}
                   strokeWidth={2}
                 />

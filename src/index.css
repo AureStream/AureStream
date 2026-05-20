@@ -494,7 +494,7 @@ body::before {
 
 /* Liquid Pill Glide Animation for Bottom Dock */
 .liquid-pill-active {
-  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* Mobile-friendly bottom drawer style override */

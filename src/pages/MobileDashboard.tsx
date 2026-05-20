@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useLayoutEffect } from "react";
 import {
   Power,
-  Zap,
   ChevronRight,
   Loader2,
   RefreshCw,
@@ -10,7 +9,7 @@ import {
   ArrowDownAZ,
   Package,
 } from "lucide-react";
-import { useProxyStore, useAppStore } from "@/stores/appStore";
+import { useProxyStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
 import { getLatencyColor } from "@/types";
 import { toast } from "sonner";
@@ -80,6 +79,7 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
+  const [smartRoute, setSmartRoute] = useState(true);
   const wasTestingRef = useRef(false);
 
   // 1. Timer for duration
@@ -189,11 +189,12 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full max-w-md mx-auto py-4 h-full">
+    <div className="relative w-full max-w-md mx-auto h-full overflow-hidden">
 
-      {/* 0. Subscription Details Panel at the Top */}
+      {/* Subscription card — top flow */}
+      <div className="relative z-10 px-4 pt-4">
       {currentProvider ? (
-        <div className="liquid-glass-card px-4 py-3.5 flex flex-col gap-3 shrink-0">
+        <div className="liquid-glass-card px-4 py-3.5 flex flex-col gap-3">
           {/* Header row */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -241,7 +242,7 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
           </div>
         </div>
       ) : (
-        <div className="liquid-glass-card px-4 py-3.5 text-center shrink-0">
+        <div className="liquid-glass-card px-4 py-3.5 text-center">
           <p className="text-xs text-muted-foreground font-medium">未激活任何服务商订阅</p>
           <button
             type="button"
@@ -252,35 +253,38 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
           </button>
         </div>
       )}
+      </div>
 
-      {/* 2. Circular Liquid Glass Connection Dial — flex-1 fills remaining space */}
-      <div className="relative flex-1 flex flex-col justify-center items-center gap-3">
-        {/* Colorful Breathing Backlight Glow — centered via left-1/2 top-1/2 + keyframe translate(-50%,-50%) */}
+      {/* Connect button — absolutely centered in viewport */}
+      <div className="absolute inset-0 z-20 pointer-events-none">
+        {/* Breathing Backlight Glow — centered */}
         <div className={cn(
-          "absolute left-1/2 top-1/2 rounded-full transition-all duration-1000 ease-in-out blur-3xl pointer-events-none",
+          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-1000 ease-in-out blur-3xl pointer-events-none",
           isConnected && !isDisconnecting
             ? "w-[320px] h-[320px] bg-primary/25 dark:bg-primary/20 animate-breathing-active"
             : "w-[280px] h-[280px] bg-primary/10 dark:bg-primary/5 animate-breathing-idle"
         )} />
 
-        {/* Timer above button */}
-        {isConnected && !isDisconnecting ? (
-          <span className="text-3xl font-extrabold tracking-tight tabular-nums text-foreground z-10 select-none">
-            {formatDuration(elapsedSec)}
-          </span>
-        ) : (
-          <span className="text-3xl font-extrabold tracking-tight tabular-nums text-muted-foreground/20 z-10 select-none">
-            00:00:00
-          </span>
-        )}
+        {/* Timer — absolute, between subscription card and button */}
+        <div className="absolute left-0 right-0 top-[25%] flex justify-center">
+          {isConnected && !isDisconnecting ? (
+            <span className="text-3xl font-extrabold tracking-tight tabular-nums text-foreground z-10 select-none">
+              {formatDuration(elapsedSec)}
+            </span>
+          ) : (
+            <span className="text-3xl font-extrabold tracking-tight tabular-nums text-muted-foreground/20 z-10 select-none">
+              00:00:00
+            </span>
+          )}
+        </div>
 
-        {/* Main Orb Button — responsive: 230px cap, scales with viewport */}
+        {/* Main Orb Button — truly centered via translate */}
         <button
           type="button"
           onClick={handleConnectionToggle}
           disabled={!isConnected && (busy || !canConnect)}
           className={cn(
-            "relative w-[min(230px,58vw)] h-[min(230px,58vw)] !rounded-full flex flex-col items-center justify-center transition-all duration-700 ease-in-out cursor-pointer z-10",
+            "pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(230px,58vw)] h-[min(230px,58vw)] !rounded-full flex flex-col items-center justify-center transition-all duration-700 ease-in-out cursor-pointer z-10",
             "liquid-glass-card shadow-lg ring-1 ring-white/20 select-none outline-none focus:outline-none focus-visible:outline-none",
             isConnected && !isDisconnecting
               ? "border-primary/45 shadow-[0_0_48px_rgba(59,130,246,0.38)]"
@@ -325,7 +329,7 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
               isConnected && !isDisconnecting ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" : ""
             )} strokeWidth={2} />
             <span className="text-[13px] font-bold uppercase tracking-widest">
-              {isDisconnecting ? "关闭中" : isConnecting ? "连接中" : isConnected ? "已开启" : "未连接"}
+            {isDisconnecting ? "断开中" : isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}
             </span>
           </div>
 
@@ -337,11 +341,36 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
             </>
           )}
         </button>
+
+        {/* Smart Route Toggle — below button, only when not connected */}
+        {!isConnected && (
+        <div className="absolute left-0 right-0 top-[73%] flex justify-center pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setSmartRoute((v) => !v)}
+            className={cn(
+              "flex flex-col items-center gap-1.5 px-4 py-2.5 rounded-2xl select-none text-muted-foreground"
+            )}
+          >
+            <span className="text-[11px] font-semibold whitespace-nowrap">智能分流</span>
+            <div className={cn(
+              "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+              smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15"
+            )}>
+              <div className={cn(
+                "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                smartRoute && "translate-x-[18px]"
+              )} />
+            </div>
+          </button>
+        </div>
+        )}
       </div>
 
-      {/* 5. Node Picker — only when connected */}
+      {/* Node Picker — bottom flow */}
       {isConnected && (
-        <div className="liquid-glass-card px-2 py-2 shrink-0">
+        <div className="absolute bottom-0 left-0 right-0 z-10 px-4" style={{ paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))" }}>
+        <div className="liquid-glass-card px-2 py-2 max-w-[280px] mx-auto">
           <button
             type="button"
             onClick={() => setIsDrawerOpen(true)}
@@ -367,6 +396,7 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
               <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </div>
           </button>
+        </div>
         </div>
       )}
 

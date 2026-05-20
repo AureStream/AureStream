@@ -187,7 +187,7 @@ export function Providers() {
             if (!open) setDeleteTargetId(null);
           }}
         >
-          <AlertDialogContent className="sm:max-w-[440px] glass-strong !border-white/20 !rounded-2xl">
+          <AlertDialogContent className="sm:max-w-[440px] liquid-glass-card !rounded-2xl">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-lg">
                 删除服务商
@@ -199,10 +199,10 @@ export function Providers() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeleteTargetId(null)}>
+              <AlertDialogCancel onClick={() => setDeleteTargetId(null)} className="flex-1">
                 取消
               </AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmDelete}>
+              <AlertDialogAction onClick={handleConfirmDelete} className="flex-1">
                 删除
               </AlertDialogAction>
             </AlertDialogFooter>

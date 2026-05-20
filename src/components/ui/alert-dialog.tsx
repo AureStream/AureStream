@@ -16,15 +16,15 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-all duration-300"
-          onClick={() => onOpenChange?.(false)}
-          aria-hidden="true"
-        />
-      )}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-          {children}
+        <div className="fixed inset-0 z-50 animate-fade-in-up">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => onOpenChange?.(false)}
+            aria-hidden="true"
+          />
+          <div className="relative flex items-center justify-center w-full h-full p-4">
+            {children}
+          </div>
         </div>
       )}
     </>
@@ -54,7 +54,7 @@ const AlertDialogContent = React.forwardRef<
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         className={cn(
-          "relative w-full max-w-lg glass-strong !border-white/20 rounded-2xl p-6 shadow-2xl scale-in duration-200",
+          "relative w-full max-w-lg liquid-glass-card rounded-2xl p-6 shadow-2xl [&:active]:transform-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -87,7 +87,7 @@ const AlertDialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:gap-2 mt-4",
+      "flex flex-row justify-end gap-2 mt-4",
       className,
     )}
     {...props}
@@ -131,13 +131,13 @@ const AlertDialogDescription = React.forwardRef<
 AlertDialogDescription.displayName = "AlertDialogDescription";
 
 const AlertDialogCancel = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "outline", size = "default", ...props }, ref) => (
+  ({ className, variant = "ghost", size = "default", ...props }, ref) => (
     <Button
       ref={ref}
       type="button"
       variant={variant}
       size={size}
-      className={className}
+      className={cn("bg-black/5 dark:bg-white/5 text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10", className)}
       {...props}
     />
   ),
@@ -151,7 +151,10 @@ const AlertDialogAction = React.forwardRef<HTMLButtonElement, ButtonProps>(
       type="button"
       variant={variant}
       size={size}
-      className={className}
+      className={cn(
+        "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 hover:scale-[1.02] active:scale-95 transition-all duration-200",
+        className,
+      )}
       {...props}
     />
   ),

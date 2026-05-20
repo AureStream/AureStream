@@ -11,21 +11,21 @@ const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-all duration-300"
-          onClick={() => onOpenChange?.(false)}
-        />
-      )}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-          {React.Children.map(children, (child) => {
-            if (React.isValidElement(child)) {
-              return React.cloneElement(child as React.ReactElement<any>, {
-                onClose: () => onOpenChange?.(false),
-              });
-            }
-            return child;
-          })}
+        <div className="fixed inset-0 z-50 animate-fade-in-up">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
+            onClick={() => onOpenChange?.(false)}
+          />
+          <div className="relative flex items-center justify-center w-full h-full p-4">
+            {React.Children.map(children, (child) => {
+              if (React.isValidElement(child)) {
+                return React.cloneElement(child as React.ReactElement<any>, {
+                  onClose: () => onOpenChange?.(false),
+                });
+              }
+              return child;
+            })}
+          </div>
         </div>
       )}
     </>
@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       <div
         ref={ref}
         className={cn(
-          "relative w-full max-w-lg glass-strong !border-white/20 rounded-2xl p-6 shadow-2xl scale-in duration-200",
+          "relative w-full max-w-lg liquid-glass-card rounded-2xl p-6 shadow-2xl [&:active]:transform-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -51,7 +51,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
         {children}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-1 rounded-lg opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+          className="absolute right-3 top-3 p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-all"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -95,7 +95,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-4",
+      "flex flex-row justify-end gap-2 mt-6",
       className,
     )}
     {...props}
