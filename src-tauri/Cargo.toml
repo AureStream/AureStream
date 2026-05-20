@@ -1,6 +1,6 @@
 [package]
 name = "aurestream"
-version = "0.1.1"
+version = "0.1.2"
 description = "AureStream — Mihomo-based proxy desktop application"
 authors = ["you"]
 edition = "2021"
