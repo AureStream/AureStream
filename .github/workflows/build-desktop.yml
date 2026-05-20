@@ -64,6 +64,10 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: choco install nsis -y
 
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install create-dmg
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
