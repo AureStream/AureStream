@@ -59,7 +59,7 @@ export function SubscriptionBlock({
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex flex-1 flex-col gap-1.5 justify-between">
+            <div className="flex flex-1 flex-col gap-2.5">
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">总流量</span>
                 <span className="font-medium tabular-nums text-foreground">

@@ -95,7 +95,7 @@ export function NetworkBlock({
       }
     }
     return (
-      <span className="text-xs font-medium tabular-nums text-foreground">
+      <span className="min-w-0 truncate text-xs font-medium tabular-nums text-foreground" title={val || undefined}>
         {val || "-"}
       </span>
     );
@@ -119,7 +119,7 @@ export function NetworkBlock({
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 flex-col justify-between">
+      <div className="flex flex-1 min-h-0 flex-col gap-2.5">
         {INFO_ROWS.map(({ key, label }) => (
           <div key={key} className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground shrink-0">

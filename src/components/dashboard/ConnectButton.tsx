@@ -97,17 +97,15 @@ export function ConnectButton({
         type="button"
         onClick={handleClick}
         disabled={
-          (!isConnected && (disabledOuter || isConnecting)) ||
-          (isConnected && busy)
+          !isConnected && (disabledOuter || isConnecting)
         }
         aria-disabled={
-          (!isConnected && (disabledOuter || isConnecting)) ||
-          (isConnected && busy)
+          !isConnected && (disabledOuter || isConnecting)
         }
         title={disabledOuter && !isConnected ? "请先选择服务商" : undefined}
         className={cn(
           "relative z-10 flex flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
-          "enabled:cursor-pointer disabled:cursor-not-allowed",
+          "cursor-pointer",
           dims.outer,
           "glass-strong group",
           isConnected && !isDisconnecting
