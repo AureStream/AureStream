@@ -322,17 +322,17 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
               ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)] text-white"
               : busy
                 ? "bg-gradient-to-tr from-indigo-600/70 via-blue-500/70 to-cyan-400/70 text-white/90"
-                : "bg-gradient-to-tr from-slate-200/90 to-slate-50 dark:from-[#1c1c21] dark:to-[#0f0f12] shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_4px_12px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)] border border-slate-200/30 dark:border-white/[0.04] text-slate-500 dark:text-zinc-500 group-hover:text-primary dark:group-hover:text-primary-foreground"
+                : "bg-gradient-to-b from-white to-slate-50/95 dark:from-zinc-800/85 dark:to-zinc-900/95 shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_2px_3px_rgba(255,255,255,1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.1)] border border-slate-200/50 dark:border-zinc-700/35"
           )}>
             <Power className={cn(
               "w-11 h-11 transition-all duration-700",
               isConnected && !isDisconnecting 
                 ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] text-white" 
-                : "text-slate-400 dark:text-zinc-500 group-hover:text-primary dark:group-hover:text-primary-foreground group-hover:scale-110"
+                : "text-slate-400 dark:text-zinc-500 group-hover:text-primary dark:group-hover:text-cyan-400 group-hover:scale-110"
             )} strokeWidth={2} />
             <span className={cn(
               "text-[13px] font-bold tracking-widest transition-colors duration-700",
-              isConnected && !isDisconnecting ? "text-white/95" : "text-slate-500 dark:text-zinc-500 group-hover:text-primary dark:group-hover:text-primary-foreground"
+              isConnected && !isDisconnecting ? "text-white/95" : "text-slate-500 dark:text-zinc-400 group-hover:text-primary dark:group-hover:text-cyan-400"
             )}>
               {isDisconnecting ? "断开中" : isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}
             </span>
