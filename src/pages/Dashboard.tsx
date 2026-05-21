@@ -405,7 +405,8 @@ export function Dashboard({
                     </span>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setHelpTarget(helpTarget === "route" ? null : "route"); }}
+                      onMouseEnter={() => setHelpTarget("route")}
+                      onMouseLeave={() => setHelpTarget(null)}
                       className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -442,7 +443,8 @@ export function Dashboard({
                     </span>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setHelpTarget(helpTarget === "ad" ? null : "ad"); }}
+                      onMouseEnter={() => setHelpTarget("ad")}
+                      onMouseLeave={() => setHelpTarget(null)}
                       className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
