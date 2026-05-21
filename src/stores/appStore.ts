@@ -300,7 +300,6 @@ interface ProxyStore {
   /** 正在执行断开（关闭内核与系统代理），避免重复点击 */
   isDisconnecting: boolean;
   connectedAt?: number;
-  connectedIp?: string;
   uploadSpeed: number;
   downloadSpeed: number;
   /** 当前 Mihomo 会话累计上传量（字节，来自 getConnections.uploadTotal） */
@@ -399,7 +398,6 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
   isConnecting: false,
   isDisconnecting: false,
   connectedAt: undefined,
-  connectedIp: undefined,
   uploadSpeed: 0,
   downloadSpeed: 0,
   sessionUploadBytes: 0,
@@ -777,7 +775,6 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       set({
         isConnected: false,
         connectedAt: undefined,
-        connectedIp: undefined,
         uploadSpeed: 0,
         downloadSpeed: 0,
         sessionUploadBytes: 0,
@@ -795,7 +792,6 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     set((s) => ({
       isConnected,
       connectedAt: isConnected ? (s.connectedAt ?? Date.now()) : undefined,
-      connectedIp: isConnected ? s.connectedIp : undefined,
       ...(!isConnected
         ? {
             uploadSpeed: 0,

@@ -188,7 +188,7 @@ pub fn run() {
                 ])
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .max_file_size(5_000_000)
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .build(),
         )
         .plugin(tauri_plugin_autostart::Builder::new().build())

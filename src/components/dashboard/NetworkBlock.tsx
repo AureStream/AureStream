@@ -7,7 +7,6 @@ import { getNetworkInfo, type NetworkInfo } from "@/lib/api";
 export function NetworkBlock({
   className,
 }: {
-  connectedIp?: string;
   className?: string;
 }) {
   const isConnected = useProxyStore((s) => s.isConnected);
@@ -17,35 +16,32 @@ export function NetworkBlock({
   const [loading, setLoading] = useState(true);
   const fetchId = useRef(0);
 
-  const doFetch = useCallback(async (id: number) => {
+  const doFetch = useCallback(async (id: number, attempt = 0) => {
+    if (fetchId.current !== id) return;
     setLoading(true);
     try {
       const data = await getNetworkInfo();
       if (fetchId.current !== id) return;
       setInfo(data);
+      setLoading(false);
     } catch {
-      // 失败后重试一次（代理路由可能尚未生效）
-      setTimeout(async () => {
-        try {
-          const data = await getNetworkInfo();
-          if (fetchId.current !== id) return;
-          setInfo(data);
-        } catch {
-          // 静默失败
-        } finally {
-          if (fetchId.current === id) setLoading(false);
-        }
-      }, 2000);
-      return;
-    } finally {
-      if (fetchId.current === id) setLoading(false);
+      if (fetchId.current !== id) return;
+      // 节点切换后代理路由可能尚未生效，重试最多 3 次，间隔递增
+      if (attempt < 3) {
+        const delay = 2000 + attempt * 1500;
+        setTimeout(() => doFetch(id, attempt + 1), delay);
+      } else {
+        setLoading(false);
+      }
     }
   }, []);
 
   // 自动刷新：连接/断开、切换节点、切换代理模式
   useEffect(() => {
     const id = ++fetchId.current;
-    const delay = isConnected ? 1500 : 0;
+    // 节点切换时清空旧数据并等待代理路由生效
+    setInfo(null);
+    const delay = isConnected ? 2000 : 0;
     const timer = setTimeout(() => doFetch(id), delay);
     return () => clearTimeout(timer);
   }, [isConnected, nodeId, proxyMode, doFetch]);
