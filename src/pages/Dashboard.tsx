@@ -1,8 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from "react";
-import { LeftOperationPanel } from "@/components/dashboard/LeftOperationPanel";
+import { HomeDashboardPanel } from "@/components/dashboard/HomeDashboardPanel";
 import { NetworkBlock } from "@/components/dashboard/NetworkBlock";
-import { NodePickerDialog } from "@/components/dashboard/NodePickerDialog";
-import { SubscriptionBlock } from "@/components/dashboard/SubscriptionBlock";
 import { UsageBlock } from "@/components/dashboard/UsageBlock";
 import { PageShell } from "@/components/layout/PageShell";
 import { cn } from "@/lib/utils";
@@ -20,10 +18,7 @@ export function Dashboard({
   onOpenProviders?: () => void;
 }) {
   const {
-    currentProvider,
-    currentNode,
     isConnected,
-    connectedAt,
     connectedIp,
     uploadSpeed,
     downloadSpeed,
@@ -31,15 +26,8 @@ export function Dashboard({
     sessionDownloadBytes,
   } = useProxyStore();
 
-  const [nodeDialogOpen, setNodeDialogOpen] = useState(false);
-  const [nowTick, setNowTick] = useState(() => Date.now());
   const [uploadSeries, setUploadSeries] = useState(emptySeries);
   const [downloadSeries, setDownloadSeries] = useState(emptySeries);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNowTick(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   useLayoutEffect(() => {
     setUploadSeries(emptySeries());
@@ -62,9 +50,6 @@ export function Dashboard({
     }, 2200);
     return () => clearInterval(id);
   }, [isConnected]);
-
-  /** 内核由订阅 YAML 驱动；nodes 表可能未写入，不因「零节点」禁止连接 */
-  const canConnect = Boolean(currentProvider);
 
   const sessionUploadGb = isConnected
     ? sessionUploadBytes / 1024 ** 3
@@ -91,27 +76,16 @@ export function Dashboard({
 
         {/* 黄金分割双栏 */}
         <div className="relative grid w-full h-full grid-cols-1 gap-4 md:grid-cols-[55%_45%] md:gap-0 lg:grid-cols-[61.8%_38.2%]">
-          {/* 左栏：操作区 */}
+          {/* 左栏：与移动端首页一致的连接与订阅操作区 */}
           <section className="flex h-full min-h-0 flex-col md:pr-6 lg:pr-8">
-            <LeftOperationPanel
-              isConnected={isConnected}
-              canConnect={canConnect}
-              connectedAt={connectedAt}
-              nowTick={nowTick}
-              downloadSpeed={downloadSpeed}
-              uploadSpeed={uploadSpeed}
-              currentNode={currentNode}
-              onOpenNodePicker={() => setNodeDialogOpen(true)}
+            <HomeDashboardPanel
+              layout="desktop"
+              onOpenProviders={onOpenProviders}
             />
           </section>
 
-          {/* 右栏：信息展示区 */}
+          {/* 右栏：网络与用量（订阅卡片已在左侧与移动端一致展示） */}
           <section className="flex h-full min-h-0 flex-col overflow-y-auto gap-2 pl-4 pr-4 md:pr-0 md:border-l md:border-border/30 md:pl-6 lg:gap-2.5 lg:pl-8">
-            <SubscriptionBlock
-              provider={currentProvider}
-              onOpenProviders={onOpenProviders}
-            />
-            <div className="shrink-0 border-t border-border/20" />
             <NetworkBlock connectedIp={connectedIp} />
             <div className="shrink-0 border-t border-border/20" />
             <UsageBlock
@@ -123,11 +97,6 @@ export function Dashboard({
             />
           </section>
         </div>
-
-        <NodePickerDialog
-          open={nodeDialogOpen}
-          onOpenChange={setNodeDialogOpen}
-        />
       </div>
     </PageShell>
   );
