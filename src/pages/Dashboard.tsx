@@ -387,7 +387,7 @@ export function Dashboard({
                 </div>
 
                 {/* 智能开关卡片组 */}
-                <div className="rounded-2xl border border-border/40 bg-black/[0.01] dark:bg-white/[0.01] divide-y divide-border/30">
+                <div className="relative rounded-2xl border border-border/40 bg-black/[0.01] dark:bg-white/[0.01] divide-y divide-border/30">
                   {/* 智能分流 */}
                   <button
                     type="button"
@@ -465,9 +465,18 @@ export function Dashboard({
                   </button>
 
                   {helpTarget && (
-                    <div className="px-3 py-2 text-[11px] leading-relaxed text-muted-foreground bg-white dark:bg-zinc-900 rounded-b-2xl">
+                    <div className={cn(
+                      "absolute left-1/2 -translate-x-1/2 z-50 w-56 px-3 py-2 rounded-xl shadow-xl border border-border/60",
+                      "bg-white dark:bg-zinc-900 text-[11px] leading-relaxed text-muted-foreground",
+                      "animate-in fade-in slide-in-from-top-1 duration-200",
+                      helpTarget === "route" ? "-top-2 -translate-y-full" : "top-full mt-2"
+                    )}>
                       {helpTarget === "route" && "根据规则自动分流：国内站点直连，境外流量走代理。关闭后所有流量均走代理。"}
                       {helpTarget === "ad" && "自动拦截常见广告、跟踪器及恶意域名，净化上网体验。"}
+                      <div className={cn(
+                        "absolute left-1/2 -translate-x-1/2 size-2 rotate-45 bg-white dark:bg-zinc-900 border border-border/60",
+                        helpTarget === "route" ? "-bottom-1 border-t-transparent border-l-transparent" : "-top-1 border-b-transparent border-r-transparent"
+                      )} />
                     </div>
                   )}
                 </div>
