@@ -45,6 +45,8 @@ export interface PersistedSettings {
   proxyBypassDomains: string;
   autoStart: boolean;
   autoConnect: boolean;
+  smartRoute: boolean;
+  smartAdBlock: boolean;
 }
 
 const DEFAULT_SETTINGS: PersistedSettings = {
@@ -52,6 +54,8 @@ const DEFAULT_SETTINGS: PersistedSettings = {
   proxyBypassDomains: "",
   autoStart: false,
   autoConnect: false,
+  smartRoute: true,
+  smartAdBlock: false,
 };
 
 export async function loadPersistedSettings(): Promise<PersistedSettings> {
@@ -64,11 +68,17 @@ export async function loadPersistedSettings(): Promise<PersistedSettings> {
     (await store.get<boolean>("autoStart")) ?? DEFAULT_SETTINGS.autoStart;
   const autoConnect =
     (await store.get<boolean>("autoConnect")) ?? DEFAULT_SETTINGS.autoConnect;
+  const smartRoute =
+    (await store.get<boolean>("smartRoute")) ?? DEFAULT_SETTINGS.smartRoute;
+  const smartAdBlock =
+    (await store.get<boolean>("smartAdBlock")) ?? DEFAULT_SETTINGS.smartAdBlock;
   return {
-    theme: theme as "light" | "dark",
+    theme: theme as "light" | "dark" | "system",
     proxyBypassDomains,
     autoStart,
     autoConnect,
+    smartRoute,
+    smartAdBlock,
   };
 }
 

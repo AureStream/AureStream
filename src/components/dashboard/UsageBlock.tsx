@@ -1,18 +1,23 @@
-import { ChartBar } from "lucide-react";
+import { ChartBar, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec < 1024) return `${bytesPerSec.toFixed(0)} B/s`;
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`;
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(2)} MB/s`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toFixed(0)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 const VIEW_W = 200;
 const VIEW_H = 56;
 const PAD_X = 4;
 const PAD_Y = 6;
-
-function formatVolumeGb(gb?: number): string {
-  if (gb == null || !Number.isFinite(gb)) return "暂无";
-  if (gb < 0) return "暂无";
-  if (gb < 1 / 1024) return `${(gb * 1024 * 1024).toFixed(0)} KB`;
-  if (gb < 1) return `${(gb * 1024).toFixed(1)} MB`;
-  return `${gb.toFixed(2)} GB`;
-}
 
 /** 将数据点转为平滑曲线 path — 使用 Catmull-Rom → 三次贝塞尔 */
 function buildSmoothPath(
@@ -118,22 +123,22 @@ function buildSmoothLine(
 const CHART_GRAD_ID = "usage-chart";
 
 export function UsageBlock({
+  uploadSpeed,
+  downloadSpeed,
   uploadTotal,
   downloadTotal,
   uploadSeries,
   downloadSeries,
   className,
 }: {
+  uploadSpeed: number;
+  downloadSpeed: number;
   uploadTotal?: number;
   downloadTotal?: number;
   uploadSeries: number[];
   downloadSeries: number[];
   className?: string;
 }) {
-  const hasVolume = uploadTotal != null || downloadTotal != null;
-  const total = hasVolume
-    ? (uploadTotal ?? 0) + (downloadTotal ?? 0)
-    : undefined;
   const downloadArea = buildSmoothPath(downloadSeries, VIEW_W, VIEW_H);
   const uploadArea = buildSmoothPath(uploadSeries, VIEW_W, VIEW_H);
   const downloadLine = buildSmoothLine(downloadSeries, VIEW_W, VIEW_H);
@@ -157,24 +162,31 @@ export function UsageBlock({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="flex flex-col gap-0.5 rounded-lg bg-muted/40 px-3 py-2">
-          <span className="text-[10px] text-muted-foreground">上传</span>
-          <span className="text-xs font-semibold tabular-nums text-foreground">
-            {formatVolumeGb(uploadTotal)}
-          </span>
+      {/* 实时速率 + 会话累计 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/25 px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <ArrowUp className="size-3 text-emerald-500" />
+            <span className="text-[10px] text-muted-foreground">上传</span>
+          </div>
+          <div className="text-sm font-bold tabular-nums text-foreground">
+            {formatSpeed(uploadSpeed)}
+          </div>
+          <div className="text-[10px] text-muted-foreground tabular-nums">
+            累计 {formatBytes((uploadTotal ?? 0) * 1024 ** 3)}
+          </div>
         </div>
-        <div className="flex flex-col gap-0.5 rounded-lg bg-muted/40 px-3 py-2">
-          <span className="text-[10px] text-muted-foreground">下载</span>
-          <span className="text-xs font-semibold tabular-nums text-foreground">
-            {formatVolumeGb(downloadTotal)}
-          </span>
-        </div>
-        <div className="flex flex-col gap-0.5 rounded-lg bg-muted/40 px-3 py-2">
-          <span className="text-[10px] text-muted-foreground">总计</span>
-          <span className="text-xs font-semibold tabular-nums text-foreground">
-            {formatVolumeGb(total)}
-          </span>
+        <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/25 px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <ArrowDown className="size-3 text-blue-500" />
+            <span className="text-[10px] text-muted-foreground">下载</span>
+          </div>
+          <div className="text-sm font-bold tabular-nums text-foreground">
+            {formatSpeed(downloadSpeed)}
+          </div>
+          <div className="text-[10px] text-muted-foreground tabular-nums">
+            累计 {formatBytes((downloadTotal ?? 0) * 1024 ** 3)}
+          </div>
         </div>
       </div>
 

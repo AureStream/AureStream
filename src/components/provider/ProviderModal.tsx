@@ -23,13 +23,13 @@ interface ProviderModalProps {
 }
 
 const AUTO_UPDATE_OPTIONS = [
-  { label: "不自动更新", value: undefined },
-  { label: "每 30 分钟", value: 30 },
-  { label: "每 1 小时", value: 60 },
-  { label: "每 2 小时", value: 120 },
-  { label: "每 6 小时", value: 360 },
-  { label: "每 12 小时", value: 720 },
-  { label: "每 24 小时", value: 1440 },
+  { label: "不自动更新", value: "" },
+  { label: "每 30 分钟", value: "30" },
+  { label: "每 1 小时", value: "60" },
+  { label: "每 2 小时", value: "120" },
+  { label: "每 6 小时", value: "360" },
+  { label: "每 12 小时", value: "720" },
+  { label: "每 24 小时", value: "1440" },
 ];
 
 export function ProviderModal({
@@ -107,7 +107,7 @@ export function ProviderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[440px] glass-strong !border-white/20 !rounded-2xl">
+      <DialogContent className="sm:max-w-[440px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-lg">
@@ -129,7 +129,7 @@ export function ProviderModal({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="例如：我的订阅"
                 disabled={isLoading}
-                className="h-10 rounded-xl"
+                className="h-10 rounded-xl animate-none focus:scale-100"
               />
               {errors.name && (
                 <p className="text-xs text-destructive">{errors.name}</p>
@@ -146,7 +146,7 @@ export function ProviderModal({
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://example.com/clash.yaml"
                 disabled={isLoading}
-                className="h-10 rounded-xl"
+                className="h-10 rounded-xl animate-none focus:scale-100"
               />
               {errors.url && (
                 <p className="text-xs text-destructive">{errors.url}</p>
@@ -157,20 +157,15 @@ export function ProviderModal({
               <Label htmlFor="autoUpdate">定时更新</Label>
               <Select
                 id="autoUpdate"
-                value={autoUpdateInterval ?? ""}
-                onChange={(e) =>
+                value={autoUpdateInterval?.toString() ?? ""}
+                onChange={(val) =>
                   setAutoUpdateInterval(
-                    e.target.value ? Number(e.target.value) : undefined,
+                    val ? Number(val) : undefined,
                   )
                 }
+                options={AUTO_UPDATE_OPTIONS}
                 disabled={isLoading}
-              >
-                {AUTO_UPDATE_OPTIONS.map((opt) => (
-                  <option key={opt.label} value={opt.value ?? ""}>
-                    {opt.label}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
           </div>
 
@@ -179,7 +174,7 @@ export function ProviderModal({
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold bg-black/[0.04] dark:bg-white/[0.04] text-muted-foreground hover:text-foreground hover:bg-black/[0.08] dark:hover:bg-white/[0.08] border border-black/5 dark:border-white/5 transition-all active:scale-[0.98]"
               >
                 取消
               </button>
@@ -187,10 +182,10 @@ export function ProviderModal({
             <button
               type="submit"
               disabled={isLoading}
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white text-sm font-medium shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-50 inline-flex items-center gap-2"
+              className="flex-1 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white text-sm font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
               {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isLoading ? "下载中..." : editingProvider ? "保存修改" : "添加"}
+              {isLoading ? "下载中..." : "保存"}
             </button>
           </DialogFooter>
         </form>

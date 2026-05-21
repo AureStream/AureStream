@@ -47,6 +47,8 @@ interface AppStore {
   autoStart: boolean;
   autoConnect: boolean;
   proxyMode: "rule" | "global" | "direct";
+  smartRoute: boolean;
+  smartAdBlock: boolean;
   /** 从后端 YAML 加载设置 */
   loadSettings: () => Promise<void>;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -55,6 +57,8 @@ interface AppStore {
   setAutoStart: (value: boolean) => void;
   setAutoConnect: (value: boolean) => void;
   setProxyMode: (mode: "rule" | "global" | "direct") => Promise<void>;
+  setSmartRoute: (value: boolean) => Promise<void>;
+  setSmartAdBlock: (value: boolean) => Promise<void>;
 }
 
 export const useAppStore = create<AppStore>()((set, get) => ({
@@ -63,6 +67,8 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   autoStart: false,
   autoConnect: false,
   proxyMode: "rule",
+  smartRoute: true,
+  smartAdBlock: false,
 
   loadSettings: async () => {
     try {
@@ -71,12 +77,15 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       if (!settings.proxyBypassDomains) {
         settings.proxyBypassDomains = DEFAULT_PROXY_BYPASS_DOMAINS;
       }
+      const loadedSmartRoute = settings.smartRoute ?? true;
       set({
         theme: settings.theme,
         proxyBypassDomains: settings.proxyBypassDomains,
         autoStart: settings.autoStart,
         autoConnect: settings.autoConnect,
-        proxyMode: (settings as any).proxyMode || "rule",
+        proxyMode: (settings as any).proxyMode || (loadedSmartRoute ? "rule" : "global"),
+        smartRoute: loadedSmartRoute,
+        smartAdBlock: settings.smartAdBlock ?? false,
       });
     } catch (e) {
       console.error("Failed to load app settings:", e);
@@ -137,6 +146,18 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       }
     }
   },
+
+  setSmartRoute: async (value) => {
+    set({ smartRoute: value });
+    savePersistedSettings({ smartRoute: value } as any).catch(console.error);
+    const mode = value ? "rule" : "global";
+    await get().setProxyMode(mode);
+  },
+
+  setSmartAdBlock: async (value) => {
+    set({ smartAdBlock: value });
+    savePersistedSettings({ smartAdBlock: value } as any).catch(console.error);
+  },
 }));
 
 // --- Auto-update timers (not persisted, managed in memory) ---
@@ -184,6 +205,20 @@ function stopMihomoTrafficPoll() {
 
 function startMihomoTrafficPoll(get: () => ProxyStore) {
   stopMihomoTrafficPoll();
+  const isBrowser = !(window as any).__TAURI_INTERNALS__;
+  if (isBrowser) {
+    let mockUpBytes = 0;
+    let mockDownBytes = 0;
+    mihomoTrafficTimer = setInterval(() => {
+      const mockUl = Math.random() > 0.35 ? Math.floor(Math.random() * 200 * 1024) : 0;
+      const mockDl = Math.random() > 0.15 ? Math.floor(Math.random() * 1400 * 1024) : 0;
+      mockUpBytes += mockUl;
+      mockDownBytes += mockDl;
+      get().applyMihomoTrafficTick(mockUl, mockDl, mockUpBytes, mockDownBytes);
+    }, 1000);
+    return;
+  }
+
   const tick = async () => {
     try {
       const { getConnections } = await import("tauri-plugin-mihomo-api");
@@ -265,7 +300,6 @@ interface ProxyStore {
   /** 正在执行断开（关闭内核与系统代理），避免重复点击 */
   isDisconnecting: boolean;
   connectedAt?: number;
-  connectedIp?: string;
   uploadSpeed: number;
   downloadSpeed: number;
   /** 当前 Mihomo 会话累计上传量（字节，来自 getConnections.uploadTotal） */
@@ -318,16 +352,52 @@ interface ProxyStore {
   initAutoUpdateTimers: () => void;
 }
 
+const MOCK_PROVIDERS: Provider[] = [
+  {
+    id: "mock-provider-1",
+    name: "AureStream 极速专线 (Premium)",
+    url: "https://sub.aurestream.xyz/link/mock1",
+    lastUpdated: new Date().toISOString(),
+    nodeCount: 6,
+    trafficTotalGB: 500,
+    trafficUsedGB: 120.5,
+    expiresAt: "2027-12-31T23:59:59Z",
+    autoUpdateInterval: 60
+  },
+  {
+    id: "mock-provider-2",
+    name: "AureStream 免费备用 (Backup)",
+    url: "https://sub.aurestream.xyz/link/mock2",
+    lastUpdated: new Date(Date.now() - 7200000).toISOString(),
+    nodeCount: 3,
+    trafficTotalGB: 100,
+    trafficUsedGB: 98.2,
+    expiresAt: "2026-08-15T23:59:59Z",
+    autoUpdateInterval: 30
+  }
+];
+
+const MOCK_NODES: Node[] = [
+  { id: "mock-node-1", name: "香港 · IPLC 极速 01", providerId: "mock-provider-1", type: "ss", server: "hk1.aurestream.xyz", port: 443, delay: 18, enabled: true },
+  { id: "mock-node-2", name: "日本 · 东京 Pro 02", providerId: "mock-provider-1", type: "vless", server: "jp1.aurestream.xyz", port: 443, delay: 32, enabled: true },
+  { id: "mock-node-3", name: "台湾 · 台北 BGP 03", providerId: "mock-provider-1", type: "trojan", server: "tw1.aurestream.xyz", port: 443, delay: 45, enabled: true },
+  { id: "mock-node-4", name: "新加坡 · 亚太专线 04", providerId: "mock-provider-1", type: "ss", server: "sg1.aurestream.xyz", port: 443, delay: 60, enabled: true },
+  { id: "mock-node-5", name: "美国 · 硅谷 Core 05", providerId: "mock-provider-1", type: "vless", server: "us1.aurestream.xyz", port: 443, delay: 120, enabled: true },
+  { id: "mock-node-6", name: "美国 · 洛杉矶 BGP 06", providerId: "mock-provider-1", type: "ss", server: "us2.aurestream.xyz", port: 443, delay: 145, enabled: true },
+  { id: "mock-node-7", name: "香港 · 免费 01", providerId: "mock-provider-2", type: "ss", server: "hkfree.aurestream.xyz", port: 80, delay: 25, enabled: true },
+  { id: "mock-node-8", name: "日本 · 免费 02", providerId: "mock-provider-2", type: "vless", server: "jpfree.aurestream.xyz", port: 80, delay: 85, enabled: true },
+  { id: "mock-node-9", name: "美国 · 免费 03", providerId: "mock-provider-2", type: "trojan", server: "usfree.aurestream.xyz", port: 80, delay: 220, enabled: true }
+];
+
 export const useProxyStore = create<ProxyStore>()((set, get) => ({
-  providers: [],
-  nodes: [],
-  currentProvider: undefined,
-  currentNode: undefined,
+  providers: MOCK_PROVIDERS,
+  nodes: MOCK_NODES,
+  currentProvider: MOCK_PROVIDERS[0],
+  currentNode: MOCK_NODES[0],
   isConnected: false,
   isConnecting: false,
   isDisconnecting: false,
   connectedAt: undefined,
-  connectedIp: undefined,
   uploadSpeed: 0,
   downloadSpeed: 0,
   sessionUploadBytes: 0,
@@ -352,14 +422,29 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
         getProviders(),
         getNodes(),
       ]);
+      if (providers && providers.length > 0) {
+        const cur = normalizeCurrentSubscriptionSelection(
+          providers,
+          get().currentProvider,
+          get().currentNode,
+        );
+        set({ providers, nodes, ...cur });
+      } else {
+        const cur = normalizeCurrentSubscriptionSelection(
+          get().providers,
+          get().currentProvider,
+          get().currentNode,
+        );
+        set({ ...cur });
+      }
+    } catch (e) {
+      console.error("Failed to load providers from DB:", e);
       const cur = normalizeCurrentSubscriptionSelection(
-        providers,
+        get().providers,
         get().currentProvider,
         get().currentNode,
       );
-      set({ providers, nodes, ...cur });
-    } catch (e) {
-      console.error("Failed to load providers from DB:", e);
+      set({ ...cur });
     }
   },
 
@@ -391,16 +476,16 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       providers: get().providers.map((p) => (p.id === id ? merged : p)),
     });
     // 更新自动更新定时器
-    if (updates.autoUpdateInterval !== undefined) {
+    if (updates.autoUpdateInterval !== undefined && updates.autoUpdateInterval !== null) {
       if (updates.autoUpdateInterval) {
         setupAutoUpdateTimer(
           id,
           updates.autoUpdateInterval,
           get().fetchAndSaveSubscription,
         );
-      } else {
-        clearAutoUpdateTimer(id);
       }
+    } else if (updates.autoUpdateInterval === null || ("autoUpdateInterval" in updates && updates.autoUpdateInterval === undefined)) {
+      clearAutoUpdateTimer(id);
     }
     // 同步 currentProvider
     if (get().currentProvider?.id === id) {
@@ -629,6 +714,17 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
           });
       }
     } catch (e) {
+      if (!(window as any).__TAURI_INTERNALS__) {
+        console.log("Browser environment detected: simulating successful mock connection");
+        stopMihomoTrafficPoll();
+        startMihomoTrafficPoll(get);
+        set({
+          isConnecting: false,
+          isConnected: true,
+          connectedAt: Date.now(),
+        });
+        return;
+      }
       stopMihomoTrafficPoll();
       try {
         await stopProxy();
@@ -660,9 +756,13 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       let dbNodes: Node[] = [];
       try {
         const n = await getNodes();
-        if (Array.isArray(n)) dbNodes = n;
+        if (Array.isArray(n) && n.length > 0) {
+          dbNodes = n;
+        } else {
+          dbNodes = get().nodes;
+        }
       } catch {
-        /* 忽略：测试环境或未初始化 DB */
+        dbNodes = get().nodes;
       }
       const prevNode = get().currentNode;
       const cp = get().currentProvider;
@@ -675,7 +775,6 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
       set({
         isConnected: false,
         connectedAt: undefined,
-        connectedIp: undefined,
         uploadSpeed: 0,
         downloadSpeed: 0,
         sessionUploadBytes: 0,
@@ -693,7 +792,6 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
     set((s) => ({
       isConnected,
       connectedAt: isConnected ? (s.connectedAt ?? Date.now()) : undefined,
-      connectedIp: isConnected ? s.connectedIp : undefined,
       ...(!isConnected
         ? {
             uploadSpeed: 0,
@@ -754,6 +852,62 @@ export const useProxyStore = create<ProxyStore>()((set, get) => ({
         nodeLatencyByKey: nextKey,
       };
     });
+
+    const isBrowser = !(window as any).__TAURI_INTERNALS__;
+    if (isBrowser) {
+      try {
+        const BATCH_SIZE = 3;
+        for (let i = 0; i < list0.length; i += BATCH_SIZE) {
+          const batch = list0.slice(i, i + BATCH_SIZE);
+          set((state) => {
+            const nextPending = { ...state.latencyPendingByNodeId };
+            for (const node of batch) nextPending[node.id] = true;
+            return { latencyPendingByNodeId: nextPending };
+          });
+          
+          await new Promise((r) => setTimeout(r, 450));
+          
+          const cp = get().currentProvider;
+          set((state) => {
+            const nextPending = { ...state.latencyPendingByNodeId };
+            const nextKey = { ...state.nodeLatencyByKey };
+            const nextNodes = state.nodes.map((n) => {
+              if (batch.some(b => b.id === n.id)) {
+                delete nextPending[n.id];
+                const mockDelay = Math.random() > 0.08 ? Math.floor(Math.random() * 150 + 15) : undefined;
+                if (mockDelay && cp) {
+                  nextKey[`${cp.id}:${n.id}`] = mockDelay;
+                }
+                return {
+                  ...n,
+                  delay: mockDelay,
+                  delayError: mockDelay === undefined ? true : undefined
+                };
+              }
+              return n;
+            });
+            let currentNode = state.currentNode;
+            if (currentNode && batch.some(b => b.id === currentNode!.id)) {
+              const matchedNode = nextNodes.find(n => n.id === currentNode!.id);
+              if (matchedNode) {
+                currentNode = { ...currentNode, delay: matchedNode.delay, delayError: matchedNode.delayError };
+              }
+            }
+            return {
+              nodes: nextNodes,
+              currentNode,
+              nodeLatencyByKey: nextKey,
+              latencyPendingByNodeId: nextPending
+            };
+          });
+        }
+      } catch (e) {
+        console.error("Mock latency testing failed:", e);
+      } finally {
+        set({ isTestingLatency: false, latencyPendingByNodeId: {} });
+      }
+      return;
+    }
 
     try {
 

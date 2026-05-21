@@ -41,17 +41,17 @@ export function Settings() {
     description: string;
     children: ReactNode;
   }) => (
-    <div className="glass rounded-2xl p-5 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
+    <div className="glass rounded-2xl p-4 sm:p-5 flex flex-row items-center justify-between gap-3 sm:gap-4">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
           <Icon className="w-4 h-4 text-primary" />
         </div>
-        <div>
-          <div className="font-medium text-sm">{title}</div>
-          <div className="text-xs text-muted-foreground">{description}</div>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-sm truncate">{title}</div>
+          <div className="text-xs text-muted-foreground truncate">{description}</div>
         </div>
       </div>
-      {children}
+      <div className="flex justify-end shrink-0">{children}</div>
     </div>
   );
 
@@ -64,34 +64,44 @@ export function Settings() {
             title="外观主题"
             description="选择跟随系统、浅色或深色模式"
           >
-            <div className="flex rounded-xl bg-black/5 dark:bg-white/10 p-1 gap-1">
-              {[
-                { id: "system", label: "跟随系统", icon: Monitor },
-                { id: "light", label: "浅色", icon: Sun },
-                { id: "dark", label: "深色", icon: Moon },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() =>
-                    theme !== t.id &&
-                    setTheme(t.id as "system" | "light" | "dark")
-                  }
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border outline-none",
-                    theme === t.id
-                      ? "bg-white text-primary shadow-sm border-black/5 dark:bg-primary dark:text-primary-foreground dark:border-primary/20"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5",
-                  )}
-                >
-                  <t.icon className="w-3.5 h-3.5" />
-                  {t.label}
-                </button>
-              ))}
+            {/* Three-segment theme picker */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08]">
+              {([
+                { value: "system", icon: Monitor, label: "系统", activeColor: "text-primary" },
+                { value: "light",  icon: Sun,     label: "亮色", activeColor: "text-amber-500" },
+                { value: "dark",   icon: Moon,    label: "暗色", activeColor: "text-indigo-400" },
+              ] as const).map(({ value, icon: Icon, label, activeColor }) => {
+                const active = theme === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={active}
+                    className={cn(
+                      "relative flex items-center justify-center w-9 h-8 rounded-lg transition-all duration-200 select-none",
+                      active
+                        ? "bg-white dark:bg-white/10 shadow-sm"
+                        : "hover:bg-black/[0.05] dark:hover:bg-white/[0.06]",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "w-4 h-4 transition-colors duration-200",
+                        active ? activeColor : "text-muted-foreground",
+                        value === "light" && active && "animate-spin",
+                      )}
+                      style={value === "light" && active ? { animationDuration: "12s" } : undefined}
+                    />
+                  </button>
+                );
+              })}
             </div>
           </SettingRow>
 
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Globe className="w-5 h-5 text-primary" />
@@ -126,7 +136,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Zap className="w-5 h-5 text-primary" />
@@ -178,7 +188,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Info className="w-5 h-5 text-primary" />

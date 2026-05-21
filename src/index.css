@@ -266,6 +266,15 @@ body::before {
   animation: axis-glow-active 2s ease-in-out infinite;
 }
 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out forwards;
+}
+
 /* State transition animations for left panel content */
 @keyframes fade-in-down {
   from {
@@ -275,7 +284,7 @@ body::before {
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -287,7 +296,7 @@ body::before {
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -350,4 +359,195 @@ body::before {
 
 .animate-loading-bg-drift {
   animation: loading-bg-drift 8s ease-in-out infinite;
+}
+
+/* --- iOS Liquid Glass Core Design System --- */
+:root {
+  --liquid-glass-bg: rgba(255, 255, 255, 0.35);
+  --liquid-glass-border: rgba(255, 255, 255, 0.45);
+  --liquid-glass-border-inner: rgba(255, 255, 255, 0.6);
+  --liquid-glass-shadow: 
+    0 10px 30px rgba(59, 130, 246, 0.08), 
+    inset 0 1px 1px var(--liquid-glass-border-inner),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.03);
+}
+
+.dark {
+  --liquid-glass-bg: rgba(22, 22, 26, 0.45);
+  --liquid-glass-border: rgba(255, 255, 255, 0.08);
+  --liquid-glass-border-inner: rgba(255, 255, 255, 0.05);
+  --liquid-glass-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.5), 
+    inset 0 1px 1px var(--liquid-glass-border-inner),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.02);
+}
+
+/* Liquid Glass Cards */
+.liquid-glass-card {
+  background: var(--liquid-glass-bg);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--liquid-glass-border);
+  box-shadow: var(--liquid-glass-shadow);
+  border-radius: 24px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-glass-card:active {
+  transform: scale(0.98);
+}
+
+/* Floating Dock for iOS-style bottom tabs */
+.liquid-glass-dock {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    0 16px 40px rgba(0, 0, 0, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  border-radius: 32px;
+}
+
+.dark .liquid-glass-dock {
+  background: rgba(20, 20, 25, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.65),
+    0 4px 16px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Header Glass */
+.liquid-glass-header {
+  background: rgba(244, 247, 252, 0.4);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+}
+
+.dark .liquid-glass-header {
+  background: rgba(24, 24, 24, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Background animated blobs */
+.liquid-blob-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.liquid-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.28;
+  mix-blend-mode: multiply;
+  transition: opacity 1s ease-in-out;
+}
+
+.dark .liquid-blob {
+  opacity: 0.15;
+  mix-blend-mode: screen;
+  filter: blur(120px);
+}
+
+.liquid-blob-1 {
+  width: 250px;
+  height: 250px;
+  left: 5%;
+  top: 15%;
+  background: radial-gradient(circle, #3b82f6 0%, #60a5fa 100%);
+  animation: liquid-blob-1-anim 16s ease-in-out infinite alternate;
+}
+
+.liquid-blob-2 {
+  width: 320px;
+  height: 320px;
+  right: -5%;
+  bottom: 20%;
+  background: radial-gradient(circle, #8b5cf6 0%, #a78bfa 100%);
+  animation: liquid-blob-2-anim 20s ease-in-out infinite alternate;
+}
+
+.liquid-blob-3 {
+  width: 200px;
+  height: 200px;
+  left: 35%;
+  bottom: 10%;
+  background: radial-gradient(circle, #10b981 0%, #34d399 100%);
+  animation: liquid-blob-3-anim 14s ease-in-out infinite alternate;
+}
+
+@keyframes liquid-blob-1-anim {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, 80px) scale(1.2); }
+  100% { transform: translate(-30px, 40px) scale(0.9); }
+}
+
+@keyframes liquid-blob-2-anim {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-60px, -40px) scale(0.8); }
+  100% { transform: translate(40px, -90px) scale(1.1); }
+}
+
+@keyframes liquid-blob-3-anim {
+  0% { transform: translate(0, 0) scale(0.9); }
+  50% { transform: translate(30px, -30px) scale(1.15); }
+  100% { transform: translate(-40px, 15px) scale(1); }
+}
+
+/* Liquid Pill Glide Animation for Bottom Dock */
+.liquid-pill-active {
+  transition: left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Mobile-friendly bottom drawer style override */
+.mobile-bottom-drawer {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(32px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-top-left-radius: 28px !important;
+  border-top-right-radius: 28px !important;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.08) !important;
+}
+
+.dark .mobile-bottom-drawer {
+  background: rgba(20, 20, 25, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 -15px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Soft touch ripple effect */
+.touch-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.touch-ripple::after {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
+  background-repeat: no-repeat;
+  background-position: 50%;
+  transform: scale(10, 10);
+  opacity: 0;
+  transition: transform .5s, opacity 1s;
+}
+
+.touch-ripple:active::after {
+  transform: scale(0, 0);
+  opacity: .3;
+  transition: 0s;
 }

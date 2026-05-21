@@ -4,20 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { getNetworkInfo, type NetworkInfo } from "@/lib/api";
 
-const INFO_ROWS: { key: keyof NetworkInfo; label: string }[] = [
-  { key: "fetchMode", label: "获取方式" },
-  { key: "ip", label: "IP" },
-  { key: "city", label: "城市" },
-  { key: "region", label: "区域" },
-  { key: "country", label: "国家" },
-  { key: "asn", label: "ASN" },
-  { key: "org", label: "组织" },
-];
-
 export function NetworkBlock({
   className,
 }: {
-  connectedIp?: string;
   className?: string;
 }) {
   const isConnected = useProxyStore((s) => s.isConnected);
@@ -27,35 +16,32 @@ export function NetworkBlock({
   const [loading, setLoading] = useState(true);
   const fetchId = useRef(0);
 
-  const doFetch = useCallback(async (id: number) => {
+  const doFetch = useCallback(async (id: number, attempt = 0) => {
+    if (fetchId.current !== id) return;
     setLoading(true);
     try {
       const data = await getNetworkInfo();
       if (fetchId.current !== id) return;
       setInfo(data);
+      setLoading(false);
     } catch {
-      // 失败后重试一次（代理路由可能尚未生效）
-      setTimeout(async () => {
-        try {
-          const data = await getNetworkInfo();
-          if (fetchId.current !== id) return;
-          setInfo(data);
-        } catch {
-          // 静默失败
-        } finally {
-          if (fetchId.current === id) setLoading(false);
-        }
-      }, 2000);
-      return;
-    } finally {
-      if (fetchId.current === id) setLoading(false);
+      if (fetchId.current !== id) return;
+      // 节点切换后代理路由可能尚未生效，重试最多 3 次，间隔递增
+      if (attempt < 3) {
+        const delay = 2000 + attempt * 1500;
+        setTimeout(() => doFetch(id, attempt + 1), delay);
+      } else {
+        setLoading(false);
+      }
     }
   }, []);
 
   // 自动刷新：连接/断开、切换节点、切换代理模式
   useEffect(() => {
     const id = ++fetchId.current;
-    const delay = isConnected ? 1500 : 0;
+    setInfo(null);
+    setLoading(true);
+    const delay = isConnected ? 2000 : 0;
     const timer = setTimeout(() => doFetch(id), delay);
     return () => clearTimeout(timer);
   }, [isConnected, nodeId, proxyMode, doFetch]);
@@ -66,43 +52,8 @@ export function NetworkBlock({
     doFetch(id);
   }, [doFetch]);
 
-  const valueNode = (key: keyof NetworkInfo) => {
-    if (loading && !info) {
-      return (
-        <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
-      );
-    }
-    const val = info?.[key];
-    if (!val && loading) {
-      return (
-        <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
-      );
-    }
-    if (key === "fetchMode") {
-      if (val === "代理") {
-        return (
-          <span className="inline-flex items-center rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500 ring-1 ring-inset ring-emerald-500/20">
-            代理
-          </span>
-        );
-      }
-      if (val === "直连") {
-        return (
-          <span className="inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-500 ring-1 ring-inset ring-blue-500/20">
-            直连
-          </span>
-        );
-      }
-    }
-    return (
-      <span className="min-w-0 truncate text-xs font-medium tabular-nums text-foreground" title={val || undefined}>
-        {val || "-"}
-      </span>
-    );
-  };
-
   return (
-    <div className={cn("flex flex-col gap-4", className)}>
+    <div className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-center gap-2.5">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
           <Globe className="size-4 text-primary" strokeWidth={1.75} />
@@ -119,15 +70,68 @@ export function NetworkBlock({
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 flex-col gap-2.5">
-        {INFO_ROWS.map(({ key, label }) => (
-          <div key={key} className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground shrink-0">
-              {label}
-            </span>
-            {valueNode(key)}
+      <div className="flex flex-1 min-h-0 flex-col gap-2">
+        {/* IP 地址 & 获取方式 */}
+        <div className="flex items-center justify-between min-h-[1.5rem]">
+          <span className="text-xs text-muted-foreground shrink-0">
+            IP 地址
+          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {loading && !info ? (
+              <span className="h-4 w-20 animate-pulse rounded bg-muted-foreground/20" />
+            ) : (
+              <>
+                <span className="min-w-0 truncate text-xs font-medium tabular-nums text-foreground" title={info?.ip || undefined}>
+                  {info?.ip || "-"}
+                </span>
+                {info?.fetchMode === "代理" && (
+                  <span className="inline-flex items-center rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 ring-1 ring-inset ring-emerald-500/20 shrink-0">
+                    代理
+                  </span>
+                )}
+                {info?.fetchMode === "直连" && (
+                  <span className="inline-flex items-center rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500 ring-1 ring-inset ring-blue-500/20 shrink-0">
+                    直连
+                  </span>
+                )}
+              </>
+            )}
           </div>
-        ))}
+        </div>
+
+        {/* 地理位置 */}
+        <div className="flex items-center justify-between min-h-[1.5rem]">
+          <span className="text-xs text-muted-foreground shrink-0">
+            地理位置
+          </span>
+          {loading && !info ? (
+            <span className="h-4 w-24 animate-pulse rounded bg-muted-foreground/20" />
+          ) : (
+            <span
+              className="min-w-0 truncate text-xs font-medium text-foreground"
+              title={[info?.country, info?.region, info?.city].filter(Boolean).join(" · ") || undefined}
+            >
+              {[info?.country, info?.region, info?.city].filter(Boolean).join(" · ") || "-"}
+            </span>
+          )}
+        </div>
+
+        {/* 网络提供商 */}
+        <div className="flex items-center justify-between min-h-[1.5rem]">
+          <span className="text-xs text-muted-foreground shrink-0">
+            网络提供商
+          </span>
+          {loading && !info ? (
+            <span className="h-4 w-28 animate-pulse rounded bg-muted-foreground/20" />
+          ) : (
+            <span
+              className="min-w-0 truncate text-xs font-medium text-foreground"
+              title={[info?.asn, info?.org].filter(Boolean).join(" · ") || undefined}
+            >
+              {[info?.asn, info?.org].filter(Boolean).join(" · ") || "-"}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

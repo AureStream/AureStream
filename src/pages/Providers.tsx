@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ProviderCard } from "@/components/provider/ProviderCard";
 import { ProviderModal } from "@/components/provider/ProviderModal";
@@ -122,57 +122,34 @@ export function Providers() {
   return (
     <PageShell title="服务商管理" className="max-w-6xl">
       <div className="space-y-4 sm:space-y-5 lg:space-y-6">
-        {/* Providers grid */}
-        {providers.length === 0 ? (
-          <div className="glass rounded-xl sm:rounded-2xl p-8 sm:p-10 lg:p-12 text-center">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Package className="w-7 h-7 sm:w-8 sm:h-8 text-primary opacity-50" />
+        {/* Providers grid：有无数据均使用同一套网格与虚线「添加」卡片，PC 端视觉统一 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+          {providers.map((provider) => (
+            <ProviderCard
+              key={provider.id}
+              provider={provider}
+              isActive={currentProvider?.id === provider.id}
+              isRefreshing={refreshingIds.has(provider.id)}
+              onSetActive={handleSetActive}
+              onEdit={handleEdit}
+              onDelete={handleDeleteRequest}
+              onRefresh={handleRefresh}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={handleAddNew}
+            className="glass rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-[var(--shadow-glass-hover)] border-2 border-dashed border-border/50 hover:border-primary/40 flex flex-col items-center justify-center gap-2 min-h-[12rem] text-muted-foreground hover:text-primary"
+          >
+            <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
+              <Plus className="w-5 h-5" />
             </div>
-            <p className="text-sm sm:text-base text-muted-foreground font-medium">
-              暂无服务商
-            </p>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              点击下方按钮添加您的第一个订阅
-            </p>
-            <button
-              type="button"
-              onClick={handleAddNew}
-              className="mt-4 sm:mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              <Plus className="w-4 h-4" />
-              添加服务商
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {providers.map((provider) => (
-              <ProviderCard
-                key={provider.id}
-                provider={provider}
-                isActive={currentProvider?.id === provider.id}
-                isRefreshing={refreshingIds.has(provider.id)}
-                onSetActive={handleSetActive}
-                onEdit={handleEdit}
-                onDelete={handleDeleteRequest}
-                onRefresh={handleRefresh}
-              />
-            ))}
-            {/* 添加服务商卡片 */}
-            <button
-              type="button"
-              onClick={handleAddNew}
-              className="glass rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[var(--shadow-glass-hover)] border-2 border-dashed border-border/50 hover:border-primary/40 flex flex-col items-center justify-center gap-2 min-h-[12rem] text-muted-foreground hover:text-primary"
-            >
-              <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
-                <Plus className="w-5 h-5" />
-              </div>
-              <span className="text-sm font-medium">添加服务商</span>
-              <span className="text-[11px] text-muted-foreground/60">
-                粘贴订阅链接开始使用
-              </span>
-            </button>
-          </div>
-        )}
+            <span className="text-sm font-medium">添加服务商</span>
+            <span className="text-[11px] text-muted-foreground/60">
+              粘贴订阅链接开始使用
+            </span>
+          </button>
+        </div>
 
         <ProviderModal
           open={isModalOpen}
@@ -187,7 +164,7 @@ export function Providers() {
             if (!open) setDeleteTargetId(null);
           }}
         >
-          <AlertDialogContent className="sm:max-w-[440px] glass-strong !border-white/20 !rounded-2xl">
+          <AlertDialogContent className="sm:max-w-[440px]">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-lg">
                 删除服务商
@@ -199,10 +176,10 @@ export function Providers() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeleteTargetId(null)}>
+              <AlertDialogCancel onClick={() => setDeleteTargetId(null)} className="flex-1">
                 取消
               </AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmDelete}>
+              <AlertDialogAction onClick={handleConfirmDelete} className="flex-1">
                 删除
               </AlertDialogAction>
             </AlertDialogFooter>
