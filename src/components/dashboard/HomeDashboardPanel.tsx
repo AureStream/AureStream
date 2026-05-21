@@ -17,10 +17,10 @@ import {
   Package,
   Compass,
   Shield,
+  Lock,
 } from "lucide-react";
 import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
-import { getLatencyColor } from "@/types";
 import { toast } from "sonner";
 import { logErrorDetail, userFacingMessage } from "@/lib/userErrors";
 
@@ -222,7 +222,7 @@ export function HomeDashboardPanel({
       {/* Subscription card — 固定在上，避免与下方计时/球体重叠 */}
       <div className="relative z-30 shrink-0 px-4 pt-4 pb-1">
         {currentProvider ? (
-          <div className="glass rounded-2xl bg-gradient-to-br from-primary/10 via-indigo-500/8 to-transparent dark:from-primary/15 dark:via-indigo-500/10 dark:to-transparent flex flex-col gap-3 px-4 py-3.5 [@media(max-height:700px)]:gap-2 [@media(max-height:700px)]:py-3">
+          <div className="rounded-2xl border flex flex-col gap-3 px-4 py-3.5 bg-gradient-to-r from-white/35 via-white/20 to-white/10 dark:from-zinc-950/40 dark:via-zinc-900/30 dark:to-zinc-900/10 border-white/25 dark:border-white/[0.06] shadow-[0_10px_32px_rgba(59,130,246,0.04),inset_0_1px_1.5px_rgba(255,255,255,0.7)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.45),inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl [@media(max-height:700px)]:gap-2 [@media(max-height:700px)]:py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
@@ -297,7 +297,7 @@ export function HomeDashboardPanel({
             </div>
           </div>
         ) : (
-          <div className="glass rounded-2xl bg-gradient-to-br from-primary/10 via-indigo-500/8 to-transparent dark:from-primary/15 dark:via-indigo-500/10 dark:to-transparent px-4 py-3.5 text-center [@media(max-height:700px)]:py-3">
+          <div className="rounded-2xl border px-4 py-3.5 text-center bg-gradient-to-r from-white/35 via-white/20 to-white/10 dark:from-zinc-950/40 dark:via-zinc-900/30 dark:to-zinc-900/10 border-white/25 dark:border-white/[0.06] shadow-[0_10px_32px_rgba(59,130,246,0.04),inset_0_1px_1.5px_rgba(255,255,255,0.7)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.45),inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl [@media(max-height:700px)]:py-3">
             <p className="text-xs text-muted-foreground font-medium">
               未激活任何服务商订阅
             </p>
@@ -470,41 +470,62 @@ export function HomeDashboardPanel({
           <button
             type="button"
             onClick={() => void setSmartRoute(!smartRoute)}
+            disabled={isConnected}
             className={cn(
-              "flex flex-col justify-between gap-3.5 p-3 rounded-2xl border transition-all duration-300 w-full text-left relative overflow-hidden group active:scale-[0.98]",
-              smartRoute
-                ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
-                : "bg-black/[0.02] dark:bg-white/[0.02] border-border/40 hover:border-border/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.03]"
+              "flex flex-col justify-between gap-3 p-3.5 rounded-2xl border transition-all duration-300 w-full text-left relative overflow-hidden group select-none",
+              isConnected
+                ? "opacity-60 cursor-not-allowed bg-black/[0.01] dark:bg-white/[0.01] border-border/10"
+                : smartRoute
+                  ? "bg-gradient-to-br from-primary/8 via-indigo-500/4 to-transparent border-primary/35 shadow-[0_8px_20px_rgba(59,130,246,0.06),inset_0_1px_1px_rgba(255,255,255,0.7)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.05)] cursor-pointer active:scale-[0.96]"
+                  : "bg-black/[0.01] dark:bg-white/[0.02] border-border/10 hover:border-border/30 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] cursor-pointer active:scale-[0.96]"
             )}
           >
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0",
-                smartRoute
-                  ? "bg-primary/15 text-primary"
-                  : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
-              )}>
-                <Compass className="w-4 h-4" />
+            {smartRoute && !isConnected && (
+              <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.12)_0%,transparent_70%)] opacity-100 pointer-events-none" />
+            )}
+
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2.5">
+                <div className={cn(
+                  "w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0",
+                  smartRoute
+                    ? "bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)]"
+                    : "bg-black/5 dark:bg-white/5 text-muted-foreground group-hover:text-foreground"
+                )}>
+                  <Compass className="w-4 h-4" />
+                </div>
+                <span className="text-[12px] font-extrabold text-foreground tracking-wide">
+                  智能分流
+                </span>
               </div>
-              <span className="text-[11px] font-bold text-foreground">
-                智能分流
-              </span>
+              {isConnected && (
+                <Lock className="w-3.5 h-3.5 text-muted-foreground/45 shrink-0 animate-fade-in" />
+              )}
             </div>
 
-            <div className="flex items-center justify-between w-full mt-0.5">
-              <span className="text-[9px] text-muted-foreground/75 truncate max-w-[65px]">
-                {smartRoute ? "绕过大陆" : "全部走代理"}
+            <div className="flex items-center justify-between w-full mt-1">
+              <span className={cn(
+                "text-[10px] truncate max-w-[80px] font-bold transition-colors",
+                isConnected
+                  ? "text-muted-foreground/50"
+                  : smartRoute 
+                    ? "text-primary font-extrabold" 
+                    : "text-muted-foreground/70"
+              )}>
+                {isConnected ? "已锁定配置" : smartRoute ? "绕过大陆" : "全部走代理"}
               </span>
               <div
                 className={cn(
-                  "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
-                  smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                  "relative w-8 h-4.5 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
+                  isConnected 
+                    ? (smartRoute ? "bg-primary/50" : "bg-black/5 dark:bg-white/10")
+                    : (smartRoute ? "bg-gradient-to-r from-primary to-indigo-500" : "bg-black/15 dark:bg-white/15"),
                 )}
               >
                 <div
                   className={cn(
-                    "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white transition-transform duration-300",
-                    smartRoute && "translate-x-3",
+                    "absolute top-[2px] left-[2px] w-3.5 h-3.5 rounded-full bg-white shadow-[0_1.5px_3px_rgba(0,0,0,0.2)] transition-transform duration-300",
+                    smartRoute && "translate-x-3.5",
                   )}
                 />
               </div>
@@ -515,41 +536,62 @@ export function HomeDashboardPanel({
           <button
             type="button"
             onClick={() => void setSmartAdBlock(!smartAdBlock)}
+            disabled={isConnected}
             className={cn(
-              "flex flex-col justify-between gap-3.5 p-3 rounded-2xl border transition-all duration-300 w-full text-left relative overflow-hidden group active:scale-[0.98]",
-              smartAdBlock
-                ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
-                : "bg-black/[0.02] dark:bg-white/[0.02] border-border/40 hover:border-border/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.03]"
+              "flex flex-col justify-between gap-3 p-3.5 rounded-2xl border transition-all duration-300 w-full text-left relative overflow-hidden group select-none",
+              isConnected
+                ? "opacity-60 cursor-not-allowed bg-black/[0.01] dark:bg-white/[0.01] border-border/10"
+                : smartAdBlock
+                  ? "bg-gradient-to-br from-primary/8 via-indigo-500/4 to-transparent border-primary/35 shadow-[0_8px_20px_rgba(59,130,246,0.06),inset_0_1px_1px_rgba(255,255,255,0.7)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.05)] cursor-pointer active:scale-[0.96]"
+                  : "bg-black/[0.01] dark:bg-white/[0.02] border-border/10 hover:border-border/30 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] cursor-pointer active:scale-[0.96]"
             )}
           >
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0",
-                smartAdBlock
-                  ? "bg-primary/15 text-primary"
-                  : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
-              )}>
-                <Shield className="w-4 h-4" />
+            {smartAdBlock && !isConnected && (
+              <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.12)_0%,transparent_70%)] opacity-100 pointer-events-none" />
+            )}
+
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2.5">
+                <div className={cn(
+                  "w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0",
+                  smartAdBlock
+                    ? "bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-[0_2px_8px_rgba(59,130,246,0.3)]"
+                    : "bg-black/5 dark:bg-white/5 text-muted-foreground group-hover:text-foreground"
+                )}>
+                  <Shield className="w-4 h-4" />
+                </div>
+                <span className="text-[12px] font-extrabold text-foreground tracking-wide">
+                  去广告
+                </span>
               </div>
-              <span className="text-[11px] font-bold text-foreground">
-                去广告
-              </span>
+              {isConnected && (
+                <Lock className="w-3.5 h-3.5 text-muted-foreground/45 shrink-0 animate-fade-in" />
+              )}
             </div>
 
-            <div className="flex items-center justify-between w-full mt-0.5">
-              <span className="text-[9px] text-muted-foreground/75 truncate max-w-[65px]">
-                {smartAdBlock ? "已拦截广告" : "广告防护关"}
+            <div className="flex items-center justify-between w-full mt-1">
+              <span className={cn(
+                "text-[10px] truncate max-w-[80px] font-bold transition-colors",
+                isConnected
+                  ? "text-muted-foreground/50"
+                  : smartAdBlock 
+                    ? "text-primary font-extrabold" 
+                    : "text-muted-foreground/70"
+              )}>
+                {isConnected ? "已锁定配置" : smartAdBlock ? "广告拦截开" : "广告防护关"}
               </span>
               <div
                 className={cn(
-                  "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
-                  smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                  "relative w-8 h-4.5 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
+                  isConnected 
+                    ? (smartAdBlock ? "bg-primary/50" : "bg-black/5 dark:bg-white/10")
+                    : (smartAdBlock ? "bg-gradient-to-r from-primary to-indigo-500" : "bg-black/15 dark:bg-white/15"),
                 )}
               >
                 <div
                   className={cn(
-                    "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white transition-transform duration-300",
-                    smartAdBlock && "translate-x-3",
+                    "absolute top-[2px] left-[2px] w-3.5 h-3.5 rounded-full bg-white shadow-[0_1.5px_3px_rgba(0,0,0,0.2)] transition-transform duration-300",
+                    smartAdBlock && "translate-x-3.5",
                   )}
                 />
               </div>
@@ -563,52 +605,83 @@ export function HomeDashboardPanel({
         className="relative z-10 shrink-0 px-4 pt-1"
         style={{ paddingBottom: nodePickerPaddingBottom }}
       >
-        <div className="liquid-glass-card px-2 py-2 max-w-[280px] mx-auto">
-          <button
-            type="button"
-            onClick={() => setIsDrawerOpen(true)}
-            className="flex w-full items-center justify-between gap-3 px-3 py-3 rounded-2xl bg-transparent active:bg-black/5 dark:active:bg-white/5 transition-all text-left"
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <span className="text-xl leading-none shrink-0" aria-hidden>
+        <button
+          type="button"
+          onClick={() => setIsDrawerOpen(true)}
+          className={cn(
+            "flex w-full max-w-[340px] mx-auto items-center justify-between gap-3.5 px-4 py-3.5 rounded-2xl text-left transition-all duration-300 relative overflow-hidden select-none outline-none group border active:scale-[0.98]",
+            "bg-gradient-to-r from-white/35 via-white/20 to-white/10 dark:from-zinc-950/40 dark:via-zinc-900/30 dark:to-zinc-900/10",
+            "border-white/25 dark:border-white/[0.06] shadow-[0_10px_32px_rgba(59,130,246,0.05),inset_0_1px_1.5px_rgba(255,255,255,0.7)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)]",
+            "hover:border-primary/30 dark:hover:border-primary/20 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]"
+          )}
+        >
+          {isConnected && (
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.03] to-transparent opacity-100 pointer-events-none animate-fade-in" />
+          )}
+
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+            <div className={cn(
+              "w-11 h-11 rounded-full flex items-center justify-center text-2xl shrink-0 transition-all duration-500 border",
+              isConnected
+                ? "bg-gradient-to-br from-primary/15 via-indigo-500/10 to-transparent border-primary/25 dark:border-primary/30 shadow-[0_2px_10px_rgba(59,130,246,0.15)]"
+                : "bg-white/60 dark:bg-zinc-800/80 border-slate-200/50 dark:border-zinc-700/50 shadow-sm"
+            )}>
+              <span className="group-hover:scale-110 transition-transform duration-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 {nodeLine.flag}
               </span>
-              <div className="min-w-0 flex-1">
-                <span className="block text-[13px] font-bold text-foreground leading-tight truncate">
-                  {nodeLine.primary}
-                </span>
-                {!isConnected ? (
-                  <span className="block text-[10px] text-muted-foreground truncate leading-normal mt-0.5">
-                    点击选择节点
-                  </span>
-                ) : (
-                  nodeLine.secondary && (
-                    <span className="block text-[10px] text-muted-foreground truncate leading-normal mt-0.5">
-                      {nodeLine.secondary}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="block text-[13px] font-extrabold text-foreground leading-tight tracking-wide truncate">
+                {nodeLine.primary}
+              </span>
+              <div className="flex items-center gap-1.5 mt-1">
+                {isConnected ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                  )
+                    <span className="block text-[10px] text-muted-foreground/85 truncate font-bold font-mono">
+                      {nodeLine.secondary || "已连接代理"}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-flex rounded-full h-1.5 w-1.5 bg-slate-400 dark:bg-zinc-500"></span>
+                    <span className="block text-[10px] text-muted-foreground/75 truncate font-medium">
+                      {currentNode ? "待连接 · 点击切换" : "选择可用节点"}
+                    </span>
+                  </>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {currentNode?.delay != null ? (
-                <span
-                  className={cn(
-                    "text-xs font-bold tabular-nums",
-                    getLatencyColor(currentNode.delay),
-                  )}
-                >
-                  {currentNode.delay} ms
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  {isConnected ? "测试延迟" : "选择节点"}
-                </span>
-              )}
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {currentNode?.delay != null ? (
+              <span
+                className={cn(
+                  "text-[10px] font-bold tabular-nums px-2.5 py-1 rounded-full border transition-all duration-300 flex items-center gap-1 shadow-sm",
+                  currentNode.delay < 100
+                    ? "bg-emerald-500/8 border-emerald-500/25 text-emerald-600 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400"
+                    : currentNode.delay < 200
+                      ? "bg-amber-500/8 border-amber-500/25 text-amber-600 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-400"
+                      : "bg-rose-500/8 border-rose-500/25 text-rose-600 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400"
+                )}
+              >
+                <span className="w-1 h-1 rounded-full bg-current animate-pulse" />
+                {currentNode.delay} ms
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-muted-foreground/85 px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-border/15 hover:border-border/30 transition-colors">
+                {isConnected ? "测试延迟" : "选择节点"}
+              </span>
+            )}
+            <div className="w-6 h-6 rounded-full bg-black/[0.02] dark:bg-white/[0.04] flex items-center justify-center border border-transparent group-hover:border-white/10 dark:group-hover:border-white/5 group-hover:bg-black/5 dark:group-hover:bg-white/10 transition-all">
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60 group-hover:translate-x-0.5 transition-transform" />
             </div>
-          </button>
-        </div>
+          </div>
+        </button>
       </div>
 
       {isDrawerOpen && (
@@ -695,24 +768,27 @@ export function HomeDashboardPanel({
                           type="button"
                           onClick={() => handlePickNode(node.id)}
                           className={cn(
-                            "w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-left transition-all",
+                            "w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-left transition-all duration-300 border relative overflow-hidden group select-none active:scale-[0.98]",
                             active
-                              ? "bg-primary/10 text-primary border border-primary/20"
-                              : "bg-black/5 dark:bg-white/5 border border-transparent text-foreground hover:bg-black/10 dark:hover:bg-white/10",
+                              ? "bg-gradient-to-r from-primary/12 to-indigo-500/8 border-primary/30 text-foreground shadow-[0_4px_12px_rgba(59,130,246,0.06),inset_0_1px_1px_rgba(255,255,255,0.6)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.04)]"
+                              : "bg-white/40 dark:bg-white/[0.03] border-white/10 dark:border-white/[0.04] text-foreground hover:bg-white/60 dark:hover:bg-white/[0.06] hover:border-white/20 dark:hover:border-white/[0.08]",
                           )}
                         >
+                          {active && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.03] to-transparent opacity-100 pointer-events-none animate-fade-in" />
+                          )}
+
                           <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <span
-                              className="text-2xl leading-none shrink-0"
-                              aria-hidden
-                            >
-                              {nLine.flag}
-                            </span>
+                            <div className="w-9 h-9 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] flex items-center justify-center text-xl shrink-0 border border-black/5 dark:border-white/5 shadow-sm">
+                              <span className="group-hover:scale-110 transition-transform duration-300" aria-hidden>
+                                {nLine.flag}
+                              </span>
+                            </div>
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs font-bold truncate leading-tight">
+                              <div className="text-xs font-bold truncate leading-tight tracking-wide">
                                 {nLine.primary}
                               </div>
-                              <div className="text-[9px] text-muted-foreground truncate leading-normal mt-0.5">
+                              <div className="text-[9px] text-muted-foreground/80 truncate leading-normal mt-0.5 font-mono">
                                 {node.server
                                   ? `${node.server}:${node.port}`
                                   : node.type}
@@ -720,36 +796,41 @@ export function HomeDashboardPanel({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2.5 shrink-0">
                             {rowPending ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
                             ) : delayText ? (
                               <span
                                 className={cn(
-                                  "text-[10px] font-bold tabular-nums",
+                                  "text-[10px] font-bold tabular-nums px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 shadow-sm",
                                   node.delayError
-                                    ? "text-red-500"
-                                    : getLatencyColor(node.delay),
+                                    ? "bg-rose-500/8 border-rose-500/25 text-rose-600 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400"
+                                    : node.delay !== undefined && node.delay < 100
+                                      ? "bg-emerald-500/8 border-emerald-500/25 text-emerald-600 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400"
+                                      : node.delay !== undefined && node.delay < 200
+                                        ? "bg-amber-500/8 border-amber-500/25 text-amber-600 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-400"
+                                        : "bg-rose-500/8 border-rose-500/25 text-rose-600 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400"
                                 )}
                               >
+                                <span className="w-1 h-1 rounded-full bg-current animate-pulse" />
                                 {delayText}
                               </span>
                             ) : (
-                              <span className="text-[9px] text-muted-foreground/60">
+                              <span className="text-[9px] font-medium text-muted-foreground/60 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 border border-border/10">
                                 未测速
                               </span>
                             )}
 
                             <div
                               className={cn(
-                                "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
+                                "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-all duration-300",
                                 active
-                                  ? "border-primary bg-primary"
-                                  : "border-muted-foreground/30",
+                                  ? "border-primary bg-gradient-to-tr from-primary to-indigo-500 shadow-[0_2px_6px_rgba(59,130,246,0.35)]"
+                                  : "border-black/20 dark:border-white/20 bg-black/[0.02] dark:bg-white/[0.02]",
                               )}
                             >
                               {active && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                <div className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
                               )}
                             </div>
                           </div>
