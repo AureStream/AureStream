@@ -244,10 +244,10 @@ export function Dashboard({
         />
 
         {/* 双栏黄金比例布局 */}
-        <div className="relative grid w-full h-full grid-cols-1 gap-6 md:grid-cols-[62%_38%] min-h-0 z-10">
+        <div className="relative flex flex-col md:flex-row w-full h-full gap-4 lg:gap-6 min-h-0 z-10">
           
           {/* 左侧主功能区：控制卡片 + 节点面板 */}
-          <div className="flex flex-col gap-5 min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col gap-5 min-h-0 overflow-hidden">
             
             {/* 卡片 A：连接与控制面板 */}
             <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
@@ -551,7 +551,7 @@ export function Dashboard({
           </div>
 
           {/* 右侧：用量/网络/图表监控栏 */}
-          <div className="flex flex-col gap-5 min-h-0 overflow-y-auto pr-2">
+          <div className="w-full md:w-[300px] lg:w-[340px] shrink-0 flex flex-col gap-5 min-h-0 overflow-y-auto pr-2">
             
             {/* 卡片 C：订阅用量面板 */}
             <div className="glass rounded-3xl p-5 flex flex-col gap-3.5 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
