@@ -16,7 +16,7 @@ import {
   ArrowDownAZ,
   Package,
 } from "lucide-react";
-import { useProxyStore } from "@/stores/appStore";
+import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
 import { getLatencyColor } from "@/types";
 import { toast } from "sonner";
@@ -88,6 +88,7 @@ export function HomeDashboardPanel({
     latencyPendingByNodeId,
   } = useProxyStore();
 
+  const { proxyMode, setProxyMode } = useAppStore();
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
@@ -451,6 +452,49 @@ export function HomeDashboardPanel({
           )}
         </button>
           </div>
+
+        {/* PC：连接球下方 — 全局模式（规则 ⟷ 全局），移动端不展示 */}
+        {isDesktop && (
+          <div
+            className={cn(
+              "pointer-events-auto flex shrink-0 flex-col items-center",
+              "mt-[clamp(0.5rem,min(3.25dvh,4vw),1.625rem)] pb-1",
+            )}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                void setProxyMode(proxyMode === "global" ? "rule" : "global")
+              }
+              className={cn(
+                "flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2.5 select-none",
+                proxyMode === "global"
+                  ? "text-primary"
+                  : "text-muted-foreground",
+              )}
+              aria-pressed={proxyMode === "global"}
+            >
+              <span className="text-[11px] font-semibold whitespace-nowrap">
+                全局模式
+              </span>
+              <div
+                className={cn(
+                  "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-300",
+                  proxyMode === "global"
+                    ? "bg-primary"
+                    : "bg-black/15 dark:bg-white/15",
+                )}
+              >
+                <div
+                  className={cn(
+                    "absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                    proxyMode === "global" && "translate-x-[18px]",
+                  )}
+                />
+              </div>
+            </button>
+          </div>
+        )}
 
         {!isConnected && (
           <div
