@@ -438,119 +438,104 @@ export function HomeDashboardPanel({
             </span>
           </div>
 
-          {isConnected && !isDisconnecting && (
-            <>
-              <div
-                className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping"
-                style={{ animationDuration: "2s" }}
-              />
-              <div
-                className="absolute inset-[-16px] rounded-full border border-primary/10 animate-ping"
-                style={{ animationDuration: "4s", animationDelay: "0.5s" }}
-              />
-            </>
-          )}
         </button>
           </div>
 
-        {/* PC：连接球下方 — 全局模式（规则 ⟷ 全局），移动端不展示 */}
-        {isDesktop && (
+        {/* 开关行：移动未连接→分流+去广告；PC 未连接→三者一排；PC 已连接→仅全局模式 */}
+        {(!isConnected || isDesktop) && (
           <div
             className={cn(
-              "pointer-events-auto flex shrink-0 flex-col items-center",
-              "mt-[clamp(0.5rem,min(3.25dvh,4vw),1.625rem)] pb-1",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                void setProxyMode(proxyMode === "global" ? "rule" : "global")
-              }
-              className={cn(
-                "flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2.5 select-none",
-                proxyMode === "global"
-                  ? "text-primary"
-                  : "text-muted-foreground",
-              )}
-              aria-pressed={proxyMode === "global"}
-            >
-              <span className="text-[11px] font-semibold whitespace-nowrap">
-                全局模式
-              </span>
-              <div
-                className={cn(
-                  "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-300",
-                  proxyMode === "global"
-                    ? "bg-primary"
-                    : "bg-black/15 dark:bg-white/15",
-                )}
-              >
-                <div
-                  className={cn(
-                    "absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                    proxyMode === "global" && "translate-x-[18px]",
-                  )}
-                />
-              </div>
-            </button>
-          </div>
-        )}
-
-        {!isConnected && (
-          <div
-            className={cn(
-              "flex shrink-0 flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2 pb-1 pointer-events-auto",
-              // 连接球与「智能分流 / 去广告」之间：明显留白，矮屏仍有下限
+              "pointer-events-auto flex shrink-0 flex-row flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2 pb-1",
               "mt-[clamp(0.625rem,min(4.5dvh,6vw),1.875rem)] max-[380px]:gap-x-5",
               "[@media(max-height:700px)]:mt-[clamp(0.5rem,min(3.5dvh,5vw),1.5rem)] [@media(max-height:700px)]:gap-x-6",
               "pt-[clamp(0.25rem,min(2dvh,2vw),0.5rem)]",
+              isDesktop && "lg:gap-x-12 xl:gap-x-14",
             )}
           >
-            <button
-              type="button"
-              onClick={() => setSmartRoute((v) => !v)}
-              className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2"
-            >
-              <span className="text-[11px] font-semibold whitespace-nowrap">
-                智能分流
-              </span>
-              <div
-                className={cn(
-                  "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-                  smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
-                )}
-              >
-                <div
-                  className={cn(
-                    "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                    smartRoute && "translate-x-[18px]",
-                  )}
-                />
-              </div>
-            </button>
+            {!isConnected ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSmartRoute((v) => !v)}
+                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2"
+                >
+                  <span className="text-[11px] font-semibold whitespace-nowrap">
+                    智能分流
+                  </span>
+                  <div
+                    className={cn(
+                      "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+                      smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                        smartRoute && "translate-x-[18px]",
+                      )}
+                    />
+                  </div>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => setSmartAdBlock((v) => !v)}
-              className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2"
-            >
-              <span className="text-[11px] font-semibold whitespace-nowrap">
-                智能去广告
-              </span>
-              <div
+                <button
+                  type="button"
+                  onClick={() => setSmartAdBlock((v) => !v)}
+                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2"
+                >
+                  <span className="text-[11px] font-semibold whitespace-nowrap">
+                    智能去广告
+                  </span>
+                  <div
+                    className={cn(
+                      "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+                      smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                        smartAdBlock && "translate-x-[18px]",
+                      )}
+                    />
+                  </div>
+                </button>
+              </>
+            ) : null}
+
+            {isDesktop ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void setProxyMode(proxyMode === "global" ? "rule" : "global")
+                }
                 className={cn(
-                  "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-                  smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                  "flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2",
+                  proxyMode === "global"
+                    ? "text-primary"
+                    : "text-muted-foreground",
                 )}
+                aria-pressed={proxyMode === "global"}
               >
+                <span className="text-[11px] font-semibold whitespace-nowrap">
+                  全局模式
+                </span>
                 <div
                   className={cn(
-                    "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                    smartAdBlock && "translate-x-[18px]",
+                    "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-300",
+                    proxyMode === "global"
+                      ? "bg-primary"
+                      : "bg-black/15 dark:bg-white/15",
                   )}
-                />
-              </div>
-            </button>
+                >
+                  <div
+                    className={cn(
+                      "absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                      proxyMode === "global" && "translate-x-[18px]",
+                    )}
+                  />
+                </div>
+              </button>
+            ) : null}
           </div>
         )}
         </div>
