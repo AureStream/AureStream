@@ -256,7 +256,7 @@ export function Dashboard({
           <div className="flex-1 flex flex-col gap-5 min-h-0">
             
             {/* 卡片 A：连接与控制面板 */}
-            <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
+            <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent relative z-10">
               {/* 左侧：连接圆球 */}
               <div className="relative flex shrink-0 items-center justify-center">
                 <button
