@@ -140,7 +140,7 @@ export function ProviderCard({
 
   return (
     /* Outer clip: hides anything that spills outside the rounded rect */
-    <div className="relative overflow-hidden rounded-[24px] h-full">
+    <div className="relative overflow-hidden rounded-3xl h-full">
 
       {/* ── Action panel (revealed by swiping) ───────────────────────── */}
       <div
@@ -182,9 +182,8 @@ export function ProviderCard({
       {/* ── Sliding card content ─────────────────────────────────────── */}
       <div
         className={cn(
-          "liquid-glass-card h-full relative cursor-pointer touch-pan-y select-none overflow-hidden",
-          // Remove the border-radius from the inner card — outer clip handles it
-          "rounded-[24px]",
+          "glass h-full relative cursor-pointer touch-pan-y select-none overflow-hidden",
+          "rounded-3xl",
           isActive
             ? "ring-1 ring-primary/30 shadow-[0_0_24px_rgba(59,130,246,0.15)]"
             : "hover:shadow-[var(--shadow-glass-hover)]",

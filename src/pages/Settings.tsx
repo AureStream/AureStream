@@ -41,7 +41,7 @@ export function Settings() {
     description: string;
     children: ReactNode;
   }) => (
-    <div className="liquid-glass-card p-4 sm:p-5 flex flex-row items-center justify-between gap-3 sm:gap-4">
+    <div className="glass rounded-2xl p-4 sm:p-5 flex flex-row items-center justify-between gap-3 sm:gap-4">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
           <Icon className="w-4 h-4 text-primary" />
@@ -101,7 +101,7 @@ export function Settings() {
             </div>
           </SettingRow>
 
-          <div className="liquid-glass-card p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Globe className="w-5 h-5 text-primary" />
@@ -136,7 +136,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="liquid-glass-card p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Zap className="w-5 h-5 text-primary" />
@@ -188,7 +188,7 @@ export function Settings() {
             </div>
           </div>
 
-          <div className="liquid-glass-card p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Info className="w-5 h-5 text-primary" />

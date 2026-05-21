@@ -139,7 +139,7 @@ export function Providers() {
           <button
             type="button"
             onClick={handleAddNew}
-            className="glass rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[var(--shadow-glass-hover)] border-2 border-dashed border-border/50 hover:border-primary/40 flex flex-col items-center justify-center gap-2 min-h-[12rem] text-muted-foreground hover:text-primary"
+            className="glass rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-[var(--shadow-glass-hover)] border-2 border-dashed border-border/50 hover:border-primary/40 flex flex-col items-center justify-center gap-2 min-h-[12rem] text-muted-foreground hover:text-primary"
           >
             <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center">
               <Plus className="w-5 h-5" />
