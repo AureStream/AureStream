@@ -9,9 +9,23 @@ use crate::models::proxy_config::ProxyConfig;
 
 use super::common::{ensure_loopback_bypass, parse_bypass_domains, system_proxy_host};
 
+/// 查找 gsettings 可执行文件路径。
+fn find_gsettings() -> Option<&'static str> {
+    for candidate in &["/usr/bin/gsettings", "/usr/local/bin/gsettings", "gsettings"] {
+        if Command::new(candidate)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 /// 检测当前是否为 GNOME 桌面环境。
 fn is_gnome() -> bool {
-    // 检查 XDG_CURRENT_DESKTOP 或 GDMSESSION
     if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
         let lower = desktop.to_lowercase();
         if lower.contains("gnome") || lower.contains("unity") || lower.contains("budgie") {
@@ -25,21 +39,26 @@ fn is_gnome() -> bool {
         }
     }
     // fallback：检查 gsettings schema 是否存在
-    Command::new("gsettings")
-        .args(["get", "org.gnome.system.proxy", "mode"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    if let Some(gs) = find_gsettings() {
+        return Command::new(gs)
+            .args(["get", "org.gnome.system.proxy", "mode"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+    }
+    false
 }
 
 /// 执行 gsettings set 命令。
 fn gsettings_set(schema: &str, key: &str, value: &str) -> Result<(), String> {
-    let status = Command::new("gsettings")
+    let gs = find_gsettings().ok_or_else(|| "未找到 gsettings 命令".to_string())?;
+    let output = Command::new(gs)
         .args(["set", schema, key, value])
-        .status()
+        .output()
         .map_err(|e| format!("执行 gsettings 失败: {e}"))?;
-    if !status.success() {
-        return Err(format!("gsettings set {schema} {key} {value} 失败"));
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gsettings set {schema} {key} 失败: {stderr}"));
     }
     Ok(())
 }
@@ -67,18 +86,18 @@ pub fn apply(config: &ProxyConfig) -> Result<(), String> {
 
     tracing::info!(host = %host, port = %port, "[system-proxy] 设置 GNOME 系统代理");
 
-    gsettings_set("org.gnome.system.proxy", "mode", "'manual'")?;
+    gsettings_set("org.gnome.system.proxy", "mode", "manual")?;
 
     // HTTP 代理
-    gsettings_set("org.gnome.system.proxy.http", "host", &format!("'{}'", host))?;
+    gsettings_set("org.gnome.system.proxy.http", "host", &host)?;
     gsettings_set("org.gnome.system.proxy.http", "port", &port)?;
 
     // HTTPS 代理
-    gsettings_set("org.gnome.system.proxy.https", "host", &format!("'{}'", host))?;
+    gsettings_set("org.gnome.system.proxy.https", "host", &host)?;
     gsettings_set("org.gnome.system.proxy.https", "port", &port)?;
 
     // SOCKS 代理
-    gsettings_set("org.gnome.system.proxy.socks", "host", &format!("'{}'", host))?;
+    gsettings_set("org.gnome.system.proxy.socks", "host", &host)?;
     gsettings_set("org.gnome.system.proxy.socks", "port", &port)?;
 
     // 绕过域名

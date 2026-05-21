@@ -136,15 +136,7 @@ impl RuntimeManager {
 
         if let Some(cfg) = proxy_cfg.as_ref() {
             if let Err(e) = self.inner.proxy.enable(cfg) {
-                let _ = self.inner.core.adapter().stop().await;
-                let mut st = self.inner.state.lock().await;
-                *st = ConnectionState::Error;
-                drop(st);
-                let msg = e.to_string();
-                self.inner.events.publish(AppEvent::Error {
-                    message: msg.clone(),
-                });
-                return Err(AppError::other(msg));
+                tracing::warn!(error = %e, "[runtime] 系统代理设置失败，连接继续");
             }
         }
 
