@@ -47,6 +47,8 @@ interface AppStore {
   autoStart: boolean;
   autoConnect: boolean;
   proxyMode: "rule" | "global" | "direct";
+  smartRoute: boolean;
+  smartAdBlock: boolean;
   /** 从后端 YAML 加载设置 */
   loadSettings: () => Promise<void>;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -55,6 +57,8 @@ interface AppStore {
   setAutoStart: (value: boolean) => void;
   setAutoConnect: (value: boolean) => void;
   setProxyMode: (mode: "rule" | "global" | "direct") => Promise<void>;
+  setSmartRoute: (value: boolean) => Promise<void>;
+  setSmartAdBlock: (value: boolean) => Promise<void>;
 }
 
 export const useAppStore = create<AppStore>()((set, get) => ({
@@ -63,6 +67,8 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   autoStart: false,
   autoConnect: false,
   proxyMode: "rule",
+  smartRoute: true,
+  smartAdBlock: false,
 
   loadSettings: async () => {
     try {
@@ -71,12 +77,15 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       if (!settings.proxyBypassDomains) {
         settings.proxyBypassDomains = DEFAULT_PROXY_BYPASS_DOMAINS;
       }
+      const loadedSmartRoute = settings.smartRoute ?? true;
       set({
         theme: settings.theme,
         proxyBypassDomains: settings.proxyBypassDomains,
         autoStart: settings.autoStart,
         autoConnect: settings.autoConnect,
-        proxyMode: (settings as any).proxyMode || "rule",
+        proxyMode: (settings as any).proxyMode || (loadedSmartRoute ? "rule" : "global"),
+        smartRoute: loadedSmartRoute,
+        smartAdBlock: settings.smartAdBlock ?? false,
       });
     } catch (e) {
       console.error("Failed to load app settings:", e);
@@ -136,6 +145,18 @@ export const useAppStore = create<AppStore>()((set, get) => ({
         console.error("Failed to update mihomo mode:", e);
       }
     }
+  },
+
+  setSmartRoute: async (value) => {
+    set({ smartRoute: value });
+    savePersistedSettings({ smartRoute: value } as any).catch(console.error);
+    const mode = value ? "rule" : "global";
+    await get().setProxyMode(mode);
+  },
+
+  setSmartAdBlock: async (value) => {
+    set({ smartAdBlock: value });
+    savePersistedSettings({ smartAdBlock: value } as any).catch(console.error);
   },
 }));
 

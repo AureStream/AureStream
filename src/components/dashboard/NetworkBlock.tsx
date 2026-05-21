@@ -4,16 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { getNetworkInfo, type NetworkInfo } from "@/lib/api";
 
-const INFO_ROWS: { key: keyof NetworkInfo; label: string }[] = [
-  { key: "fetchMode", label: "获取方式" },
-  { key: "ip", label: "IP" },
-  { key: "city", label: "城市" },
-  { key: "region", label: "区域" },
-  { key: "country", label: "国家" },
-  { key: "asn", label: "ASN" },
-  { key: "org", label: "组织" },
-];
-
 export function NetworkBlock({
   className,
 }: {
@@ -66,43 +56,8 @@ export function NetworkBlock({
     doFetch(id);
   }, [doFetch]);
 
-  const valueNode = (key: keyof NetworkInfo) => {
-    if (loading && !info) {
-      return (
-        <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
-      );
-    }
-    const val = info?.[key];
-    if (!val && loading) {
-      return (
-        <span className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
-      );
-    }
-    if (key === "fetchMode") {
-      if (val === "代理") {
-        return (
-          <span className="inline-flex items-center rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500 ring-1 ring-inset ring-emerald-500/20">
-            代理
-          </span>
-        );
-      }
-      if (val === "直连") {
-        return (
-          <span className="inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-500 ring-1 ring-inset ring-blue-500/20">
-            直连
-          </span>
-        );
-      }
-    }
-    return (
-      <span className="min-w-0 truncate text-xs font-medium tabular-nums text-foreground" title={val || undefined}>
-        {val || "-"}
-      </span>
-    );
-  };
-
   return (
-    <div className={cn("flex flex-col gap-4", className)}>
+    <div className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-center gap-2.5">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
           <Globe className="size-4 text-primary" strokeWidth={1.75} />
@@ -119,15 +74,68 @@ export function NetworkBlock({
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 flex-col gap-2.5">
-        {INFO_ROWS.map(({ key, label }) => (
-          <div key={key} className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground shrink-0">
-              {label}
-            </span>
-            {valueNode(key)}
+      <div className="flex flex-1 min-h-0 flex-col gap-2">
+        {/* IP 地址 & 获取方式 */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground shrink-0">
+            IP 地址
+          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {loading && !info ? (
+              <span className="h-3 w-20 animate-pulse rounded bg-muted-foreground/20" />
+            ) : (
+              <>
+                <span className="min-w-0 truncate text-xs font-medium tabular-nums text-foreground" title={info?.ip || undefined}>
+                  {info?.ip || "-"}
+                </span>
+                {info?.fetchMode === "代理" && (
+                  <span className="inline-flex items-center rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 ring-1 ring-inset ring-emerald-500/20 shrink-0">
+                    代理
+                  </span>
+                )}
+                {info?.fetchMode === "直连" && (
+                  <span className="inline-flex items-center rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500 ring-1 ring-inset ring-blue-500/20 shrink-0">
+                    直连
+                  </span>
+                )}
+              </>
+            )}
           </div>
-        ))}
+        </div>
+
+        {/* 地理位置 */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground shrink-0">
+            地理位置
+          </span>
+          {loading && !info ? (
+            <span className="h-3 w-24 animate-pulse rounded bg-muted-foreground/20" />
+          ) : (
+            <span
+              className="min-w-0 truncate text-xs font-medium text-foreground"
+              title={[info?.country, info?.region, info?.city].filter(Boolean).join(" · ") || undefined}
+            >
+              {[info?.country, info?.region, info?.city].filter(Boolean).join(" · ") || "-"}
+            </span>
+          )}
+        </div>
+
+        {/* 网络提供商 */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground shrink-0">
+            网络提供商
+          </span>
+          {loading && !info ? (
+            <span className="h-3 w-28 animate-pulse rounded bg-muted-foreground/20" />
+          ) : (
+            <span
+              className="min-w-0 truncate text-xs font-medium text-foreground"
+              title={[info?.asn, info?.org].filter(Boolean).join(" · ") || undefined}
+            >
+              {[info?.asn, info?.org].filter(Boolean).join(" · ") || "-"}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

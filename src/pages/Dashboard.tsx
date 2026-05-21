@@ -3,7 +3,7 @@ import { NetworkBlock } from "@/components/dashboard/NetworkBlock";
 import { UsageBlock } from "@/components/dashboard/UsageBlock";
 import { PageShell } from "@/components/layout/PageShell";
 import { cn } from "@/lib/utils";
-import { useProxyStore } from "@/stores/appStore";
+import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { getLatencyColor } from "@/types";
 import type { Node } from "@/types";
 import { toast } from "sonner";
@@ -17,6 +17,8 @@ import {
   ArrowDownAZ,
   Package,
   ChevronRight,
+  Compass,
+  Shield,
 } from "lucide-react";
 
 const SERIES_LEN = 48;
@@ -89,14 +91,16 @@ export function Dashboard({
     latencyPendingByNodeId,
   } = useProxyStore();
 
-
+  const {
+    smartRoute,
+    smartAdBlock,
+    setSmartRoute,
+    setSmartAdBlock,
+  } = useAppStore();
 
   const [uploadSeries, setUploadSeries] = useState(emptySeries);
   const [downloadSeries, setDownloadSeries] = useState(emptySeries);
   const [nowTick, setNowTick] = useState(() => Date.now());
-
-  const [smartRoute, setSmartRoute] = useState(true);
-  const [smartAdBlock, setSmartAdBlock] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
   const wasTestingRef = useRef(false);
@@ -334,51 +338,86 @@ export function Dashboard({
                 </button>
               </div>
 
-              {/* 右侧：状态展示与代理模式控制 */}
-              <div className="flex-1 flex flex-col justify-between h-full min-w-0 py-1 gap-3">
-                {/* 状态与时长 */}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "size-2 rounded-full",
-                        isConnected && !isDisconnecting
-                          ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"
-                          : "bg-zinc-400",
-                      )}
-                    />
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {isDisconnecting
-                        ? "正在断开网络连接..."
-                        : isConnecting
-                          ? "正在建立安全代理连接..."
-                          : isConnected
-                            ? "安全代理网络已建立"
-                            : "安全代理网络已断开"}
+              {/* 右侧：状态展示与智能控制卡片 */}
+              <div className="flex-1 flex flex-col justify-between self-stretch min-w-0 py-0.5 gap-4">
+                {/* 状态与时长双栏布局 */}
+                <div className="flex items-center justify-between border-b border-border/10 pb-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold tracking-wider text-muted-foreground/80 uppercase">
+                      服务状态
                     </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "size-2 rounded-full",
+                          isConnected && !isDisconnecting
+                            ? "bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"
+                            : isConnecting
+                              ? "bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]"
+                              : "bg-zinc-400",
+                        )}
+                      />
+                      <span className="text-xs font-bold text-foreground leading-none">
+                        {isDisconnecting
+                          ? "正在断开网络连接..."
+                          : isConnecting
+                            ? "建立安全代理中..."
+                            : isConnected
+                              ? "安全代理网络已建立"
+                              : "安全代理已断开"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 text-2xl font-extrabold tabular-nums tracking-tight text-foreground">
-                    {isConnected ? formatDuration(elapsedSec) : "00:00:00"}
+
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-bold tracking-wider text-muted-foreground/80 uppercase">
+                      已连接时长
+                    </span>
+                    <div className={cn(
+                      "text-lg font-black font-mono tracking-wider leading-none",
+                      isConnected && !isDisconnecting
+                        ? "text-emerald-500 dark:text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.25)]"
+                        : "text-muted-foreground/50"
+                    )}>
+                      {isConnected ? formatDuration(elapsedSec) : "00:00:00"}
+                    </div>
                   </div>
                 </div>
 
-                {/* 控制条 */}
-                <div className="flex items-center gap-3 mt-1.5">
-                  {/* 智能分流开关 */}
+                {/* 智能开关卡片组 */}
+                <div className="grid grid-cols-2 gap-3.5">
+                  {/* 智能分流 */}
                   <button
                     type="button"
-                    onClick={() => setSmartRoute((v) => !v)}
+                    onClick={() => void setSmartRoute(!smartRoute)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-bold active:scale-[0.98] select-none cursor-pointer",
+                      "flex items-center justify-between gap-3 p-2.5 rounded-2xl border transition-all duration-300 cursor-pointer select-none text-left relative overflow-hidden group active:scale-[0.98]",
                       smartRoute
-                        ? "bg-primary/10 border-primary/20 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
-                        : "bg-black/[0.02] dark:bg-white/[0.02] border-transparent text-muted-foreground hover:text-foreground"
+                        ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
+                        : "bg-black/[0.01] dark:bg-white/[0.01] border-border/40 hover:border-border/60 hover:bg-black/[0.03] dark:hover:bg-white/[0.02]"
                     )}
                   >
-                    <span>智能分流</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0",
+                        smartRoute
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
+                      )}>
+                        <Compass className="w-4.5 h-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className={cn("text-xs font-bold transition-colors leading-none", smartRoute ? "text-primary" : "text-foreground")}>
+                          智能分流
+                        </div>
+                        <div className="text-[9px] text-muted-foreground/75 truncate mt-1">
+                          {smartRoute ? "绕过局域网及大陆" : "全部流量走代理"}
+                        </div>
+                      </div>
+                    </div>
                     <div
                       className={cn(
-                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none",
+                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
                         smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
                       )}
                     >
@@ -391,21 +430,38 @@ export function Dashboard({
                     </div>
                   </button>
 
-                  {/* 去广告开关 */}
+                  {/* 去广告 */}
                   <button
                     type="button"
-                    onClick={() => setSmartAdBlock((v) => !v)}
+                    onClick={() => void setSmartAdBlock(!smartAdBlock)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-bold active:scale-[0.98] select-none cursor-pointer",
+                      "flex items-center justify-between gap-3 p-2.5 rounded-2xl border transition-all duration-300 cursor-pointer select-none text-left relative overflow-hidden group active:scale-[0.98]",
                       smartAdBlock
-                        ? "bg-primary/10 border-primary/20 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
-                        : "bg-black/[0.02] dark:bg-white/[0.02] border-transparent text-muted-foreground hover:text-foreground"
+                        ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
+                        : "bg-black/[0.01] dark:bg-white/[0.01] border-border/40 hover:border-border/60 hover:bg-black/[0.03] dark:hover:bg-white/[0.02]"
                     )}
                   >
-                    <span>去广告</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0",
+                        smartAdBlock
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
+                      )}>
+                        <Shield className="w-4.5 h-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className={cn("text-xs font-bold transition-colors leading-none", smartAdBlock ? "text-primary" : "text-foreground")}>
+                          去广告
+                        </div>
+                        <div className="text-[9px] text-muted-foreground/75 truncate mt-1">
+                          {smartAdBlock ? "已开启广告拦截" : "未开启广告防御"}
+                        </div>
+                      </div>
+                    </div>
                     <div
                       className={cn(
-                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none",
+                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
                         smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
                       )}
                     >
@@ -551,10 +607,10 @@ export function Dashboard({
           </div>
 
           {/* 右侧：用量/网络/图表监控栏 */}
-          <div className="w-full md:w-[300px] lg:w-[340px] shrink-0 flex flex-col gap-5 min-h-0 overflow-y-auto pr-2">
+          <div className="w-full md:w-[300px] lg:w-[340px] shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto pr-2">
             
             {/* 卡片 C：订阅用量面板 */}
-            <div className="glass rounded-3xl p-5 flex flex-col gap-3.5 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
+            <div className="glass rounded-3xl p-4 flex flex-col gap-3 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
               {currentProvider ? (
                 <>
                   <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/10">
@@ -629,12 +685,12 @@ export function Dashboard({
             </div>
 
             {/* 卡片 D：网络诊断面板 */}
-            <div className="glass rounded-3xl p-5">
+            <div className="glass rounded-3xl p-4">
               <NetworkBlock />
             </div>
 
             {/* 卡片 E：实时速率折线图 */}
-            <div className="glass rounded-3xl p-5 flex flex-col flex-1 min-h-[200px]">
+            <div className="glass rounded-3xl p-4 flex flex-col flex-1 min-h-[140px]">
               <UsageBlock
                 uploadTotal={sessionUploadGb}
                 downloadTotal={sessionDownloadGb}

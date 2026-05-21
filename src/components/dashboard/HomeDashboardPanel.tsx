@@ -88,13 +88,16 @@ export function HomeDashboardPanel({
     latencyPendingByNodeId,
   } = useProxyStore();
 
-  const { proxyMode, setProxyMode } = useAppStore();
+  const {
+    smartRoute,
+    smartAdBlock,
+    setSmartRoute,
+    setSmartAdBlock,
+  } = useAppStore();
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
-  const [smartRoute, setSmartRoute] = useState(true);
-  const [smartAdBlock, setSmartAdBlock] = useState(false);
   const wasTestingRef = useRef(false);
 
   useEffect(() => {
@@ -460,102 +463,60 @@ export function HomeDashboardPanel({
         </button>
           </div>
 
-        {/* 开关行：移动未连接→分流+去广告；PC 未连接→三者一排；PC 已连接→仅全局模式 */}
-        {(!isConnected || isDesktop) && (
-          <div
-            className={cn(
-              "pointer-events-auto flex shrink-0 flex-row flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2",
-              "mt-[clamp(0.5rem,min(3dvh,4vw),1.25rem)] max-[380px]:gap-x-5",
-              "[@media(max-height:700px)]:mt-[clamp(0.375rem,min(2.5dvh,3vw),0.875rem)] [@media(max-height:700px)]:gap-x-6",
-              isDesktop && "lg:gap-x-12 xl:gap-x-14",
-            )}
+        {/* 开关行：分流与去广告 */}
+        <div
+          className={cn(
+            "pointer-events-auto flex shrink-0 flex-row flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2",
+            "mt-[clamp(0.5rem,min(3dvh,4vw),1.25rem)] max-[380px]:gap-x-5",
+            "[@media(max-height:700px)]:mt-[clamp(0.375rem,min(2.5dvh,3vw),0.875rem)] [@media(max-height:700px)]:gap-x-6",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => void setSmartRoute(!smartRoute)}
+            className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2 hover:text-foreground transition-colors"
           >
-            {!isConnected ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setSmartRoute((v) => !v)}
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2"
-                >
-                  <span className="text-[11px] font-semibold whitespace-nowrap">
-                    智能分流
-                  </span>
-                  <div
-                    className={cn(
-                      "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-                      smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                        smartRoute && "translate-x-[18px]",
-                      )}
-                    />
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSmartAdBlock((v) => !v)}
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2"
-                >
-                  <span className="text-[11px] font-semibold whitespace-nowrap">
-                    智能去广告
-                  </span>
-                  <div
-                    className={cn(
-                      "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-                      smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                        smartAdBlock && "translate-x-[18px]",
-                      )}
-                    />
-                  </div>
-                </button>
-              </>
-            ) : null}
-
-            {isDesktop ? (
-              <button
-                type="button"
-                onClick={() =>
-                  void setProxyMode(proxyMode === "global" ? "rule" : "global")
-                }
+            <span className="text-[11px] font-semibold whitespace-nowrap">
+              智能分流
+            </span>
+            <div
+              className={cn(
+                "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+                smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+              )}
+            >
+              <div
                 className={cn(
-                  "flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2",
-                  proxyMode === "global"
-                    ? "text-primary"
-                    : "text-muted-foreground",
+                  "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                  smartRoute && "translate-x-[18px]",
                 )}
-                aria-pressed={proxyMode === "global"}
-              >
-                <span className="text-[11px] font-semibold whitespace-nowrap">
-                  全局模式
-                </span>
-                <div
-                  className={cn(
-                    "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-300",
-                    proxyMode === "global"
-                      ? "bg-primary"
-                      : "bg-black/15 dark:bg-white/15",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                      proxyMode === "global" && "translate-x-[18px]",
-                    )}
-                  />
-                </div>
-              </button>
-            ) : null}
-          </div>
-        )}
+              />
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void setSmartAdBlock(!smartAdBlock)}
+            className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2 hover:text-foreground transition-colors"
+          >
+            <span className="text-[11px] font-semibold whitespace-nowrap">
+              智能去广告
+            </span>
+            <div
+              className={cn(
+                "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+                smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+              )}
+            >
+              <div
+                className={cn(
+                  "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                  smartAdBlock && "translate-x-[18px]",
+                )}
+              />
+            </div>
+          </button>
+        </div>
         </div>
       </div>
 
