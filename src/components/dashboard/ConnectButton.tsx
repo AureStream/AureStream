@@ -108,8 +108,8 @@ export function ConnectButton({
           dims.outer,
           "backdrop-blur-2xl border group",
           isConnected && !isDisconnecting
-            ? "border-cyan-500/30 bg-cyan-500/10 dark:bg-cyan-500/10 shadow-[0_0_50px_rgba(6,182,212,0.35),0_0_100px_rgba(59,130,246,0.15)] dark:border-cyan-400/40"
-            : "border-slate-200/60 dark:border-white/[0.08] bg-white/60 dark:bg-white/[0.02] shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_30px_rgba(99,102,241,0.25)]",
+            ? "border-cyan-500/30 dark:border-cyan-400/35 bg-transparent shadow-[0_0_50px_rgba(6,182,212,0.25),0_0_100px_rgba(59,130,246,0.1)]"
+            : "border-slate-200/40 dark:border-white/[0.08] bg-transparent shadow-[0_8px_32px_rgba(0,0,0,0.02)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.02)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] dark:hover:shadow-[0_0_30px_rgba(99,102,241,0.2)]",
           !isConnected && !isConnecting && "opacity-95 hover:opacity-100",
           busy && "border-primary/20",
         )}
