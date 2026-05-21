@@ -220,7 +220,7 @@ export function HomeDashboardPanel({
       {/* Subscription card — 固定在上，避免与下方计时/球体重叠 */}
       <div className="relative z-30 shrink-0 px-4 pt-4 pb-1">
         {currentProvider ? (
-          <div className="rounded-2xl border flex flex-col gap-3 px-4 py-3.5 bg-gradient-to-r from-white/35 via-white/20 to-white/10 dark:from-zinc-950/40 dark:via-zinc-900/30 dark:to-zinc-900/10 border-white/25 dark:border-white/[0.06] shadow-[0_10px_32px_rgba(59,130,246,0.04),inset_0_1px_1.5px_rgba(255,255,255,0.7)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.45),inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl [@media(max-height:700px)]:gap-2 [@media(max-height:700px)]:py-3">
+          <div className="liquid-glass-card flex flex-col gap-3 px-4 py-3.5 [@media(max-height:700px)]:gap-2 [@media(max-height:700px)]:py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
@@ -295,7 +295,7 @@ export function HomeDashboardPanel({
             </div>
           </div>
         ) : (
-          <div className="rounded-2xl border px-4 py-3.5 text-center bg-gradient-to-r from-white/35 via-white/20 to-white/10 dark:from-zinc-950/40 dark:via-zinc-900/30 dark:to-zinc-900/10 border-white/25 dark:border-white/[0.06] shadow-[0_10px_32px_rgba(59,130,246,0.04),inset_0_1px_1.5px_rgba(255,255,255,0.7)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.45),inset_0_1px_1px_rgba(255,255,255,0.05)] backdrop-blur-xl [@media(max-height:700px)]:py-3">
+          <div className="liquid-glass-card px-4 py-3.5 text-center [@media(max-height:700px)]:py-3">
             <p className="text-xs text-muted-foreground font-medium">
               未激活任何服务商订阅
             </p>
@@ -610,9 +610,7 @@ export function HomeDashboardPanel({
           type="button"
           onClick={() => setIsDrawerOpen(true)}
           className={cn(
-            "flex w-full max-w-[340px] mx-auto items-center justify-between gap-3.5 px-4 py-3.5 rounded-2xl text-left transition-all duration-300 relative overflow-hidden select-none outline-none group border active:scale-[0.98]",
-            "bg-gradient-to-r from-white/35 via-white/20 to-white/10 dark:from-zinc-950/40 dark:via-zinc-900/30 dark:to-zinc-900/10",
-            "border-white/25 dark:border-white/[0.06] shadow-[0_10px_32px_rgba(59,130,246,0.05),inset_0_1px_1.5px_rgba(255,255,255,0.7)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)]",
+            "liquid-glass-card flex w-full max-w-[340px] mx-auto items-center justify-between gap-3.5 px-4 py-3.5 text-left relative overflow-hidden select-none outline-none group",
             "hover:border-primary/30 dark:hover:border-primary/20 hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)]"
           )}
         >
