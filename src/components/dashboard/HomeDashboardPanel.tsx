@@ -33,19 +33,6 @@ function formatDuration(totalSeconds: number): string {
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
-function formatSpeed(bytesPerSecond: number): string {
-  if (bytesPerSecond === 0) return "0 KB/s";
-  const k = 1024;
-  const sizes = ["B/s", "KB/s", "MB/s", "GB/s"];
-  const i = Math.min(
-    Math.floor(Math.log(bytesPerSecond) / Math.log(k)),
-    sizes.length - 1,
-  );
-  const v = bytesPerSecond / Math.pow(k, i);
-  const decimals = i >= 2 ? 1 : i === 1 ? 1 : 0;
-  return `${v.toFixed(decimals)} ${sizes[i]}`;
-}
-
 function parseNodeLabels(nodeName?: string, nodeServer?: string): {
   flag: string;
   primary: string;
@@ -93,8 +80,6 @@ export function HomeDashboardPanel({
     isConnecting,
     isDisconnecting,
     connectedAt,
-    uploadSpeed,
-    downloadSpeed,
     connect,
     disconnect,
     nodes,
@@ -372,29 +357,6 @@ export function HomeDashboardPanel({
                     ? formatDuration(elapsedSec)
                     : "00:00:00"}
                 </span>
-                <div
-                  className={cn(
-                    "inline-flex items-center gap-2.5 rounded-full border border-border/60 bg-muted/35 px-3 py-1 text-[10px] tabular-nums text-muted-foreground mt-1.5 shadow-sm transition-all duration-500",
-                    isConnected && !isDisconnecting
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-95 pointer-events-none select-none",
-                  )}
-                  aria-hidden={!(isConnected && !isDisconnecting)}
-                >
-                  <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                    <span className="text-foreground/60" aria-hidden>
-                      ↓
-                    </span>
-                    <span>{formatSpeed(downloadSpeed)}</span>
-                  </span>
-                  <div className="h-3 w-px bg-border/60" aria-hidden />
-                  <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                    <span className="text-foreground/60" aria-hidden>
-                      ↑
-                    </span>
-                    <span>{formatSpeed(uploadSpeed)}</span>
-                  </span>
-                </div>
               </div>
             )}
 
