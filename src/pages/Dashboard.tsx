@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Compass,
   Shield,
+  HelpCircle,
 } from "lucide-react";
 
 const SERIES_LEN = 48;
@@ -103,6 +104,7 @@ export function Dashboard({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
+  const [helpTarget, setHelpTarget] = useState<"route" | "ad" | null>(null);
   const wasTestingRef = useRef(false);
 
   // 1. 本次会话流量数据转换
@@ -385,39 +387,32 @@ export function Dashboard({
                 </div>
 
                 {/* 智能开关卡片组 */}
-                <div className="grid grid-cols-2 gap-3.5">
+                <div className="rounded-2xl border border-border/40 bg-black/[0.01] dark:bg-white/[0.01] divide-y divide-border/30">
                   {/* 智能分流 */}
                   <button
                     type="button"
                     onClick={() => void setSmartRoute(!smartRoute)}
-                    className={cn(
-                      "flex items-center justify-between gap-3 p-2.5 rounded-2xl border transition-all duration-300 cursor-pointer select-none text-left relative overflow-hidden group active:scale-[0.98]",
-                      smartRoute
-                        ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
-                        : "bg-black/[0.01] dark:bg-white/[0.01] border-border/40 hover:border-border/60 hover:bg-black/[0.03] dark:hover:bg-white/[0.02]"
-                    )}
+                    className="flex items-center gap-3 px-3 py-2.5 w-full transition-colors cursor-pointer select-none group rounded-t-2xl hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={cn(
-                        "w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0",
-                        smartRoute
-                          ? "bg-primary/15 text-primary"
-                          : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
-                      )}>
-                        <Compass className="w-4.5 h-4.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className={cn("text-xs font-bold transition-colors leading-none", smartRoute ? "text-primary" : "text-foreground")}>
-                          智能分流
-                        </div>
-                        <div className="text-[9px] text-muted-foreground/75 truncate mt-1">
-                          {smartRoute ? "绕过局域网及大陆" : "全部流量走代理"}
-                        </div>
-                      </div>
+                    <div className={cn(
+                      "w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0",
+                      smartRoute ? "bg-primary/15 text-primary" : "bg-muted/10 text-muted-foreground"
+                    )}>
+                      <Compass className="w-4 h-4" />
                     </div>
+                    <span className={cn("text-xs font-semibold flex-1 text-left", smartRoute ? "text-primary" : "text-foreground")}>
+                      智能分流
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setHelpTarget(helpTarget === "route" ? null : "route"); }}
+                      className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
                     <div
                       className={cn(
-                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
+                        "relative w-7 h-4 rounded-full transition-colors duration-300 shrink-0",
                         smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
                       )}
                     >
@@ -434,34 +429,27 @@ export function Dashboard({
                   <button
                     type="button"
                     onClick={() => void setSmartAdBlock(!smartAdBlock)}
-                    className={cn(
-                      "flex items-center justify-between gap-3 p-2.5 rounded-2xl border transition-all duration-300 cursor-pointer select-none text-left relative overflow-hidden group active:scale-[0.98]",
-                      smartAdBlock
-                        ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
-                        : "bg-black/[0.01] dark:bg-white/[0.01] border-border/40 hover:border-border/60 hover:bg-black/[0.03] dark:hover:bg-white/[0.02]"
-                    )}
+                    className="flex items-center gap-3 px-3 py-2.5 w-full transition-colors cursor-pointer select-none group rounded-b-2xl hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={cn(
-                        "w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0",
-                        smartAdBlock
-                          ? "bg-primary/15 text-primary"
-                          : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
-                      )}>
-                        <Shield className="w-4.5 h-4.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className={cn("text-xs font-bold transition-colors leading-none", smartAdBlock ? "text-primary" : "text-foreground")}>
-                          去广告
-                        </div>
-                        <div className="text-[9px] text-muted-foreground/75 truncate mt-1">
-                          {smartAdBlock ? "已开启广告拦截" : "未开启广告防御"}
-                        </div>
-                      </div>
+                    <div className={cn(
+                      "w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0",
+                      smartAdBlock ? "bg-primary/15 text-primary" : "bg-muted/10 text-muted-foreground"
+                    )}>
+                      <Shield className="w-4 h-4" />
                     </div>
+                    <span className={cn("text-xs font-semibold flex-1 text-left", smartAdBlock ? "text-primary" : "text-foreground")}>
+                      去广告
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setHelpTarget(helpTarget === "ad" ? null : "ad"); }}
+                      className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
                     <div
                       className={cn(
-                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
+                        "relative w-7 h-4 rounded-full transition-colors duration-300 shrink-0",
                         smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
                       )}
                     >
@@ -473,6 +461,13 @@ export function Dashboard({
                       />
                     </div>
                   </button>
+
+                  {helpTarget && (
+                    <div className="px-3 py-2 text-[11px] leading-relaxed text-muted-foreground bg-white dark:bg-zinc-900 rounded-b-2xl">
+                      {helpTarget === "route" && "根据规则自动分流：国内站点直连，境外流量走代理。关闭后所有流量均走代理。"}
+                      {helpTarget === "ad" && "自动拦截常见广告、跟踪器及恶意域名，净化上网体验。"}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -692,6 +687,8 @@ export function Dashboard({
             {/* 卡片 E：实时速率折线图 */}
             <div className="glass rounded-3xl p-4 flex flex-col flex-1 min-h-[140px]">
               <UsageBlock
+                uploadSpeed={uploadSpeed}
+                downloadSpeed={downloadSpeed}
                 uploadTotal={sessionUploadGb}
                 downloadTotal={sessionDownloadGb}
                 uploadSeries={uploadSeries}
