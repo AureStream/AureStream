@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useMemo, useRef, useId } from "react";
+import { createPortal } from "react-dom";
 import { NetworkBlock } from "@/components/dashboard/NetworkBlock";
 import { UsageBlock } from "@/components/dashboard/UsageBlock";
 import { PageShell } from "@/components/layout/PageShell";
@@ -104,7 +105,7 @@ export function Dashboard({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
-  const [helpTarget, setHelpTarget] = useState<"route" | "ad" | null>(null);
+  const [helpPopover, setHelpPopover] = useState<{ type: "route" | "ad"; rect: DOMRect } | null>(null);
   const wasTestingRef = useRef(false);
 
   // 1. 本次会话流量数据转换
@@ -256,7 +257,7 @@ export function Dashboard({
           <div className="flex-1 flex flex-col gap-5 min-h-0">
             
             {/* 卡片 A：连接与控制面板 */}
-            <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent relative z-10">
+            <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
               {/* 左侧：连接圆球 */}
               <div className="relative flex shrink-0 items-center justify-center">
                 <button
@@ -387,7 +388,7 @@ export function Dashboard({
                 </div>
 
                 {/* 智能开关卡片组 */}
-                <div className="relative rounded-2xl border border-border/40 bg-black/[0.01] dark:bg-white/[0.01] divide-y divide-border/30">
+                <div className="rounded-2xl border border-border/40 bg-black/[0.01] dark:bg-white/[0.01] divide-y divide-border/30">
                   {/* 智能分流 */}
                   <button
                     type="button"
@@ -405,8 +406,8 @@ export function Dashboard({
                     </span>
                     <button
                       type="button"
-                      onMouseEnter={() => setHelpTarget("route")}
-                      onMouseLeave={() => setHelpTarget(null)}
+                      onMouseEnter={(e) => setHelpPopover({ type: "route", rect: e.currentTarget.getBoundingClientRect() })}
+                      onMouseLeave={() => setHelpPopover(null)}
                       className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -443,8 +444,8 @@ export function Dashboard({
                     </span>
                     <button
                       type="button"
-                      onMouseEnter={() => setHelpTarget("ad")}
-                      onMouseLeave={() => setHelpTarget(null)}
+                      onMouseEnter={(e) => setHelpPopover({ type: "ad", rect: e.currentTarget.getBoundingClientRect() })}
+                      onMouseLeave={() => setHelpPopover(null)}
                       className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -464,21 +465,6 @@ export function Dashboard({
                     </div>
                   </button>
 
-                  {helpTarget && (
-                    <div className={cn(
-                      "absolute left-1/2 -translate-x-1/2 z-50 w-56 px-3 py-2 rounded-xl shadow-xl border border-border/60",
-                      "bg-white dark:bg-zinc-900 text-[11px] leading-relaxed text-muted-foreground",
-                      "animate-in fade-in slide-in-from-top-1 duration-200",
-                      helpTarget === "route" ? "-top-2 -translate-y-full" : "top-full mt-2"
-                    )}>
-                      {helpTarget === "route" && "根据规则自动分流：国内站点直连，境外流量走代理。关闭后所有流量均走代理。"}
-                      {helpTarget === "ad" && "自动拦截常见广告、跟踪器及恶意域名，净化上网体验。"}
-                      <div className={cn(
-                        "absolute left-1/2 -translate-x-1/2 size-2 rotate-45 bg-white dark:bg-zinc-900 border border-border/60",
-                        helpTarget === "route" ? "-bottom-1 border-t-transparent border-l-transparent" : "-top-1 border-b-transparent border-r-transparent"
-                      )} />
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -710,6 +696,24 @@ export function Dashboard({
           </div>
         </div>
       </div>
+      {helpPopover &&
+        createPortal(
+          <div
+            className={cn(
+              "fixed z-[9999] w-56 px-3 py-2 rounded-xl shadow-xl border border-border/60",
+              "bg-white dark:bg-zinc-900 text-[11px] leading-relaxed text-muted-foreground",
+            )}
+            style={{
+              top: helpPopover.rect.bottom + 6,
+              left: Math.max(8, helpPopover.rect.left + helpPopover.rect.width / 2 - 112),
+            }}
+          >
+            {helpPopover.type === "route" && "根据规则自动分流：国内站点直连，境外流量走代理。关闭后所有流量均走代理。"}
+            {helpPopover.type === "ad" && "自动拦截常见广告、跟踪器及恶意域名，净化上网体验。"}
+            <div className="absolute left-1/2 -translate-x-1/2 -top-1 size-2 rotate-45 bg-white dark:bg-zinc-900 border-l border-t border-border/60" />
+          </div>,
+          document.body,
+        )}
     </PageShell>
   );
 }
