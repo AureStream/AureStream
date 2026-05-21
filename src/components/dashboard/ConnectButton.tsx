@@ -68,6 +68,12 @@ export function ConnectButton({
     }
   };
 
+  const diskState: "idle" | "active" | "busy" = busy
+    ? "busy"
+    : isConnected && !isDisconnecting
+      ? "active"
+      : "idle";
+
   return (
     <div
       className={cn(
@@ -91,35 +97,35 @@ export function ConnectButton({
         }}
       />
 
-      {/* 主按钮 — 始终是同一个 <button>，仅颜色/阴影随状态过渡 */}
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={
-          !isConnected && (disabledOuter || isConnecting)
-        }
-        aria-disabled={
-          !isConnected && (disabledOuter || isConnecting)
-        }
-        title={disabledOuter && !isConnected ? "请先选择服务商" : undefined}
-        className={cn(
-          "relative z-10 flex flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
-          "cursor-pointer",
-          dims.outer,
-          "backdrop-blur-2xl border group",
-          isConnected && !isDisconnecting
-            ? "border-cyan-500/30 dark:border-cyan-400/35 bg-transparent shadow-[0_0_50px_rgba(6,182,212,0.25),0_0_100px_rgba(59,130,246,0.1)]"
-            : "border-slate-200/40 dark:border-white/[0.08] bg-transparent shadow-[0_8px_32px_rgba(0,0,0,0.02)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.02)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] dark:hover:shadow-[0_0_30px_rgba(99,102,241,0.2)]",
-          !isConnected && !isConnecting && "opacity-95 hover:opacity-100",
-          busy && "border-primary/20",
-        )}
-      >
-        {/* 连接中 / 断开中 — 旋转渐变环 */}
-        {busy && (
-          <svg
-            className="absolute inset-0 size-full animate-spin"
-            viewBox="0 0 124 124"
-          >
+      <div className="connect-orb-root">
+        {/* 主按钮 — WKWebView 亮色见 index.css `.connect-orb-btn` */}
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={
+            !isConnected && (disabledOuter || isConnecting)
+          }
+          aria-disabled={
+            !isConnected && (disabledOuter || isConnecting)
+          }
+          title={disabledOuter && !isConnected ? "请先选择服务商" : undefined}
+          className={cn(
+            "connect-orb-btn relative z-10 flex flex-col items-center justify-center rounded-full overflow-hidden transition-all duration-700 ease-in-out",
+            "cursor-pointer",
+            dims.outer,
+            "border group",
+            isConnected && !isDisconnecting
+              ? "border-cyan-500/30 dark:border-cyan-400/35 shadow-[0_0_50px_rgba(6,182,212,0.25),0_0_100px_rgba(59,130,246,0.1)]"
+              : "border-slate-200/40 dark:border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.02)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.02)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.12)] dark:hover:shadow-[0_0_30px_rgba(99,102,241,0.2)]",
+            !isConnected && !isConnecting && "opacity-95 hover:opacity-100",
+            busy && "border-primary/20",
+          )}
+        >
+          {busy && (
+            <svg
+              className="absolute inset-0 z-[2] size-full animate-spin"
+              viewBox="0 0 124 124"
+            >
             <circle
               cx="62"
               cy="62"
@@ -145,17 +151,19 @@ export function ConnectButton({
           </svg>
         )}
 
-        <div
-          className={cn(
-            "relative z-10 flex shrink-0 flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
-            dims.inner,
-            isConnected && !isDisconnecting
-              ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)]"
-              : busy
-                ? "bg-gradient-to-tr from-indigo-600/70 via-blue-500/70 to-cyan-400/70"
-                : "bg-gradient-to-b from-white to-slate-50/95 dark:from-zinc-800/85 dark:to-zinc-900/95 shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_2px_3px_rgba(255,255,255,1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.1)] border border-slate-200/50 dark:border-zinc-700/35",
-          )}
-        >
+          <div
+            className={cn(
+              "connect-orb-disk relative z-[3] flex shrink-0 flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
+              dims.inner,
+              diskState === "idle" &&
+                "dark:border dark:border-zinc-700/35 dark:bg-gradient-to-b dark:from-zinc-800/85 dark:to-zinc-950 dark:shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.1)]",
+              diskState === "active" &&
+                "dark:bg-gradient-to-tr dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 dark:shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)] text-white",
+              diskState === "busy" &&
+                "text-white/90 dark:bg-gradient-to-tr dark:from-indigo-600/70 dark:via-blue-500/70 dark:to-cyan-400/70 dark:text-white/90",
+            )}
+            data-connect-orb={diskState}
+          >
           <Power
             className={cn(
               "relative z-10 shrink-0 transition-all duration-700 ease-in-out",
@@ -190,7 +198,7 @@ export function ConnectButton({
         {/* 已连接 — 外层脉动波纹 */}
         <div
           className={cn(
-            "pointer-events-none absolute inset-0 rounded-full border-2 border-primary/30 transition-opacity duration-700",
+            "pointer-events-none absolute inset-0 z-[1] rounded-full border-2 border-primary/30 transition-opacity duration-700",
             isConnected && !isDisconnecting
               ? "animate-ping opacity-100"
               : "opacity-0",
@@ -199,14 +207,15 @@ export function ConnectButton({
         />
         <div
           className={cn(
-            "pointer-events-none absolute inset-0 rounded-full border border-primary/20 transition-opacity duration-700",
+            "pointer-events-none absolute inset-0 z-[1] rounded-full border border-primary/20 transition-opacity duration-700",
             isConnected && !isDisconnecting
               ? "animate-ping opacity-100"
               : "opacity-0",
           )}
           style={{ animationDuration: "3s", animationDelay: "0.5s" }}
         />
-      </button>
+        </button>
+      </div>
 
       {/* 代理模式说明（已连接时显示） */}
       <div className="flex min-h-[1.25rem] flex-col items-center justify-center text-center">

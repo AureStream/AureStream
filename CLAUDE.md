@@ -54,7 +54,7 @@ npm run preview         # Preview built frontend locally
 **Core Components:**
 
 - **Pages**: `Dashboard.tsx` (main page), `Providers.tsx`, `Settings.tsx`
-- **Layout**: `Sidebar` navigation rail + `MainContent` page container
+- **Layout**: `Sidebar` navigation rail + `MainContent` page container（**桌面端壳层唯一**；原窄屏/移动端适配已摘除，移动端计划独立工程实现，见 `docs/MOBILE_UI.md`）
 - **Dashboard**: Golden ratio layout (61.8%/38.2%), single viewport, glassmorphism design
 - **State Management**:
   - `useAppStore`: Theme management (light/dark) with persistence

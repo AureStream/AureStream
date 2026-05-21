@@ -222,6 +222,12 @@ export function Dashboard({
   const canConnect = Boolean(currentProvider);
   const busy = isConnecting || isDisconnecting;
 
+  const connectOrbDiskState: "idle" | "active" | "busy" = busy
+    ? "busy"
+    : isConnected && !isDisconnecting
+      ? "active"
+      : "idle";
+
 
 
   return (
@@ -250,23 +256,24 @@ export function Dashboard({
             <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
               {/* 左侧：连接圆球 */}
               <div className="relative flex shrink-0 items-center justify-center">
-                <button
-                  type="button"
-                  onClick={handleConnectionToggle}
-                  disabled={!isConnected && (busy || !canConnect)}
-                  className={cn(
-                    "relative z-10 flex shrink-0 cursor-pointer flex-col items-center justify-center !rounded-full transition-all duration-700 ease-in-out",
+                <div className="connect-orb-root">
+                  <button
+                    type="button"
+                    onClick={handleConnectionToggle}
+                    disabled={!isConnected && (busy || !canConnect)}
+                    className={cn(
+                    "connect-orb-btn relative z-10 flex shrink-0 cursor-pointer flex-col items-center justify-center !rounded-full overflow-hidden transition-all duration-700 ease-in-out",
                     "h-[126px] w-[126px]",
-                    "pointer-events-auto backdrop-blur-2xl border group select-none outline-none focus:outline-none focus-visible:outline-none",
+                    "pointer-events-auto border group select-none outline-none focus:outline-none focus-visible:outline-none",
                     isConnected && !isDisconnecting
-                      ? "border-cyan-500/30 dark:border-cyan-400/35 bg-transparent shadow-[0_0_40px_rgba(6,182,212,0.2),0_0_80px_rgba(59,130,246,0.08)]"
-                      : "border-slate-200/40 dark:border-white/[0.08] bg-transparent shadow-[0_8px_24px_rgba(0,0,0,0.02)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.02)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_24px_rgba(59,130,246,0.08)] dark:hover:shadow-[0_0_24px_rgba(99,102,241,0.15)]",
+                      ? "border-cyan-500/30 dark:border-cyan-400/35 shadow-[0_0_40px_rgba(6,182,212,0.2),0_0_80px_rgba(59,130,246,0.08)]"
+                      : "border-slate-200/40 dark:border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.02)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.02)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_24px_rgba(59,130,246,0.08)] dark:hover:shadow-[0_0_24px_rgba(99,102,241,0.15)]",
                     busy && "border-primary/20",
                     !isConnected && "opacity-95 hover:opacity-100",
                   )}
-                >
-                  {busy && (
-                    <svg className="absolute inset-0 size-full animate-spin" viewBox="0 0 100 100">
+                  >
+                    {busy && (
+                    <svg className="absolute inset-0 z-[2] size-full animate-spin" viewBox="0 0 100 100">
                       <circle
                         cx="50"
                         cy="50"
@@ -294,13 +301,17 @@ export function Dashboard({
 
                   <div
                     className={cn(
-                      "flex h-[88px] w-[88px] flex-col items-center justify-center gap-1.5 !rounded-full transition-all duration-700 ease-in-out",
-                      isConnected && !isDisconnecting
-                        ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_8px_16px_rgba(59,130,246,0.35)] text-white"
-                        : busy
-                          ? "bg-gradient-to-tr from-indigo-600/70 via-blue-500/70 to-cyan-400/70 text-white/90"
-                          : "bg-gradient-to-b from-white to-slate-50/95 dark:from-zinc-800/85 dark:to-zinc-900/95 shadow-[0_2px_6px_rgba(0,0,0,0.04),inset_0_2px_3px_rgba(255,255,255,1)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.25),inset_0_1px_1px_rgba(255,255,255,0.1)] border border-slate-200/50 dark:border-zinc-700/35",
+                      "connect-orb-disk relative z-[3] flex h-[88px] w-[88px] flex-col items-center justify-center gap-1.5 !rounded-full transition-all duration-700 ease-in-out",
+                      connectOrbDiskState === "active" &&
+                        "connect-orb-disk--compact",
+                      connectOrbDiskState === "idle" &&
+                        "dark:border dark:border-zinc-700/35 dark:bg-gradient-to-b dark:from-zinc-800/85 dark:to-zinc-950 dark:shadow-[0_4px_12px_rgba(0,0,0,0.25),inset_0_1px_1px_rgba(255,255,255,0.1)]",
+                      connectOrbDiskState === "active" &&
+                        "dark:bg-gradient-to-tr dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 dark:shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_8px_16px_rgba(59,130,246,0.35)] text-white",
+                      connectOrbDiskState === "busy" &&
+                        "text-white/90 dark:bg-gradient-to-tr dark:from-indigo-600/70 dark:via-blue-500/70 dark:to-cyan-400/70 dark:text-white/90",
                     )}
+                    data-connect-orb={connectOrbDiskState}
                   >
                     <Power
                       className={cn(
@@ -328,7 +339,8 @@ export function Dashboard({
                             : "未连接"}
                     </span>
                   </div>
-                </button>
+                  </button>
+                </div>
               </div>
 
               {/* 右侧：状态展示与智能控制卡片 */}
