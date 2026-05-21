@@ -80,6 +80,7 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
   const [sortBy, setSortBy] = useState<"name" | "delay">("delay");
   const [frozenIds, setFrozenIds] = useState<string[] | null>(null);
   const [smartRoute, setSmartRoute] = useState(true);
+  const [smartAdBlock, setSmartAdBlock] = useState(false);
   const wasTestingRef = useRef(false);
 
   // 1. Timer for duration
@@ -347,28 +348,57 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
           )}
         </button>
 
-        {/* Smart Route Toggle — below button, only when not connected */}
+        {/* Smart toggles — below button when not connected（与原先相同的标签 + 胶囊开关样式） */}
         {!isConnected && (
-        <div className="absolute left-0 right-0 top-[73%] flex justify-center pointer-events-auto">
-          <button
-            type="button"
-            onClick={() => setSmartRoute((v) => !v)}
-            className={cn(
-              "flex flex-col items-center gap-1.5 px-4 py-2.5 rounded-2xl select-none text-muted-foreground"
-            )}
-          >
-            <span className="text-[11px] font-semibold whitespace-nowrap">智能分流</span>
-            <div className={cn(
-              "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-              smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15"
-            )}>
-              <div className={cn(
-                "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                smartRoute && "translate-x-[18px]"
-              )} />
+          <div className="absolute left-0 right-0 top-[73%] flex justify-center pointer-events-auto">
+            <div className="flex items-start justify-center gap-8 px-4">
+              <button
+                type="button"
+                onClick={() => setSmartRoute((v) => !v)}
+                className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground"
+              >
+                <span className="text-[11px] font-semibold whitespace-nowrap">
+                  智能分流
+                </span>
+                <div
+                  className={cn(
+                    "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+                    smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                      smartRoute && "translate-x-[18px]",
+                    )}
+                  />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSmartAdBlock((v) => !v)}
+                className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground"
+              >
+                <span className="text-[11px] font-semibold whitespace-nowrap">
+                  智能去广告
+                </span>
+                <div
+                  className={cn(
+                    "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
+                    smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
+                      smartAdBlock && "translate-x-[18px]",
+                    )}
+                  />
+                </div>
+              </button>
             </div>
-          </button>
-        </div>
+          </div>
         )}
       </div>
 
