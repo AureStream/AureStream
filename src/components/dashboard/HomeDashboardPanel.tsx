@@ -357,45 +357,44 @@ export function HomeDashboardPanel({
               !isDesktop && "gap-y-[clamp(0.5rem,min(4dvh,6vw),1.5rem)]",
             )}
           >
-            {/* 移动端：计时与网速 pill */}
             {!isDesktop && (
-              <div className="flex shrink-0 flex-col items-center gap-2 px-1">
-                {isConnected && !isDisconnecting ? (
-                  <>
-                    <span
-                      className={cn(
-                        "select-none font-extrabold tabular-nums tracking-tight text-foreground",
-                        "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
-                      )}
-                    >
-                      {formatDuration(elapsedSec)}
+              <div className="flex shrink-0 flex-col items-center px-1">
+                <span
+                  className={cn(
+                    "select-none font-extrabold tabular-nums tracking-tight leading-none transition-colors duration-500",
+                    "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)]",
+                    isConnected && !isDisconnecting
+                      ? "text-foreground"
+                      : "text-muted-foreground/20",
+                  )}
+                >
+                  {isConnected && !isDisconnecting
+                    ? formatDuration(elapsedSec)
+                    : "00:00:00"}
+                </span>
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-2.5 rounded-full border border-border/60 bg-muted/35 px-3 py-1 text-[10px] tabular-nums text-muted-foreground mt-1.5 shadow-sm transition-all duration-500",
+                    isConnected && !isDisconnecting
+                      ? "opacity-100 scale-100"
+                      : "opacity-0 scale-95 pointer-events-none select-none",
+                  )}
+                  aria-hidden={!(isConnected && !isDisconnecting)}
+                >
+                  <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                    <span className="text-foreground/60" aria-hidden>
+                      ↓
                     </span>
-                    <div className="inline-flex items-center gap-2.5 rounded-full border border-border/60 bg-muted/35 px-3 py-1 text-[10px] tabular-nums text-muted-foreground mt-1.5 shadow-sm">
-                      <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                        <span className="text-foreground/60" aria-hidden>
-                          ↓
-                        </span>
-                        <span>{formatSpeed(downloadSpeed)}</span>
-                      </span>
-                      <div className="h-3 w-px bg-border/60" aria-hidden />
-                      <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
-                        <span className="text-foreground/60" aria-hidden>
-                          ↑
-                        </span>
-                        <span>{formatSpeed(uploadSpeed)}</span>
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <span
-                    className={cn(
-                      "select-none font-extrabold tabular-nums tracking-tight text-muted-foreground/20",
-                      "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
-                    )}
-                  >
-                    00:00:00
+                    <span>{formatSpeed(downloadSpeed)}</span>
                   </span>
-                )}
+                  <div className="h-3 w-px bg-border/60" aria-hidden />
+                  <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                    <span className="text-foreground/60" aria-hidden>
+                      ↑
+                    </span>
+                    <span>{formatSpeed(uploadSpeed)}</span>
+                  </span>
+                </div>
               </div>
             )}
 
