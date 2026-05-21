@@ -39,8 +39,8 @@ export function NetworkBlock({
   // 自动刷新：连接/断开、切换节点、切换代理模式
   useEffect(() => {
     const id = ++fetchId.current;
-    // 节点切换时清空旧数据并等待代理路由生效
     setInfo(null);
+    setLoading(true);
     const delay = isConnected ? 2000 : 0;
     const timer = setTimeout(() => doFetch(id), delay);
     return () => clearTimeout(timer);
@@ -72,13 +72,13 @@ export function NetworkBlock({
 
       <div className="flex flex-1 min-h-0 flex-col gap-2">
         {/* IP 地址 & 获取方式 */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between min-h-[1.5rem]">
           <span className="text-xs text-muted-foreground shrink-0">
             IP 地址
           </span>
           <div className="flex items-center gap-1.5 min-w-0">
             {loading && !info ? (
-              <span className="h-3 w-20 animate-pulse rounded bg-muted-foreground/20" />
+              <span className="h-4 w-20 animate-pulse rounded bg-muted-foreground/20" />
             ) : (
               <>
                 <span className="min-w-0 truncate text-xs font-medium tabular-nums text-foreground" title={info?.ip || undefined}>
@@ -100,12 +100,12 @@ export function NetworkBlock({
         </div>
 
         {/* 地理位置 */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between min-h-[1.5rem]">
           <span className="text-xs text-muted-foreground shrink-0">
             地理位置
           </span>
           {loading && !info ? (
-            <span className="h-3 w-24 animate-pulse rounded bg-muted-foreground/20" />
+            <span className="h-4 w-24 animate-pulse rounded bg-muted-foreground/20" />
           ) : (
             <span
               className="min-w-0 truncate text-xs font-medium text-foreground"
@@ -117,12 +117,12 @@ export function NetworkBlock({
         </div>
 
         {/* 网络提供商 */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between min-h-[1.5rem]">
           <span className="text-xs text-muted-foreground shrink-0">
             网络提供商
           </span>
           {loading && !info ? (
-            <span className="h-3 w-28 animate-pulse rounded bg-muted-foreground/20" />
+            <span className="h-4 w-28 animate-pulse rounded bg-muted-foreground/20" />
           ) : (
             <span
               className="min-w-0 truncate text-xs font-medium text-foreground"

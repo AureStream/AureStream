@@ -592,7 +592,7 @@ export function Dashboard({
           <div className="w-full md:w-[300px] lg:w-[340px] shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto pr-2">
             
             {/* 卡片 C：订阅用量面板 */}
-            <div className="glass rounded-3xl p-4 flex flex-col gap-3 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
+            <div className="glass rounded-3xl p-4 shrink-0 flex flex-col gap-3 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
               {currentProvider ? (
                 <>
                   <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/10">
@@ -667,7 +667,7 @@ export function Dashboard({
             </div>
 
             {/* 卡片 D：网络诊断面板 */}
-            <div className="glass rounded-3xl p-4">
+            <div className="glass rounded-3xl p-4 shrink-0">
               <NetworkBlock />
             </div>
 
