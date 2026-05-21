@@ -49,8 +49,9 @@ coverage
 # Rust / Cargo artifacts (see also src-tauri/.gitignore)
 target/
 
-# Mihomo sidecar binaries (download via scripts/download-mihomo.sh)
-src-tauri/binaries/
+# Mihomo sidecar binaries（运行 npm run mihomo:download 生成；README 纳入版本库）
+src-tauri/binaries/*
+!src-tauri/binaries/README.md
 
 # Cargo：不提交 lockfile（由本地 / CI `cargo generate-lockfile` 生成）
 src-tauri/Cargo.lock

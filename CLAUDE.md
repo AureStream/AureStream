@@ -1,4 +1,4 @@
-# CLAUDE.md
+# [CLAUDE.md](http://CLAUDE.md)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -221,7 +221,7 @@ Parallel TypeScript definitions with camelCase naming convention for JSON serial
 
 **Common Issues:**
 
-- Mihomo process not starting: Check if binary exists in `binaries/` folder
+- Mihomo process not starting / `binaries/mihomo-* doesn't exist`: 在项目根目录执行 `npm run mihomo:download`，确认生成 `src-tauri/binaries/mihomo-<target>`（勿从 `scripts/` 目录单独跑下载脚本）；桌面开发请用 `npm run dev:desktop`（会先确保二进制存在）。
 - Connection failures: Verify NO_PROXY environment variables include localhost
 - Port conflicts: Use `npm run dev:desktop` with `TAURI_DEV_HOST` override
 - Theme not switching: Clear browser cache or check CSS custom property fallbacks
@@ -243,3 +243,4 @@ Tracked in `docs/README.md`（章节「后续改进」）.
 - `docs/SPEC.md`: Detailed technical specifications and design decisions
 - `docs/DESIGN.md`: Architecture overview and technology rationale
 - `docs/FEATURE_*.md` / `docs/MIHOMO_SIDECAR.md` / `docs/PLATFORM_TRAY_MODE.md`: Feature and platform notes
+
