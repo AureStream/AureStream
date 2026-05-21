@@ -15,6 +15,8 @@ import {
   ArrowDown01,
   ArrowDownAZ,
   Package,
+  Compass,
+  Shield,
 } from "lucide-react";
 import { useProxyStore, useAppStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,19 @@ function formatDuration(totalSeconds: number): string {
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond === 0) return "0 KB/s";
+  const k = 1024;
+  const sizes = ["B/s", "KB/s", "MB/s", "GB/s"];
+  const i = Math.min(
+    Math.floor(Math.log(bytesPerSecond) / Math.log(k)),
+    sizes.length - 1,
+  );
+  const v = bytesPerSecond / Math.pow(k, i);
+  const decimals = i >= 2 ? 1 : i === 1 ? 1 : 0;
+  return `${v.toFixed(decimals)} ${sizes[i]}`;
 }
 
 function parseNodeLabels(nodeName?: string, nodeServer?: string): {
@@ -78,6 +93,8 @@ export function HomeDashboardPanel({
     isConnecting,
     isDisconnecting,
     connectedAt,
+    uploadSpeed,
+    downloadSpeed,
     connect,
     disconnect,
     nodes,
@@ -340,18 +357,35 @@ export function HomeDashboardPanel({
               !isDesktop && "gap-y-[clamp(0.5rem,min(4dvh,6vw),1.5rem)]",
             )}
           >
-            {/* 移动端：计时在球上方 */}
+            {/* 移动端：计时与网速 pill */}
             {!isDesktop && (
-              <div className="flex shrink-0 justify-center px-1">
+              <div className="flex shrink-0 flex-col items-center gap-2 px-1">
                 {isConnected && !isDisconnecting ? (
-                  <span
-                    className={cn(
-                      "select-none font-extrabold tabular-nums tracking-tight text-foreground",
-                      "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
-                    )}
-                  >
-                    {formatDuration(elapsedSec)}
-                  </span>
+                  <>
+                    <span
+                      className={cn(
+                        "select-none font-extrabold tabular-nums tracking-tight text-foreground",
+                        "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
+                      )}
+                    >
+                      {formatDuration(elapsedSec)}
+                    </span>
+                    <div className="inline-flex items-center gap-2.5 rounded-full border border-border/60 bg-muted/35 px-3 py-1 text-[10px] tabular-nums text-muted-foreground mt-1.5 shadow-sm">
+                      <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                        <span className="text-foreground/60" aria-hidden>
+                          ↓
+                        </span>
+                        <span>{formatSpeed(downloadSpeed)}</span>
+                      </span>
+                      <div className="h-3 w-px bg-border/60" aria-hidden />
+                      <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
+                        <span className="text-foreground/60" aria-hidden>
+                          ↑
+                        </span>
+                        <span>{formatSpeed(uploadSpeed)}</span>
+                      </span>
+                    </div>
+                  </>
                 ) : (
                   <span
                     className={cn(
@@ -466,105 +500,155 @@ export function HomeDashboardPanel({
         {/* 开关行：分流与去广告 */}
         <div
           className={cn(
-            "pointer-events-auto flex shrink-0 flex-row flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2",
-            "mt-[clamp(0.5rem,min(3dvh,4vw),1.25rem)] max-[380px]:gap-x-5",
-            "[@media(max-height:700px)]:mt-[clamp(0.375rem,min(2.5dvh,3vw),0.875rem)] [@media(max-height:700px)]:gap-x-6",
+            "pointer-events-auto grid grid-cols-2 gap-3.5 w-full max-w-[340px] px-4",
+            "mt-[clamp(0.5rem,min(3dvh,4vw),1.25rem)]",
+            "[@media(max-height:700px)]:mt-[clamp(0.375rem,min(2.5dvh,3vw),0.875rem)]",
           )}
         >
+          {/* 智能分流 */}
           <button
             type="button"
             onClick={() => void setSmartRoute(!smartRoute)}
-            className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2 hover:text-foreground transition-colors"
+            className={cn(
+              "flex flex-col justify-between gap-3.5 p-3 rounded-2xl border transition-all duration-300 w-full text-left relative overflow-hidden group active:scale-[0.98]",
+              smartRoute
+                ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
+                : "bg-black/[0.02] dark:bg-white/[0.02] border-border/40 hover:border-border/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.03]"
+            )}
           >
-            <span className="text-[11px] font-semibold whitespace-nowrap">
-              智能分流
-            </span>
-            <div
-              className={cn(
-                "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-                smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
-              )}
-            >
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0",
+                smartRoute
+                  ? "bg-primary/15 text-primary"
+                  : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
+              )}>
+                <Compass className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-bold text-foreground">
+                智能分流
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between w-full mt-0.5">
+              <span className="text-[9px] text-muted-foreground/75 truncate max-w-[65px]">
+                {smartRoute ? "绕过大陆" : "全部走代理"}
+              </span>
               <div
                 className={cn(
-                  "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                  smartRoute && "translate-x-[18px]",
+                  "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
+                  smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
                 )}
-              />
+              >
+                <div
+                  className={cn(
+                    "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white transition-transform duration-300",
+                    smartRoute && "translate-x-3",
+                  )}
+                />
+              </div>
             </div>
           </button>
 
+          {/* 智能去广告 */}
           <button
             type="button"
             onClick={() => void setSmartAdBlock(!smartAdBlock)}
-            className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-2xl select-none text-muted-foreground [@media(max-height:700px)]:gap-1 [@media(max-height:700px)]:py-2 hover:text-foreground transition-colors"
+            className={cn(
+              "flex flex-col justify-between gap-3.5 p-3 rounded-2xl border transition-all duration-300 w-full text-left relative overflow-hidden group active:scale-[0.98]",
+              smartAdBlock
+                ? "bg-primary/8 border-primary/20 hover:bg-primary/12"
+                : "bg-black/[0.02] dark:bg-white/[0.02] border-border/40 hover:border-border/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.03]"
+            )}
           >
-            <span className="text-[11px] font-semibold whitespace-nowrap">
-              智能去广告
-            </span>
-            <div
-              className={cn(
-                "relative w-10 h-[22px] rounded-full transition-colors duration-300 shrink-0",
-                smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
-              )}
-            >
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0",
+                smartAdBlock
+                  ? "bg-primary/15 text-primary"
+                  : "bg-muted/10 text-muted-foreground group-hover:text-foreground"
+              )}>
+                <Shield className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-bold text-foreground">
+                去广告
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between w-full mt-0.5">
+              <span className="text-[9px] text-muted-foreground/75 truncate max-w-[65px]">
+                {smartAdBlock ? "已拦截广告" : "广告防护关"}
+              </span>
               <div
                 className={cn(
-                  "absolute top-[2px] left-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-transform duration-300",
-                  smartAdBlock && "translate-x-[18px]",
+                  "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none shrink-0",
+                  smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
                 )}
-              />
+              >
+                <div
+                  className={cn(
+                    "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white transition-transform duration-300",
+                    smartAdBlock && "translate-x-3",
+                  )}
+                />
+              </div>
             </div>
           </button>
         </div>
         </div>
       </div>
 
-      {isConnected && (
-        <div
-          className="relative z-10 shrink-0 px-4 pt-1"
-          style={{ paddingBottom: nodePickerPaddingBottom }}
-        >
-          <div className="liquid-glass-card px-2 py-2 max-w-[280px] mx-auto">
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(true)}
-              className="flex w-full items-center justify-between gap-3 px-3 py-3 rounded-2xl bg-transparent active:bg-black/5 dark:active:bg-white/5 transition-all text-left"
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="text-xl leading-none shrink-0" aria-hidden>
-                  {nodeLine.flag}
+      <div
+        className="relative z-10 shrink-0 px-4 pt-1"
+        style={{ paddingBottom: nodePickerPaddingBottom }}
+      >
+        <div className="liquid-glass-card px-2 py-2 max-w-[280px] mx-auto">
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="flex w-full items-center justify-between gap-3 px-3 py-3 rounded-2xl bg-transparent active:bg-black/5 dark:active:bg-white/5 transition-all text-left"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span className="text-xl leading-none shrink-0" aria-hidden>
+                {nodeLine.flag}
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block text-[13px] font-bold text-foreground leading-tight truncate">
+                  {nodeLine.primary}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-bold text-foreground leading-tight truncate">
-                    {nodeLine.primary}
+                {!isConnected ? (
+                  <span className="block text-[10px] text-muted-foreground truncate leading-normal mt-0.5">
+                    点击选择节点
                   </span>
-                  {nodeLine.secondary && (
+                ) : (
+                  nodeLine.secondary && (
                     <span className="block text-[10px] text-muted-foreground truncate leading-normal mt-0.5">
                       {nodeLine.secondary}
                     </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {currentNode?.delay != null ? (
-                  <span
-                    className={cn(
-                      "text-xs font-bold tabular-nums",
-                      getLatencyColor(currentNode.delay),
-                    )}
-                  >
-                    {currentNode.delay} ms
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">测试延迟</span>
+                  )
                 )}
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
-            </button>
-          </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {currentNode?.delay != null ? (
+                <span
+                  className={cn(
+                    "text-xs font-bold tabular-nums",
+                    getLatencyColor(currentNode.delay),
+                  )}
+                >
+                  {currentNode.delay} ms
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {isConnected ? "测试延迟" : "选择节点"}
+                </span>
+              )}
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </button>
         </div>
-      )}
+      </div>
 
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
