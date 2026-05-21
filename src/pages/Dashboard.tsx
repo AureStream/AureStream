@@ -253,7 +253,7 @@ export function Dashboard({
         <div className="relative flex flex-col md:flex-row w-full h-full gap-4 lg:gap-6 min-h-0 z-10">
           
           {/* 左侧主功能区：控制卡片 + 节点面板 */}
-          <div className="flex-1 flex flex-col gap-5 min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col gap-5 min-h-0">
             
             {/* 卡片 A：连接与控制面板 */}
             <div className="glass rounded-3xl p-5 flex items-center gap-6 shrink-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
@@ -484,7 +484,7 @@ export function Dashboard({
             </div>
 
             {/* 卡片 B：一体化节点面板 */}
-            <div className="glass rounded-3xl p-5 flex flex-col flex-1 min-h-0">
+            <div className="glass rounded-3xl p-5 flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="flex justify-between items-center pb-3.5 border-b border-border/10 shrink-0">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-foreground">选择代理节点</h3>
