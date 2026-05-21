@@ -124,16 +124,6 @@ export function Dashboard({
     setDownloadSeries((prev) => [...prev.slice(1), downloadSpeed]);
   }, [isConnected, uploadSpeed, downloadSpeed]);
 
-  useEffect(() => {
-    if (isConnected) return;
-    const id = window.setInterval(() => {
-      const t = Date.now() / 4500;
-      const base = (Math.sin(t) * 0.5 + 0.5) * 4096;
-      setUploadSeries((prev) => [...prev.slice(1), base * 0.35]);
-      setDownloadSeries((prev) => [...prev.slice(1), base * 0.52]);
-    }, 2200);
-    return () => clearInterval(id);
-  }, [isConnected]);
 
   // 3. 在线时长计算
   useEffect(() => {
