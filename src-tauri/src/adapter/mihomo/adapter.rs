@@ -62,13 +62,13 @@ impl MihomoAdapter {
             .await
             .map_err(AppError::Io)?;
 
-        // 复制订阅到 mihomo 工作目录
-        let abs_sub_path =
+        // 复制订阅到 mihomo 工作目录，配置内使用相对 `-d` 的路径
+        let sub_path_rel_home =
             config_gen::mirror_subscription_to_workdir(subscription_file, &self.work_dir, provider_id)
                 .await?;
 
         // 生成完整配置
-        let yaml = config_gen::generate_full_config(&abs_sub_path, profile)?;
+        let yaml = config_gen::generate_full_config(&sub_path_rel_home, profile)?;
         let path = self.runtime_config_path();
         tokio::fs::write(&path, yaml.as_bytes())
             .await

@@ -1,5 +1,8 @@
 //! 内置 Clash/Mihomo 运行时配置：`proxy-providers` 使用本地 YAML（type: file）+ 固定规则与单一 Selector。
-//! Mihomo 要求 `path` 必须位于 `-d` 工作目录（及其 SAFE_PATHS）之下，因此从应用配置目录的订阅文件**复制**到 `mihomo-work/subscriptions/` 再写入配置。
+//! Mihomo 将 `proxy-providers.path` 限制在 `-d`（home）及 SAFE_PATHS 之下；YAML 内使用**相对于 `-d` 的路径**
+//! （如 `subscriptions/<id>.yaml`），并与侧进程传入的 `-d`（`app_local_data_dir()/mihomo-work`）一致，
+//! 避免 Windows 上使用绝对规范化路径与用户目录推导不一致而导致 fatal。
+//! 数据源仍在应用配置目录 `subscriptions/` 下，生成运行配置时会复制到 `mihomo-work/subscriptions/`。
 
 use super::mihomo_constants::{
     AURESTREAM_NODE_SELECTOR, DEFAULT_MIXED_PORT, EXTERNAL_CONTROLLER, GEODATA, LATENCY_TEST_URL,
@@ -11,7 +14,7 @@ use tauri::{AppHandle, Manager, State};
 
 const PROXY_PROVIDER_KEY: &str = "AureStream_Sub";
 
-fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port: u16) -> Value {
+fn build_config_value(subscription_path_relative_home: &str, listen: &str, mixed_port: u16) -> Value {
     let mut root = Mapping::new();
     root.insert(
         Value::String("bind-address".to_string()),
@@ -70,7 +73,7 @@ fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port
     );
     prov.insert(
         Value::String("path".to_string()),
-        Value::String(subscription_file_absolute.to_string()),
+        Value::String(subscription_path_relative_home.to_string()),
     );
     prov.insert(
         Value::String("interval".to_string()),
@@ -126,8 +129,8 @@ fn build_config_value(subscription_file_absolute: &str, listen: &str, mixed_port
     Value::Mapping(root)
 }
 
-/// 写入 `runtime/aurestream-mihomo.yaml`：`proxy-providers.type: file` 的 `path` 为 **`mihomo-work/subscriptions/<provider_id>.yaml`**（内核 `-d` 下，符合 SAFE_PATH）。
-/// 数据源仍为应用配置目录下 `subscriptions/<provider_id>.yaml`（按 `download_subscription` 写入），此处每次生成配置时做一次复制以同步最新内容。
+/// 写入 `runtime/aurestream-mihomo.yaml`：`proxy-providers.type: file` 的 `path` 为相对 `-d` 的 **`subscriptions/<provider_id>.yaml`**（实体文件位于 `.../mihomo-work/subscriptions/`）。
+/// 数据源为应用配置目录下 `subscriptions/<provider_id>.yaml`；每次生成时复制到镜像目录以同步内容。
 #[tauri::command]
 pub async fn build_runtime_config(
     app: AppHandle,
@@ -171,17 +174,8 @@ pub async fn build_runtime_config(
         .await
         .map_err(|e| format!("同步订阅文件到 mihomo-work 失败: {}", e))?;
 
-    let absolute = dest
-        .canonicalize()
-        .map_err(|e| format!("无法解析 mihomo-work 内订阅路径: {}", e))?;
-    // Windows canonicalize() 会加 \\?\ 前缀，mihomo 不识别，需去掉
-    let abs_str = absolute
-        .to_string_lossy()
-        .strip_prefix("\\\\?\\")
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| absolute.to_string_lossy().to_string());
-
-    let yaml_value = build_config_value(&abs_str, &listen, mixed_port);
+    let rel_path = format!("subscriptions/{provider_id}.yaml");
+    let yaml_value = build_config_value(&rel_path, &listen, mixed_port);
 
     let text =
         serde_yaml::to_string(&yaml_value).map_err(|e| format!("序列化内置配置失败: {}", e))?;

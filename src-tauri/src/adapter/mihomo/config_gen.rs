@@ -14,10 +14,11 @@ const PROXY_PROVIDER_KEY: &str = "AureStream_Sub";
 
 /// 生成完整的 Mihomo YAML 配置。
 ///
-/// - `subscription_file_absolute`: 订阅 YAML 文件的绝对路径（必须在 mihomo `-d` 工作目录下）
+/// - `subscription_path_relative_home`: **相对** Mihomo `-d`（工作目录）的路径，通常为 `subscriptions/<provider_id>.yaml`。
+///   使用绝对路径在 Windows 上易与 Mihomo SAFE_PATH（用户目录规范化）不一致并报 fatal；相对路径与各平台一致解析。
 /// - `profile`: 运行时配置（listen、mixed_port、routing_mode 等）
 pub fn generate_full_config(
-    subscription_file_absolute: &str,
+    subscription_path_relative_home: &str,
     profile: &RuntimeProfile,
 ) -> Result<String, AppError> {
     let mut root = Mapping::new();
@@ -79,7 +80,7 @@ pub fn generate_full_config(
     prov.insert(Value::String("type".into()), Value::String("file".into()));
     prov.insert(
         Value::String("path".into()),
-        Value::String(subscription_file_absolute.to_string()),
+        Value::String(subscription_path_relative_home.to_string()),
     );
     prov.insert(Value::String("interval".into()), Value::Number(3600.into()));
     prov.insert(Value::String("health-check".into()), Value::Mapping(hc));
@@ -127,9 +128,9 @@ pub fn generate_full_config(
     serde_yaml::to_string(&Value::Mapping(root)).map_err(AppError::Yaml)
 }
 
-/// 将订阅文件复制到 mihomo 工作目录下并返回绝对路径。
+/// 将订阅文件复制到 `work_dir/subscriptions/<provider_id>.yaml`，并返回**相对 `-d`** 的路径字符串。
 ///
-/// Mihomo 要求 `proxy-providers.path` 必须位于 `-d` 工作目录（及其 SAFE_PATHS）之下。
+/// Mihomo 将 `proxy-providers.path` 限制在 home（`-d`）及 SAFE_PATHS 下；使用相对路径避免 Windows 上与绝对规范化路径不匹配。
 pub async fn mirror_subscription_to_workdir(
     src: &std::path::Path,
     work_dir: &PathBuf,
@@ -145,13 +146,7 @@ pub async fn mirror_subscription_to_workdir(
         .await
         .map_err(AppError::Io)?;
 
-    let absolute = dest.canonicalize().map_err(AppError::Io)?;
-    // Windows canonicalize() 会加 \\?\ 前缀，mihomo 不识别，需去掉
-    let abs_str = absolute
-        .to_string_lossy()
-        .strip_prefix("\\\\?\\")
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| absolute.to_string_lossy().to_string());
+    tokio::fs::metadata(&dest).await.map_err(AppError::Io)?;
 
-    Ok(abs_str)
+    Ok(format!("subscriptions/{provider_id}.yaml"))
 }
