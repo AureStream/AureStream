@@ -108,9 +108,9 @@ export function ConnectButton({
           dims.outer,
           "backdrop-blur-2xl border group",
           isConnected && !isDisconnecting
-            ? "border-cyan-500/30 bg-cyan-500/10 dark:bg-cyan-500/5 shadow-[0_0_50px_rgba(6,182,212,0.35),0_0_100px_rgba(59,130,246,0.15)]"
-            : "border-slate-200/60 dark:border-neutral-800/60 bg-white/60 dark:bg-neutral-900/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] hover:border-primary/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]",
-          !isConnected && !isConnecting && "opacity-90 hover:opacity-100",
+            ? "border-cyan-500/30 bg-cyan-500/10 dark:bg-cyan-500/10 shadow-[0_0_50px_rgba(6,182,212,0.35),0_0_100px_rgba(59,130,246,0.15)] dark:border-cyan-400/40"
+            : "border-slate-200/60 dark:border-white/[0.08] bg-white/60 dark:bg-white/[0.02] shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] hover:border-primary/45 dark:hover:border-primary/40 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_30px_rgba(99,102,241,0.25)]",
+          !isConnected && !isConnecting && "opacity-95 hover:opacity-100",
           busy && "border-primary/20",
         )}
       >
@@ -150,10 +150,10 @@ export function ConnectButton({
             "relative z-10 flex shrink-0 flex-col items-center justify-center rounded-full transition-all duration-700 ease-in-out",
             dims.inner,
             isConnected && !isDisconnecting
-              ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)]"
+              ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)]"
               : busy
                 ? "bg-gradient-to-tr from-indigo-600/70 via-blue-500/70 to-cyan-400/70"
-                : "bg-gradient-to-tr from-slate-200/90 to-slate-50 dark:from-neutral-900 dark:to-neutral-850/90 shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/30 dark:border-neutral-800/30",
+                : "bg-gradient-to-tr from-slate-200/90 to-slate-50 dark:from-[#1c1c21] dark:to-[#0f0f12] shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_4px_12px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)] border border-slate-200/30 dark:border-white/[0.04]",
           )}
         >
           <Power
@@ -164,7 +164,7 @@ export function ConnectButton({
                 ? "text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] scale-105"
                 : busy
                   ? "text-white/90"
-                  : "text-slate-400 dark:text-slate-500 group-hover:text-primary dark:group-hover:text-primary-foreground group-hover:scale-105",
+                  : "text-slate-400 dark:text-zinc-500 group-hover:text-primary dark:group-hover:text-primary-foreground group-hover:scale-105",
             )}
             strokeWidth={2}
           />
@@ -174,7 +174,7 @@ export function ConnectButton({
               dims.captionInner,
               busy && "text-white/85",
               !busy && isConnected && "text-white/95 font-bold tracking-wide",
-              !busy && !isConnected && "text-slate-500 dark:text-slate-400 group-hover:text-primary dark:group-hover:text-primary-foreground font-semibold",
+              !busy && !isConnected && "text-slate-500 dark:text-zinc-500 group-hover:text-primary dark:group-hover:text-primary-foreground font-semibold",
             )}
           >
             {isDisconnecting
