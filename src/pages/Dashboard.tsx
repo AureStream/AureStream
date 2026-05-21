@@ -3,7 +3,7 @@ import { NetworkBlock } from "@/components/dashboard/NetworkBlock";
 import { UsageBlock } from "@/components/dashboard/UsageBlock";
 import { PageShell } from "@/components/layout/PageShell";
 import { cn } from "@/lib/utils";
-import { useProxyStore, useAppStore } from "@/stores/appStore";
+import { useProxyStore } from "@/stores/appStore";
 import { getLatencyColor } from "@/types";
 import type { Node } from "@/types";
 import { toast } from "sonner";
@@ -89,7 +89,7 @@ export function Dashboard({
     latencyPendingByNodeId,
   } = useProxyStore();
 
-  const { proxyMode, setProxyMode } = useAppStore();
+
 
   const [uploadSeries, setUploadSeries] = useState(emptySeries);
   const [downloadSeries, setDownloadSeries] = useState(emptySeries);
@@ -225,14 +225,7 @@ export function Dashboard({
   const canConnect = Boolean(currentProvider);
   const busy = isConnecting || isDisconnecting;
 
-  const PROXY_OPTIONS: {
-    mode: "rule" | "global" | "direct";
-    label: string;
-  }[] = [
-    { mode: "rule", label: "规则分流" },
-    { mode: "global", label: "全局代理" },
-    { mode: "direct", label: "直连模式" },
-  ];
+
 
   return (
     <PageShell fillHeight className="max-w-7xl" title="首页">
@@ -370,70 +363,60 @@ export function Dashboard({
                 </div>
 
                 {/* 控制条 */}
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  {/* 分段模式选择 */}
-                  <div className="inline-flex rounded-xl bg-black/5 dark:bg-white/5 p-1 border border-black/5 dark:border-white/[0.02] shrink-0">
-                    {PROXY_OPTIONS.map(({ mode, label }) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setProxyMode(mode)}
-                        className={cn(
-                          "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                          proxyMode === mode
-                            ? "bg-primary text-primary-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* 滑块开关 */}
-                  <div className="flex items-center gap-4 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setSmartRoute((v) => !v)}
-                      className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                <div className="flex items-center gap-3 mt-1.5">
+                  {/* 智能分流开关 */}
+                  <button
+                    type="button"
+                    onClick={() => setSmartRoute((v) => !v)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-bold active:scale-[0.98] select-none cursor-pointer",
+                      smartRoute
+                        ? "bg-primary/10 border-primary/20 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
+                        : "bg-black/[0.02] dark:bg-white/[0.02] border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span>智能分流</span>
+                    <div
+                      className={cn(
+                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none",
+                        smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                      )}
                     >
-                      <span className="text-[11px] font-bold">智能分流</span>
                       <div
                         className={cn(
-                          "relative w-7 h-4 rounded-full transition-colors duration-300",
-                          smartRoute ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                          "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-300",
+                          smartRoute && "translate-x-3",
                         )}
-                      >
-                        <div
-                          className={cn(
-                            "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-300",
-                            smartRoute && "translate-x-3",
-                          )}
-                        />
-                      </div>
-                    </button>
+                      />
+                    </div>
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setSmartAdBlock((v) => !v)}
-                      className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                  {/* 去广告开关 */}
+                  <button
+                    type="button"
+                    onClick={() => setSmartAdBlock((v) => !v)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-bold active:scale-[0.98] select-none cursor-pointer",
+                      smartAdBlock
+                        ? "bg-primary/10 border-primary/20 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"
+                        : "bg-black/[0.02] dark:bg-white/[0.02] border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span>去广告</span>
+                    <div
+                      className={cn(
+                        "relative w-7 h-4 rounded-full transition-colors duration-300 pointer-events-none",
+                        smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                      )}
                     >
-                      <span className="text-[11px] font-bold">去广告</span>
                       <div
                         className={cn(
-                          "relative w-7 h-4 rounded-full transition-colors duration-300",
-                          smartAdBlock ? "bg-primary" : "bg-black/15 dark:bg-white/15",
+                          "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-300",
+                          smartAdBlock && "translate-x-3",
                         )}
-                      >
-                        <div
-                          className={cn(
-                            "absolute top-[2px] left-[2px] w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-300",
-                            smartAdBlock && "translate-x-3",
-                          )}
-                        />
-                      </div>
-                    </button>
-                  </div>
+                      />
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -568,7 +551,7 @@ export function Dashboard({
           </div>
 
           {/* 右侧：用量/网络/图表监控栏 */}
-          <div className="flex flex-col gap-5 min-h-0 overflow-y-auto pr-1">
+          <div className="flex flex-col gap-5 min-h-0 overflow-y-auto pr-2">
             
             {/* 卡片 C：订阅用量面板 */}
             <div className="glass rounded-3xl p-5 flex flex-col gap-3.5 bg-gradient-to-br from-primary/5 via-transparent to-transparent">

@@ -45,7 +45,10 @@ export function PageShell({
         className={cn(
           isMobile 
             ? "flex-1 w-full"
-            : "flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pr-2 [scrollbar-gutter:stable] [padding-bottom:max(2rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:[padding-bottom:max(3rem,env(safe-area-inset-bottom,0px)+0.75rem)]",
+            : cn(
+                "flex-1 min-h-0 overflow-x-hidden overscroll-contain pr-2 [padding-bottom:max(2rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:[padding-bottom:max(3rem,env(safe-area-inset-bottom,0px)+0.75rem)]",
+                fillHeight ? "overflow-hidden" : "overflow-y-auto [scrollbar-gutter:stable]"
+              ),
           fillHeight && "flex w-full flex-col",
           contentClassName,
         )}
