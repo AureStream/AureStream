@@ -330,11 +330,13 @@ export function HomeDashboardPanel({
 
         <div
           className={cn(
-            "relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden px-2",
+            "relative z-10 flex min-h-0 flex-1 flex-col items-center justify-start overflow-y-auto overflow-x-hidden px-2",
             "py-[clamp(0.375rem,min(2.5dvh,2.5vw),0.75rem)]",
             "[scrollbar-width:thin]",
           )}
         >
+          {/* Scroll wrapper to enable vertical centering with safe overflow scrolling */}
+          <div className="my-auto flex flex-col items-center w-full shrink-0">
           {/* 计时与连接球间距：桌面端计时嵌入球内，移动端保留上方间距 */}
           <div
             className={cn(
@@ -366,7 +368,7 @@ export function HomeDashboardPanel({
           disabled={!isConnected && (busy || !canConnect)}
           className={cn(
             "relative z-10 flex shrink-0 cursor-pointer flex-col items-center justify-center !rounded-full transition-all duration-700 ease-in-out",
-            "h-[min(230px,58vw,38dvh)] w-[min(230px,58vw,38dvh)]",
+            isDesktop ? "h-[220px] w-[220px]" : "h-[min(190px,50vw,26dvh)] w-[min(190px,50vw,26dvh)]",
             "pointer-events-auto backdrop-blur-2xl border group select-none outline-none focus:outline-none focus-visible:outline-none",
             isConnected && !isDisconnecting
               ? "border-cyan-500/30 dark:border-cyan-400/35 bg-transparent shadow-[0_0_50px_rgba(6,182,212,0.25),0_0_100px_rgba(59,130,246,0.1)]"
@@ -404,7 +406,7 @@ export function HomeDashboardPanel({
 
           <div
             className={cn(
-              "flex h-[min(161px,40.6vw,26.5dvh)] w-[min(161px,40.6vw,26.5dvh)] flex-col items-center justify-center gap-2 !rounded-full transition-all duration-700 ease-in-out [@media(max-height:700px)]:gap-1.5",
+              "flex h-[70%] w-[70%] flex-col items-center justify-center gap-2 !rounded-full transition-all duration-700 ease-in-out [@media(max-height:700px)]:gap-1.5",
               isConnected && !isDisconnecting
                 ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 dark:from-indigo-600 dark:via-blue-500 dark:to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)] text-white"
                 : busy
@@ -598,6 +600,7 @@ export function HomeDashboardPanel({
             </div>
           </button>
         </div>
+          </div>
         </div>
       </div>
 
