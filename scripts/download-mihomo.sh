@@ -50,7 +50,7 @@ DEST="$BINARIES_DIR/mihomo-${RUST_TRIPLE}${SUFFIX}"
 
 # 已存在则跳过
 if [ -f "$DEST" ]; then
-  echo "mihomo 已存在: $DEST，跳过下载"
+  echo "mihomo 已存在: ${DEST}，跳过下载"
   exit 0
 fi
 
