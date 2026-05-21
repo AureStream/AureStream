@@ -207,9 +207,7 @@ export function HomeDashboardPanel({
   };
 
   const isDesktop = layout === "desktop";
-  const nodePickerPaddingBottom = isDesktop
-    ? "1.25rem"
-    : "calc(100px + env(safe-area-inset-bottom, 0px))";
+  const nodePickerPaddingBottom = "1.25rem";
 
   return (
     <div
