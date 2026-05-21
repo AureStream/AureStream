@@ -75,7 +75,7 @@ export function Dashboard({
         />
 
         {/* 黄金分割双栏 */}
-        <div className="relative grid w-full h-full grid-cols-1 gap-4 md:grid-cols-[55%_45%] md:gap-0 lg:grid-cols-[61.8%_38.2%]">
+        <div className="relative grid w-full h-full grid-cols-1 gap-4 md:grid-cols-[61.8%_38.2%] md:gap-0">
           {/* 左栏：与移动端首页一致的连接与订阅操作区 */}
           <section className="flex h-full min-h-0 flex-col md:pr-6 lg:pr-8">
             <HomeDashboardPanel
@@ -85,15 +85,14 @@ export function Dashboard({
           </section>
 
           {/* 右栏：网络与用量（订阅卡片已在左侧与移动端一致展示） */}
-          <section className="flex h-full min-h-0 flex-col overflow-y-auto gap-2 pl-4 pr-4 md:pr-0 md:border-l md:border-border/30 md:pl-6 lg:gap-2.5 lg:pl-8">
+          <section className="grid h-full min-h-0 grid-rows-[auto_1fr] overflow-y-auto pl-4 pr-4 md:pr-0 md:border-l md:border-border/30 md:pl-6 lg:pl-8">
             <NetworkBlock connectedIp={connectedIp} />
-            <div className="shrink-0 border-t border-border/20" />
             <UsageBlock
               uploadTotal={sessionUploadGb}
               downloadTotal={sessionDownloadGb}
               uploadSeries={uploadSeries}
               downloadSeries={downloadSeries}
-              className="flex-1 min-h-0"
+              className="h-full border-t border-border/20 pt-2"
             />
           </section>
         </div>

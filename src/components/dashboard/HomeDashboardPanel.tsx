@@ -217,7 +217,7 @@ export function HomeDashboardPanel({
       {/* Subscription card — 固定在上，避免与下方计时/球体重叠 */}
       <div className="relative z-30 shrink-0 px-4 pt-4 pb-1">
         {currentProvider ? (
-          <div className="liquid-glass-card flex flex-col gap-3 px-4 py-3.5 [@media(max-height:700px)]:gap-2 [@media(max-height:700px)]:py-3">
+          <div className="glass rounded-2xl bg-gradient-to-br from-primary/10 via-indigo-500/8 to-transparent dark:from-primary/15 dark:via-indigo-500/10 dark:to-transparent flex flex-col gap-3 px-4 py-3.5 [@media(max-height:700px)]:gap-2 [@media(max-height:700px)]:py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
@@ -292,7 +292,7 @@ export function HomeDashboardPanel({
             </div>
           </div>
         ) : (
-          <div className="liquid-glass-card px-4 py-3.5 text-center [@media(max-height:700px)]:py-3">
+          <div className="glass rounded-2xl bg-gradient-to-br from-primary/10 via-indigo-500/8 to-transparent dark:from-primary/15 dark:via-indigo-500/10 dark:to-transparent px-4 py-3.5 text-center [@media(max-height:700px)]:py-3">
             <p className="text-xs text-muted-foreground font-medium">
               未激活任何服务商订阅
             </p>
@@ -330,34 +330,37 @@ export function HomeDashboardPanel({
             "[scrollbar-width:thin]",
           )}
         >
-          {/* 计时与连接球间距：保底略松，随行高放宽，避免贴得太近 */}
+          {/* 计时与连接球间距：桌面端计时嵌入球内，移动端保留上方间距 */}
           <div
             className={cn(
               "flex shrink-0 flex-col items-center",
-              "gap-y-[clamp(0.625rem,min(5.5dvh,8vw),2rem)]",
+              !isDesktop && "gap-y-[clamp(0.5rem,min(4dvh,6vw),1.5rem)]",
             )}
           >
-            <div className="flex shrink-0 justify-center px-1">
-              {isConnected && !isDisconnecting ? (
-                <span
-                  className={cn(
-                    "select-none font-extrabold tabular-nums tracking-tight text-foreground",
-                    "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
-                  )}
-                >
-                  {formatDuration(elapsedSec)}
-                </span>
-              ) : (
-                <span
-                  className={cn(
-                    "select-none font-extrabold tabular-nums tracking-tight text-muted-foreground/20",
-                    "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
-                  )}
-                >
-                  00:00:00
-                </span>
-              )}
-            </div>
+            {/* 移动端：计时在球上方 */}
+            {!isDesktop && (
+              <div className="flex shrink-0 justify-center px-1">
+                {isConnected && !isDisconnecting ? (
+                  <span
+                    className={cn(
+                      "select-none font-extrabold tabular-nums tracking-tight text-foreground",
+                      "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
+                    )}
+                  >
+                    {formatDuration(elapsedSec)}
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      "select-none font-extrabold tabular-nums tracking-tight text-muted-foreground/20",
+                      "text-[clamp(1.125rem,min(7vw,9dvh),1.875rem)] leading-none",
+                    )}
+                  >
+                    00:00:00
+                  </span>
+                )}
+              </div>
+            )}
 
         <button
           type="button"
@@ -411,6 +414,22 @@ export function HomeDashboardPanel({
                   : "bg-gradient-to-b from-white to-slate-50/95 dark:from-zinc-800/85 dark:to-zinc-900/95 shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_2px_3px_rgba(255,255,255,1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.1)] border border-slate-200/50 dark:border-zinc-700/35",
             )}
           >
+            {/* 桌面端：计时嵌入球内，位于图标上方 */}
+            {isDesktop && (
+              <span
+                className={cn(
+                  "select-none font-extrabold tabular-nums tracking-tight leading-none",
+                  "text-[clamp(0.875rem,min(3.5vw,4.5dvh),1.25rem)]",
+                  isConnected && !isDisconnecting
+                    ? "text-white/80"
+                    : "text-muted-foreground/25",
+                )}
+              >
+                {isConnected && !isDisconnecting
+                  ? formatDuration(elapsedSec)
+                  : "00:00:00"}
+              </span>
+            )}
             <Power
               className={cn(
                 "h-11 w-11 transition-all duration-700 [@media(max-height:700px)]:h-9 [@media(max-height:700px)]:w-9",
@@ -445,10 +464,9 @@ export function HomeDashboardPanel({
         {(!isConnected || isDesktop) && (
           <div
             className={cn(
-              "pointer-events-auto flex shrink-0 flex-row flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2 pb-1",
-              "mt-[clamp(0.625rem,min(4.5dvh,6vw),1.875rem)] max-[380px]:gap-x-5",
-              "[@media(max-height:700px)]:mt-[clamp(0.5rem,min(3.5dvh,5vw),1.5rem)] [@media(max-height:700px)]:gap-x-6",
-              "pt-[clamp(0.25rem,min(2dvh,2vw),0.5rem)]",
+              "pointer-events-auto flex shrink-0 flex-row flex-wrap items-start justify-center gap-x-8 gap-y-2 px-2",
+              "mt-[clamp(0.5rem,min(3dvh,4vw),1.25rem)] max-[380px]:gap-x-5",
+              "[@media(max-height:700px)]:mt-[clamp(0.375rem,min(2.5dvh,3vw),0.875rem)] [@media(max-height:700px)]:gap-x-6",
               isDesktop && "lg:gap-x-12 xl:gap-x-14",
             )}
           >
