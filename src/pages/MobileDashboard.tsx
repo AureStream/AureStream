@@ -261,8 +261,8 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
         <div className={cn(
           "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-1000 ease-in-out blur-3xl pointer-events-none",
           isConnected && !isDisconnecting
-            ? "w-[320px] h-[320px] bg-primary/25 dark:bg-primary/20 animate-breathing-active"
-            : "w-[280px] h-[280px] bg-primary/10 dark:bg-primary/5 animate-breathing-idle"
+            ? "w-[320px] h-[320px] bg-gradient-to-r from-cyan-500/40 via-blue-500/40 to-indigo-500/40 animate-breathing-active"
+            : "w-[280px] h-[280px] bg-slate-400/20 dark:bg-slate-800/30 animate-breathing-idle"
         )} />
 
         {/* Timer — absolute, between subscription card and button */}
@@ -285,12 +285,12 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
           disabled={!isConnected && (busy || !canConnect)}
           className={cn(
             "pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(230px,58vw)] h-[min(230px,58vw)] !rounded-full flex flex-col items-center justify-center transition-all duration-700 ease-in-out cursor-pointer z-10",
-            "liquid-glass-card shadow-lg ring-1 ring-white/20 select-none outline-none focus:outline-none focus-visible:outline-none",
+            "backdrop-blur-2xl border group select-none outline-none focus:outline-none focus-visible:outline-none",
             isConnected && !isDisconnecting
-              ? "border-primary/45 shadow-[0_0_48px_rgba(59,130,246,0.38)]"
-              : "border-white/20 hover:opacity-100",
+              ? "border-cyan-500/30 bg-cyan-500/10 dark:bg-cyan-500/5 shadow-[0_0_50px_rgba(6,182,212,0.35),0_0_100px_rgba(59,130,246,0.15)]"
+              : "border-slate-200/60 dark:border-neutral-800/60 bg-white/60 dark:bg-neutral-900/40 shadow-[0_8px_32px_rgba(0,0,0,0.04)] hover:border-primary/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]",
             busy && "border-primary/20",
-            !isConnected && "opacity-90"
+            !isConnected && "opacity-90 hover:opacity-100"
           )}
         >
           {/* Connecting/Disconnecting Spin Rings */}
@@ -317,19 +317,24 @@ export function MobileDashboard({ onOpenProviders }: MobileDashboardProps) {
 
           {/* Inner Liquid Dial Content — 70% of outer orb */}
           <div className={cn(
-            "w-[min(161px,40.6vw)] h-[min(161px,40.6vw)] !rounded-full flex flex-col items-center justify-center gap-2.5 shadow-inner transition-all duration-700 ease-in-out",
+            "w-[min(161px,40.6vw)] h-[min(161px,40.6vw)] !rounded-full flex flex-col items-center justify-center gap-2.5 transition-all duration-700 ease-in-out",
             isConnected && !isDisconnecting
-              ? "bg-gradient-to-br from-primary to-blue-600 shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)] text-white"
+              ? "bg-gradient-to-tr from-indigo-600 via-blue-500 to-cyan-400 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_10px_25px_rgba(59,130,246,0.45)] text-white"
               : busy
-                ? "bg-gradient-to-br from-primary/60 to-blue-500/60 text-white/90"
-                : "bg-gradient-to-br from-muted/50 to-muted/20 dark:from-white/10 dark:to-white/5 text-muted-foreground"
+                ? "bg-gradient-to-tr from-indigo-600/70 via-blue-500/70 to-cyan-400/70 text-white/90"
+                : "bg-gradient-to-tr from-slate-200/90 to-slate-50 dark:from-neutral-900 dark:to-neutral-850/90 shadow-[inset_0_2px_4px_rgba(255,255,255,0.15),0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/30 dark:border-neutral-800/30 text-slate-500 dark:text-slate-400 group-hover:text-primary dark:group-hover:text-primary-foreground"
           )}>
             <Power className={cn(
-              "w-11 h-11 transition-transform duration-700",
-              isConnected && !isDisconnecting ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" : ""
+              "w-11 h-11 transition-all duration-700",
+              isConnected && !isDisconnecting 
+                ? "scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] text-white" 
+                : "text-slate-400 dark:text-slate-500 group-hover:text-primary dark:group-hover:text-primary-foreground group-hover:scale-110"
             )} strokeWidth={2} />
-            <span className="text-[13px] font-bold uppercase tracking-widest">
-            {isDisconnecting ? "断开中" : isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}
+            <span className={cn(
+              "text-[13px] font-bold tracking-widest transition-colors duration-700",
+              isConnected && !isDisconnecting ? "text-white/95" : "text-slate-500 dark:text-slate-400 group-hover:text-primary dark:group-hover:text-primary-foreground"
+            )}>
+              {isDisconnecting ? "断开中" : isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}
             </span>
           </div>
 
