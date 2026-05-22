@@ -53,18 +53,4 @@ impl AppEvent {
             Self::TrafficUpdated { .. } | Self::NodeLatencyTested { .. } | Self::CoreLog { .. }
         )
     }
-
-    /// Tauri emit 事件名
-    pub fn event_name(&self) -> &'static str {
-        match self {
-            Self::ConnectionStateChanged { .. } => "connection-state-changed",
-            Self::SubscriptionUpdated { .. } => "subscription-updated",
-            Self::CoreStarted { .. } => "core-started",
-            Self::CoreStopped => "core-stopped",
-            Self::Error { .. } => "app-error",
-            Self::TrafficUpdated { .. } => "traffic-updated",
-            Self::NodeLatencyTested { .. } => "node-latency-tested",
-            Self::CoreLog { .. } => "core-log",
-        }
-    }
 }

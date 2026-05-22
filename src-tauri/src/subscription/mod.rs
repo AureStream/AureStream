@@ -2,7 +2,6 @@
 //!
 //! 具体解析逻辑在后续迭代中填充；此处提供 trait 与注册表骨架。
 
-pub mod cache;
 pub mod deduplicator;
 pub mod fetcher;
 pub mod format;
@@ -10,5 +9,4 @@ pub mod normalizer;
 pub mod protocol;
 pub mod registry;
 
-pub use cache::SubscriptionCache;
 pub use registry::ParserRegistry;

@@ -24,14 +24,11 @@
 
   --color-glass-strong: rgba(255, 255, 255, 0.85);
   --color-glass-medium: rgba(255, 255, 255, 0.65);
-  --color-glass-light: rgba(255, 255, 255, 0.4);
   --color-glass-border: rgba(255, 255, 255, 0.6);
   --shadow-glass:
     0 8px 32px rgba(59, 130, 246, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-glass-hover:
     0 12px 40px rgba(59, 130, 246, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-glow:
-    0 0 40px rgba(59, 130, 246, 0.28), 0 0 80px rgba(59, 130, 246, 0.1);
 }
 
 .dark {
@@ -55,13 +52,10 @@
 
   --color-glass-strong: rgba(40, 40, 40, 0.85);
   --color-glass-medium: rgba(40, 40, 40, 0.65);
-  --color-glass-light: rgba(40, 40, 40, 0.4);
   --color-glass-border: rgba(255, 255, 255, 0.12);
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
   --shadow-glass-hover:
     0 12px 40px rgba(96, 165, 250, 0.12), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-glow:
-    0 0 40px rgba(96, 165, 250, 0.2), 0 0 80px rgba(96, 165, 250, 0.1);
 }
 
 * {
@@ -119,13 +113,6 @@ body {
     var(--shadow-glass);
 }
 
-@utility glass-light {
-  background: var(--color-glass-light);
-  backdrop-filter: blur(22px) saturate(155%);
-  -webkit-backdrop-filter: blur(22px) saturate(155%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
 /* Narrow rail + main shell — slightly deeper blur for layered glass */
 @utility glass-rail {
   background: linear-gradient(165deg,
@@ -148,16 +135,6 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 4px 24px rgba(0, 0, 0, 0.6),
     0 12px 40px rgba(0, 0, 0, 0.4);
-}
-
-@utility glass-hover {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-hover:hover {
-  box-shadow: var(--shadow-glass-hover);
-  border-color: rgba(59, 130, 246, 0.3);
-  transform: translateY(-1px);
 }
 
 /*
@@ -270,76 +247,6 @@ body::before {
     box-shadow 0.3s ease;
 }
 
-/* Breathing animations for ConnectButton */
-@keyframes breathing-idle {
-
-  0%,
-  100% {
-    opacity: 0.12;
-    transform: translate(-50%, -50%) scale(0.95);
-  }
-
-  50% {
-    opacity: 0.28;
-    transform: translate(-50%, -50%) scale(1.08);
-  }
-}
-
-@keyframes breathing-active {
-
-  0%,
-  100% {
-    opacity: 0.18;
-    transform: translate(-50%, -50%) scale(0.95);
-  }
-
-  50% {
-    opacity: 0.45;
-    transform: translate(-50%, -50%) scale(1.08);
-  }
-}
-
-.animate-breathing-idle {
-  animation: breathing-idle 4s ease-in-out infinite;
-}
-
-.animate-breathing-active {
-  animation: breathing-active 2s ease-in-out infinite;
-}
-
-/* Center-axis glow — radiates outward from the ConnectButton */
-@keyframes axis-glow-idle {
-
-  0%,
-  100% {
-    opacity: 0.03;
-  }
-
-  50% {
-    opacity: 0.08;
-  }
-}
-
-@keyframes axis-glow-active {
-
-  0%,
-  100% {
-    opacity: 0.06;
-  }
-
-  50% {
-    opacity: 0.15;
-  }
-}
-
-.animate-axis-glow-idle {
-  animation: axis-glow-idle 4s ease-in-out infinite;
-}
-
-.animate-axis-glow-active {
-  animation: axis-glow-active 2s ease-in-out infinite;
-}
-
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -349,33 +256,15 @@ body::before {
   animation: fade-in 0.15s ease-out forwards;
 }
 
-/* State transition animations for left panel content */
-@keyframes fade-in-down {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes fade-in-up {
   from {
     opacity: 0;
     transform: translateY(8px);
   }
-
   to {
     opacity: 1;
     transform: none;
   }
-}
-
-.animate-fade-in-down {
-  animation: fade-in-down 0.7s ease-out forwards;
 }
 
 .animate-fade-in-up {
@@ -433,33 +322,4 @@ body::before {
 
 .animate-loading-bg-drift {
   animation: loading-bg-drift 8s ease-in-out infinite;
-}
-
-/* Soft touch ripple effect */
-.touch-ripple {
-  position: relative;
-  overflow: hidden;
-}
-
-.touch-ripple::after {
-  content: "";
-  display: block;
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
-  background-repeat: no-repeat;
-  background-position: 50%;
-  transform: scale(10, 10);
-  opacity: 0;
-  transition: transform .5s, opacity 1s;
-}
-
-.touch-ripple:active::after {
-  transform: scale(0, 0);
-  opacity: .3;
-  transition: 0s;
 }

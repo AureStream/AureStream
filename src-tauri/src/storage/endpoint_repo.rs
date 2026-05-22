@@ -28,26 +28,6 @@ pub async fn list_by_source(pool: &SqlitePool, source_id: &str) -> Result<Vec<En
     rows.iter().map(row_to_endpoint).collect()
 }
 
-pub async fn get_by_id(pool: &SqlitePool, id: &str) -> Result<Option<Endpoint>, AppError> {
-    let row = sqlx::query(
-        r#"SELECT id, source_id, name, protocol, server, port, udp, tls, network,
-                  auth_json, transport_json, metadata_json, raw_json, unique_hash
-           FROM endpoints WHERE id = ?1"#,
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
-    row.as_ref().map(row_to_endpoint).transpose()
-}
-
-pub async fn delete_by_source(pool: &SqlitePool, source_id: &str) -> Result<u64, AppError> {
-    let res = sqlx::query("DELETE FROM endpoints WHERE source_id = ?1")
-        .bind(source_id)
-        .execute(pool)
-        .await?;
-    Ok(res.rows_affected())
-}
-
 pub async fn count_by_source(pool: &SqlitePool, source_id: &str) -> Result<i32, AppError> {
     let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM endpoints WHERE source_id = ?1")
         .bind(source_id)
@@ -66,10 +46,6 @@ pub async fn replace_for_source(pool: &SqlitePool, source_id: &str, eps: &[Endpo
     insert_many_tx(&mut tx, eps).await?;
     tx.commit().await?;
     Ok(())
-}
-
-pub async fn upsert_one(pool: &SqlitePool, ep: &Endpoint) -> Result<(), AppError> {
-    upsert_with_executor(pool, ep).await
 }
 
 async fn insert_many_tx(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, eps: &[Endpoint]) -> Result<(), AppError> {

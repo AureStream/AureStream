@@ -17,23 +17,22 @@ use tokio::sync::Mutex;
 
 use crate::adapter::{CoreAdapter, MihomoAdapter};
 use crate::models::proxy_config::ProxyConfig;
-use crate::error::AppError;
-use crate::models::{AppEvent, ConnectionState, RuntimePolicy, RuntimeProfile, RuntimeSession};
+use crate::models::ConnectionState;
 use tauri::AppHandle;
-use uuid::Uuid;
 
 use self::core_manager::CoreManager;
 use self::event_bus::EventBus;
 use self::mihomo_sidecar::MihomoSidecar;
 use self::proxy_manager::ProxyManager;
 use self::session_manager::SessionManager;
-use self::state_machine::{ensure_can_connect, ensure_can_disconnect, ensure_can_switch};
 
 #[derive(Clone)]
 pub struct RuntimeManager {
     inner: Arc<Inner>,
 }
 
+// Suppress dead code warnings for architectural components that may be used in the future
+#[allow(dead_code)]
 struct Inner {
     pool: SqlitePool,
     state: Mutex<ConnectionState>,
@@ -65,14 +64,6 @@ impl RuntimeManager {
         &self.inner.pool
     }
 
-    pub async fn state(&self) -> ConnectionState {
-        *self.inner.state.lock().await
-    }
-
-    pub async fn session(&self) -> Option<RuntimeSession> {
-        self.inner.session.current().await
-    }
-
     /// 使用 `build_runtime_config` 等生成的 YAML 启动侧进程，并在就绪后尝试系统代理。
     pub async fn spawn_sidecar_with_config(
         &self,
@@ -97,91 +88,5 @@ impl RuntimeManager {
             m.set_sidecar_running(false);
         }
         r
-    }
-
-    pub async fn start_with_profile(
-        &self,
-        profile: RuntimeProfile,
-        proxy_cfg: Option<ProxyConfig>,
-    ) -> Result<(), AppError> {
-        {
-            let mut st = self.inner.state.lock().await;
-            ensure_can_connect(*st)?;
-            *st = ConnectionState::Connecting;
-        }
-
-        self.inner.events.publish(AppEvent::ConnectionStateChanged {
-            state: ConnectionState::Connecting,
-            node_id: profile.selected_node_id.clone(),
-        });
-
-        let session = RuntimeSession {
-            session_id: Uuid::new_v4().to_string(),
-            current_node_id: profile.selected_node_id.clone(),
-            current_core: self.inner.core.adapter().core_type().to_string(),
-            policy: profile.policy.clone(),
-            started_at: chrono::Utc::now().timestamp(),
-        };
-
-        if let Err(e) = self.inner.core.adapter().start(&profile).await {
-            let mut st = self.inner.state.lock().await;
-            *st = ConnectionState::Error;
-            drop(st);
-            let msg = e.to_string();
-            self.inner.events.publish(AppEvent::Error {
-                message: msg.clone(),
-            });
-            return Err(e);
-        }
-
-        if let Some(cfg) = proxy_cfg.as_ref() {
-            if let Err(e) = self.inner.proxy.enable(cfg) {
-                tracing::warn!(error = %e, "[runtime] 系统代理设置失败，连接继续");
-            }
-        }
-
-        {
-            let mut st = self.inner.state.lock().await;
-            *st = ConnectionState::Connected;
-        }
-        self.inner.session.replace(session).await;
-        self.inner.events.publish(AppEvent::ConnectionStateChanged {
-            state: ConnectionState::Connected,
-            node_id: profile.selected_node_id.clone(),
-        });
-        Ok(())
-    }
-
-    pub async fn stop(&self, clear_system_proxy: bool) -> Result<(), AppError> {
-        {
-            let mut st = self.inner.state.lock().await;
-            ensure_can_disconnect(*st)?;
-            *st = ConnectionState::Disconnected;
-        }
-
-        let _ = self.inner.sidecar.stop_kill().await.map_err(AppError::other);
-        if let Some(m) = &self.inner.mihomo {
-            m.set_sidecar_running(false);
-        }
-        let _ = self.inner.core.adapter().stop().await;
-        if clear_system_proxy {
-            let _ = self.inner.proxy.disable();
-        }
-        self.inner.session.clear().await;
-        self.inner.events.publish(AppEvent::ConnectionStateChanged {
-            state: ConnectionState::Disconnected,
-            node_id: None,
-        });
-        Ok(())
-    }
-
-    pub async fn switch_node(&self, node_id: &str) -> Result<(), AppError> {
-        let st = *self.inner.state.lock().await;
-        ensure_can_switch(st)?;
-        self.inner.core.adapter().select_node(node_id).await
-    }
-
-    pub async fn set_policy(&self, policy: RuntimePolicy) -> Result<(), AppError> {
-        self.inner.core.adapter().apply_policy(&policy).await
     }
 }

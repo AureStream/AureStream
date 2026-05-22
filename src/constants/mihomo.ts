@@ -1,7 +1,3 @@
-/** 与内核 health-check 及 Rust `mihomo_constants::LATENCY_TEST_URL` 一致（规则分流用） */
-export const MIHOMO_LATENCY_TEST_URL =
-  "https://www.gstatic.com/generate_204" as const;
-
 /** 与后端 `builtin_config::AURESTREAM_NODE_SELECTOR` 一致；选节点时传给 selectNodeForGroup */
 export const AURESTREAM_NODE_SELECTOR = "AureStream_Node_Selector";
 
