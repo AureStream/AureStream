@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::models::ConnectionState;
 
+#[allow(dead_code)]
 pub fn ensure_can_connect(current: ConnectionState) -> Result<(), AppError> {
     if current.can_connect() {
         Ok(())
@@ -12,6 +13,7 @@ pub fn ensure_can_connect(current: ConnectionState) -> Result<(), AppError> {
     }
 }
 
+#[allow(dead_code)]
 pub fn ensure_can_disconnect(current: ConnectionState) -> Result<(), AppError> {
     if current.can_disconnect() {
         Ok(())
@@ -23,6 +25,7 @@ pub fn ensure_can_disconnect(current: ConnectionState) -> Result<(), AppError> {
     }
 }
 
+#[allow(dead_code)]
 pub fn ensure_can_switch(current: ConnectionState) -> Result<(), AppError> {
     if current.can_switch() {
         Ok(())

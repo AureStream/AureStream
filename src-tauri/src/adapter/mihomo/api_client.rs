@@ -32,22 +32,6 @@ impl MihomoApiClient {
         Url::parse(&format!("{base}/{path}")).map_err(|e| AppError::other(format!("非法 URL: {e}")))
     }
 
-    pub async fn version(&self) -> Result<String, AppError> {
-        let url = self.url("version")?;
-        let text = self
-            .client
-            .get(url)
-            .send()
-            .await
-            .map_err(AppError::Http)?
-            .error_for_status()
-            .map_err(|e| AppError::CoreApiError(e.to_string()))?
-            .text()
-            .await
-            .map_err(AppError::Http)?;
-        Ok(text)
-    }
-
     /// GET /traffic — 响应字段依 Mihomo 版本略有差异，此处做宽松解析。
     pub async fn traffic_stats(&self) -> Result<TrafficStats, AppError> {
         let url = self.url("traffic")?;
@@ -78,23 +62,6 @@ impl MihomoApiClient {
             upload_total: up,
             download_total: down,
         })
-    }
-
-    /// GET /proxies — 获取所有代理组和节点信息。
-    pub async fn get_proxies(&self) -> Result<serde_json::Value, AppError> {
-        let url = self.url("proxies")?;
-        let v: serde_json::Value = self
-            .client
-            .get(url)
-            .send()
-            .await
-            .map_err(AppError::Http)?
-            .error_for_status()
-            .map_err(|e| AppError::CoreApiError(e.to_string()))?
-            .json()
-            .await
-            .map_err(AppError::Http)?;
-        Ok(v)
     }
 
     /// PATCH /proxies/{group_name} — 切换代理组选中的节点。

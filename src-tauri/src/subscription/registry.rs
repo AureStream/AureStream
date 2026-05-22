@@ -46,14 +46,6 @@ impl ParserRegistry {
         }
     }
 
-    pub fn register_format(&mut self, p: Box<dyn FormatParser>) {
-        self.formats.push(p);
-    }
-
-    pub fn register_protocol(&mut self, p: Box<dyn ProtocolParser>) {
-        self.protocols.insert(p.protocol_key().to_string(), p);
-    }
-
     /// 自动检测格式 → RawProxyNode[]
     pub fn parse_raw_nodes(&self, content: &[u8], source_id: &str) -> Result<Vec<RawProxyNode>, AppError> {
         let mut last_err: Option<AppError> = None;
@@ -86,16 +78,6 @@ impl ParserRegistry {
         parser.parse(raw, source_id)
     }
 
-    /// 两阶段合一：内容 → Endpoint 列表（任一节点解析失败则返回 Err）
-    pub fn parse_subscription(&self, content: &[u8], source_id: &str) -> Result<Vec<Endpoint>, AppError> {
-        let raws = self.parse_raw_nodes(content, source_id)?;
-        let mut out = Vec::with_capacity(raws.len());
-        for r in &raws {
-            out.push(self.raw_to_endpoint(r, source_id)?);
-        }
-        Ok(out)
-    }
-
     /// 订阅字节 → Endpoint：格式无法识别返回空；单节点失败跳过。
     /// 自动执行：Normalizer（地区推测）→ Deduplicator（unique_hash 去重）。
     pub fn ingest_subscription_bytes(&self, content: &[u8], source_id: &str) -> Vec<Endpoint> {
@@ -117,15 +99,5 @@ impl ParserRegistry {
             }
         }
         super::deduplicator::dedup_endpoints(out)
-    }
-}
-
-impl ParserRegistry {
-    /// 测试/调试：是否识别为已知格式
-    pub fn detect_format_name(&self, content: &[u8]) -> Option<&'static str> {
-        self.formats
-            .iter()
-            .find(|f| f.can_parse(content))
-            .map(|f| f.name())
     }
 }

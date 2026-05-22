@@ -16,20 +16,6 @@ pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Subscription>, AppError> 
     rows.iter().map(row_to_subscription).collect()
 }
 
-pub async fn get_by_id(pool: &SqlitePool, id: &str) -> Result<Option<Subscription>, AppError> {
-    let row = sqlx::query(
-        r#"SELECT id, name, url, sub_type, enabled, auto_update, update_interval, last_updated_at,
-                  node_count, health_status, health_message,
-                  traffic_upload, traffic_download, traffic_total, expire_at,
-                  last_success_at, created_at, updated_at
-           FROM subscriptions WHERE id = ?1"#,
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
-    row.as_ref().map(row_to_subscription).transpose()
-}
-
 pub async fn upsert(pool: &SqlitePool, sub: &Subscription) -> Result<(), AppError> {
     sqlx::query(
         r#"INSERT INTO subscriptions (
@@ -131,71 +117,5 @@ fn parse_health(s: &str) -> Result<HealthStatus, AppError> {
         "expired" => Ok(HealthStatus::Expired),
         _ => Err(AppError::other(format!("未知健康状态: {s}"))),
     }
-}
-
-// ── 三层缓存字段读写 ──────────────────────────────────────
-
-/// 保存 Layer 1：HTTP 原始响应（gzip 压缩后写入 BLOB）
-pub async fn save_raw_cache(pool: &SqlitePool, id: &str, raw: &[u8]) -> Result<(), AppError> {
-    sqlx::query("UPDATE subscriptions SET last_success_raw = ?1, last_success_at = unixepoch() WHERE id = ?2")
-        .bind(raw)
-        .bind(id)
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
-/// 读取 Layer 1：HTTP 原始响应
-pub async fn load_raw_cache(pool: &SqlitePool, id: &str) -> Result<Option<Vec<u8>>, AppError> {
-    let row = sqlx::query("SELECT last_success_raw FROM subscriptions WHERE id = ?1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
-    match row {
-        Some(r) => Ok(r.try_get::<Option<Vec<u8>>, _>("last_success_raw")?),
-        None => Ok(None),
-    }
-}
-
-/// 保存 Layer 2：RawProxyNode[] JSON 序列化
-pub async fn save_parsed_cache(pool: &SqlitePool, id: &str, json: &str) -> Result<(), AppError> {
-    sqlx::query("UPDATE subscriptions SET parsed_cache = ?1 WHERE id = ?2")
-        .bind(json)
-        .bind(id)
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
-/// 读取 Layer 2：RawProxyNode[] JSON
-pub async fn load_parsed_cache(pool: &SqlitePool, id: &str) -> Result<Option<String>, AppError> {
-    let row = sqlx::query("SELECT parsed_cache FROM subscriptions WHERE id = ?1")
-        .bind(id)
-        .fetch_optional(pool)
-        .await?;
-    match row {
-        Some(r) => Ok(r.try_get::<Option<String>, _>("parsed_cache")?),
-        None => Ok(None),
-    }
-}
-
-/// 更新节点计数与健康状态
-pub async fn update_health(
-    pool: &SqlitePool,
-    id: &str,
-    node_count: i32,
-    status: HealthStatus,
-    message: Option<&str>,
-) -> Result<(), AppError> {
-    sqlx::query(
-        "UPDATE subscriptions SET node_count = ?1, health_status = ?2, health_message = ?3, updated_at = unixepoch() WHERE id = ?4",
-    )
-    .bind(node_count)
-    .bind(status.as_str())
-    .bind(message)
-    .bind(id)
-    .execute(pool)
-    .await?;
-    Ok(())
 }
 

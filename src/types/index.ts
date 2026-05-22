@@ -27,14 +27,6 @@ export interface Node {
   enabled: boolean;
 }
 
-export interface ProxyStatus {
-  isConnected: boolean;
-  currentNode?: Node;
-  uploadSpeed: number;
-  downloadSpeed: number;
-  latency?: number;
-}
-
 export function getLatencyColor(delay?: number): string {
   if (delay == null) return "text-gray-400";
   if (delay < 100) return "text-primary";

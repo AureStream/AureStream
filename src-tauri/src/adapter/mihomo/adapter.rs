@@ -34,48 +34,9 @@ impl MihomoAdapter {
         })
     }
 
-    pub fn runtime_config_path(&self) -> PathBuf {
-        self.work_dir.join(self.runtime_file)
-    }
-
-    pub fn api_client(&self) -> &MihomoApiClient {
-        &self.api
-    }
-
     /// 与 `mihomo_kernel` / sidecar 接线完成后调用，影响 [`CoreControlPlane::is_running`] 与遥测请求。
     pub fn set_sidecar_running(&self, running: bool) {
         self.sidecar_running.store(running, Ordering::SeqCst);
-    }
-
-    /// 生成完整运行时配置（含 proxy-providers、geox-url、routing rules）并写入磁盘。
-    ///
-    /// - `subscription_file`: 原始订阅 YAML 路径
-    /// - `provider_id`: 订阅 ID（用于复制到 work_dir）
-    /// - `profile`: 运行时配置
-    pub async fn build_and_write_config(
-        &self,
-        subscription_file: &std::path::Path,
-        provider_id: &str,
-        profile: &RuntimeProfile,
-    ) -> Result<PathBuf, AppError> {
-        tokio::fs::create_dir_all(&self.work_dir)
-            .await
-            .map_err(AppError::Io)?;
-
-        // 复制订阅到 mihomo 工作目录，配置内使用相对 `-d` 的路径
-        let sub_path_rel_home =
-            config_gen::mirror_subscription_to_workdir(subscription_file, &self.work_dir, provider_id)
-                .await?;
-
-        // 生成完整配置
-        let yaml = config_gen::generate_full_config(&sub_path_rel_home, profile)?;
-        let path = self.runtime_config_path();
-        tokio::fs::write(&path, yaml.as_bytes())
-            .await
-            .map_err(AppError::Io)?;
-
-        tracing::info!(path = %path.display(), "已写入 Mihomo 完整运行时配置");
-        Ok(path)
     }
 }
 
@@ -88,7 +49,7 @@ impl crate::adapter::CoreControlPlane for MihomoAdapter {
 
         // 生成骨架配置（无 subscription file 时的 fallback）
         let yaml = config_gen::generate_full_config("", profile)?;
-        let path = self.runtime_config_path();
+        let path = self.work_dir.join(self.runtime_file);
         tokio::fs::write(&path, yaml.as_bytes())
             .await
             .map_err(AppError::Io)?;
