@@ -64,7 +64,6 @@ npm run preview         # Preview built frontend locally
 **Key Features:**
 
 - Manual routing via `currentPage` state (no React Router)
-- Seed data in `src/data/seed.ts` for development/demo
 - Real-time proxy connection control with Mihomo integration
 - Subscription management with automatic updates
 - Latency testing and node selection
@@ -72,9 +71,8 @@ npm run preview         # Preview built frontend locally
 
 **Design System:**
 
-- Custom glass utilities: `glass`, `glass-strong`, `glass-light`, `glass-rail`, `glass-hover`
+- Custom glass utilities: `glass`, `glass-strong`, `glass-rail`
 - Color system via CSS custom properties with dark theme variants
-- Breathing animations for connect button (idle: 4s, active: 2s)
 - Smooth transitions for theme switching and state changes
 
 ### Backend Structure (`src-tauri/`)
@@ -156,16 +154,14 @@ Parallel TypeScript definitions with camelCase naming convention for JSON serial
 
 **Development Workflow:**
 
-1. Use seed data during development (`src/data/seed.ts`)
-2. Run `npm run dev:desktop` for full Tauri integration
-3. Hot reload works for both frontend and backend changes
-4. SQLite schema is applied when the app initializes (no backward-compat relocation of legacy install paths).
+1. Run `npm run dev:desktop` for full Tauri integration
+2. Hot reload works for both frontend and backend changes
+3. SQLite schema is applied when the app initializes (no backward-compat relocation of legacy install paths).
 
 **Testing Strategy:**
 
 - No formal test framework configured yet
 - Manual testing recommended for core flows
-- Seed data provides consistent test environment
 - TODO items in docs indicate areas needing automated tests
 
 ## Key Configuration Files
