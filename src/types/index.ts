@@ -35,38 +35,9 @@ export interface ProxyStatus {
   latency?: number;
 }
 
-export interface AppConfig {
-  theme: "light" | "dark";
-  providers: Provider[];
-  nodes: Node[];
-  proxy: {
-    bypassDomains: string;
-  };
-  startup: {
-    autoStart: boolean;
-    autoConnect: boolean;
-  };
-}
-
-export type LatencyLevel = "excellent" | "good" | "poor" | "unknown";
-
-export function getLatencyLevel(delay?: number): LatencyLevel {
-  if (delay == null) return "unknown";
-  if (delay < 100) return "excellent";
-  if (delay < 300) return "good";
-  return "poor";
-}
-
 export function getLatencyColor(delay?: number): string {
-  const level = getLatencyLevel(delay);
-  switch (level) {
-    case "excellent":
-      return "text-primary";
-    case "good":
-      return "text-yellow-500";
-    case "poor":
-      return "text-red-500";
-    default:
-      return "text-gray-400";
-  }
+  if (delay == null) return "text-gray-400";
+  if (delay < 100) return "text-primary";
+  if (delay < 300) return "text-yellow-500";
+  return "text-red-500";
 }
