@@ -81,7 +81,7 @@ export function ConnectionPanel() {
         {/* Double-circle connection button */}
         <div
           className={cn(
-            "size-[92px] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-1.5",
+            "size-[104px] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-2",
             connected
               ? "border border-blue-200 bg-blue-50/50"
               : "border border-slate-100 bg-[#f8fafc]/50"
@@ -91,13 +91,13 @@ export function ConnectionPanel() {
             onClick={() => setConnected((v) => !v)}
             aria-pressed={connected}
             className={cn(
-              "size-full rounded-full border flex flex-col items-center justify-center gap-0.5 transition-all duration-300 shadow-xs cursor-pointer select-none",
+              "size-full rounded-full border flex flex-col items-center justify-center gap-1 transition-all duration-300 shadow-xs cursor-pointer select-none",
               connected
                 ? "border-blue-400 bg-white text-[#3b59ff] shadow-[0_4px_16px_rgba(59,89,255,0.12)] hover:bg-blue-50/10"
                 : "border-slate-300 bg-white text-slate-400 hover:bg-slate-50"
             )}
           >
-            <PowerIcon className={cn("size-5 transition-transform duration-300", connected && "scale-110")} />
+            <PowerIcon className={cn("size-6 transition-transform duration-300", connected && "scale-110")} />
             <span className="text-[10px] font-semibold tracking-wide">
               {connected ? "已连接" : "未连接"}
             </span>

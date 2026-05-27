@@ -28,12 +28,12 @@ export function NodeSelector() {
           </span>
         </div>
         <div className="flex gap-1.5">
-          <Button variant="ghost" size="xs" className="h-7 px-2 rounded-lg bg-[#eef2ff] text-[#3b59ff] text-[10px] font-bold hover:bg-blue-100/60 transition-colors">
-            <ActivityIcon className="size-3.5 mr-0.5" />
+          <Button variant="ghost" size="sm" className="h-8 px-3 rounded-lg bg-[#eef2ff] text-[#3b59ff] text-xs font-bold hover:bg-blue-100/60 transition-colors">
+            <ActivityIcon className="size-3.5 mr-1" />
             一键测速
           </Button>
-          <Button variant="ghost" size="xs" className="h-7 px-2 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200/60 transition-colors">
-            <ArrowDownUpIcon className="size-3.5 mr-0.5" />
+          <Button variant="ghost" size="sm" className="h-8 px-3 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200/60 transition-colors">
+            <ArrowDownUpIcon className="size-3.5 mr-1" />
             延迟排序
           </Button>
         </div>

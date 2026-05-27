@@ -17,10 +17,10 @@ const rows = [
 export function NetworkPanel() {
   return (
     <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
-      <CardContent className="flex flex-col gap-0 py-4 px-4">
+      <CardContent className="flex flex-col gap-0 py-3 px-4">
         {rows.map((row, index) => (
           <div key={row.label}>
-            {index > 0 ? <Separator className="my-2.5 bg-slate-100" /> : null}
+            {index > 0 ? <Separator className="my-2 bg-slate-100" /> : null}
             <div className="flex items-center justify-between gap-4 text-xs font-semibold">
               <span className="text-slate-500 font-medium">{row.label}</span>
               <div className="flex items-center gap-2 min-w-0">
