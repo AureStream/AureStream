@@ -72,7 +72,7 @@ function ToggleRow({
 
 export function ConnectionPanel() {
   const [connected, setConnected] = useState(false)
-  const [smartRoute, setSmartRoute] = useState(true)
+  const [routingMode, setRoutingMode] = useState<"rule" | "global" | "direct">("rule")
   const [adBlock, setAdBlock] = useState(false)
 
   return (
@@ -128,13 +128,56 @@ export function ConnectionPanel() {
           </div>
 
           <div className="flex flex-col gap-1.5 pt-0.5">
-            <ToggleRow
-              icon={CompassIcon}
-              label="智能分流"
-              help="按规则自动选择直连或代理"
-              checked={smartRoute}
-              onCheckedChange={setSmartRoute}
-            />
+            {/* Segmented Routing Mode Row */}
+            <div
+              className={cn(
+                "flex items-center justify-between rounded-[14px] px-3.5 py-2 transition-all duration-200 border border-[#e2e8f0] bg-[#f8fafc]/30 hover:bg-[#f8fafc]/60"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#eef2ff] text-[#3b59ff]">
+                  <CompassIcon className="size-4" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-semibold text-slate-800">路由模式</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-5 text-muted-foreground hover:bg-transparent"
+                        aria-label="路由分流模式"
+                      >
+                        <CircleHelpIcon className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      规则: 按规则分流；全局: 代理所有流量；直连: 直接连接不代理
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+
+              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-150 shrink-0">
+                {(["rule", "global", "direct"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setRoutingMode(mode)}
+                    className={cn(
+                      "px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer text-center",
+                      routingMode === mode
+                        ? "bg-white text-[#3b59ff] shadow-xs"
+                        : "text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    {mode === "rule" && "规则"}
+                    {mode === "global" && "全局"}
+                    {mode === "direct" && "直连"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <ToggleRow
               icon={ShieldIcon}
               label="去广告"
