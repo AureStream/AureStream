@@ -73,20 +73,20 @@ export function SettingsPage() {
             </div>
 
             {/* Auto Start Switch */}
-            <div className="flex items-center justify-between rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 p-2.5 hover:bg-[#f8fafc]/60 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
+            <div className="flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">开机自启动</span>
-                <span className="text-[9px] text-slate-400 font-semibold mt-0.5">在系统启动时自动运行客户端</span>
+                <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">在系统启动时自动运行客户端</span>
               </div>
               <Switch checked={autoStart} onCheckedChange={setAutoStart} size="sm" />
             </div>
 
             {/* TUN Service Card */}
-            <div className="flex flex-col gap-2 rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 p-2.5 hover:bg-[#f8fafc]/60 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
+            <div className="flex flex-col gap-2 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">TUN 虚拟网卡服务</span>
-                  <span className="text-[9px] text-slate-400 font-semibold mt-0.5">接管整机网络流量，免配置系统代理</span>
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">接管整机网络流量，免配置系统代理</span>
                 </div>
                 <span
                   className={cn(
@@ -98,8 +98,8 @@ export function SettingsPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100/60 dark:border-white/[0.06]">
-                <div className="flex items-center gap-1 text-[9px] text-slate-400 font-semibold">
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-white/[0.06]">
+                <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 font-semibold">
                   {tunInstalled ? (
                     <>
                       <CheckCircle2Icon className="size-3 text-emerald-500" />
@@ -146,18 +146,18 @@ export function SettingsPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center justify-between rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 p-2.5 hover:bg-[#f8fafc]/60 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
+              <div className="flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">启动时隐藏</span>
-                  <span className="text-[8px] text-slate-400 font-semibold mt-0.5">静默后台启动</span>
+                  <span className="text-[8px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">静默后台启动</span>
                 </div>
                 <Switch checked={hideOnLaunch} onCheckedChange={setHideOnLaunch} size="sm" />
               </div>
 
-              <div className="flex items-center justify-between rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 p-2.5 hover:bg-[#f8fafc]/60 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
+              <div className="flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">最小化到托盘</span>
-                  <span className="text-[8px] text-slate-400 font-semibold mt-0.5">关闭窗口不退出</span>
+                  <span className="text-[8px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">关闭窗口不退出</span>
                 </div>
                 <Switch checked={minimizeToTray} onCheckedChange={setMinimizeToTray} size="sm" />
               </div>
@@ -176,22 +176,22 @@ export function SettingsPage() {
             </div>
 
             {/* Port Setting */}
-            <div className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 p-2.5 shrink-0 dark:border-white/[0.06] dark:bg-white/[0.04]">
+            <div className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 shrink-0 dark:border-white/[0.06] dark:bg-white/[0.04]">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">混合代理端口 (Mixed Port)</span>
-                <span className="text-[9px] text-slate-400 font-semibold mt-0.5">本地统一 HTTP / SOCKS 监听端口</span>
+                <span className="text-[9px] text-slate-550 dark:text-slate-400 font-semibold mt-0.5">本地统一 HTTP / SOCKS 监听端口</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <input
                   type="number"
                   value={port}
                   onChange={(e) => setPort(e.target.value)}
-                  className="w-16 h-6.5 rounded-md border border-slate-200 bg-white px-2 text-center text-xs font-bold text-slate-800 focus:border-[#3b59ff] outline-none transition-all dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
+                  className="w-16 h-6.5 rounded-md border border-slate-200 bg-white px-2 text-center text-xs font-bold text-slate-800 focus:border-[#007ACC] outline-none transition-all dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
                 />
                 <Button
                   variant="ghost"
                   onClick={() => setPort("7890")}
-                  className="h-6.5 px-2 rounded-md text-[9px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                  className="h-6.5 px-2 rounded-md text-[9px] font-bold text-slate-500 hover:text-slate-700 transition-colors"
                 >
                   重置
                 </Button>
@@ -199,18 +199,18 @@ export function SettingsPage() {
             </div>
 
             {/* Bypass Proxy List */}
-            <div className="flex flex-col gap-1.5 rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 p-2.5 flex-1 min-h-0 dark:border-white/[0.06] dark:bg-white/[0.04]">
+            <div className="flex flex-col gap-1.5 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 flex-1 min-h-0 dark:border-white/[0.06] dark:bg-white/[0.04]">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">绕过代理目标地址 (Bypass)</span>
-                <span className="text-[9px] text-slate-400 font-semibold mt-0.5">列表内域名/IP直连</span>
+                <span className="text-[9px] text-slate-550 dark:text-slate-400 font-semibold mt-0.5">列表内域名/IP直连</span>
               </div>
               <textarea
                 value={bypassList}
                 onChange={(e) => setBypassList(e.target.value)}
-                className="flex-1 min-h-[45px] rounded-lg border border-slate-200 bg-white p-2 text-[10px] font-mono text-slate-700 placeholder-slate-400 focus:border-[#3b59ff] outline-none transition-all resize-none dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
+                className="flex-1 min-h-[45px] rounded-lg border border-slate-200 bg-white p-2 text-[10px] font-mono text-slate-700 placeholder-slate-400 focus:border-[#007ACC] outline-none transition-all resize-none dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
                 placeholder="localhost, 127.0.0.1, <local>..."
               />
-              <span className="text-[8px] text-slate-400 font-medium">多个地址用逗号分割</span>
+              <span className="text-[8px] text-slate-500 dark:text-slate-400 font-medium">多个地址用逗号分割</span>
             </div>
           </CardContent>
         </Card>
@@ -274,7 +274,7 @@ export function SettingsPage() {
                 </div>
                 <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">DNS 与安全解析</span>
               </div>
-              <span className="text-[8.5px] text-slate-400 font-semibold">防止 DNS 劫持与泄露</span>
+              <span className="text-[8.5px] text-slate-500 dark:text-slate-400 font-semibold">防止 DNS 劫持与泄露</span>
             </div>
 
             {/* Mode selection (pill style grid) */}
@@ -286,8 +286,8 @@ export function SettingsPage() {
                   className={cn(
                     "h-7 rounded-lg border text-[10px] font-bold transition-all cursor-pointer text-center",
                     dnsMode === mode
-                      ? "border-[#3b59ff] bg-[#eef2ff] text-[#3b59ff] dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/40"
-                      : "border-slate-100 bg-[#f8fafc]/30 text-slate-500 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:bg-white/[0.06]"
+                      ? "border-[#007ACC] bg-[#eef2ff] text-[#007ACC] dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/40"
+                      : "border-slate-200/60 bg-white/40 text-slate-500 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:bg-white/[0.06]"
                   )}
                 >
                   {mode === "system" && "系统默认"}
@@ -300,16 +300,16 @@ export function SettingsPage() {
             {/* Row 1 of config slot */}
             <div className="h-10 mt-0.5 shrink-0">
               {dnsMode === "system" && (
-                <div className="h-full flex items-center justify-between rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 px-2.5 text-[9px] text-slate-400 font-semibold animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:text-slate-400">
+                <div className="h-full flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 px-2.5 text-[9px] text-slate-500 font-semibold animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:text-slate-400">
                   <span>DNS 解析模式</span>
                   <span className="text-slate-600 font-bold dark:text-slate-300">直连系统默认 DNS</span>
                 </div>
               )}
 
               {dnsMode === "secure" && (
-                <div className="h-full flex items-center justify-between rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 px-2.5 animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04]">
+                <div className="h-full flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 px-2.5 animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04]">
                   <span className="text-[9px] text-slate-500 font-bold shrink-0 dark:text-slate-400">DOH 提供商</span>
-                  <div className="flex rounded-md bg-slate-100 p-0.5 border border-slate-150 shrink-0 dark:bg-white/[0.06] dark:border-white/[0.1]">
+                  <div className="flex rounded-md bg-slate-100 p-0.5 border border-slate-200/80 shrink-0 dark:bg-white/[0.06] dark:border-white/[0.1]">
                     {(["ali", "tencent", "google"] as const).map((prov) => (
                       <button
                         key={prov}
@@ -317,7 +317,7 @@ export function SettingsPage() {
                         className={cn(
                           "px-2.5 py-0.5 rounded-md text-[8.5px] font-bold transition-all cursor-pointer text-center",
                           dohProvider === prov
-                            ? "bg-white text-[#3b59ff] shadow-xs dark:bg-white/[0.1] dark:text-blue-400"
+                            ? "bg-white text-[#007ACC] shadow-xs dark:bg-white/[0.1] dark:text-blue-400"
                             : "text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                         )}
                       >
@@ -331,14 +331,14 @@ export function SettingsPage() {
               )}
 
               {dnsMode === "custom" && (
-                <div className="h-full flex items-center gap-2 rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 px-2.5 animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04]">
+                <div className="h-full flex items-center gap-2 rounded-[12px] border border-slate-200/60 bg-white/40 px-2.5 animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04]">
                   <span className="text-[9px] text-slate-500 font-bold shrink-0 dark:text-slate-400">DNS 服务器</span>
                   <input
                     type="text"
                     value={dnsServers}
                     onChange={(e) => setDnsServers(e.target.value)}
                     placeholder="223.5.5.5, 119.29.29.29"
-                    className="flex-1 h-6.5 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-slate-800 focus:border-[#3b59ff] outline-none transition-all font-mono dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
+                    className="flex-1 h-6.5 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-slate-800 focus:border-[#007ACC] outline-none transition-all font-mono dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
                   />
                 </div>
               )}
@@ -347,10 +347,10 @@ export function SettingsPage() {
             {/* Row 2 of config slot (Cache switch or placeholder tip) */}
             <div className="h-10 mt-0.5 shrink-0">
               {dnsMode !== "custom" ? (
-                <div className="h-full flex items-center justify-between rounded-[12px] border border-slate-100 bg-[#f8fafc]/30 px-2.5 hover:bg-[#f8fafc]/60 transition-all duration-200 animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
+                <div className="h-full flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 px-2.5 hover:bg-white/70 transition-all duration-200 animate-in fade-in duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-800 leading-none dark:text-slate-200">开启 DNS 缓存</span>
-                    <span className="text-[8px] text-slate-400 font-semibold mt-1">减少解析延迟并防止 DNS 泄露</span>
+                    <span className="text-[8px] text-slate-500 dark:text-slate-400 font-semibold mt-1">减少解析延迟并防止 DNS 泄露</span>
                   </div>
                   <Switch checked={enableDnsCache} onCheckedChange={setEnableDnsCache} size="sm" />
                 </div>

@@ -84,7 +84,7 @@ export function NodeSelector() {
                   </div>
 
                   <div className="flex items-center gap-3 ml-3 shrink-0">
-                    <span className="text-[10px] text-slate-400 font-medium dark:text-slate-500">
+                    <span className="text-[10px] text-slate-500 font-semibold dark:text-slate-400">
                       {node.latencyLabel}
                     </span>
                     <RadioGroupItem

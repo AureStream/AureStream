@@ -174,10 +174,10 @@ export function SubscriptionPage() {
                       className={cn(
                         "flex flex-col gap-2 rounded-[16px] border p-3.5 transition-all duration-200 cursor-pointer",
                         isCurrent
-                          ? "bg-[#eef2ff] border-[#3b59ff]/30 shadow-[0_2px_8px_rgba(59,89,255,0.08)] dark:bg-blue-500/10 dark:border-blue-500/35"
+                          ? "bg-[#eef2ff] border-[#007ACC]/30 shadow-[0_2px_8px_rgba(0,122,204,0.08)] dark:bg-blue-500/10 dark:border-blue-500/35"
                           : sub.status === "expired"
-                          ? "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] opacity-60 dark:bg-white/[0.02] dark:border-white/[0.04]"
-                          : "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:bg-white dark:bg-white/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.06]"
+                          ? "bg-white/90 border-slate-200/60 shadow-[0_2px_8px_rgba(15,23,42,0.02)] opacity-60 dark:bg-white/[0.02] dark:border-white/[0.04]"
+                          : "bg-white/90 border-slate-200/60 shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:bg-white dark:bg-white/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.06]"
                       )}
                     >
                       {/* Subscription Info Header */}
@@ -200,7 +200,7 @@ export function SubscriptionPage() {
                               {sub.status === "expired" && "已过期"}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                          <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                             <LinkIcon className="size-3 shrink-0" />
                             <span className="truncate">{sub.url}</span>
                           </div>
@@ -260,13 +260,13 @@ export function SubscriptionPage() {
                       </div>
 
                       {/* Footer Info */}
-                      <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-slate-200/50 dark:border-white/[0.06] text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                       <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-slate-200/50 dark:border-white/[0.06] text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="size-3" />
                           到期时间: {sub.expirationDate}
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className={cn("size-1.5 rounded-full", sub.autoUpdate ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600")} />
+                          <span className={cn("size-1.5 rounded-full", sub.autoUpdate ? "bg-emerald-500" : "bg-slate-350 dark:bg-slate-600")} />
                           自动更新: {sub.autoUpdate ? sub.updateInterval : "关闭"}
                         </span>
                       </div>
@@ -315,10 +315,10 @@ export function SubscriptionPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-[#f8fafc]/30 px-3 py-2 mt-0.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
+              <div className="flex items-center justify-between rounded-lg border border-slate-200/60 bg-white/40 px-3 py-2 mt-0.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">自动更新</span>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500">开启后将定时同步节点</span>
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400">开启后将定时同步节点</span>
                 </div>
                 <Switch size="sm" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
               </div>
