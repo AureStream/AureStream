@@ -19,7 +19,7 @@ export function NodeSelector() {
   const [selectedId, setSelectedId] = useState(proxyNodes[0]?.id ?? "")
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">
+    <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden @container">
       <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
         <div className="flex items-center gap-1.5">
           <CardTitle className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">选择代理节点</CardTitle>
@@ -44,7 +44,7 @@ export function NodeSelector() {
           <RadioGroup
             value={selectedId}
             onValueChange={setSelectedId}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 pb-2"
+            className="grid grid-cols-1 @sm:grid-cols-2 @lg:grid-cols-3 @2xl:grid-cols-4 gap-2 pb-2"
           >
             {proxyNodes.map((node) => {
               const isSelected = selectedId === node.id
