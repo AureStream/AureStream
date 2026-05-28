@@ -340,6 +340,7 @@ dependencies = [
  "tauri-plugin-sql",
  "tauri-plugin-store",
  "tokio",
+ "tun-service",
  "url",
  "webbrowser",
  "winapi",
