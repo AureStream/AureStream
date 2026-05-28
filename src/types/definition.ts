@@ -16,6 +16,7 @@ export const DEFAULT_PROXY_PORT = 6789;
 export const PROXY_PORT_STORE_KEY = 'proxy_port_key';
 export const ALLOWLAN_STORE_KEY = 'allow_lan_key';
 export const ENABLE_TUN_STORE_KEY = 'enable_tun_key';
+export const SSI_STORE_KEY = "selected_subscription_identifier";
 
 export interface Subscription {
   id: number;

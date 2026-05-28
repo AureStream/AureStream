@@ -18,7 +18,16 @@ import {
 } from "@/components/ui/tooltip"
 import { invoke } from "@tauri-apps/api/core"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getEnableTun } from "@/single/store"
+import { getEnableTun, getStoreValue, setStoreValue } from "@/single/store"
+import { useSubscriptions } from "@/hooks/useSubscriptions"
+import setGlobalTunConfig, {
+  setTunConfig,
+  setMixedConfig,
+  setGlobalMixedConfig,
+} from "@/config/merger/main"
+import { message } from "@tauri-apps/plugin-dialog"
+
+const ROUTING_MODE_KEY = "routing_mode"
 
 function ToggleRow({
   icon: Icon,
@@ -79,13 +88,26 @@ function formatUptime(seconds: number): string {
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":")
 }
 
-export function ConnectionPanel() {
+export function ConnectionPanel({ className }: { className?: string }) {
   const { engineState, isConnected, isStarting, isFailed, start, stop, clearError } =
     useEngineState()
+  const { activeIdentifier } = useSubscriptions()
   const [routingMode, setRoutingMode] = useState<"rule" | "global" | "direct">("rule")
   const [adBlock, setAdBlock] = useState(false)
   const [uptime, setUptime] = useState(0)
   const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Load routing mode from store
+  useEffect(() => {
+    getStoreValue(ROUTING_MODE_KEY, "rule").then((val) => {
+      setRoutingMode(val)
+    })
+  }, [])
+
+  const handleRoutingModeChange = async (mode: "rule" | "global" | "direct") => {
+    setRoutingMode(mode)
+    await setStoreValue(ROUTING_MODE_KEY, mode)
+  }
 
   const since =
     engineState.kind === "running" || engineState.kind === "starting"
@@ -111,8 +133,34 @@ export function ConnectionPanel() {
     if (isConnected || isStarting) {
       await stop()
     } else {
+      if (!activeIdentifier) {
+        await message("请先在订阅页面添加并选择一个有效的订阅", {
+          title: "提示",
+          kind: "warning",
+        })
+        return
+      }
       if (isFailed) await clearError()
       const useTun = await getEnableTun()
+
+      try {
+        const isGlobal = routingMode === "global"
+        if (useTun) {
+          const fn = isGlobal ? setGlobalTunConfig : setTunConfig
+          await fn(activeIdentifier)
+        } else {
+          const fn = isGlobal ? setGlobalMixedConfig : setMixedConfig
+          await fn(activeIdentifier)
+        }
+      } catch (err: any) {
+        console.error("Config merge failed:", err)
+        await message(`配置解析合并失败: ${err.message || err}`, {
+          title: "错误",
+          kind: "error",
+        })
+        return
+      }
+
       const configDir = await invoke<Record<string, string>>("get_app_paths").then(
         (p) => p.config_dir
       ).catch(() => "")
@@ -137,11 +185,11 @@ export function ConnectionPanel() {
       : "bg-slate-400"
 
   return (
-    <Card className="shrink-0 rounded-[20px]">
-      <CardContent className="flex flex-row items-center gap-4 p-3 sm:p-4">
+    <Card className={cn("shrink-0 rounded-[20px] h-full", className)}>
+      <CardContent className="flex flex-row items-center gap-4 p-3 sm:p-4 h-full">
         <div
           className={cn(
-            "size-[6.5rem] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-2",
+            "h-[85%] aspect-square shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-4",
             isConnected
               ? "border border-blue-200/80 bg-blue-50/50 shadow-[0_0_15px_rgba(59,89,255,0.08)] dark:border-blue-500/25 dark:bg-blue-950/20 dark:shadow-[0_0_20px_rgba(59,89,255,0.15)]"
               : "border border-slate-200/50 bg-[#f8fafc]/50 dark:border-white/[0.06] dark:bg-white/[0.02]"
@@ -162,12 +210,12 @@ export function ConnectionPanel() {
           >
             <PowerIcon
               className={cn(
-                "size-6 transition-transform duration-300",
+                "size-5 sm:size-6 transition-transform duration-300",
                 (isConnected || isStarting) && "scale-110",
                 isStarting && "animate-spin"
               )}
             />
-            <span className="text-[10px] font-semibold tracking-wide">
+            <span className="text-[9px] sm:text-[10px] font-semibold tracking-wide">
               {isStarting ? "连接中" : isConnected ? "已连接" : "未连接"}
             </span>
           </button>
@@ -230,7 +278,7 @@ export function ConnectionPanel() {
                 {(["rule", "global", "direct"] as const).map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => setRoutingMode(mode)}
+                    onClick={() => handleRoutingModeChange(mode)}
                     className={cn(
                       "px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer text-center",
                       routingMode === mode

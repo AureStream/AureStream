@@ -124,6 +124,17 @@ pub(crate) async fn handle_process_termination(
         );
     }
 
+    #[cfg(target_os = "macos")]
+    let is_watchdog_restart = crate::engine::macos::watchdog::is_restart_in_progress();
+    #[cfg(not(target_os = "macos"))]
+    let is_watchdog_restart = false;
+
+    if is_watchdog_restart {
+        log::info!(
+            "[handle_process_termination] bypass_router_watchdog restart in progress, skipping cleanup but preserving state transition"
+        );
+    }
+
     let (pm_pid, manager_mode, matches, is_stopping) = {
         let manager = ProcessManager::acquire();
         let pm_pid = manager.child.as_ref().map(|c| c.pid());
@@ -150,7 +161,7 @@ pub(crate) async fn handle_process_termination(
         (false, false)
     };
 
-    if should_cleanup && !is_stale {
+    if should_cleanup && !is_stale && !is_watchdog_restart {
         if matches!(**process_mode, ProxyMode::SystemProxy) {
             if let Err(e) = crate::engine::clear_system_proxy(app_handle).await {
                 log::error!("Failed to unset proxy after process termination: {}", e);
@@ -163,6 +174,7 @@ pub(crate) async fn handle_process_termination(
 
         ProcessManager::acquire().reset();
     }
+
 
     if let Err(e) = app_handle.emit(EVENT_STATUS_CHANGED, payload.clone()) {
         log::error!("Failed to emit status-changed event: {}", e);

@@ -28,6 +28,8 @@
     "http:allow-fetch-cancel",
     "http:allow-fetch-read-body",
     "fs:default",
+    "fs:allow-app-write",
+    "fs:allow-app-read",
     "process:default",
     "process:allow-exit",
     "process:allow-restart",

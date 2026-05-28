@@ -16,5 +16,7 @@ pub fn app_setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => log::error!("Failed to copy config: {}", e),
     }
 
+    crate::commands::whitelist::spawn_whitelist_refresh_task(app.handle().clone());
+
     Ok(())
 }

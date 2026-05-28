@@ -10,21 +10,21 @@ import { Progress } from "@/components/ui/progress"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 GB"
+  if (!bytes || bytes === 0) return "0 GB"
   const gb = bytes / (1024 * 1024 * 1024)
   if (gb < 0.01) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${gb.toFixed(1)} GB`
 }
 
-function formatExpiry(expireTime: number): string {
-  if (!expireTime || expireTime <= 0) return "无限期"
-  const date = new Date(expireTime * 1000)
+function formatExpiry(expireTimeMs: number): string {
+  if (!expireTimeMs || expireTimeMs <= 0) return "无限期"
+  const date = new Date(expireTimeMs)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
 export function SubscriptionPanel() {
-  const { subscriptions, loading } = useSubscriptions()
-  const active = subscriptions[0]
+  const { subscriptions, activeIdentifier, loading } = useSubscriptions()
+  const active = subscriptions.find(s => s.identifier === activeIdentifier) || subscriptions[0]
   const usedPercent =
     active && active.total_traffic > 0
       ? (active.used_traffic / active.total_traffic) * 100

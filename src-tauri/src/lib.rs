@@ -39,6 +39,10 @@ pub fn run() {
             // prestart commands
             commands::prestart::prestart_check,
             commands::prestart::kill_orphans,
+            // dns and config fetch commands
+            commands::dns::get_optimal_local_dns_server,
+            commands::config_fetch::fetch_config_with_optimal_dns,
+            commands::config_fetch::verify_deep_link_url,
         ])
         .setup(app::setup::app_setup)
         .on_window_event(app::events::on_window_event)

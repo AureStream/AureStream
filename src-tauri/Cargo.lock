@@ -311,6 +311,7 @@ name = "aurestream"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cc",
  "chrono",
  "core-foundation 0.9.4",
  "flate2",
@@ -322,6 +323,7 @@ dependencies = [
  "onebox-sysproxy-rs",
  "serde",
  "serde_json",
+ "sha2",
  "system-configuration",
  "tauri",
  "tauri-build",
@@ -336,6 +338,7 @@ dependencies = [
  "tauri-plugin-sql",
  "tauri-plugin-store",
  "tokio",
+ "url",
  "webbrowser",
  "winapi",
  "windows 0.62.2",

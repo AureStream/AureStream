@@ -1,5 +1,209 @@
+import { invoke } from '@tauri-apps/api/core';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
-import { SubscriptionConfig } from '../types/definition';
+import { Subscription, SubscriptionConfig } from '../types/definition';
+
+export interface ResponseHeaders {
+    'subscription-userinfo'?: string;
+    'official-website'?: string;
+    'content-disposition'?: string;
+}
+
+export interface ConfigResponse {
+    data: any;
+    headers: ResponseHeaders;
+    status: number;
+}
+
+export class FileError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "FileError";
+    }
+}
+
+export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
+    if (url.startsWith('file://')) {
+        const filePath = url.slice(7);
+        try {
+            const content = await readTextFile(filePath);
+            return {
+                data: JSON.parse(content),
+                headers: {
+                    'subscription-userinfo': `upload=0; download=0; total=1125899906842624; expire=32503680000`,
+                    'official-website': 'https://sing-box.net',
+                    'content-disposition': `attachment; filename=local-config-${Date.now()}.json`
+                },
+                status: 200
+            };
+        } catch (error) {
+            throw new FileError(`${error}`);
+        }
+    } else {
+        const userAgent = "AureStream/0.1.0 (sing-box/1.12.0)";
+        const result = await invoke<{
+            data: unknown;
+            headers: Record<string, string>;
+            status: number;
+        }>('fetch_config_with_optimal_dns', {
+            url,
+            userAgent,
+        });
+
+        // Normalize header keys to lowercase
+        const normalizedHeaders: Record<string, string> = {};
+        if (result.headers) {
+            for (const key of Object.keys(result.headers)) {
+                normalizedHeaders[key.toLowerCase()] = result.headers[key];
+            }
+        }
+
+        return {
+            data: result.data ?? null,
+            headers: {
+                'subscription-userinfo': normalizedHeaders['subscription-userinfo'] || '',
+                'official-website': normalizedHeaders['official-website'] || 'https://sing-box.net',
+                'content-disposition': normalizedHeaders['content-disposition'] || '',
+            },
+            status: result.status,
+        };
+    }
+}
+
+export function getRemoteNameByContentDisposition(contentDisposition: string) {
+    const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+    const matches = filenameRegex.exec(contentDisposition);
+    if (matches != null && matches[1]) {
+        return decodeURIComponent(matches[1].replace(/['"]/g, ''));
+    }
+    return null;
+}
+
+export function getRemoteInfoBySubscriptionUserinfo(subscriptionUserinfo: string) {
+    try {
+        const info = subscriptionUserinfo.split('; ').reduce((acc, item) => {
+            const [key, value] = item.split('=');
+            if (key && value) {
+                acc[key.trim()] = value.trim();
+            }
+            return acc;
+        }, {} as Record<string, string>);
+
+        return {
+            upload: info.upload || '0',
+            download: info.download || '0',
+            total: info.total || '0',
+            expire: info.expire || '0',
+        };
+    } catch (error) {
+        console.error('Error parsing subscription userinfo:', error);
+        return {
+            upload: '0',
+            download: '0',
+            total: '0',
+            expire: '0',
+        };
+    }
+}
+
+export async function insertSubscription(url: string, name?: string): Promise<string | undefined> {
+    try {
+        const response = await fetchConfigContent(url);
+        if (response.status !== 200 || !response.data) {
+            console.warn(`[import] abort non-200 status=${response.status} url=${url}`);
+            return undefined;
+        }
+
+        const db = await getDataBaseInstance();
+        const resolvedName = (!name || name === '默认配置')
+            ? getRemoteNameByContentDisposition(response.headers['content-disposition'] || '') || '配置'
+            : name;
+        const { upload, download, total, expire } = getRemoteInfoBySubscriptionUserinfo(
+            response.headers['subscription-userinfo'] || ''
+        );
+        const usedTraffic = parseInt(upload) + parseInt(download);
+        const totalTraffic = parseInt(total) || 1;
+        const expireTime = parseInt(expire) * 1000 || (Date.now() + 30 * 24 * 3600 * 1000);
+
+        const existing: { identifier: string }[] = await db.select(
+            'SELECT identifier FROM subscriptions WHERE subscription_url = ? ORDER BY id DESC LIMIT 1',
+            [url]
+        );
+
+        if (existing.length > 0) {
+            const identifier = existing[0].identifier;
+            await db.execute(
+                'UPDATE subscriptions SET name = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
+                [resolvedName, usedTraffic, totalTraffic, expireTime, Math.floor(Date.now() / 1000), identifier]
+            );
+            await db.execute(
+                'UPDATE subscription_configs SET config_content = ? WHERE identifier = ?',
+                [JSON.stringify(response.data), identifier]
+            );
+            return identifier;
+        }
+
+        const identifier = crypto.randomUUID().toString().replace(/-/g, '');
+        await db.execute(
+            'INSERT INTO subscriptions (identifier, name, subscription_url, official_website, used_traffic, total_traffic, expire_time, last_update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                identifier, resolvedName, url,
+                response.headers['official-website'] || 'https://sing-box.net',
+                usedTraffic, totalTraffic, expireTime, Math.floor(Date.now() / 1000),
+            ]
+        );
+        await db.execute(
+            'INSERT INTO subscription_configs (identifier, config_content) VALUES (?, ?)',
+            [identifier, JSON.stringify(response.data)]
+        );
+        return identifier;
+    } catch (err) {
+        console.error(`[import] error url=${url}`, err);
+        return undefined;
+    }
+}
+
+export async function updateSubscription(identifier: string): Promise<boolean> {
+    try {
+        const db = await getDataBaseInstance();
+        const result: Subscription[] = await db.select('SELECT subscription_url FROM subscriptions WHERE identifier = ?', [identifier]);
+        if (result.length === 0) {
+            return false;
+        }
+        const url = result[0].subscription_url;
+        const response = await fetchConfigContent(url);
+        if (response.status !== 200 || !response.data) {
+            return false;
+        }
+
+        const { upload, download, total, expire } = getRemoteInfoBySubscriptionUserinfo(response.headers['subscription-userinfo'] || '');
+        const officialWebsite = response.headers['official-website'] || 'https://sing-box.net';
+        const used_traffic = parseInt(upload) + parseInt(download);
+        const total_traffic = parseInt(total) || 1;
+        const expire_time = parseInt(expire) * 1000 || (Date.now() + 30 * 24 * 3600 * 1000);
+        const last_update_time = Math.floor(Date.now() / 1000);
+
+        await db.execute(
+            'UPDATE subscriptions SET official_website = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
+            [officialWebsite, used_traffic, total_traffic, expire_time, last_update_time, identifier]
+        );
+        await db.execute('UPDATE subscription_configs SET config_content = ? WHERE identifier = ?', [JSON.stringify(response.data), identifier]);
+        return true;
+    } catch (error) {
+        console.error('Error updating subscription:', error);
+        return false;
+    }
+}
+
+export async function deleteSubscription(identifier: string): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        await db.execute('DELETE FROM subscriptions WHERE identifier = ?', [identifier]);
+        await db.execute('DELETE FROM subscription_configs WHERE identifier = ?', [identifier]);
+    } catch (error) {
+        console.error('Error deleting subscription:', error);
+    }
+}
 
 export async function getSubscriptionConfig(identifier: string): Promise<any> {
     try {
