@@ -94,7 +94,7 @@ function StatBox({
 
 export function UsagePanel() {
   return (
-    <Card className="flex min-h-0 flex-1 flex-col border border-slate-100 dark:border-white/[0.08] rounded-[20px] shadow-sm">
+    <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] shadow-sm">
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-4 pb-4 px-4">
         <div className="flex shrink-0 gap-3">
           <StatBox type="upload" label="上传" bytesPerSecond={0} totalBytes={0} />

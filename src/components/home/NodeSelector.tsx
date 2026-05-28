@@ -56,7 +56,7 @@ export function NodeSelector() {
                     "flex cursor-pointer items-center justify-between rounded-[14px] p-2 sm:p-2.5 transition-all border duration-200 min-w-0",
                     isSelected
                       ? "bg-[#f4f7ff] border-[#bfdbfe]/60 shadow-[0_2px_8px_rgba(59,89,255,0.04)] dark:bg-blue-500/10 dark:border-blue-500/30"
-                      : "bg-[#f8fafc]/30 border-slate-100 hover:bg-[#f8fafc]/60 dark:bg-white/[0.02] dark:border-white/[0.06] dark:hover:bg-white/[0.05]"
+                      : "bg-[#f8fafc]/30 border-slate-200/60 hover:bg-[#f8fafc]/60 dark:bg-white/[0.02] dark:border-white/[0.06] dark:hover:bg-white/[0.05]"
                   )}
                 >
                   <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">

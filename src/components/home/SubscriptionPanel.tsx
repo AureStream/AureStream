@@ -12,7 +12,7 @@ export function SubscriptionPanel() {
   const usedPercent = 0
 
   return (
-    <Card className="shrink-0 border border-slate-100 dark:border-white/[0.08] rounded-[20px] shadow-sm">
+    <Card className="shrink-0 rounded-[20px] shadow-sm">
       <CardHeader className="pb-0 pt-3 px-4">
         <CardTitle className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">AureStream 高级订阅</CardTitle>
       </CardHeader>

@@ -10,14 +10,16 @@ function App() {
   return (
     <div className="relative flex h-screen w-screen overflow-hidden p-2.5 gap-2.5">
       {/* Light mode background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#c5d0e8] via-[#d8e0f0] to-[#e8ecf5] dark:hidden" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.6)_0%,_transparent_50%)] dark:hidden" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(200,210,235,0.5)_0%,_transparent_50%)] dark:hidden" />
+      <div className="absolute inset-0 bg-[#EEEEEE] dark:hidden" />
+      <div className="absolute top-[-10%] right-[-10%] size-[380px] rounded-full bg-[#007ACC]/12 blur-[100px] dark:hidden" />
+      <div className="absolute bottom-[-10%] left-[-10%] size-[380px] rounded-full bg-[#4f46e5]/8 blur-[100px] dark:hidden" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.45)_0%,_transparent_75%)] dark:hidden" />
       
       {/* Dark mode background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#111111] via-[#0a0a0a] to-[#050505] hidden dark:block" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.03)_0%,_transparent_50%)] hidden dark:block" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(255,255,255,0.02)_0%,_transparent_50%)] hidden dark:block" />
+      <div className="absolute inset-0 bg-[#101010] hidden dark:block" />
+      <div className="absolute top-[-10%] right-[-10%] size-[380px] rounded-full bg-[#007ACC]/10 blur-[100px] hidden dark:block" />
+      <div className="absolute bottom-[-10%] left-[-10%] size-[380px] rounded-full bg-[#4f46e5]/6 blur-[100px] hidden dark:block" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.01)_0%,_transparent_75%)] hidden dark:block" />
       
       <AppSidebar activeId={activeTab} onActiveIdChange={setActiveTab} />
 

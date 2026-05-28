@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 
 export function NetworkPanel() {
   return (
-    <Card className="shrink-0 border border-slate-100 dark:border-white/[0.08] rounded-[20px] shadow-sm">
+    <Card className="shrink-0 rounded-[20px] shadow-sm">
       <CardContent className="flex flex-col gap-0 py-4 px-4">
         {/* Country Row with Refresh Button */}
         <div className="flex items-center justify-between gap-4 text-xs font-semibold">
