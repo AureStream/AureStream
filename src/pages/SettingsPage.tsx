@@ -2,6 +2,8 @@ import { useState } from "react"
 import {
   SettingsIcon,
   SunIcon,
+  MoonIcon,
+  MonitorIcon,
   InfoIcon,
   CheckCircle2Icon,
   AlertCircleIcon,
@@ -16,9 +18,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import { useTheme } from "@/contexts/ThemeContext"
 
 export function SettingsPage() {
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("system")
+  const { theme, setTheme } = useTheme()
   const [port, setPort] = useState("7890")
   const [bypassList, setBypassList] = useState(
     "localhost, 127.0.0.1, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, *.local, <local>"
@@ -60,7 +63,7 @@ export function SettingsPage() {
       {/* Left Column: Network, Service and Tray Settings */}
       <div className="flex min-h-0 flex-col gap-2.5 sm:gap-3 overflow-hidden">
         {/* Card 1: System and Services */}
-        <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
+        <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-2 pt-3.5 pb-3 px-4">
             <div className="flex items-center gap-1.5 shrink-0 mb-1">
               <div className="flex size-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -133,7 +136,7 @@ export function SettingsPage() {
         </Card>
 
         {/* Card 2: Tray & UI Interaction (New Card) */}
-        <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
+        <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-2 pt-3 pb-3 px-4">
             <div className="flex items-center gap-1.5 shrink-0 mb-1">
               <div className="flex size-7 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
@@ -163,7 +166,7 @@ export function SettingsPage() {
         </Card>
 
         {/* Card 3: Network Parameters */}
-        <Card className="flex-1 min-h-0 border border-slate-100 rounded-[20px] shadow-sm overflow-hidden flex flex-col">
+        <Card className="flex-1 min-h-0 rounded-[20px] overflow-hidden flex flex-col">
           <CardContent className="flex min-h-0 flex-1 flex-col gap-2 pt-3.5 pb-3 px-4 overflow-hidden">
             <div className="flex items-center gap-1.5 shrink-0 mb-1">
               <div className="flex size-7 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
@@ -216,30 +219,45 @@ export function SettingsPage() {
       {/* Right Column: Theme selection, Routing Rules, and Version info */}
       <div className="flex min-h-0 flex-col gap-2.5 sm:gap-3 overflow-hidden">
         {/* Card 4: Theme select card */}
-        <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
+        <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-2.5 py-3.5 px-4">
             <div className="flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
                 <SunIcon className="size-4" />
               </div>
-              <span className="text-xs sm:text-sm font-bold text-slate-800">外观与主题</span>
+              <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">外观与主题</span>
             </div>
 
-            <div className="flex rounded-lg bg-slate-100 p-0.5 mt-1 border border-slate-150">
+            <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 mt-1 border border-slate-150 dark:border-slate-700">
               {(["system", "light", "dark"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTheme(t)}
                   className={cn(
-                    "flex-1 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer text-center",
+                    "flex-1 py-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer text-center flex items-center justify-center gap-1",
                     theme === t
-                      ? "bg-white text-[#3b59ff] shadow-sm border-slate-100"
-                      : "text-slate-500 hover:text-slate-800"
+                      ? "bg-white dark:bg-slate-700 text-[#3b59ff] dark:text-blue-400 shadow-sm border border-slate-100 dark:border-slate-600"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   )}
                 >
-                  {t === "system" && "跟随系统"}
-                  {t === "light" && "浅色"}
-                  {t === "dark" && "深色"}
+                  {t === "system" && (
+                    <>
+                      <MonitorIcon className="size-3" />
+                      跟随系统
+                    </>
+                  )}
+                  {t === "light" && (
+                    <>
+                      <SunIcon className="size-3" />
+                      浅色
+                    </>
+                  )}
+                  {t === "dark" && (
+                    <>
+                      <MoonIcon className="size-3" />
+                      深色
+                    </>
+                  )}
                 </button>
               ))}
             </div>
@@ -247,7 +265,7 @@ export function SettingsPage() {
         </Card>
 
         {/* Card 5: DNS & Secure Resolution Settings (Redesigned) */}
-        <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
+        <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-2 pt-3 px-4 pb-3.5">
             <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -346,7 +364,7 @@ export function SettingsPage() {
         </Card>
 
         {/* Card 6: About App Card (Redesigned) */}
-        <Card className="flex-1 border border-slate-100 rounded-[20px] shadow-sm overflow-hidden">
+        <Card className="flex-1 rounded-[20px] overflow-hidden">
           <CardContent className="flex flex-col gap-2.5 py-3 px-4 h-full">
             <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">

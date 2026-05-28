@@ -8,6 +8,7 @@ import {
   CalendarIcon,
   ShieldCheckIcon,
   AlertCircleIcon,
+  CheckCircle2Icon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -91,6 +92,8 @@ export function SubscriptionPage() {
     },
   ])
 
+  const [currentSubscriptionId, setCurrentSubscriptionId] = useState<string>("1")
+
   const [name, setName] = useState("")
   const [url, setUrl] = useState("")
   const [autoUpdate, setAutoUpdate] = useState(true)
@@ -120,13 +123,23 @@ export function SubscriptionPage() {
 
   const handleDelete = (id: string) => {
     setSubscriptions(subscriptions.filter((sub) => sub.id !== id))
+    if (currentSubscriptionId === id && subscriptions.length > 1) {
+      const remaining = subscriptions.filter((sub) => sub.id !== id)
+      if (remaining.length > 0) {
+        setCurrentSubscriptionId(remaining[0].id)
+      }
+    }
+  }
+
+  const handleSetCurrent = (id: string) => {
+    setCurrentSubscriptionId(id)
   }
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-4 sm:gap-5">
       {/* Left side: Subscription list */}
       <div className="flex min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden">
-        <Card className="flex min-h-0 flex-1 flex-col border border-slate-100 rounded-[20px] shadow-sm overflow-hidden">
+        <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">
           <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
             <div className="flex items-center gap-1.5">
               <div className="flex size-7 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
@@ -153,11 +166,18 @@ export function SubscriptionPage() {
               ) : (
                 subscriptions.map((sub) => {
                   const percent = (sub.usedTraffic / sub.totalTraffic) * 100
+                  const isCurrent = sub.id === currentSubscriptionId
                   return (
                     <div
                       key={sub.id}
+                      onClick={() => sub.status !== "expired" && handleSetCurrent(sub.id)}
                       className={cn(
-                        "flex flex-col gap-2 rounded-[16px] border p-3.5 bg-[#f8fafc]/30 border-slate-100 hover:bg-[#f8fafc]/60 transition-all duration-200"
+                        "flex flex-col gap-2 rounded-[16px] border p-3.5 transition-all duration-200 cursor-pointer",
+                        isCurrent
+                          ? "bg-[#eef2ff] border-[#3b59ff]/30 shadow-[0_2px_8px_rgba(59,89,255,0.08)]"
+                          : sub.status === "expired"
+                          ? "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] opacity-60"
+                          : "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:bg-white"
                       )}
                     >
                       {/* Subscription Info Header */}
@@ -185,7 +205,13 @@ export function SubscriptionPage() {
                             <span className="truncate">{sub.url}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isCurrent && (
+                            <div className="flex items-center gap-1 px-2 h-6 rounded-md bg-emerald-50 text-emerald-600 text-[9px] font-bold">
+                              <CheckCircle2Icon className="size-3" />
+                              使用中
+                            </div>
+                          )}
                           <Button variant="ghost" size="icon" className="size-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors" aria-label="更新订阅">
                             <RefreshCwIcon className="size-3.5" />
                           </Button>
@@ -225,7 +251,7 @@ export function SubscriptionPage() {
                       </div>
 
                       {/* Footer Info */}
-                      <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-slate-100/60 text-[10px] text-slate-400 font-medium">
+                      <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-slate-200/50 text-[10px] text-slate-400 font-medium">
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="size-3" />
                           到期时间: {sub.expirationDate}
@@ -247,7 +273,7 @@ export function SubscriptionPage() {
       {/* Right side: Add subscription & Info card */}
       <div className="flex min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden">
         {/* Add subscription Form */}
-        <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
+        <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-3.5 py-4 px-4">
             <div className="flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -325,7 +351,7 @@ export function SubscriptionPage() {
         </Card>
 
         {/* Tip / Info Card */}
-        <Card className="flex-1 border border-slate-100 rounded-[20px] shadow-sm overflow-hidden">
+        <Card className="flex-1 rounded-[20px] overflow-hidden">
           <CardContent className="flex flex-col gap-3.5 py-4 px-4 h-full">
             <div className="flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">

@@ -19,7 +19,7 @@ export function NodeSelector() {
   const [selectedId, setSelectedId] = useState(proxyNodes[0]?.id ?? "")
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col border border-slate-100 rounded-[20px] shadow-sm overflow-hidden">
+    <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">
       <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
         <div className="flex items-center gap-1.5">
           <CardTitle className="text-xs sm:text-sm font-bold text-slate-800">选择代理节点</CardTitle>

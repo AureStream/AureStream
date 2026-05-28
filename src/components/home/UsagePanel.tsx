@@ -26,44 +26,85 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
+// 格式化速度，小于 1 KB 显示 0 KB/s
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond < 1024) {
+    return "0 KB/s"
+  }
+  const kb = bytesPerSecond / 1024
+  if (kb < 1024) {
+    return `${kb.toFixed(1)} KB/s`
+  }
+  const mb = kb / 1024
+  if (mb < 1024) {
+    return `${mb.toFixed(1)} MB/s`
+  }
+  const gb = mb / 1024
+  return `${gb.toFixed(1)} GB/s`
+}
+
+// 格式化总流量
+function formatTotal(bytes: number): string {
+  if (bytes === 0) return "累计 0 B"
+  if (bytes < 1024) return `累计 ${bytes} B`
+  const kb = bytes / 1024
+  if (kb < 1024) return `累计 ${kb.toFixed(1)} KB`
+  const mb = kb / 1024
+  if (mb < 1024) return `累计 ${mb.toFixed(1)} MB`
+  const gb = mb / 1024
+  if (gb < 1024) return `累计 ${gb.toFixed(1)} GB`
+  const tb = gb / 1024
+  return `累计 ${tb.toFixed(1)} TB`
+}
+
+function StatBox({
+  label,
+  bytesPerSecond,
+  totalBytes,
+  type,
+}: {
+  label: string
+  bytesPerSecond: number
+  totalBytes: number
+  type: "upload" | "download"
+}) {
+  const isUpload = type === "upload"
+  const speed = formatSpeed(bytesPerSecond)
+  const total = formatTotal(totalBytes)
+
+  return (
+    <div className="flex items-center gap-3 rounded-[14px] border border-slate-100 bg-[#f8fafc]/30 px-3 py-2.5 flex-1 min-w-0">
+      <div
+        className={`flex size-8 items-center justify-center rounded-lg shrink-0 ${
+          isUpload ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"
+        }`}
+      >
+        {isUpload ? <ArrowUpIcon className="size-4" /> : <ArrowDownIcon className="size-4" />}
+      </div>
+      <div className="flex flex-col min-w-0 flex-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold text-slate-500">{label}</span>
+          <span className="text-sm font-extrabold text-slate-800 leading-tight">{speed}</span>
+        </div>
+        <div className="text-[9px] text-slate-400 font-semibold mt-0.5">{total}</div>
+      </div>
+    </div>
+  )
+}
+
 export function UsagePanel() {
   return (
     <Card className="flex min-h-0 flex-1 flex-col border border-slate-100 rounded-[20px] shadow-sm">
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-2 pt-3 pb-3 px-4">
-        {/* Unified Horizontal Double-sided Stat Card */}
-        <div className="flex items-center justify-between rounded-[14px] border border-slate-100 bg-[#f8fafc]/30 p-2 shrink-0">
-          {/* Upload */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-500">
-              <ArrowUpIcon className="size-3.5" />
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col">
-              <span className="text-[10px] font-bold text-slate-500 leading-none">上传</span>
-              <span className="text-xs font-extrabold text-slate-800 mt-1 truncate">0 B/s</span>
-              <span className="text-[9px] text-slate-400 font-semibold mt-0.5 truncate">累计 0 B</span>
-            </div>
-          </div>
-
-          {/* Vertical Divider */}
-          <div className="h-8 w-px bg-slate-200/80 mx-2 shrink-0" />
-
-          {/* Download */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500">
-              <ArrowDownIcon className="size-3.5" />
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col">
-              <span className="text-[10px] font-bold text-slate-500 leading-none">下载</span>
-              <span className="text-xs font-extrabold text-slate-800 mt-1 truncate">0 B/s</span>
-              <span className="text-[9px] text-slate-400 font-semibold mt-0.5 truncate">累计 0 B</span>
-            </div>
-          </div>
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-4 pb-4 px-4">
+        <div className="flex shrink-0 gap-3">
+          <StatBox type="upload" label="上传" bytesPerSecond={0} totalBytes={0} />
+          <StatBox type="download" label="下载" bytesPerSecond={0} totalBytes={0} />
         </div>
 
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto w-full flex-1 min-h-[100px] sm:min-h-[120px] [&_.recharts-legend-wrapper]:!static [&_.recharts-legend-wrapper]:!pt-1"
-          initialDimension={{ width: 280, height: 100 }}
+          className="aspect-auto w-full flex-1 min-h-0 [&_.recharts-legend-wrapper]:!static [&_.recharts-legend-wrapper]:!pt-2"
+          initialDimension={{ width: 280, height: 72 }}
         >
           <LineChart data={trafficHistory} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />

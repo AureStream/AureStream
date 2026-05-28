@@ -40,7 +40,7 @@ function ToggleRow({
       className={cn(
         "flex items-center justify-between rounded-[14px] px-3.5 py-2.5 transition-all duration-200",
         highlighted
-          ? "border-[1.5px] border-slate-900 bg-white shadow-xs"
+          ? "border border-[#e2e8f0] bg-[#eef2ff]/50 hover:bg-[#eef2ff]"
           : "border border-[#e2e8f0] bg-[#f8fafc]/30 hover:bg-[#f8fafc]/60"
       )}
     >
@@ -76,7 +76,7 @@ export function ConnectionPanel() {
   const [adBlock, setAdBlock] = useState(false)
 
   return (
-    <Card className="shrink-0 border border-slate-100 rounded-[20px] shadow-sm">
+    <Card className="shrink-0 rounded-[20px]">
       <CardContent className="flex flex-row items-center gap-4 p-3 sm:p-4">
         {/* Double-circle connection button */}
         <div

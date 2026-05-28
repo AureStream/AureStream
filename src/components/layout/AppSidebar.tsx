@@ -27,7 +27,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   return (
-    <aside className="flex w-14 shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/60 bg-white/80 py-4 shadow-[0_8px_32px_0_rgba(31,38,135,0.04)] backdrop-blur-md">
+    <aside className="relative flex w-14 shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/80 bg-white/60 backdrop-blur-xl py-4 shadow-[0_4px_24px_rgba(31,38,135,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] overflow-hidden">
       <div className="flex flex-col items-center gap-6 w-full">
         {/* Top Logo */}
         <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
