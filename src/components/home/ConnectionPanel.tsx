@@ -40,16 +40,16 @@ function ToggleRow({
       className={cn(
         "flex items-center justify-between rounded-[14px] px-3.5 py-2.5 transition-all duration-200",
         highlighted
-          ? "border border-[#e2e8f0] bg-[#eef2ff]/50 hover:bg-[#eef2ff]"
-          : "border border-[#e2e8f0] bg-[#f8fafc]/30 hover:bg-[#f8fafc]/60"
+          ? "border border-[#e2e8f0] bg-[#eef2ff]/50 hover:bg-[#eef2ff] dark:border-white/[0.08] dark:bg-blue-500/10 dark:hover:bg-blue-500/20"
+          : "border border-[#e2e8f0] bg-[#f8fafc]/30 hover:bg-[#f8fafc]/60 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]"
       )}
     >
       <div className="flex items-center gap-2">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#eef2ff] text-[#3b59ff]">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#eef2ff] text-[#3b59ff] dark:bg-blue-500/15 dark:text-blue-400">
           <Icon className="size-4" />
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-xs font-semibold text-slate-800">{label}</span>
+          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{label}</span>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -83,8 +83,8 @@ export function ConnectionPanel() {
           className={cn(
             "size-[104px] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-2",
             connected
-              ? "border border-blue-200 bg-blue-50/50"
-              : "border border-slate-100 bg-[#f8fafc]/50"
+              ? "border border-blue-200 bg-blue-50/50 dark:border-blue-500/20 dark:bg-white/[0.04]"
+              : "border border-slate-100 bg-[#f8fafc]/50 dark:border-white/[0.08] dark:bg-white/[0.03]"
           )}
         >
           <button
@@ -93,8 +93,8 @@ export function ConnectionPanel() {
             className={cn(
               "size-full rounded-full border flex flex-col items-center justify-center gap-1 transition-all duration-300 shadow-xs cursor-pointer select-none",
               connected
-                ? "border-blue-400 bg-white text-[#3b59ff] shadow-[0_4px_16px_rgba(59,89,255,0.12)] hover:bg-blue-50/10"
-                : "border-slate-300 bg-white text-slate-400 hover:bg-slate-50"
+                ? "border-blue-400 bg-white text-[#3b59ff] shadow-[0_4px_16px_rgba(59,89,255,0.12)] hover:bg-blue-50/10 dark:border-blue-500/50 dark:bg-black dark:text-blue-400"
+                : "border-slate-300 bg-white text-slate-400 hover:bg-slate-50 dark:border-white/[0.08] dark:bg-black dark:text-slate-400 dark:hover:bg-white/[0.04]"
             )}
           >
             <PowerIcon className={cn("size-6 transition-transform duration-300", connected && "scale-110")} />
@@ -109,7 +109,7 @@ export function ConnectionPanel() {
           <div className="flex justify-between items-start w-full px-0.5">
             <div className="flex flex-col gap-0.5">
               <span className="text-[9px] text-muted-foreground font-medium">服务状态</span>
-              <span className="flex items-center gap-1 text-[11px] font-bold text-slate-800">
+              <span className="flex items-center gap-1 text-[11px] font-bold text-slate-800 dark:text-slate-200">
                 <span
                   className={cn(
                     "size-1.5 rounded-full",
@@ -121,7 +121,7 @@ export function ConnectionPanel() {
             </div>
             <div className="flex flex-col items-end gap-0.5">
               <span className="text-[9px] text-muted-foreground font-medium">已连接时长</span>
-              <span className="font-mono text-[13px] font-bold text-slate-600 tracking-wider">
+              <span className="font-mono text-[13px] font-bold text-slate-600 tracking-wider dark:text-slate-300">
                 00:00:00
               </span>
             </div>
@@ -131,15 +131,15 @@ export function ConnectionPanel() {
             {/* Segmented Routing Mode Row */}
             <div
               className={cn(
-                "flex items-center justify-between rounded-[14px] px-3.5 py-2 transition-all duration-200 border border-[#e2e8f0] bg-[#f8fafc]/30 hover:bg-[#f8fafc]/60"
+                "flex items-center justify-between rounded-[14px] px-3.5 py-2 transition-all duration-200 border border-[#e2e8f0] bg-[#f8fafc]/30 hover:bg-[#f8fafc]/60 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]"
               )}
             >
               <div className="flex items-center gap-2">
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#eef2ff] text-[#3b59ff]">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#eef2ff] text-[#3b59ff] dark:bg-blue-500/15 dark:text-blue-400">
                   <CompassIcon className="size-4" />
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-semibold text-slate-800">路由模式</span>
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">路由模式</span>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -158,7 +158,7 @@ export function ConnectionPanel() {
                 </div>
               </div>
 
-              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-150 shrink-0">
+              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-150 shrink-0 dark:bg-white/[0.06] dark:border-white/[0.1]">
                 {(["rule", "global", "direct"] as const).map((mode) => (
                   <button
                     key={mode}
@@ -166,8 +166,8 @@ export function ConnectionPanel() {
                     className={cn(
                       "px-2.5 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer text-center",
                       routingMode === mode
-                        ? "bg-white text-[#3b59ff] shadow-xs"
-                        : "text-slate-500 hover:text-slate-800"
+                        ? "bg-white text-[#3b59ff] shadow-xs dark:bg-white/[0.1] dark:text-blue-400"
+                        : "text-slate-500 hover:text-slate-800 dark:text-white/60 dark:hover:text-slate-200"
                     )}
                   >
                     {mode === "rule" && "规则"}

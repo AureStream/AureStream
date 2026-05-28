@@ -51,7 +51,7 @@ function formatTotal(bytes: number): string {
   if (kb < 1024) return `累计 ${kb.toFixed(1)} KB`
   const mb = kb / 1024
   if (mb < 1024) return `累计 ${mb.toFixed(1)} MB`
-  const gb = mb / 1024
+  const gb = kb / 1024
   if (gb < 1024) return `累计 ${gb.toFixed(1)} GB`
   const tb = gb / 1024
   return `累计 ${tb.toFixed(1)} TB`
@@ -73,20 +73,20 @@ function StatBox({
   const total = formatTotal(totalBytes)
 
   return (
-    <div className="flex items-center gap-3 rounded-[14px] border border-slate-100 bg-[#f8fafc]/30 px-3 py-2.5 flex-1 min-w-0">
+    <div className="flex items-center gap-3 rounded-[14px] border border-slate-100 dark:border-white/[0.08] bg-[#f8fafc]/30 dark:bg-white/[0.04] px-3 py-2.5 flex-1 min-w-0">
       <div
         className={`flex size-8 items-center justify-center rounded-lg shrink-0 ${
-          isUpload ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500"
+          isUpload ? "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-400"
         }`}
       >
         {isUpload ? <ArrowUpIcon className="size-4" /> : <ArrowDownIcon className="size-4" />}
       </div>
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-slate-500">{label}</span>
-          <span className="text-sm font-extrabold text-slate-800 leading-tight">{speed}</span>
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{label}</span>
+          <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 leading-tight">{speed}</span>
         </div>
-        <div className="text-[9px] text-slate-400 font-semibold mt-0.5">{total}</div>
+        <div className="text-[9px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">{total}</div>
       </div>
     </div>
   )
@@ -94,7 +94,7 @@ function StatBox({
 
 export function UsagePanel() {
   return (
-    <Card className="flex min-h-0 flex-1 flex-col border border-slate-100 rounded-[20px] shadow-sm">
+    <Card className="flex min-h-0 flex-1 flex-col border border-slate-100 dark:border-white/[0.08] rounded-[20px] shadow-sm">
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 pt-4 pb-4 px-4">
         <div className="flex shrink-0 gap-3">
           <StatBox type="upload" label="上传" bytesPerSecond={0} totalBytes={0} />
@@ -107,7 +107,7 @@ export function UsagePanel() {
           initialDimension={{ width: 280, height: 72 }}
         >
           <LineChart data={trafficHistory} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" className="dark:stroke-white/[0.06]" />
             <XAxis dataKey="time" hide />
             <ChartTooltip content={<ChartTooltipContent />} />
             <ChartLegend content={<ChartLegendContent />} />
