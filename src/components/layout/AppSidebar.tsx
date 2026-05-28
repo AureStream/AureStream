@@ -5,6 +5,7 @@ import {
   ZapIcon,
   SunIcon,
   MoonIcon,
+  MonitorIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -32,13 +33,12 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   const { theme, setTheme } = useTheme()
 
   const toggleTheme = () => {
-    if (theme === "light") {
-      setTheme("dark")
-    } else if (theme === "dark") {
+    if (theme === "system") {
       setTheme("light")
+    } else if (theme === "light") {
+      setTheme("dark")
     } else {
-      const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-      setTheme(isSystemDark ? "light" : "dark")
+      setTheme("system")
     }
   }
 
@@ -91,12 +91,13 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
               onClick={toggleTheme}
               aria-label="切换主题"
             >
-              <SunIcon className="size-4 rotate-0 scale-100 transition-transform duration-350 dark:-rotate-90 dark:scale-0" />
-              <MoonIcon className="absolute size-4 rotate-90 scale-0 transition-transform duration-350 dark:rotate-0 dark:scale-100" />
+              {theme === "system" && <MonitorIcon className="size-4" />}
+              {theme === "light" && <SunIcon className="size-4" />}
+              {theme === "dark" && <MoonIcon className="size-4" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
-            切换到 {theme === "light" ? "深色模式" : "浅色模式"}
+            主题: {theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"} (点击切换)
           </TooltipContent>
         </Tooltip>
       </div>

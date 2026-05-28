@@ -84,7 +84,7 @@ function StatBox({
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{label}</span>
-          <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 leading-tight">{speed}</span>
+          <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 leading-tight">{speed}</span>
         </div>
         <div className="text-[9px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">{total}</div>
       </div>

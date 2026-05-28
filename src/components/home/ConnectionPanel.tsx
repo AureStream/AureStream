@@ -83,18 +83,18 @@ export function ConnectionPanel() {
           className={cn(
             "size-[104px] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-2",
             connected
-              ? "border border-blue-200 bg-blue-50/50 dark:border-blue-500/20 dark:bg-white/[0.04]"
-              : "border border-slate-100 bg-[#f8fafc]/50 dark:border-white/[0.08] dark:bg-white/[0.03]"
+              ? "border border-blue-200/80 bg-blue-50/50 shadow-[0_0_15px_rgba(59,89,255,0.08)] dark:border-blue-500/25 dark:bg-blue-950/20 dark:shadow-[0_0_20px_rgba(59,89,255,0.15)]"
+              : "border border-slate-200/50 bg-[#f8fafc]/50 dark:border-white/[0.06] dark:bg-white/[0.02]"
           )}
         >
           <button
             onClick={() => setConnected((v) => !v)}
             aria-pressed={connected}
             className={cn(
-              "size-full rounded-full border flex flex-col items-center justify-center gap-1 transition-all duration-300 shadow-xs cursor-pointer select-none",
+              "size-full rounded-full border flex flex-col items-center justify-center gap-1 transition-all duration-300 cursor-pointer select-none",
               connected
-                ? "border-blue-400 bg-white text-[#3b59ff] shadow-[0_4px_16px_rgba(59,89,255,0.12)] hover:bg-blue-50/10 dark:border-blue-500/50 dark:bg-black dark:text-blue-400"
-                : "border-slate-300 bg-white text-slate-400 hover:bg-slate-50 dark:border-white/[0.08] dark:bg-black dark:text-slate-400 dark:hover:bg-white/[0.04]"
+                ? "border-transparent bg-gradient-to-tr from-[#254eff] to-[#4d73ff] text-white shadow-[0_4px_16px_rgba(59,89,255,0.25)] hover:brightness-105 dark:from-[#1d3cbd] dark:to-[#3b59ff] dark:text-white dark:shadow-[0_4px_20px_rgba(59,89,255,0.35)] dark:hover:brightness-110"
+                : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-600 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-slate-300"
             )}
           >
             <PowerIcon className={cn("size-6 transition-transform duration-300", connected && "scale-110")} />

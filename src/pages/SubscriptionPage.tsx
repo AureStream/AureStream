@@ -174,10 +174,10 @@ export function SubscriptionPage() {
                       className={cn(
                         "flex flex-col gap-2 rounded-[16px] border p-3.5 transition-all duration-200 cursor-pointer",
                         isCurrent
-                          ? "bg-[#eef2ff] border-[#3b59ff]/30 shadow-[0_2px_8px_rgba(59,89,255,0.08)] dark:bg-white/[0.06] dark:border-blue-500/30"
+                          ? "bg-[#eef2ff] border-[#3b59ff]/30 shadow-[0_2px_8px_rgba(59,89,255,0.08)] dark:bg-blue-500/10 dark:border-blue-500/35"
                           : sub.status === "expired"
-                          ? "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] opacity-60 dark:bg-white/[0.06] dark:border-white/[0.06]"
-                          : "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:bg-white dark:bg-white/[0.06] dark:border-white/[0.06]"
+                          ? "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] opacity-60 dark:bg-white/[0.02] dark:border-white/[0.04]"
+                          : "bg-white/80 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:bg-white dark:bg-white/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.06]"
                       )}
                     >
                       {/* Subscription Info Header */}
@@ -342,7 +342,7 @@ export function SubscriptionPage() {
 
               <Button
                 type="submit"
-                className="w-full h-8.5 rounded-lg bg-[#3b59ff] text-white hover:bg-[#3b59ff]/90 font-semibold text-xs shadow-sm mt-1 transition-all"
+                className="w-full h-8.5 rounded-lg bg-[#3b59ff] text-white hover:bg-[#3b59ff]/90 font-semibold text-xs shadow-sm mt-1 transition-all dark:bg-blue-600 dark:hover:bg-blue-700"
               >
                 保存订阅
               </Button>

@@ -121,7 +121,7 @@ export function SettingsPage() {
                   className={cn(
                     "h-6 px-2.5 rounded-md text-[9px] font-bold transition-all duration-200 cursor-pointer",
                     tunInstalled
-                      ? "bg-rose-50 text-rose-600 hover:bg-rose-100/60 dark:bg-rose-950/40 dark:text-rose-450 dark:hover:bg-rose-900/30"
+                      ? "bg-rose-50 text-rose-600 hover:bg-rose-100/60 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-900/30"
                       : "bg-[#eef2ff] text-[#3b59ff] hover:bg-blue-100/60 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
                   )}
                 >
@@ -318,7 +318,7 @@ export function SettingsPage() {
                           "px-2.5 py-0.5 rounded-md text-[8.5px] font-bold transition-all cursor-pointer text-center",
                           dohProvider === prov
                             ? "bg-white text-[#3b59ff] shadow-xs dark:bg-white/[0.1] dark:text-blue-400"
-                            : "text-slate-450 hover:text-slate-750 dark:text-slate-400 dark:hover:text-slate-200"
+                            : "text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                         )}
                       >
                         {prov === "ali" && "阿里"}
@@ -396,7 +396,7 @@ export function SettingsPage() {
                       v0.1.0
                     </span>
                     <span className="size-1 rounded-full bg-slate-300 dark:bg-white/[0.1]" />
-                    <span className="text-[8px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100/50 font-extrabold dark:bg-emerald-950/40 dark:text-emerald-450 dark:border-emerald-900/30">
+                    <span className="text-[8px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-100/50 font-extrabold dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900/30">
                       Stable
                     </span>
                   </div>
@@ -414,15 +414,15 @@ export function SettingsPage() {
             <div className="text-[9px] text-slate-400 leading-relaxed font-semibold flex flex-col gap-1.5 mt-0.5 shrink-0 dark:text-slate-500">
               <div className="flex justify-between">
                 <span>软件内核</span>
-                <span className="text-slate-650 font-bold dark:text-slate-300">Clash Meta (Mihomo)</span>
+                <span className="text-slate-600 font-bold dark:text-slate-300">Clash Meta (Mihomo)</span>
               </div>
               <div className="flex justify-between">
                 <span>运行平台</span>
-                <span className="text-slate-650 font-bold dark:text-slate-300">macOS (Tauri)</span>
+                <span className="text-slate-600 font-bold dark:text-slate-300">macOS (Tauri)</span>
               </div>
               <div className="flex justify-between">
                 <span>系统许可</span>
-                <span className="text-slate-650 font-bold dark:text-slate-300">MIT License</span>
+                <span className="text-slate-600 font-bold dark:text-slate-300">MIT License</span>
               </div>
             </div>
 
@@ -436,10 +436,10 @@ export function SettingsPage() {
                 className={cn(
                   "w-full h-7.5 rounded-lg text-[9.5px] font-bold transition-all duration-300 cursor-pointer shadow-sm shadow-blue-500/5",
                   updateStatus === "checking"
-                    ? "bg-slate-50 text-slate-400 border border-slate-100"
+                    ? "bg-slate-50 text-slate-400 border border-slate-100 dark:bg-white/[0.04] dark:border-white/[0.08] dark:text-slate-500"
                     : updateStatus === "latest"
-                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100/60 border border-emerald-100/20"
-                    : "bg-[#eef2ff] text-[#3b59ff] hover:bg-blue-100/60 border border-blue-100/20"
+                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100/60 border border-emerald-100/20 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/50 dark:border-emerald-900/30"
+                    : "bg-[#eef2ff] text-[#3b59ff] hover:bg-blue-100/60 border border-blue-100/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 dark:border-blue-950/30"
                 )}
               >
                 {updateStatus === "checking" && (
