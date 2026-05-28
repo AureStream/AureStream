@@ -5,7 +5,6 @@ import {
   ZapIcon,
   SunIcon,
   MoonIcon,
-  MonitorIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -33,25 +32,26 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   const { theme, setTheme } = useTheme()
 
   const toggleTheme = () => {
-    if (theme === "system") {
-      setTheme("light")
-    } else if (theme === "light") {
+    if (theme === "light") {
       setTheme("dark")
+    } else if (theme === "dark") {
+      setTheme("light")
     } else {
-      setTheme("system")
+      const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+      setTheme(isSystemDark ? "light" : "dark")
     }
   }
 
   return (
-    <Card className="w-14 shrink-0 py-4 !gap-0">
-      <div className="flex flex-col items-center gap-6 w-full flex-1">
+    <Card className="w-16 shrink-0 py-4.5 !gap-0 flex flex-col items-center justify-between">
+      <div className="flex flex-col items-center gap-7 w-full flex-1">
         {/* Top Logo */}
-        <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
-          <ZapIcon className="size-4 fill-white/10" />
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
+          <ZapIcon className="size-5 fill-white/10" />
         </div>
 
         {/* Navigation */}
-        <nav className="flex flex-col items-center gap-3 w-full px-2">
+        <nav className="flex flex-col items-center gap-3.5 w-full px-2">
           {navItems.map((item) => {
             const isActive = item.id === activeId
             return (
@@ -61,7 +61,7 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
                     variant="ghost"
                     size="icon"
                     className={cn(
-                      "size-9 rounded-2xl transition-all duration-200",
+                      "size-11 rounded-2xl transition-all duration-200",
                       isActive
                         ? "bg-[#eef2ff] text-[#3b59ff] border border-[#e0e7ff] shadow-sm dark:bg-white/[0.1] dark:text-white dark:border-white/[0.15]"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -70,7 +70,7 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
                     aria-label={item.label}
                     aria-current={isActive ? "page" : undefined}
                   >
-                    <item.icon className="size-4" />
+                    <item.icon className="size-5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right">{item.label}</TooltipContent>
@@ -87,17 +87,16 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="size-9 rounded-2xl text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all duration-200"
+              className="size-11 rounded-2xl text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all duration-200 dark:hover:bg-white/[0.08]"
               onClick={toggleTheme}
               aria-label="切换主题"
             >
-              {theme === "system" && <MonitorIcon className="size-4" />}
-              {theme === "light" && <SunIcon className="size-4" />}
-              {theme === "dark" && <MoonIcon className="size-4" />}
+              <SunIcon className="size-5 rotate-0 scale-100 transition-transform duration-350 dark:-rotate-90 dark:scale-0" />
+              <MoonIcon className="absolute size-5 rotate-90 scale-0 transition-transform duration-350 dark:rotate-0 dark:scale-100 text-blue-400" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
-            主题: {theme === "system" ? "跟随系统" : theme === "light" ? "浅色" : "深色"} (点击切换)
+            切换到 {theme === "light" ? "深色模式" : "浅色模式"}
           </TooltipContent>
         </Tooltip>
       </div>
