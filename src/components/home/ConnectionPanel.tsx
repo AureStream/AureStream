@@ -81,7 +81,7 @@ export function ConnectionPanel() {
         {/* Double-circle connection button */}
         <div
           className={cn(
-            "size-[104px] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-2",
+            "size-[6.5rem] shrink-0 rounded-full flex items-center justify-center transition-all duration-300 p-2",
             connected
               ? "border border-blue-200/80 bg-blue-50/50 shadow-[0_0_15px_rgba(59,89,255,0.08)] dark:border-blue-500/25 dark:bg-blue-950/20 dark:shadow-[0_0_20px_rgba(59,89,255,0.15)]"
               : "border border-slate-200/50 bg-[#f8fafc]/50 dark:border-white/[0.06] dark:bg-white/[0.02]"
