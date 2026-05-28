@@ -31,6 +31,7 @@ pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Bu
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:data.db", migrations)

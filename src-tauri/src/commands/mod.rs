@@ -4,4 +4,5 @@ pub mod shell;
 pub mod dns;
 pub mod config_fetch;
 pub mod whitelist;
+pub mod theme;
 

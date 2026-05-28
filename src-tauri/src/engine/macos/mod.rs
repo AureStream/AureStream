@@ -60,7 +60,7 @@ pub fn ensure_helper_installed() -> Result<(), String> {
 
     let bundled = bundled_helper_path().and_then(|p| read_helper_cfbundle_version(&p));
     let installed = read_helper_cfbundle_version(std::path::Path::new(
-        "/Library/PrivilegedHelperTools/cloud.oneoh.aurestream.helper",
+        "/Library/PrivilegedHelperTools/com.root.aurestream.helper",
     ));
 
     match (bundled, installed) {
@@ -82,7 +82,7 @@ fn bundled_helper_path() -> Option<std::path::PathBuf> {
     let p = contents
         .join("Library")
         .join("LaunchServices")
-        .join("cloud.oneoh.aurestream.helper");
+        .join("com.root.aurestream.helper");
     if p.exists() {
         Some(p)
     } else {

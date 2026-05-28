@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   SettingsIcon,
   SunIcon,
@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/contexts/ThemeContext"
+import { getEnableTun, setEnableTun } from "@/single/store"
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
@@ -43,12 +44,22 @@ export function SettingsPage() {
   // States for About Card updates
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest">("idle")
 
-  const handleInstallTun = () => {
+  useEffect(() => {
+    async function loadTunStatus() {
+      const enabled = await getEnableTun()
+      setTunInstalled(enabled)
+    }
+    loadTunStatus()
+  }, [])
+
+  const handleInstallTun = async () => {
     setTunInstalling(true)
+    const nextVal = !tunInstalled
+    await setEnableTun(nextVal)
     setTimeout(() => {
-      setTunInstalled(!tunInstalled)
+      setTunInstalled(nextVal)
       setTunInstalling(false)
-    }, 1200)
+    }, 800)
   }
 
   const handleCheckUpdate = () => {

@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static NSString *const kAureStreamHelperMachServiceName = @"cloud.oneoh.aurestream.helper";
+static NSString *const kAureStreamHelperMachServiceName = @"com.root.aurestream.helper";
 static const int64_t kAureStreamHelperDefaultTimeoutSeconds = 10;
 static const int64_t kAureStreamHelperStartTimeoutSeconds = 30;
 
@@ -480,7 +480,7 @@ int aurestream_helper_install(char **error_out) {
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         Boolean ok = SMJobBless(
             kSMDomainSystemLaunchd,
-            CFSTR("cloud.oneoh.aurestream.helper"),
+            CFSTR("com.root.aurestream.helper"),
             authRef,
             &cfError);
 #pragma clang diagnostic pop

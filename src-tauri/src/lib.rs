@@ -43,6 +43,8 @@ pub fn run() {
             commands::dns::get_optimal_local_dns_server,
             commands::config_fetch::fetch_config_with_optimal_dns,
             commands::config_fetch::verify_deep_link_url,
+            // native theme commands
+            commands::theme::set_native_window_theme,
         ])
         .setup(app::setup::app_setup)
         .on_window_event(app::events::on_window_event)
