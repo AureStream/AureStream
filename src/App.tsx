@@ -24,7 +24,7 @@ function App() {
       
       <AppSidebar activeId={activeTab} onActiveIdChange={setActiveTab} />
 
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden py-0.5 pl-1 pr-0.5">
+      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-2.5 sm:p-3.5">
         {activeTab === "home" && <HomePage />}
         {activeTab === "subscription" && <SubscriptionPage />}
         {activeTab === "settings" && <SettingsPage />}
