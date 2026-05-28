@@ -2,7 +2,6 @@ import {
   BoxIcon,
   HomeIcon,
   SettingsIcon,
-  SunIcon,
   ZapIcon,
 } from "lucide-react"
 
@@ -27,7 +26,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   return (
-    <aside className="relative flex w-14 shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/80 bg-white/60 backdrop-blur-xl py-4 shadow-[0_4px_24px_rgba(31,38,135,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] overflow-hidden">
+    <aside className="relative flex w-14 shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/80 bg-white/60 backdrop-blur-xl py-4 shadow-[0_4px_24px_rgba(31,38,135,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] overflow-hidden dark:border-white/10 dark:bg-slate-800/60 dark:shadow-[0_4px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05)]">
       <div className="flex flex-col items-center gap-6 w-full">
         {/* Top Logo */}
         <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
@@ -47,7 +46,7 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
                     className={cn(
                       "size-9 rounded-2xl transition-all duration-200",
                       isActive
-                        ? "bg-[#eef2ff] text-[#3b59ff] border border-[#e0e7ff] shadow-sm"
+                        ? "bg-[#eef2ff] text-[#3b59ff] border border-[#e0e7ff] shadow-sm dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-400/30"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     )}
                     onClick={() => onActiveIdChange(item.id)}
@@ -63,21 +62,6 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
           })}
         </nav>
       </div>
-
-      {/* Theme Toggle */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-9 rounded-2xl text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-            aria-label="切换主题"
-          >
-            <SunIcon className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">浅色模式</TooltipContent>
-      </Tooltip>
     </aside>
   )
 }
