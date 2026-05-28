@@ -212,14 +212,23 @@ export function SubscriptionPage() {
                               使用中
                             </div>
                           )}
-                          <Button variant="ghost" size="icon" className="size-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-white/[0.08] dark:hover:text-slate-300 transition-colors" aria-label="更新订阅">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="size-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-white/[0.08] dark:hover:text-slate-300 transition-colors" 
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label="更新订阅"
+                          >
                             <RefreshCwIcon className="size-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-7 rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400 transition-colors"
-                            onClick={() => handleDelete(sub.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(sub.id)
+                            }}
                             aria-label="删除订阅"
                           >
                             <Trash2Icon className="size-3.5" />
