@@ -44,7 +44,7 @@ export function NodeSelector() {
           <RadioGroup
             value={selectedId}
             onValueChange={setSelectedId}
-            className="grid grid-cols-1 @[360px]:grid-cols-2 @[560px]:grid-cols-3 @[780px]:grid-cols-4 gap-2 pb-2"
+            className="grid grid-cols-1 @[480px]:grid-cols-2 @[720px]:grid-cols-3 gap-2 pb-2"
           >
             {proxyNodes.map((node) => {
               const isSelected = selectedId === node.id
