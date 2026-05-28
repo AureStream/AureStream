@@ -11,9 +11,10 @@ function App() {
     <div className="relative flex h-screen w-screen overflow-hidden p-2.5 gap-2.5">
       {/* Light mode background */}
       <div className="absolute inset-0 bg-[#EEEEEE] dark:hidden" />
-      <div className="absolute top-[-10%] right-[-10%] size-[380px] rounded-full bg-[#007ACC]/12 blur-[100px] dark:hidden" />
-      <div className="absolute bottom-[-10%] left-[-10%] size-[380px] rounded-full bg-[#4f46e5]/8 blur-[100px] dark:hidden" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.45)_0%,_transparent_75%)] dark:hidden" />
+      <div className="absolute top-[-10%] right-[-10%] size-[450px] rounded-full bg-[#007ACC]/18 blur-[110px] dark:hidden" />
+      <div className="absolute bottom-[-10%] left-[-15%] size-[420px] rounded-full bg-[#6366f1]/12 blur-[100px] dark:hidden" />
+      <div className="absolute top-[25%] left-[-10%] size-[350px] rounded-full bg-[#ec4899]/5 blur-[90px] dark:hidden" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.4)_0%,_transparent_80%)] dark:hidden" />
       
       {/* Dark mode background */}
       <div className="absolute inset-0 bg-[#101010] hidden dark:block" />
