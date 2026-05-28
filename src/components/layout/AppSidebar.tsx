@@ -9,6 +9,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import {
   Tooltip,
   TooltipContent,
@@ -42,8 +43,8 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   }
 
   return (
-    <aside className="relative flex w-14 shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/80 bg-white/60 backdrop-blur-xl py-4 shadow-[0_4px_24px_rgba(31,38,135,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] overflow-hidden dark:border-white/[0.06] dark:bg-white/[0.06] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <div className="flex flex-col items-center gap-6 w-full">
+    <Card className="w-14 shrink-0 py-4 !gap-0">
+      <div className="flex flex-col items-center gap-6 w-full flex-1">
         {/* Top Logo */}
         <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
           <ZapIcon className="size-4 fill-white/10" />
@@ -80,7 +81,7 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
       </div>
 
       {/* Bottom Actions - Theme Toggle */}
-      <div className="flex flex-col items-center gap-3 w-full px-2">
+      <div className="flex flex-col items-center gap-3 w-full px-2 mt-auto pt-4">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -99,6 +100,6 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
           </TooltipContent>
         </Tooltip>
       </div>
-    </aside>
+    </Card>
   )
 }
