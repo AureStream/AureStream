@@ -30,7 +30,7 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
-pub(crate) const DEFAULT_MIXED_PROXY_PORT: u16 = 6789;
+pub(crate) const DEFAULT_MIXED_PROXY_PORT: u16 = 2345;
 
 fn read_mixed_port_from_config(config_path: &std::path::Path) -> Option<u16> {
     let text = std::fs::read_to_string(config_path).ok()?;
@@ -134,10 +134,12 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     let mixed_port = mixed_proxy_port(&app);
     let port_listening = probe_port_listening(mixed_port);
     let cur_state_kind = app.state::<EngineStateCell>().snapshot().kind();
-    ::log::info!(
-        "[start] action={action} mode={:?} state={} pm_child_pid={:?} pm_child_alive={:?} pm_mode={:?} :{mixed_port}_listener={}",
-        mode, cur_state_kind, pm_pid, pm_alive, pm_mode, port_listening
-    );
+    let mode_name = match mode {
+        ProxyMode::SystemProxy => "系统代理 (SystemProxy)",
+        ProxyMode::ManualProxy => "手动代理 (ManualProxy)",
+        ProxyMode::IntoProxy => "TUN虚拟网卡 (IntoProxy)",
+    };
+    ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
 
     {
         let cur = app.state::<EngineStateCell>().snapshot();

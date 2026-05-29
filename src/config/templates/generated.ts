@@ -10,7 +10,7 @@ export const BUILD_TIME_TEMPLATE_SOURCE = {
 export const MIXED_TEMPLATE = {
     log: { level: "info" },
     inbounds: [
-        { type: "mixed", tag: "mixed", listen: "127.0.0.1", listen_port: 6789 }
+        { type: "mixed", tag: "mixed", listen: "127.0.0.1", listen_port: 2345 }
     ],
     outbounds: [
         { type: "direct", tag: "direct" },
@@ -35,7 +35,7 @@ export const TUN_TEMPLATE = {
     log: { level: "info" },
     inbounds: [
         { type: "tun", tag: "tun", stack: "gvisor", interface_name: "utun233" },
-        { type: "mixed", tag: "mixed", listen: "127.0.0.1", listen_port: 6789 }
+        { type: "mixed", tag: "mixed", listen: "127.0.0.1", listen_port: 2345 }
     ],
     outbounds: [
         { type: "direct", tag: "direct" },
