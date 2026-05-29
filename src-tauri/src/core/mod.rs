@@ -140,6 +140,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         ProxyMode::IntoProxy => "TUN虚拟网卡 (IntoProxy)",
     };
     ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
+    let _ = app.emit(crate::engine::EVENT_TAURI_LOG, (0, format!("启动代理服务，模式: {}", mode_name)));
 
     {
         let cur = app.state::<EngineStateCell>().snapshot();
