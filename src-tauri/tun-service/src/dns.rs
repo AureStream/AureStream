@@ -58,7 +58,7 @@ pub fn is_tun_alias(alias: &str) -> bool {
         || lc.contains("wintun")
         || lc.contains("utun")
         || lc.contains("tap-windows")
-        || lc.contains("onebox")
+        || lc.contains("aurestream")
 }
 
 pub fn format_nameserver_value(servers: &[&str]) -> String {
@@ -396,21 +396,21 @@ pub fn restore_all() -> (usize, usize) {
 
 // =========================== service log =============================
 
-/// Append a line to `%PROGRAMDATA%\OneBox\service\service.log`, falling back to
-/// `%TEMP%\onebox-service.log` if ProgramData is not writable. Silently ignores
+/// Append a line to `%PROGRAMDATA%\AureStream\service\service.log`, falling back to
+/// `%TEMP%\aurestream-service.log` if ProgramData is not writable. Silently ignores
 /// errors (failed logging must never kill the service).
 pub fn log_line(msg: &str) {
     use std::io::Write;
     let path = match std::env::var_os("ProgramData") {
         Some(pd) => {
             let mut p = std::path::PathBuf::from(pd);
-            p.push("OneBox");
+            p.push("AureStream");
             p.push("service");
             let _ = std::fs::create_dir_all(&p);
             p.push("service.log");
             p
         }
-        None => std::env::temp_dir().join("onebox-service.log"),
+        None => std::env::temp_dir().join("aurestream-service.log"),
     };
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
@@ -469,7 +469,7 @@ mod tests {
         assert!(is_tun_alias("WinTUN Userspace Tunnel"));
         assert!(is_tun_alias("wintun"));
         assert!(is_tun_alias("TAP-Windows Adapter V9"));
-        assert!(is_tun_alias("OneBox TUN"));
+        assert!(is_tun_alias("AureStream TUN"));
         assert!(is_tun_alias("utun0"));
     }
 

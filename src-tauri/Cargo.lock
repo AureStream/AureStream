@@ -320,11 +320,11 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "onebox-sysproxy-rs",
  "onebox_lifecycle",
  "serde",
  "serde_json",
  "sha2",
+ "sysproxy-rs",
  "system-configuration",
  "tauri",
  "tauri-build",
@@ -3180,23 +3180,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
-name = "onebox-sysproxy-rs"
-version = "0.0.1"
-dependencies = [
- "clap",
- "env_logger",
- "interfaces",
- "log",
- "serde",
- "serde_json",
- "serial_test",
- "thiserror 2.0.18",
- "url",
- "windows 0.62.2",
- "xdg",
-]
-
-[[package]]
 name = "onebox_lifecycle"
 version = "0.1.1"
 source = "git+https://github.com/OneOhCloud/onebox-lifecycle?tag=v0.1.1#0e3eff5aea7f95a659cad55ba293cac9436b6404"
@@ -5050,6 +5033,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "sysproxy-rs"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "env_logger",
+ "interfaces",
+ "log",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "thiserror 2.0.18",
+ "url",
+ "windows 0.62.2",
+ "xdg",
 ]
 
 [[package]]

@@ -43,7 +43,7 @@ pub fn program_data_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
     let mut p = base;
-    p.push("OneBox");
+    p.push("AureStream");
     p.push("service");
     p
 }
@@ -310,7 +310,7 @@ pub fn ensure_installed(bundled_exe: &Path) -> Result<(), String> {
 
     let dir = program_data_dir();
     std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("mkdir ProgramData\\OneBox\\service: {}", e))?;
+        .map_err(|e| format!("mkdir ProgramData\\AureStream\\service: {}", e))?;
 
     let scm = open_scm(SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE)?;
 
@@ -502,7 +502,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn program_data_dir_is_absolute_and_ends_with_onebox_service() {
+    fn program_data_dir_is_absolute_and_ends_with_aurestream_service() {
         let p = program_data_dir();
         assert!(
             p.is_absolute(),
@@ -511,7 +511,7 @@ mod tests {
         );
         let s = p.to_string_lossy();
         assert!(
-            s.ends_with(r"OneBox\service") || s.ends_with("OneBox/service"),
+            s.ends_with(r"AureStream\service") || s.ends_with("AureStream/service"),
             "unexpected program_data_dir tail: {}",
             s
         );
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn check_freshness_reports_missing_binary_for_nonexistent_path() {
-        let p = std::path::Path::new(r"C:\__does_not_exist_onebox__\nope.exe");
+        let p = std::path::Path::new(r"C:\__does_not_exist_aurestream__\nope.exe");
         assert_eq!(check_freshness(p), Freshness::MissingBinary);
     }
 

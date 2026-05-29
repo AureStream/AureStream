@@ -2,9 +2,13 @@ import fs, { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { pipeline } from 'node:stream';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { x } from 'tar';
 import unzipper from 'unzipper';
 import { SING_BOX_VERSION } from '../src/types/definition';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const BINARY_NAME = 'sing-box';
 const GITHUB_RELEASE_URL = 'https://github.com/SagerNet/sing-box/releases/download/';
@@ -160,7 +164,7 @@ async function getCronetLatestVersion(): Promise<string> {
         try {
             const response = await fetch(CRONET_REPO_API, {
                 headers: {
-                    'User-Agent': 'OneBox-Download-Script',
+                    'User-Agent': 'AureStream-Download-Script',
                     'Accept': 'application/vnd.github+json'
                 }
             });
@@ -214,7 +218,7 @@ async function downloadCronetLibraries(): Promise<void> {
 }
 
 // Upstream conf-template still publishes v1-named rule caches; rename to v2
-// on save so OneBox's v2 migration picks them up without touching upstream.
+// on save so AureStream's v2 migration picks them up without touching upstream.
 async function downloadDatabaseFiles(): Promise<void> {
     const dbFiles = [
         {

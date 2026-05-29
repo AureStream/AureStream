@@ -1,4 +1,4 @@
-use onebox_sysproxy_rs::Sysproxy;
+use aurestream_sysproxy_rs::Sysproxy;
 use tauri::{AppHandle, Emitter};
 
 use crate::{core::mixed_proxy_port, engine::EVENT_TAURI_LOG};

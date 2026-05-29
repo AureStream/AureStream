@@ -74,7 +74,7 @@ pub(crate) use sysproxy::clear_system_proxy;
 pub(crate) use sysproxy::set_system_proxy as apply_system_proxy;
 
 pub fn cleanup_on_shutdown() {
-    use onebox_sysproxy_rs::Sysproxy;
+    use aurestream_sysproxy_rs::Sysproxy;
     let mut sysproxy = match Sysproxy::get_system_proxy() {
         Ok(proxy) => proxy,
         Err(e) => {

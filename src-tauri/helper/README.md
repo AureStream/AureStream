@@ -69,15 +69,11 @@ on-disk copies are only the source of truth for the embed step.
 The helper is built, signed, and placed inside the `.app` bundle entirely
 through `cargo tauri build`:
 
-1. `scripts/prebundle.sh` is wired into `tauri.conf.json`
-   `build.beforeBundleCommand`. It runs *after* the Rust binary compiles and
+1. `scripts/prebundle.ts` runs *after* the Rust binary compiles and
    *before* Tauri assembles the `.app`.
-2. `prebundle.sh` invokes `scripts/build-helper.sh` (clang -fobjc-arc +
-   `-sectcreate` + `lipo` to produce a universal Mach-O) then
-   `scripts/sign-helper.sh` (codesign with hardened runtime + DR check).
-3. Tauri's `copy_custom_files_to_bundle` reads
-   `bundle.macOS.files` from `tauri.macos.conf.json` and copies the signed
-   helper into `OneBox.app/Contents/Library/LaunchServices/`.
+2. `prebundle.ts` compiles the source files using `clang` (`-fobjc-arc` +
+   `-sectcreate` + `lipo` to produce a universal Mach-O) and then signs it (`codesign` with hardened runtime + DR check).
+3. Tauri's `copy_custom_files_to_bundle` copies the signed helper into `AureStream.app/Contents/Library/LaunchServices/`.
 4. Tauri's `create_info_plist` merges
    `src-tauri/Info.privileged-helper.plist` (containing only
    `SMPrivilegedExecutables`) into the main app's `Info.plist`.

@@ -38,7 +38,7 @@ libc = "0.2"
 webbrowser = "1.0.4"
 url = "2"
 sha2 = "0.10"
-onebox-sysproxy-rs = { path = "sysproxy-rs" }
+sysproxy-rs = { path = "sysproxy-rs" }
 tauri-plugin-deep-link = "2"
 onebox_lifecycle = { git = "https://github.com/OneOhCloud/onebox-lifecycle", tag = "v0.1.1" }
 

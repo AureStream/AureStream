@@ -1,20 +1,20 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * Build the `tun-service` workspace member and stage it where Tauri can find
  * it both for `cargo tauri dev` and for production bundling.
  *
- * Dev flow (`bun run tauri dev` → `predev`):
+ * Dev flow (`pnpm tauri dev` → `predev`):
  *   `cargo build -p tun-service` produces `src-tauri/target/debug/tun-service.exe`
- *   right next to the dev-mode `one-box.exe`. That's exactly where
+ *   right next to the dev-mode `aurestream.exe`. That's exactly where
  *   `vpn::windows::bundled_service_exe_path()` looks, so no further copying is
  *   needed for dev.
  *
- * Release flow (`bun run tauri build` → `prebuild`, or CI):
+ * Release flow (`pnpm tauri build` → `prebuild`, or CI):
  *   Tauri's `externalBin` contract requires the binary to live at
  *   `src-tauri/binaries/<name>-<target-triple>.exe` at bundling time. Tauri
  *   strips the triple suffix when copying into the final installer, so the
  *   runtime-side lookup in the bundled app still finds `tun-service.exe` next
- *   to `one-box.exe`. Detect the rustc host triple via `rustc -vV` and copy
+ *   to `aurestream.exe`. Detect the rustc host triple via `rustc -vV` and copy
  *   the freshly built release binary into that location.
  *
  * Platform gating: non-Windows hosts exit silently. The Windows service

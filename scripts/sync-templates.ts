@@ -117,7 +117,7 @@ async function fetchLatestSha(): Promise<string> {
     try {
         const res = await fetch(
             `https://api.github.com/repos/${REPO}/branches/${BRANCH}`,
-            { headers: { 'User-Agent': 'onebox-sync-templates' } },
+            { headers: { 'User-Agent': 'aurestream-sync-templates' } },
         );
         if (!res.ok) return 'unknown';
         const json = (await res.json()) as { commit?: { sha?: string } };

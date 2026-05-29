@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "download-binaries": "tsx scripts/download-binaries.ts",
+    "build-tun": "tsx scripts/build-tun-service.ts",
+    "prebundle": "tsx scripts/prebundle.ts"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.7",
@@ -40,9 +43,13 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/unzipper": "^0.10.11",
     "@vitejs/plugin-react": "^4.6.0",
     "tailwindcss": "^4.1.8",
+    "tar": "^7.5.15",
+    "tsx": "^4.19.0",
     "typescript": "~5.8.3",
+    "unzipper": "^0.12.3",
     "vite": "^7.0.4"
   }
 }

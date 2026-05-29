@@ -1,12 +1,12 @@
 [package]
-name = "onebox-sysproxy-rs"
+name = "sysproxy-rs"
 version = "0.0.1"
 edition = "2024"
 license = "MIT"
 description = "A cross-platform library for getting/setting system proxy. Supports Windows, macOS and Linux."
 
 [lib]
-name = "onebox_sysproxy_rs"
+name = "aurestream_sysproxy_rs"
 path = "src/lib.rs"
 
 [[bin]]
