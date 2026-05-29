@@ -32,41 +32,14 @@ fn note_reload_entry() -> Option<Duration> {
 
 pub(crate) const DEFAULT_MIXED_PROXY_PORT: u16 = 2345;
 
-fn read_mixed_port_from_config(config_path: &std::path::Path) -> Option<u16> {
-    let text = std::fs::read_to_string(config_path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
-    json.get("inbounds")
-        .and_then(|v| v.as_array())
-        .and_then(|inbounds| {
-            inbounds.iter().find_map(|ib| {
-                if ib.get("type").and_then(|v| v.as_str()) != Some("mixed") {
-                    return None;
-                }
-                ib.get("listen_port")
-                    .and_then(|v| v.as_u64())
-                    .and_then(|port| u16::try_from(port).ok())
-                    .filter(|port| *port > 0)
-            })
-        })
-}
-
 pub(crate) fn mixed_proxy_port(app: &AppHandle) -> u16 {
-    // First try the config path stored in ProcessManager (actual running config)
-    {
-        let mgr = ProcessManager::acquire();
-        if let Some(ref path) = mgr.config_path {
-            let p = std::path::Path::new(path.as_str());
-            if let Some(port) = read_mixed_port_from_config(p) {
-                return port;
-            }
-        }
-    }
-    // Fallback to app_config_dir/config.json
-    let Ok(config_dir) = app.path().app_config_dir() else {
-        return DEFAULT_MIXED_PROXY_PORT;
-    };
-    let config_path = config_dir.join("config.json");
-    read_mixed_port_from_config(&config_path).unwrap_or(DEFAULT_MIXED_PROXY_PORT)
+    use tauri_plugin_store::StoreExt;
+    app.get_store("settings.json")
+        .and_then(|s| s.get("proxy_port_key"))
+        .and_then(|v| v.as_u64())
+        .and_then(|port| u16::try_from(port).ok())
+        .filter(|port| *port > 0)
+        .unwrap_or(DEFAULT_MIXED_PROXY_PORT)
 }
 
 pub(crate) fn probe_port_listening(port: u16) -> bool {

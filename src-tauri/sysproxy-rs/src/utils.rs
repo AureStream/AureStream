@@ -4,7 +4,7 @@ use crate::{Error, Result};
 ///
 /// # Example
 /// ```
-/// use onebox_sysproxy_rs::utils::ipv4_cidr_to_wildcard;
+/// use sysproxy_rs::utils::ipv4_cidr_to_wildcard;
 /// assert_eq!(ipv4_cidr_to_wildcard("127.0.0.1/8").unwrap(), vec!["127.*".to_string()]);
 /// ```
 pub fn ipv4_cidr_to_wildcard(cidr: &str) -> Result<Vec<String>> {

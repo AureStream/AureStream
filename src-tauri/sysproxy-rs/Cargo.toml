@@ -6,7 +6,7 @@ license = "MIT"
 description = "A cross-platform library for getting/setting system proxy. Supports Windows, macOS and Linux."
 
 [lib]
-name = "aurestream_sysproxy_rs"
+name = "sysproxy_rs"
 path = "src/lib.rs"
 
 [[bin]]

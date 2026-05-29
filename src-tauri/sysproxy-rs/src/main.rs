@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use onebox_sysproxy_rs::{Autoproxy, Sysproxy};
+use sysproxy_rs::{Autoproxy, Sysproxy};
 use std::process::ExitCode;
 
 /// Fixed filename for UWP exemption import/export.
@@ -91,7 +91,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cmd: Commands) -> onebox_sysproxy_rs::Result<()> {
+fn run(cmd: Commands) -> sysproxy_rs::Result<()> {
     match cmd {
         Commands::Query => {
             let proxy = Sysproxy::get_system_proxy()?;
@@ -154,7 +154,7 @@ fn run(cmd: Commands) -> onebox_sysproxy_rs::Result<()> {
             pac_url,
         } => {
             if !(1..=15).contains(&flags) {
-                return Err(onebox_sysproxy_rs::Error::ParseStr(format!(
+                return Err(sysproxy_rs::Error::ParseStr(format!(
                     "flags must be 1-15, got {flags}"
                 )));
             }
@@ -223,9 +223,9 @@ fn run(cmd: Commands) -> onebox_sysproxy_rs::Result<()> {
 
         #[cfg(target_os = "windows")]
         Commands::UwpGet => {
-            let list = onebox_sysproxy_rs::AppContainer::get_exemption()?;
+            let list = sysproxy_rs::AppContainer::get_exemption()?;
             let json = serde_json::to_string_pretty(&list)
-                .map_err(|e| onebox_sysproxy_rs::Error::ParseStr(e.to_string()))?;
+                .map_err(|e| sysproxy_rs::Error::ParseStr(e.to_string()))?;
             std::fs::write(UWP_EXEMPTION_FILE, &json)?;
             println!("Wrote {} entries to {UWP_EXEMPTION_FILE}", list.len());
         }
@@ -233,14 +233,14 @@ fn run(cmd: Commands) -> onebox_sysproxy_rs::Result<()> {
         #[cfg(target_os = "windows")]
         Commands::UwpSet => {
             let content = std::fs::read_to_string(UWP_EXEMPTION_FILE)?;
-            let entries: Vec<onebox_sysproxy_rs::AppContainer> = serde_json::from_str(&content)
-                .map_err(|e| onebox_sysproxy_rs::Error::ParseStr(e.to_string()))?;
+            let entries: Vec<sysproxy_rs::AppContainer> = serde_json::from_str(&content)
+                .map_err(|e| sysproxy_rs::Error::ParseStr(e.to_string()))?;
             let sids: Vec<String> = entries
                 .into_iter()
                 .filter(|c| c.exempted)
                 .map(|c| c.sid)
                 .collect();
-            let updated = onebox_sysproxy_rs::AppContainer::set_exemption(&sids)?;
+            let updated = sysproxy_rs::AppContainer::set_exemption(&sids)?;
             let applied = updated.iter().filter(|c| c.exempted).count();
             println!("Applied {applied} UWP exemptions");
         }
@@ -250,14 +250,14 @@ fn run(cmd: Commands) -> onebox_sysproxy_rs::Result<()> {
 }
 
 /// Parse "host:port" string into (host, port).
-fn parse_server(server: &str) -> onebox_sysproxy_rs::Result<(String, u16)> {
+fn parse_server(server: &str) -> sysproxy_rs::Result<(String, u16)> {
     if let Some((host, port_str)) = server.rsplit_once(':') {
         let port: u16 = port_str
             .parse()
-            .map_err(|_| onebox_sysproxy_rs::Error::ParseStr(server.into()))?;
+            .map_err(|_| sysproxy_rs::Error::ParseStr(server.into()))?;
         Ok((host.to_string(), port))
     } else {
-        Err(onebox_sysproxy_rs::Error::ParseStr(format!(
+        Err(sysproxy_rs::Error::ParseStr(format!(
             "expected host:port, got '{server}'"
         )))
     }

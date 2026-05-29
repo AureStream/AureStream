@@ -6,7 +6,7 @@
 //! Run with: `cargo test -- --ignored --test-threads=1`
 //! Or via Makefile: `make test-integration`
 
-use onebox_sysproxy_rs::{Autoproxy, Sysproxy};
+use sysproxy_rs::{Autoproxy, Sysproxy};
 use serial_test::serial;
 
 /// Helper: save current proxy state, run test body, then restore on drop.
