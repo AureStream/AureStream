@@ -21,7 +21,7 @@ export function LogPage() {
   const [configContent, setConfigContent] = useState<string>("")
   const [loadingConfig, setLoadingConfig] = useState(false)
   const [autoScroll, setAutoScroll] = useState(true)
-  const terminalEndRef = useRef<HTMLDivElement>(null)
+  const consoleRef = useRef<HTMLDivElement>(null)
 
   // Fetch logs periodically
   useEffect(() => {
@@ -71,10 +71,10 @@ export function LogPage() {
     return () => clearInterval(timer)
   }, [activeSubTab])
 
-  // Scroll to bottom
+  // Scroll to bottom without shifting window viewport
   useEffect(() => {
-    if (autoScroll && terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: "smooth" })
+    if (autoScroll && consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight
     }
   }, [logs, autoScroll])
 
@@ -218,7 +218,10 @@ export function LogPage() {
           </div>
 
           {/* Terminal Output Console */}
-          <div className="flex-1 min-h-0 p-4 bg-slate-950 font-mono text-[10px] leading-relaxed overflow-y-auto text-slate-200 select-text selection:bg-blue-500/30 selection:text-white">
+          <div
+            ref={consoleRef}
+            className="flex-1 min-h-0 p-4 bg-slate-950 font-mono text-[10px] leading-relaxed overflow-y-auto text-slate-200 select-text selection:bg-blue-500/30 selection:text-white"
+          >
             {filteredLogs.length > 0 ? (
               <div className="flex flex-col gap-1">
                 {filteredLogs.map((log, index) => {
@@ -232,7 +235,6 @@ export function LogPage() {
                     </div>
                   )
                 })}
-                <div ref={terminalEndRef} />
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-2">
