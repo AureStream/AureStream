@@ -52,32 +52,27 @@ function StatBox({
 }) {
   const isUpload = type === "upload"
   return (
-    <div className="flex items-center gap-3 rounded-[14px] border border-slate-100 dark:border-white/[0.08] bg-[#f8fafc]/30 dark:bg-white/[0.04] px-3 py-2.5 flex-1 min-w-0">
+    <div className="flex items-center gap-2.5 rounded-[14px] border border-slate-100 dark:border-white/[0.08] bg-[#f8fafc]/30 dark:bg-white/[0.04] px-2.5 py-2 flex-1 min-w-0">
       <div
-        className={`flex size-8 items-center justify-center rounded-lg shrink-0 ${
+        className={`flex size-7 sm:size-8 items-center justify-center rounded-lg shrink-0 ${
           isUpload
             ? "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400"
             : "bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-400"
         }`}
       >
         {isUpload ? (
-          <ArrowUpIcon className="size-4" />
+          <ArrowUpIcon className="size-3.5 sm:size-4" />
         ) : (
-          <ArrowDownIcon className="size-4" />
+          <ArrowDownIcon className="size-3.5 sm:size-4" />
         )}
       </div>
       <div className="flex flex-col min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-[11px] sm:text-xs font-bold text-slate-550 dark:text-slate-400 tracking-wide shrink-0">
-            {label}
-          </span>
-          <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono leading-tight text-right w-[80px] sm:w-[95px] shrink-0 truncate">
-            {formatSpeed(bytesPerSecond)}
-          </span>
-        </div>
-        <div className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-semibold font-mono mt-0.5">
-          {formatTotal(totalBytes)}
-        </div>
+        <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono leading-tight truncate">
+          {formatSpeed(bytesPerSecond)}
+        </span>
+        <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 font-semibold truncate mt-0.5">
+          {label} · {formatTotal(totalBytes)}
+        </span>
       </div>
     </div>
   )
