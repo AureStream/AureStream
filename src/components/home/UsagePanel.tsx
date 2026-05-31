@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts"
 
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/chart"
 import type { TrafficPoint } from "@/types/engine-state"
 import { useEngineState } from "@/hooks/useEngineState"
+import { getClashApiSecret } from "@/single/store"
 
 const chartConfig = {
   download: { label: "下载", color: "#3b59ff" },
@@ -95,50 +96,78 @@ export function UsagePanel() {
       upload: 0,
     }))
   )
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    let active = true
+    let controller: AbortController | null = null
 
-  const fetchTraffic = useCallback(async () => {
-    if (!isRunning) {
+    const startStreaming = async () => {
+      if (!isRunning) return
+
+      try {
+        const secret = await getClashApiSecret()
+        controller = new AbortController()
+        const res = await fetch("http://127.0.0.1:9191/traffic", {
+          headers: {
+            Authorization: `Bearer ${secret}`,
+          },
+          signal: controller.signal,
+        })
+
+        if (!res.ok || !res.body) return
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+
+        while (active) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split("\n")
+          buffer = lines.pop() || ""
+
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const data = JSON.parse(line)
+                const up = Math.round(data.up ?? 0)
+                const down = Math.round(data.down ?? 0)
+                if (active) {
+                  setUploadSpeed(up)
+                  setDownloadSpeed(down)
+                  setUploadTotal((prev) => prev + up)
+                  setDownloadTotal((prev) => prev + down)
+                  setHistory((prev) => {
+                    const next = [...prev.slice(1), { time: "", download: down, upload: up }]
+                    return next.map((p, i) => ({ ...p, time: `${i}` }))
+                  })
+                }
+              } catch (e) {
+                // Ignore parsing errors of partial lines
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Traffic stream error:", e)
+      }
+    }
+
+    if (isRunning) {
+      startStreaming()
+    } else {
       setUploadSpeed(0)
       setDownloadSpeed(0)
-      return
     }
-    try {
-      const res = await fetch("http://127.0.0.1:9090/traffic")
-      const text = await res.text()
-      const lines = text.trim().split("\n")
-      const last = lines[lines.length - 1]
-      if (last) {
-        const data = JSON.parse(last)
-        const up = Math.round(data.up ?? 0)
-        const down = Math.round(data.down ?? 0)
-        setUploadSpeed(up)
-        setDownloadSpeed(down)
-        setUploadTotal((prev) => prev + up)
-        setDownloadTotal((prev) => prev + down)
-        setHistory((prev) => {
-          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
-          return next.map((p, i) => ({ ...p, time: `${i}` }))
-        })
+
+    return () => {
+      active = false
+      if (controller) {
+        controller.abort()
       }
-    } catch {
-      // Clash API not available
     }
   }, [isRunning])
-
-  useEffect(() => {
-    if (isRunning) {
-      fetchTraffic()
-      intervalRef.current = setInterval(fetchTraffic, 1000)
-      return () => {
-        if (intervalRef.current) clearInterval(intervalRef.current)
-      }
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      setUploadSpeed(0)
-      setDownloadSpeed(0)
-    }
-  }, [isRunning, fetchTraffic])
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] shadow-sm">
