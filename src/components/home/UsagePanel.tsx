@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/chart"
 import type { TrafficPoint } from "@/types/engine-state"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getClashApiSecret } from "@/single/store"
+import { getClashApiSecret, getClashApiPort } from "@/single/store"
 
 const chartConfig = {
   download: { label: "下载", color: "#3b59ff" },
@@ -105,8 +105,9 @@ export function UsagePanel() {
 
       try {
         const secret = await getClashApiSecret()
+        const port = await getClashApiPort()
         controller = new AbortController()
-        const res = await fetch("http://127.0.0.1:9191/traffic", {
+        const res = await fetch(`http://127.0.0.1:${port}/traffic`, {
           headers: {
             Authorization: `Bearer ${secret}`,
           },

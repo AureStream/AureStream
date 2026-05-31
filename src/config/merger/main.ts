@@ -1,6 +1,6 @@
 import * as path from '@tauri-apps/api/path';
 import { getSubscriptionConfig } from '../../action/db';
-import { getAllowLan, getClashApiSecret, getCustomRuleSet, getStoreValue, isBypassRouterEnabled, setStoreValue } from '../../single/store';
+import { getAllowLan, getClashApiSecret, getClashApiPort, getCustomRuleSet, getStoreValue, isBypassRouterEnabled, setStoreValue } from '../../single/store';
 import { STAGE_VERSION_STORE_KEY } from '../../types/definition';
 import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB } from './helper';
 
@@ -19,9 +19,10 @@ async function getConfigTemplate(mode: configType): Promise<any> {
 }
 
 async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
+    const port = await getClashApiPort();
     newConfig["experimental"] = newConfig["experimental"] || {};
     newConfig["experimental"]["clash_api"] = {
-        "external_controller": "127.0.0.1:9191",
+        "external_controller": `127.0.0.1:${port}`,
         "secret": await getClashApiSecret(),
     };
 

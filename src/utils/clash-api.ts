@@ -1,6 +1,9 @@
-import { getClashApiSecret } from "@/single/store"
+import { getClashApiSecret, getClashApiPort } from "@/single/store"
 
-const BASE_URL = "http://127.0.0.1:9191"
+async function getBaseUrl() {
+  const port = await getClashApiPort()
+  return `http://127.0.0.1:${port}`
+}
 
 export interface ProxyItem {
   name: string
@@ -20,7 +23,8 @@ export interface ProxyGroup {
 export async function fetchSelectGroup(): Promise<ProxyGroup | null> {
   try {
     const secret = await getClashApiSecret()
-    const res = await fetch(`${BASE_URL}/proxies/select`, {
+    const baseUrl = await getBaseUrl()
+    const res = await fetch(`${baseUrl}/proxies/select`, {
       headers: {
         Authorization: `Bearer ${secret}`,
         Accept: "application/json",
@@ -37,7 +41,8 @@ export async function fetchSelectGroup(): Promise<ProxyGroup | null> {
 export async function selectProxyNode(nodeName: string): Promise<boolean> {
   try {
     const secret = await getClashApiSecret()
-    const res = await fetch(`${BASE_URL}/proxies/select`, {
+    const baseUrl = await getBaseUrl()
+    const res = await fetch(`${baseUrl}/proxies/select`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${secret}`,
@@ -55,7 +60,8 @@ export async function selectProxyNode(nodeName: string): Promise<boolean> {
 export async function testNodeDelay(nodeName: string): Promise<number> {
   try {
     const secret = await getClashApiSecret()
-    const url = `${BASE_URL}/proxies/${encodeURIComponent(nodeName)}/delay?timeout=3000&url=${encodeURIComponent(
+    const baseUrl = await getBaseUrl()
+    const url = `${baseUrl}/proxies/${encodeURIComponent(nodeName)}/delay?timeout=3000&url=${encodeURIComponent(
       "http://www.gstatic.com/generate_204"
     )}`
     const res = await fetch(url, {
