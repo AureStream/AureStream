@@ -114,6 +114,15 @@ export function NetworkPanel() {
 
   useEffect(() => {
     refresh()
+
+    const handleNodeChange = () => {
+      refresh()
+    }
+
+    window.addEventListener("node-changed", handleNodeChange)
+    return () => {
+      window.removeEventListener("node-changed", handleNodeChange)
+    }
   }, [refresh])
 
   return (

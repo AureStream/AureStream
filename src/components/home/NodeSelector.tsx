@@ -94,6 +94,10 @@ export function NodeSelector() {
     await setStoreValue(SELECTED_NODE_KEY, nodeTag)
     if (isRunning) {
       await selectProxyNode(nodeTag)
+      // Delay 600ms to allow proxy tunnel swap, then trigger network panel refresh
+      setTimeout(() => {
+        window.dispatchEvent(new Event("node-changed"))
+      }, 600)
     }
   }
 
