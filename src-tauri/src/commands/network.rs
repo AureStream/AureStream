@@ -204,3 +204,21 @@ pub async fn ping_google(app: tauri::AppHandle) -> bool {
         Err(_) => false,
     }
 }
+
+#[tauri::command]
+pub async fn ping_tcp(host: String, port: u16) -> Result<u64, String> {
+    use std::time::{Duration, Instant};
+    use tokio::net::TcpStream;
+    use tokio::time::timeout;
+
+    let addr = format!("{}:{}", host, port);
+    let start = Instant::now();
+    match timeout(Duration::from_millis(3000), TcpStream::connect(&addr)).await {
+        Ok(Ok(_)) => {
+            let duration = start.elapsed().as_millis() as u64;
+            Ok(duration)
+        }
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(_) => Err("Timeout".to_string()),
+    }
+}

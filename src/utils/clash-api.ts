@@ -71,3 +71,14 @@ export async function testNodeDelay(nodeName: string): Promise<number> {
     return -1
   }
 }
+
+export async function pingNodeTcp(host: string, port: number): Promise<number> {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core")
+    const delay = await invoke<number>("ping_tcp", { host, port })
+    return delay
+  } catch (e) {
+    console.error(`Failed to TCP ping ${host}:${port}:`, e)
+    return -1
+  }
+}

@@ -67,14 +67,14 @@ function StatBox({
       </div>
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          <span className="text-[11px] sm:text-xs font-bold text-slate-550 dark:text-slate-400 tracking-wide">
             {label}
           </span>
-          <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 leading-tight">
+          <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono leading-tight">
             {formatSpeed(bytesPerSecond)}
           </span>
         </div>
-        <div className="text-[9px] text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
+        <div className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-semibold font-mono mt-0.5">
           {formatTotal(totalBytes)}
         </div>
       </div>

@@ -154,7 +154,7 @@ export function SubscriptionPage() {
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-4 sm:gap-5">
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-3 sm:gap-5">
       {/* Left side: Subscription list */}
       <div className="flex min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden">
         <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">

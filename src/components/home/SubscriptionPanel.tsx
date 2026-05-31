@@ -33,14 +33,14 @@ export function SubscriptionPanel() {
   return (
     <Card className="shrink-0 rounded-[20px] shadow-sm">
       <CardHeader className="pb-0 pt-3 px-4">
-        <CardTitle className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+        <CardTitle className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
           {loading
             ? "加载中..."
             : active?.name ?? "暂无订阅"}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 pt-2 px-4">
-        <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400">
+        <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400 font-mono">
           <span>已用 {active ? formatBytes(active.used_traffic) : "0 GB"}</span>
           <span>共 {active ? formatBytes(active.total_traffic) : "0 GB"}</span>
         </div>
@@ -50,18 +50,18 @@ export function SubscriptionPanel() {
         />
       </CardContent>
 
-      <CardFooter className="flex items-center justify-between pb-3 pt-1 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
-        <span className="text-[#3b59ff] dark:text-blue-400">
+      <CardFooter className="flex items-center justify-between pb-3 pt-1 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+        <span className="text-[#3b59ff] dark:text-blue-400 font-extrabold font-mono">
           {usedPercent.toFixed(1)}% 已使用
         </span>
         <div className="flex items-center gap-2">
-          <span>
+          <span className="font-mono text-[11px] sm:text-xs">
             到期 {active ? formatExpiry(active.expire_time) : "无限期"}
           </span>
           <Button
             variant="ghost"
             size="xs"
-            className="h-6 px-2 rounded-md bg-[#eef2ff] text-[#3b59ff] text-[10px] font-semibold hover:bg-blue-100/60 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+            className="h-6 px-2 rounded-md bg-[#eef2ff] text-[#3b59ff] text-[11px] sm:text-xs font-bold hover:bg-blue-100/60 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
           >
             管理
           </Button>
