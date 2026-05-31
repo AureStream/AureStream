@@ -125,6 +125,15 @@ export function UsagePanel() {
     } else {
       setUploadSpeed(0)
       setDownloadSpeed(0)
+      setUploadTotal(0)
+      setDownloadTotal(0)
+      setHistory(
+        Array.from({ length: 60 }, (_, i) => ({
+          time: `${i}`,
+          download: 0,
+          upload: 0,
+        }))
+      )
     }
 
     return () => {
