@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
-import { CartesianGrid, Line, LineChart, XAxis } from "recharts"
+import { CartesianGrid, Area, AreaChart, XAxis } from "recharts"
 
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -67,11 +67,11 @@ function StatBox({
         )}
       </div>
       <div className="flex flex-col min-w-0 flex-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] sm:text-xs font-bold text-slate-550 dark:text-slate-400 tracking-wide">
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-[11px] sm:text-xs font-bold text-slate-550 dark:text-slate-400 tracking-wide shrink-0">
             {label}
           </span>
-          <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono leading-tight">
+          <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono leading-tight text-right w-[80px] sm:w-[95px] shrink-0 truncate">
             {formatSpeed(bytesPerSecond)}
           </span>
         </div>
@@ -163,10 +163,20 @@ export function UsagePanel() {
           className="aspect-auto w-full flex-1 min-h-0 [&_.recharts-legend-wrapper]:!static [&_.recharts-legend-wrapper]:!pt-2"
           initialDimension={{ width: 280, height: 72 }}
         >
-          <LineChart
+          <AreaChart
             data={history}
             margin={{ left: 0, right: 0, top: 5, bottom: 5 }}
           >
+            <defs>
+              <linearGradient id="colorDownload" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b59ff" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="#3b59ff" stopOpacity={0.01}/>
+              </linearGradient>
+              <linearGradient id="colorUpload" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0.01}/>
+              </linearGradient>
+            </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="3 3"
@@ -176,22 +186,23 @@ export function UsagePanel() {
             <XAxis dataKey="time" hide />
             <ChartTooltip content={<ChartTooltipContent />} />
             <ChartLegend content={<ChartLegendContent />} />
-            <Line
+            <Area
               type="monotone"
               dataKey="download"
               stroke="#3b59ff"
               strokeWidth={1.5}
-              dot={false}
+              fillOpacity={1}
+              fill="url(#colorDownload)"
             />
-            <Line
+            <Area
               type="monotone"
               dataKey="upload"
               stroke="#10b981"
               strokeWidth={1.5}
-              dot={false}
-              strokeDasharray="3 3"
+              fillOpacity={1}
+              fill="url(#colorUpload)"
             />
-          </LineChart>
+          </AreaChart>
         </ChartContainer>
       </CardContent>
     </Card>
