@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { RefreshCwIcon } from "lucide-react"
+import { invoke } from "@tauri-apps/api/core"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -40,79 +41,36 @@ export function NetworkPanel() {
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    // Try ip-api.com (Chinese localization)
+    // Use Rust backend to query GeoIP — this routes through the configured proxy engine
+    // so the returned IP/location reflects the active proxy node, not the WebView's direct connection.
     try {
-      const res = await fetch("http://ip-api.com/json?lang=zh-CN")
-      if (res.ok) {
-        const data = await res.json()
-        if (data.status === "success") {
-          const locStr = [data.country, data.city].filter(Boolean).join(" · ")
-          setNetworkInfo({
-            ip: data.query || "未知",
-            countryName: data.country || "未知",
-            countryCode: data.countryCode || "UN",
-            region: locStr || "未知",
-            isp: data.isp || "未知",
-          })
-          setRefreshing(false)
-          return
-        }
-      }
+      const info = await invoke<{
+        ip: string
+        countryName: string
+        countryCode: string
+        region: string
+        isp: string
+      }>("get_geoip_info", { useProxy: isRunning })
+      setNetworkInfo({
+        ip: info.ip || "未知",
+        countryName: info.countryName || "未知",
+        countryCode: info.countryCode || "UN",
+        region: info.region || "未知",
+        isp: info.isp || "未知",
+      })
     } catch (e) {
-      console.warn("ip-api.com failed, trying fallback:", e)
+      console.warn("get_geoip_info via Rust failed:", e)
+      setNetworkInfo({
+        ip: "未知 / 获取失败",
+        countryName: "未知",
+        countryCode: "UN",
+        region: "未知",
+        isp: "未知",
+      })
+    } finally {
+      setRefreshing(false)
     }
-
-    // Try fallback: ipapi.co (HTTPS)
-    try {
-      const res = await fetch("https://ipapi.co/json/", { referrerPolicy: "no-referrer" })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.ip) {
-          const locStr = [data.country_name, data.city].filter(Boolean).join(" · ")
-          setNetworkInfo({
-            ip: data.ip,
-            countryName: data.country_name || "未知",
-            countryCode: data.country_code || "UN",
-            region: locStr || "未知",
-            isp: data.org || "未知",
-          })
-          setRefreshing(false)
-          return
-        }
-      }
-    } catch (e) {
-      console.warn("ipapi.co failed, trying fallback:", e)
-    }
-
-    // Try fallback 2: ipinfo.io
-    try {
-      const res = await fetch("https://ipinfo.io/json")
-      if (res.ok) {
-        const data = await res.json()
-        const locStr = [data.country, data.city].filter(Boolean).join(" · ")
-        setNetworkInfo({
-          ip: data.ip || "未知",
-          countryName: data.country || "未知",
-          countryCode: data.country || "UN",
-          region: locStr || "未知",
-          isp: data.org || "未知",
-        })
-        setRefreshing(false)
-        return
-      }
-    } catch (e) {
-      console.warn("ipinfo.io fallback failed:", e)
-    }
-
-    setNetworkInfo({
-      ip: "未知 / 获取失败",
-      countryName: "未知",
-      countryCode: "UN",
-      region: "未知",
-      isp: "未知",
-    })
-    setRefreshing(false)
-  }, [])
+  }, [isRunning])
 
   useEffect(() => {
     if (isRunning) {

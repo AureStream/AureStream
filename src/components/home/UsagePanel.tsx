@@ -173,12 +173,12 @@ export function UsagePanel() {
           >
             <defs>
               <linearGradient id="colorDownload" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b59ff" stopOpacity={0.15}/>
-                <stop offset="95%" stopColor="#3b59ff" stopOpacity={0.01}/>
+                <stop offset="0%" stopColor="#3b59ff" stopOpacity={0.22}/>
+                <stop offset="100%" stopColor="#3b59ff" stopOpacity={0}/>
               </linearGradient>
               <linearGradient id="colorUpload" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.01}/>
+                <stop offset="0%" stopColor="#10b981" stopOpacity={0.22}/>
+                <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid
@@ -191,20 +191,30 @@ export function UsagePanel() {
             <ChartTooltip content={<ChartTooltipContent />} />
             <ChartLegend content={<ChartLegendContent />} />
             <Area
-              type="monotone"
+              type="basis"
               dataKey="download"
               stroke="#3b59ff"
               strokeWidth={1.5}
               fillOpacity={1}
               fill="url(#colorDownload)"
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
+              animationDuration={400}
+              animationEasing="ease-out"
+              isAnimationActive={true}
             />
             <Area
-              type="monotone"
+              type="basis"
               dataKey="upload"
               stroke="#10b981"
               strokeWidth={1.5}
               fillOpacity={1}
               fill="url(#colorUpload)"
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
+              animationDuration={400}
+              animationEasing="ease-out"
+              isAnimationActive={true}
             />
           </AreaChart>
         </ChartContainer>

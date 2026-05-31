@@ -121,7 +121,7 @@ export function LogPage() {
   })
 
   return (
-    <div className="flex flex-col h-full min-h-0 w-full gap-3 sm:gap-4">
+    <div className="flex flex-col flex-1 min-h-0 w-full gap-3 sm:gap-4 overflow-hidden">
       {/* Header and Switcher */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
