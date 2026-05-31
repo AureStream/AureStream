@@ -4,6 +4,7 @@ import { RefreshCwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { useEngineState } from "@/hooks/useEngineState"
 
 interface GeoIpInfo {
   ip: string
@@ -27,6 +28,7 @@ function getFlagEmojiByCode(countryCode: string): string {
 }
 
 export function NetworkPanel() {
+  const { isRunning } = useEngineState()
   const [networkInfo, setNetworkInfo] = useState<GeoIpInfo>({
     ip: "获取中...",
     countryName: "获取中...",
@@ -113,12 +115,20 @@ export function NetworkPanel() {
   }, [])
 
   useEffect(() => {
-    refresh()
+    if (isRunning) {
+      const timer = setTimeout(() => {
+        refresh()
+      }, 800)
+      return () => clearTimeout(timer)
+    } else {
+      refresh()
+    }
+  }, [isRunning, refresh])
 
+  useEffect(() => {
     const handleNodeChange = () => {
       refresh()
     }
-
     window.addEventListener("node-changed", handleNodeChange)
     return () => {
       window.removeEventListener("node-changed", handleNodeChange)
