@@ -97,66 +97,36 @@ export function UsagePanel() {
     }))
   )
   useEffect(() => {
+    let unlisten: (() => void) | undefined
     let active = true
-    let controller: AbortController | null = null
 
-    const startStreaming = async () => {
-      if (!isRunning) return
+    const setupListener = async () => {
+      const { listen } = await import("@tauri-apps/api/event")
+      const { invoke } = await import("@tauri-apps/api/core")
 
-      try {
+      const fn = await listen<{ up: number; down: number }>("traffic-tick", (event) => {
+        if (!active) return
+        const { up, down } = event.payload
+        setUploadSpeed(up)
+        setDownloadSpeed(down)
+        setUploadTotal((prev) => prev + up)
+        setDownloadTotal((prev) => prev + down)
+        setHistory((prev) => {
+          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
+          return next.map((p, i) => ({ ...p, time: `${i}` }))
+        })
+      })
+      unlisten = fn
+
+      if (isRunning && active) {
         const secret = await getClashApiSecret()
         const port = await getClashApiPort()
-        controller = new AbortController()
-        const res = await fetch(`http://127.0.0.1:${port}/traffic`, {
-          headers: {
-            Authorization: `Bearer ${secret}`,
-          },
-          signal: controller.signal,
-        })
-
-        if (!res.ok || !res.body) return
-
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
-
-        while (active) {
-          const { value, done } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n")
-          buffer = lines.pop() || ""
-
-          for (const line of lines) {
-            if (line.trim()) {
-              try {
-                const data = JSON.parse(line)
-                const up = Math.round(data.up ?? 0)
-                const down = Math.round(data.down ?? 0)
-                if (active) {
-                  setUploadSpeed(up)
-                  setDownloadSpeed(down)
-                  setUploadTotal((prev) => prev + up)
-                  setDownloadTotal((prev) => prev + down)
-                  setHistory((prev) => {
-                    const next = [...prev.slice(1), { time: "", download: down, upload: up }]
-                    return next.map((p, i) => ({ ...p, time: `${i}` }))
-                  })
-                }
-              } catch (e) {
-                // Ignore parsing errors of partial lines
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Traffic stream error:", e)
+        await invoke("start_traffic_listener", { port, secret })
       }
     }
 
     if (isRunning) {
-      startStreaming()
+      setupListener()
     } else {
       setUploadSpeed(0)
       setDownloadSpeed(0)
@@ -164,8 +134,8 @@ export function UsagePanel() {
 
     return () => {
       active = false
-      if (controller) {
-        controller.abort()
+      if (unlisten) {
+        unlisten()
       }
     }
   }, [isRunning])

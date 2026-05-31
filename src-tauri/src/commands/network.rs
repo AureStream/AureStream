@@ -222,3 +222,54 @@ pub async fn ping_tcp(host: String, port: u16) -> Result<u64, String> {
         Err(_) => Err("Timeout".to_string()),
     }
 }
+
+#[derive(serde::Serialize, Clone)]
+struct TrafficData {
+    up: u64,
+    down: u64,
+}
+
+#[tauri::command]
+pub async fn start_traffic_listener(
+    app: tauri::AppHandle,
+    port: u16,
+    secret: String,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/traffic", port);
+        
+        let mut response = match client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", secret))
+            .send()
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                log::error!("Failed to connect to traffic endpoint: {}", e);
+                return;
+            }
+        };
+
+        let mut buffer = String::new();
+        while let Ok(Some(chunk)) = response.chunk().await {
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&chunk_str);
+            
+            while let Some(pos) = buffer.find('\n') {
+                let line = buffer.drain(..=pos).collect::<String>();
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        let up = data.get("up").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let down = data.get("down").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let _ = app.emit("traffic-tick", TrafficData { up, down });
+                    }
+                }
+            }
+        }
+    });
+    Ok(())
+}
