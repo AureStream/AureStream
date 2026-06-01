@@ -246,24 +246,6 @@ async function downloadDatabaseFiles(): Promise<void> {
     await Promise.all(downloadTasks);
 }
 
-// Generate dummy tun-service binaries for non-Windows platforms to satisfy Tauri's externalBin check
-async function generateDummyTunServices(): Promise<void> {
-    const binariesDir = 'src-tauri/binaries';
-    !fs.existsSync(binariesDir) && fs.mkdirSync(binariesDir, { recursive: true });
-
-    for (const [platform, archs] of Object.entries(RUST_TARGET_TRIPLES)) {
-        if (platform !== 'windows') {
-            for (const targetTriple of Object.values(archs)) {
-                const dummyPath = path.join(binariesDir, `tun-service-${targetTriple}`);
-                if (!fs.existsSync(dummyPath)) {
-                    fs.writeFileSync(dummyPath, '');
-                    console.log(`Created dummy sidecar: ${dummyPath}`);
-                }
-            }
-        }
-    }
-}
-
 // 并行执行所有下载任务
 if (SkipVersionList.includes(SING_BOX_VERSION)) {
     console.log(`Skipping download for version ${SING_BOX_VERSION}`);
@@ -275,7 +257,6 @@ if (SkipVersionList.includes(SING_BOX_VERSION)) {
     Promise.all([
         downloadEmbeddingExternalBinaries(),
         downloadDatabaseFiles(),
-        generateDummyTunServices(),
         // downloadCronetLibraries()
     ]).then(() => {
         const totalElapsed = ((Date.now() - scriptStartTime) / 1000).toFixed(2);

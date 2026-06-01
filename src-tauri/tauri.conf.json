@@ -27,8 +27,7 @@
     "active": true,
     "targets": "all",
     "externalBin": [
-      "binaries/sing-box",
-      "binaries/tun-service"
+      "binaries/sing-box"
     ],
     "icon": [
       "icons/32x32.png",

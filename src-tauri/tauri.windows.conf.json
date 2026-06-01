@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/sing-box",
+      "binaries/tun-service"
+    ]
+  }
+}
