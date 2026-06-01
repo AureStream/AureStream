@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
-import { ALLOWLAN_STORE_KEY, DEFAULT_PROXY_PORT, ENABLE_BYPASS_ROUTER_STORE_KEY, ENABLE_TUN_STORE_KEY, PROXY_PORT_STORE_KEY, SKIP_SYSTEM_PROXY_STORE_KEY, USE_DHCP_STORE_KEY, USER_AGENT_STORE_KEY } from '../types/definition';
+import { ALLOWLAN_STORE_KEY, DEFAULT_PROXY_PORT, ENABLE_BYPASS_ROUTER_STORE_KEY, ENABLE_TUN_STORE_KEY, PROXY_PORT_STORE_KEY, SKIP_SYSTEM_PROXY_STORE_KEY, TUN_STACK_STORE_KEY, USE_DHCP_STORE_KEY, USER_AGENT_STORE_KEY } from '../types/definition';
 
 export const LANGUAGE_STORE_KEY = 'language';
 export const CLASH_API_SECRET = 'clash_api_secret_key';
@@ -198,5 +198,27 @@ export async function setClashApiPort(port: number): Promise<void> {
         throw new Error('invalid_clash_api_port');
     }
     await store.set(CLASH_API_PORT_STORE_KEY, port);
+    await store.save();
+}
+
+export type TunStack = 'system' | 'gvisor' | 'mixed';
+
+export const DEFAULT_TUN_STACK: TunStack = 'system';
+
+const TUN_STACK_VALUES: TunStack[] = ['system', 'gvisor', 'mixed'];
+
+export async function getTunStack(): Promise<TunStack> {
+    const raw = await store.get(TUN_STACK_STORE_KEY) as string | undefined;
+    if (raw && TUN_STACK_VALUES.includes(raw as TunStack)) {
+        return raw as TunStack;
+    }
+    return DEFAULT_TUN_STACK;
+}
+
+export async function setTunStack(value: TunStack): Promise<void> {
+    if (!TUN_STACK_VALUES.includes(value)) {
+        throw new Error('invalid_tun_stack');
+    }
+    await store.set(TUN_STACK_STORE_KEY, value);
     await store.save();
 }

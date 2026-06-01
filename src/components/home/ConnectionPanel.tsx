@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { PowerIcon, GitForkIcon, CpuIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { surface, type } from "@/lib/typography"
 import { Card, CardContent } from "@/components/ui/card"
 import { invoke } from "@tauri-apps/api/core"
 import { useEngineState } from "@/hooks/useEngineState"
@@ -204,19 +205,19 @@ export function ConnectionPanel({ className }: { className?: string }) {
                       ? "text-blue-600 dark:text-blue-400"
                       : (isStarting || isStopping)
                         ? "text-blue-500 dark:text-blue-400"
-                        : "text-slate-500 dark:text-slate-400"
+                        : "text-muted-foreground"
                 )}
               />
             </div>
             <span className={cn(
-              "text-[10px] sm:text-[11px] font-extrabold tracking-wider transition-colors duration-300",
+              "type-caption font-semibold tracking-wide transition-colors duration-300",
               isFailed
-                ? "text-red-600 dark:text-red-400"
+                ? "text-destructive"
                 : (isRunning && !isStopping)
-                  ? "text-blue-600 dark:text-blue-400"
+                  ? "text-primary"
                   : (isStarting || isStopping)
-                    ? "text-blue-500 dark:text-blue-400"
-                    : "text-slate-500 dark:text-slate-400"
+                    ? "text-primary/80"
+                    : "text-muted-foreground"
             )}>
               {isStarting ? "连接中" : isStopping ? "断开中" : isConnected ? "已连接" : isFailed ? "失败" : "未连接"}
             </span>
@@ -226,30 +227,26 @@ export function ConnectionPanel({ className }: { className?: string }) {
         {/* Right: Info and Selectors */}
         <div className="flex min-w-0 flex-1 flex-col justify-between h-full py-1 gap-2.5">
           {/* Uptime and Status */}
-          <div className="flex justify-between items-center w-full px-0.5 border-b border-slate-100 dark:border-white/[0.05] pb-2.5">
+          <div className="flex justify-between items-center w-full px-0.5 border-b border-border/60 pb-2.5">
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">
-                服务状态
-              </span>
+              <span className={type.overline}>服务状态</span>
               <span className={cn(
-                "flex items-center gap-1.5 text-xs sm:text-sm font-extrabold transition-colors duration-300",
+                "flex items-center gap-1.5 type-value transition-colors duration-300",
                 (isConnected && !isStopping)
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-slate-800 dark:text-slate-100"
+                  : "text-foreground"
               )}>
                 <span className={cn("size-2 rounded-full", statusColor)} />
                 {statusText}
               </span>
             </div>
             <div className="flex flex-col items-end gap-0.5">
-              <span className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase">
-                已连接时长
-              </span>
+              <span className={type.overline}>已连接时长</span>
               <span className={cn(
-                "font-mono text-sm sm:text-base font-extrabold tracking-wider transition-colors duration-300",
+                "font-mono type-value-lg transition-colors duration-300",
                 isConnected
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-slate-700 dark:text-slate-200"
+                  : "text-foreground"
               )}>
                 {formatUptime(uptime)}
               </span>
@@ -262,16 +259,14 @@ export function ConnectionPanel({ className }: { className?: string }) {
               {/* Routing Card */}
               <button
                 onClick={cycleRoutingMode}
-                className="flex items-center gap-2 p-2 rounded-xl border border-slate-200/50 bg-[#f8fafc]/50 hover:bg-slate-50 transition-all duration-300 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:bg-white/[0.04] text-left cursor-pointer group"
+                className={cn(surface.rowInteractive, "flex items-center gap-2 p-2 text-left group")}
               >
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover:scale-105 transition-transform duration-300">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:scale-105 transition-transform duration-300">
                   <GitForkIcon className="size-4" />
                 </div>
                 <div className="flex flex-col leading-tight min-w-0">
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                    路由模式
-                  </span>
-                  <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100 mt-0.5 truncate">
+                  <span className={type.overline}>路由模式</span>
+                  <span className={cn(type.value, "mt-0.5 truncate")}>
                     {routingMode === "rule" && "规则分流"}
                     {routingMode === "global" && "全局代理"}
                     {routingMode === "direct" && "直接连接"}
@@ -282,21 +277,19 @@ export function ConnectionPanel({ className }: { className?: string }) {
               {/* Capture Card */}
               <button
                 onClick={toggleCaptureMode}
-                className="flex items-center gap-2 p-2 rounded-xl border border-slate-200/50 bg-[#f8fafc]/50 hover:bg-slate-50 transition-all duration-300 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:bg-white/[0.04] text-left cursor-pointer group"
+                className={cn(surface.rowInteractive, "flex items-center gap-2 p-2 text-left group")}
               >
                 <div className={cn(
                   "flex size-7 shrink-0 items-center justify-center rounded-lg group-hover:scale-105 transition-transform duration-300",
                   enableTun
-                    ? "bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
-                    : "bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400"
+                    ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                    : "bg-muted text-muted-foreground"
                 )}>
                   <CpuIcon className="size-4" />
                 </div>
                 <div className="flex flex-col leading-tight min-w-0">
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                    接管模式
-                  </span>
-                  <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100 mt-0.5 truncate">
+                  <span className={type.overline}>接管模式</span>
+                  <span className={cn(type.value, "mt-0.5 truncate")}>
                     {enableTun ? "Tun网卡" : "系统代理"}
                   </span>
                 </div>
@@ -305,7 +298,7 @@ export function ConnectionPanel({ className }: { className?: string }) {
 
             <div className="transition-all duration-300 w-full px-0.5 min-h-[22px] flex items-center">
               {!enableTun ? (
-                <div className="flex items-center gap-1.5 px-1 py-0.5 text-[9.5px] text-slate-450 dark:text-slate-500 font-extrabold animate-in fade-in duration-200">
+                <div className="flex items-center gap-1.5 px-1 py-0.5 type-caption font-medium animate-in fade-in duration-200">
                   <span className="size-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
                   <span>系统代理模式已就绪</span>
                 </div>
@@ -313,24 +306,24 @@ export function ConnectionPanel({ className }: { className?: string }) {
                 <div className="w-full">
                   {isTunServiceInstalled === false && (
                     <div className="flex items-center justify-between rounded-lg border border-rose-200/50 bg-rose-50/50 px-2.5 py-1 dark:border-rose-500/20 dark:bg-rose-950/20 animate-in fade-in duration-200 w-full">
-                      <span className="text-[9.5px] font-bold text-rose-600 dark:text-rose-400">未安装网卡服务</span>
+                      <span className="type-caption font-semibold text-destructive">未安装网卡服务</span>
                       <button
                         onClick={handleInstallTunService}
                         disabled={isInstallingService}
-                        className="text-[9.5px] font-extrabold text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer disabled:opacity-50 hover:underline"
+                        className={cn(type.link, "cursor-pointer disabled:opacity-50")}
                       >
                         {isInstallingService ? "安装中..." : "立即安装"}
                       </button>
                     </div>
                   )}
                   {isTunServiceInstalled === true && (
-                    <div className="flex items-center gap-1.5 px-1 py-0.5 text-[9.5px] text-emerald-600 dark:text-emerald-400 font-extrabold animate-in fade-in duration-200">
+                    <div className="flex items-center gap-1.5 px-1 py-0.5 type-caption font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
                       <span className="size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                       <span>网卡服务已就绪</span>
                     </div>
                   )}
                   {isTunServiceInstalled === null && (
-                    <span className="text-[9.5px] text-slate-400 dark:text-slate-500 font-bold animate-in fade-in duration-200">
+                    <span className={cn(type.caption, "animate-in fade-in duration-200")}>
                       正在检测服务状态...
                     </span>
                   )}

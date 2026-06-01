@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import { badge, btn, iconBadge, surface, type } from "@/lib/typography"
 
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { insertSubscription, deleteSubscription, updateSubscription } from "@/action/db"
@@ -160,20 +161,18 @@ export function SubscriptionPage() {
         <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">
           <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
             <div className="flex items-center gap-1.5">
-              <div className="flex size-7 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                <BoxIcon className="size-4" />
+              <div className={iconBadge.purple}>
+                <BoxIcon />
               </div>
-              <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">已保存的订阅</span>
-              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
-                共 {subscriptions.length} 个
-              </span>
+              <span className={type.sectionTitle}>已保存的订阅</span>
+              <span className={badge.brand}>共 {subscriptions.length} 个</span>
             </div>
             <Button
               variant="ghost"
               size="xs"
               onClick={handleUpdateAll}
               disabled={isUpdatingAll || subscriptions.length === 0}
-              className="h-7 px-2 rounded-lg bg-[#eef2ff] text-[#3b59ff] text-[10px] font-bold hover:bg-blue-100/60 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+              className={cn(btn.accent, "h-8 px-2")}
             >
               <RefreshCwIcon className={cn("size-3.5 mr-0.5", isUpdatingAll && "animate-spin")} />
               {isUpdatingAll ? "更新中..." : "全部更新"}
@@ -183,13 +182,13 @@ export function SubscriptionPage() {
           <CardContent className="flex min-h-0 flex-1 flex-col pt-0 overflow-hidden">
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin flex flex-col gap-3 pb-4">
               {loading ? (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-8">
-                  <span className="text-xs">加载中...</span>
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
+                  <span className={type.description}>加载中...</span>
                 </div>
               ) : subscriptions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-8">
-                  <AlertCircleIcon className="size-8 text-slate-300 dark:text-slate-600" />
-                  <span className="text-xs">暂无可用订阅，请在右侧添加</span>
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
+                  <AlertCircleIcon className="size-8 opacity-40" />
+                  <span className={type.description}>暂无可用订阅，请在右侧添加</span>
                 </div>
               ) : (
                 subscriptions.map((sub) => {
@@ -203,25 +202,25 @@ export function SubscriptionPage() {
                       className={cn(
                         "flex flex-col gap-2 rounded-[16px] border p-3.5 transition-all duration-200 cursor-pointer",
                         isCurrent
-                          ? "bg-[#eef2ff] border-[#007ACC]/30 shadow-[0_2px_8px_rgba(0,122,204,0.08)] dark:bg-blue-500/10 dark:border-blue-500/35"
+                          ? "bg-secondary border-primary/30 shadow-sm"
                           : status === "expired"
-                          ? "bg-white/90 border-slate-200/60 shadow-[0_2px_8px_rgba(15,23,42,0.02)] opacity-60 dark:bg-white/[0.02] dark:border-white/[0.04]"
-                          : "bg-white/90 border-slate-200/60 shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] hover:bg-white dark:bg-white/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.06]"
+                          ? "bg-card border-border/60 opacity-60"
+                          : "bg-card border-border/60 shadow-sm hover:border-primary/20 hover:bg-muted/20"
                       )}
                     >
                       {/* Subscription Info Header */}
                       <div className="flex items-start justify-between gap-3 min-w-0">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            <span className={cn(type.label, "truncate font-semibold")}>
                               {sub.name}
                             </span>
                             <span
                               className={cn(
-                                "rounded-md px-1.5 py-0.5 text-[9px] font-bold shrink-0",
-                                status === "active" && "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400",
-                                status === "expiring" && "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
-                                status === "expired" && "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                                "shrink-0",
+                                status === "active" && badge.success,
+                                status === "expiring" && badge.warning,
+                                status === "expired" && badge.danger
                               )}
                             >
                               {status === "active" && "服务中"}
@@ -229,14 +228,14 @@ export function SubscriptionPage() {
                               {status === "expired" && "已过期"}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                          <div className={cn("flex items-center gap-1 mt-1", type.caption)}>
                             <LinkIcon className="size-3 shrink-0" />
                             <span className="truncate">{sub.subscription_url}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {isCurrent && (
-                            <div className="flex items-center gap-1 px-2 h-6 rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 text-[9px] font-bold">
+                            <div className={cn(badge.success, "h-6 gap-1 px-2")}>
                               <CheckCircle2Icon className="size-3" />
                               使用中
                             </div>
@@ -244,7 +243,7 @@ export function SubscriptionPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="size-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-white/[0.08] dark:hover:text-slate-300 transition-colors"
+                            className="size-7 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleSingleUpdate(sub.identifier)
@@ -270,29 +269,29 @@ export function SubscriptionPage() {
 
                       {/* Traffic progress */}
                       <div className="flex flex-col gap-1.5 mt-1">
-                        <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                        <div className={cn("flex items-center justify-between", type.caption)}>
                           <span>已使用: {formatBytes(sub.used_traffic)} / {formatBytes(sub.total_traffic)}</span>
-                          <span className={cn(percent > 85 ? "text-rose-500" : percent > 60 ? "text-amber-500" : "text-[#3b59ff]")}>
+                          <span className={cn("font-semibold", percent > 85 ? "text-destructive" : percent > 60 ? "text-amber-600 dark:text-amber-400" : "text-primary")}>
                             {percent.toFixed(1)}%
                           </span>
                         </div>
                         <Progress
                           value={percent}
                           className={cn(
-                            "h-1.5 bg-slate-100 dark:bg-white/[0.06]",
+                            "h-1.5 bg-muted",
                             status === "expired"
                               ? "[&>div]:bg-rose-500"
                               : percent > 85
                               ? "[&>div]:bg-rose-500"
                               : percent > 60
                               ? "[&>div]:bg-amber-500"
-                              : "[&>div]:bg-[#3b59ff]"
+                              : "[&>div]:bg-primary"
                           )}
                         />
                       </div>
 
                       {/* Footer Info */}
-                      <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-slate-200/50 dark:border-white/[0.06] text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                      <div className={cn("flex items-center justify-between mt-1 pt-1.5 border-t border-border/60", type.caption)}>
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="size-3" />
                           到期时间: {formatExpiry(sub.expire_time)}
@@ -317,47 +316,47 @@ export function SubscriptionPage() {
         <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-3.5 py-4 px-4">
             <div className="flex items-center gap-2">
-              <div className="flex size-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                <PlusIcon className="size-4" />
+              <div className={iconBadge.blue}>
+                <PlusIcon />
               </div>
-              <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">添加订阅</span>
+              <span className={type.sectionTitle}>添加订阅</span>
             </div>
 
             <form onSubmit={handleAdd} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400">订阅名称 (可选)</label>
+                <label className={type.label}>订阅名称 (可选)</label>
                 <input
                   type="text"
                   placeholder="不填将依据链接自动识别"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="h-8.5 rounded-lg border border-slate-200 bg-[#f8fafc]/30 px-3 text-xs text-slate-800 placeholder-slate-400 focus:border-[#3b59ff] focus:bg-white outline-none transition-all dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-200 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:bg-slate-900"
+                  className="ui-input"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold text-slate-500">订阅链接 (URL)</label>
+                <label className={type.label}>订阅链接 (URL)</label>
                 <textarea
                   placeholder="粘贴您的 v2ray/clash 订阅链接..."
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   rows={3}
-                  className="rounded-lg border border-slate-200 bg-[#f8fafc]/30 p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:border-[#3b59ff] focus:bg-white outline-none transition-all resize-none dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-200 dark:placeholder-slate-500 dark:focus:border-blue-500 dark:focus:bg-slate-900"
+                  className="ui-textarea"
                   required
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-200/60 bg-white/40 px-3 py-2 mt-0.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
+              <div className={cn(surface.row, "flex items-center justify-between px-3 py-2 mt-0.5")}>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">自动更新</span>
-                  <span className="text-[9px] text-slate-500 dark:text-slate-400">开启后将定时同步节点</span>
+                  <span className={type.label}>自动更新</span>
+                  <span className={type.caption}>开启后将定时同步节点</span>
                 </div>
                 <Switch size="sm" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
               </div>
 
               {autoUpdate && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold text-slate-500">更新周期</label>
+                  <label className={type.label}>更新周期</label>
                   <div className="grid grid-cols-4 gap-1.5">
                     {(["6h", "12h", "24h", "7d"] as const).map((interval) => (
                       <button
@@ -365,10 +364,9 @@ export function SubscriptionPage() {
                         type="button"
                         onClick={() => setUpdateInterval(interval)}
                         className={cn(
-                          "h-7 rounded-md border text-[10px] font-bold transition-all cursor-pointer",
-                          updateInterval === interval
-                            ? "border-[#3b59ff] bg-[#eef2ff] text-[#3b59ff] dark:border-blue-500 dark:bg-blue-500/10 dark:text-blue-400"
-                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-slate-400 dark:hover:bg-white/[0.1]"
+                          btn.pill,
+                          "h-8",
+                          updateInterval === interval && btn.pillActive
                         )}
                       >
                         {interval === "6h" && "6小时"}
@@ -384,7 +382,7 @@ export function SubscriptionPage() {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full h-8.5 rounded-lg bg-[#3b59ff] text-white hover:bg-[#3b59ff]/90 font-semibold text-xs shadow-sm mt-1 transition-all dark:bg-blue-600 dark:hover:bg-blue-700"
+                className="w-full h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-xs shadow-sm mt-1 transition-all"
               >
                 {isSubmitting ? "正在拉取..." : "保存订阅"}
               </Button>
@@ -396,13 +394,13 @@ export function SubscriptionPage() {
         <Card className="flex-1 rounded-[20px] overflow-hidden">
           <CardContent className="flex flex-col gap-3.5 py-4 px-4 h-full">
             <div className="flex items-center gap-2">
-              <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                <ShieldCheckIcon className="size-4" />
+              <div className={iconBadge.emerald}>
+                <ShieldCheckIcon />
               </div>
-              <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">订阅说明</span>
+              <span className={type.sectionTitle}>订阅说明</span>
             </div>
 
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium space-y-2.5">
+            <div className={cn(type.description, "space-y-2.5")}>
               <p>1. 支持各大网络代理 service 商的标准 Clash/v2ray 订阅协议格式。</p>
               <p>2. 请务必保管好您的订阅地址链接，切勿随意分享给他人以免造成流量泄露。</p>
               <p>3. 订阅更新时将自动同步最新的服务器节点，请保持网络连接通畅。</p>

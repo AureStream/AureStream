@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react"
 import { ArrowDownUpIcon, ActivityIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { badge, btn, type } from "@/lib/typography"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
@@ -176,12 +177,8 @@ export function NodeSelector() {
     <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden @container">
       <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
         <div className="flex items-center gap-1.5">
-          <CardTitle className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100">
-            选择代理节点
-          </CardTitle>
-          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
-            共 {displayNodes.length} 个节点
-          </span>
+          <CardTitle>选择代理节点</CardTitle>
+          <span className={badge.brand}>共 {displayNodes.length} 个节点</span>
         </div>
         <div className="flex gap-1.5">
           <Button
@@ -189,7 +186,7 @@ export function NodeSelector() {
             size="sm"
             onClick={handleSpeedTest}
             disabled={isTestingSpeed}
-            className="h-8 px-2.5 sm:px-3 rounded-lg bg-[#eef2ff] text-[#3b59ff] text-xs font-bold hover:bg-blue-100/60 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+            className={cn(btn.accent, "h-8 px-2.5 sm:px-3")}
           >
             <ActivityIcon className={cn("size-3.5 mr-1", isTestingSpeed && "animate-spin")} />
             {isTestingSpeed ? "测速中" : "一键测速"}
@@ -203,10 +200,8 @@ export function NodeSelector() {
               else setSortMode("default")
             }}
             className={cn(
-              "h-8 px-2.5 sm:px-3 rounded-lg text-xs font-bold transition-colors",
-              sortMode !== "default"
-                ? "bg-[#eef2ff] text-[#3b59ff] dark:bg-blue-500/15 dark:text-blue-400"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200/60 dark:bg-white/[0.06] dark:text-white/70 dark:hover:bg-white/[0.1]"
+              "h-8 px-2.5 sm:px-3",
+              sortMode !== "default" ? btn.accent : btn.accentMuted
             )}
           >
             <ArrowDownUpIcon className="size-3.5 mr-1" />
@@ -220,11 +215,11 @@ export function NodeSelector() {
       <CardContent className="flex min-h-0 flex-1 flex-col pt-2 overflow-hidden">
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
           {subLoading ? (
-            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
+            <div className={cn("flex items-center justify-center py-8", type.description)}>
               加载中...
             </div>
           ) : displayNodes.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
+            <div className={cn("flex items-center justify-center py-8", type.description)}>
               暂无节点，请先添加订阅
             </div>
           ) : (
@@ -238,8 +233,8 @@ export function NodeSelector() {
                     className={cn(
                       "flex items-center justify-between rounded-[14px] p-2 sm:p-2.5 transition-all border duration-200 min-w-0 text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                       isSelected
-                        ? "bg-[#f4f7ff] border-[#bfdbfe]/60 shadow-[0_2px_8px_rgba(59,89,255,0.04)] dark:bg-blue-500/10 dark:border-blue-500/30"
-                        : "bg-[#f8fafc]/30 border-slate-200/60 hover:bg-[#f8fafc]/60 dark:bg-white/[0.02] dark:border-white/[0.06] dark:hover:bg-white/[0.05]"
+                        ? "bg-secondary border-primary/30 shadow-sm"
+                        : "bg-muted/20 border-border/70 hover:bg-muted/40 dark:bg-white/[0.02] dark:hover:bg-white/[0.05]"
                     )}
                   >
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -247,8 +242,8 @@ export function NodeSelector() {
                         className={cn(
                           "flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-xl transition-colors text-base sm:text-lg",
                           isSelected
-                            ? "bg-[#eef2ff] text-[#3b59ff] dark:bg-blue-500/25 dark:text-blue-400"
-                            : "bg-white text-slate-400 border border-slate-100 dark:bg-black dark:text-slate-500 dark:border-white/[0.08]"
+                            ? "bg-secondary text-primary"
+                            : "bg-background text-muted-foreground border border-border"
                         )}
                       >
                         {getFlagEmoji(node.name)}
@@ -256,15 +251,13 @@ export function NodeSelector() {
                       <div className="min-w-0 flex-1">
                         <p
                           className={cn(
-                            "truncate text-xs sm:text-sm font-bold",
-                            isSelected
-                              ? "text-[#3b59ff] dark:text-blue-400"
-                              : "text-slate-800 dark:text-slate-200"
+                            "truncate type-label font-semibold",
+                            isSelected && "text-primary"
                           )}
                         >
                           {node.name}
                         </p>
-                        <p className="truncate text-[11px] text-muted-foreground mt-0.5 font-mono">
+                        <p className={cn(type.caption, "truncate mt-0.5 font-mono")}>
                           {node.host}:{node.port}
                         </p>
                       </div>
@@ -273,7 +266,7 @@ export function NodeSelector() {
                     <div className="flex items-center gap-1 ml-2 shrink-0">
                       <span
                         className={cn(
-                          "text-xs font-bold font-mono transition-opacity duration-200",
+                          "type-caption font-semibold font-mono transition-opacity duration-200",
                           node.latencyLabel === "未测速"
                             ? "opacity-0 select-none pointer-events-none"
                             : "opacity-100",

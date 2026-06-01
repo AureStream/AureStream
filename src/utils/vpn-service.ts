@@ -26,10 +26,6 @@ export async function clearEngineError(): Promise<void> {
   return invoke("clear_engine_error")
 }
 
-export async function readLogs(isError: boolean): Promise<string> {
-  return invoke("read_logs", { isError })
-}
-
 export async function getAppVersion(): Promise<string> {
   return invoke("get_app_version")
 }

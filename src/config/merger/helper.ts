@@ -1,6 +1,6 @@
 import { type } from '@tauri-apps/plugin-os';
-import { getDirectDNS, getProxyPort, getStoreValue, getUseDHCP } from "../../single/store";
-import { TUN_INTERFACE_NAME, TUN_STACK_STORE_KEY } from "../../types/definition";
+import { getDirectDNS, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
+import { TUN_INTERFACE_NAME } from "../../types/definition";
 import { writeConfigFile } from "../helper";
 
 type Item = {
@@ -83,9 +83,8 @@ export async function configureTunInbound(newConfig: any, bypassRouter: boolean 
     const osType = type();
     if (osType === "linux") {
         tunInbound.stack = "system";
-    }
-    if (osType !== "macos" && await getStoreValue(TUN_STACK_STORE_KEY)) {
-        tunInbound.stack = await getStoreValue(TUN_STACK_STORE_KEY);
+    } else {
+        tunInbound.stack = await getTunStack();
     }
     if (osType === "macos") {
         tunInbound.interface_name = TUN_INTERFACE_NAME;
