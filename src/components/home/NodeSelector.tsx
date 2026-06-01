@@ -207,7 +207,7 @@ export function NodeSelector() {
         </div>
       </div>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col pt-0 overflow-hidden">
+      <CardContent className="flex min-h-0 flex-1 flex-col pt-2 overflow-hidden">
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
           {subLoading ? (
             <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
@@ -218,7 +218,7 @@ export function NodeSelector() {
               暂无节点，请先添加订阅
             </div>
           ) : (
-            <div className="grid grid-cols-1 @[480px]:grid-cols-2 @[720px]:grid-cols-3 gap-2 p-0.5 pb-2">
+            <div className="grid grid-cols-1 @[480px]:grid-cols-2 @[720px]:grid-cols-3 gap-2 p-0.5 pt-2 pb-2">
               {displayNodes.map((node) => {
                 const isSelected = selectedTag === node.name
                 return (
