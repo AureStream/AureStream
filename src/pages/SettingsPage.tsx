@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   SettingsIcon,
   SunIcon,
@@ -21,20 +21,25 @@ import {
   setProxyPort,
   getControllerPort,
   setControllerPort,
+  getProxyBypass,
+  setProxyBypass,
   getTunStack,
   setTunStack,
   type TunStack,
 } from "@/single/store"
 import { invoke } from "@tauri-apps/api/core"
 import { message } from "@tauri-apps/plugin-dialog"
+import { DEFAULT_PROXY_BYPASS_UI, normalizeBypassInput } from "@/lib/proxy-bypass"
+import { getEngineState } from "@/utils/vpn-service"
+import { isEngineBusy } from "@/lib/engine-guard"
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const [port, setPort] = useState("2345")
   const [apiPort, setApiPort] = useState("9191")
-  const [bypassList, setBypassList] = useState(
-    "localhost, 127.0.0.1, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, *.local, <local>"
-  )
+  const [bypassList, setBypassList] = useState(DEFAULT_PROXY_BYPASS_UI)
+  const [savedBypass, setSavedBypass] = useState(DEFAULT_PROXY_BYPASS_UI)
+  const initialPortsRef = useRef<{ mixed: number; controller: number } | null>(null)
   const [autoStart, setAutoStart] = useState(true)
   const [tunStack, setTunStackState] = useState<TunStack>("system")
 
@@ -116,11 +121,26 @@ export function SettingsPage() {
       setPort(String(p))
       const ap = await getControllerPort()
       setApiPort(String(ap))
+      initialPortsRef.current = { mixed: p, controller: ap }
       const stack = await getTunStack()
       setTunStackState(stack)
+      const bypass = await getProxyBypass()
+      const display = bypass || DEFAULT_PROXY_BYPASS_UI
+      setBypassList(display)
+      setSavedBypass(display)
     }
     loadSettings()
   }, [])
+
+  const warnIfEngineRunningForNetworkChange = async () => {
+    const state = await getEngineState()
+    if (isEngineBusy(state)) {
+      await message("修改已保存。请断开后重新连接以使端口或绕过列表生效。", {
+        title: "提示",
+        kind: "info",
+      })
+    }
+  }
 
   const handleTunStackChange = async (stack: TunStack) => {
     setTunStackState(stack)
@@ -136,15 +156,34 @@ export function SettingsPage() {
   const handleProxyPortChange = async (val: number) => {
     setPort(String(val))
     if (val > 0 && val <= 65535) {
+      const prev = initialPortsRef.current?.mixed
       await setProxyPort(val)
+      if (prev !== undefined && prev !== val) {
+        await warnIfEngineRunningForNetworkChange()
+      }
+      if (initialPortsRef.current) initialPortsRef.current.mixed = val
     }
   }
 
   const handleApiPortChange = async (val: number) => {
     setApiPort(String(val))
     if (val > 0 && val <= 65535) {
+      const prev = initialPortsRef.current?.controller
       await setControllerPort(val)
+      if (prev !== undefined && prev !== val) {
+        await warnIfEngineRunningForNetworkChange()
+      }
+      if (initialPortsRef.current) initialPortsRef.current.controller = val
     }
+  }
+
+  const handleBypassBlur = async () => {
+    const normalized = normalizeBypassInput(bypassList)
+    setBypassList(normalized)
+    if (normalized === savedBypass) return
+    await setProxyBypass(normalized)
+    setSavedBypass(normalized)
+    await warnIfEngineRunningForNetworkChange()
   }
 
 
@@ -471,6 +510,7 @@ export function SettingsPage() {
                   <textarea
                     value={bypassList}
                     onChange={(e) => setBypassList(e.target.value)}
+                    onBlur={() => void handleBypassBlur()}
                     className="ui-textarea font-mono w-full sm:flex-1 min-h-[130px] flex-1 text-xs resize-none"
                     placeholder="localhost, 127.0.0.1..."
                   />

@@ -11,6 +11,7 @@ import {
     ENABLE_TUN_STORE_KEY,
     LEGACY_CLASH_API_PORT_STORE_KEY,
     LEGACY_CLASH_API_SECRET_STORE_KEY,
+    PROXY_BYPASS_STORE_KEY,
     PROXY_PORT_STORE_KEY,
     SKIP_SYSTEM_PROXY_STORE_KEY,
     TUN_STACK_STORE_KEY,
@@ -218,6 +219,16 @@ export async function setProxyPort(port: number): Promise<void> {
         throw new Error('invalid_proxy_port');
     }
     await store.set(PROXY_PORT_STORE_KEY, port);
+    await store.save();
+}
+
+export async function getProxyBypass(): Promise<string> {
+    const raw = await store.get(PROXY_BYPASS_STORE_KEY) as string | undefined;
+    return raw?.trim() ? raw : '';
+}
+
+export async function setProxyBypass(value: string): Promise<void> {
+    await store.set(PROXY_BYPASS_STORE_KEY, value);
     await store.save();
 }
 

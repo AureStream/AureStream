@@ -6,14 +6,12 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { message } from "@tauri-apps/plugin-dialog"
 import { getDataBaseInstance } from "@/single/db"
 import { getStoreValue, setStoreValue } from "@/single/store"
+import { requireEngineIdle } from "@/lib/require-engine-idle"
 import { SSI_STORE_KEY } from "@/types/definition"
 import type { Subscription, SubscriptionConfig } from "@/types/definition"
 import type { ProxyNode } from "@/types/engine-state"
-import { getEngineState } from "@/utils/vpn-service"
-
 export type SubscriptionContextValue = {
   subscriptions: Subscription[]
   activeIdentifier: string
@@ -23,6 +21,8 @@ export type SubscriptionContextValue = {
   refresh: () => Promise<void>
   /** Returns false if switch was blocked (e.g. engine running). */
   selectSubscription: (identifier: string) => Promise<boolean>
+  /** Returns false if engine is busy (shows warning). */
+  requireIdleForMutation: () => Promise<boolean>
 }
 
 const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
@@ -98,25 +98,17 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const selectSubscription = useCallback(
     async (identifier: string): Promise<boolean> => {
       if (identifier === activeIdentifier) return true
-
-      const engine = await getEngineState()
-      if (
-        engine.kind === "running" ||
-        engine.kind === "starting" ||
-        engine.kind === "stopping"
-      ) {
-        await message("请先断开连接后再切换订阅", {
-          title: "提示",
-          kind: "warning",
-        })
-        return false
-      }
-
+      if (!(await requireEngineIdle())) return false
       await setStoreValue(SSI_STORE_KEY, identifier)
       await applyActiveId(identifier)
       return true
     },
     [activeIdentifier, applyActiveId]
+  )
+
+  const requireIdleForMutation = useCallback(
+    () => requireEngineIdle(),
+    []
   )
 
   const refresh = useCallback(async () => {
@@ -163,6 +155,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         loading,
         refresh,
         selectSubscription,
+        requireIdleForMutation,
       }}
     >
       {children}

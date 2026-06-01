@@ -8,14 +8,16 @@ import { invoke } from "@tauri-apps/api/core"
 import { useEngineState } from "@/hooks/useEngineState"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue } from "@/single/store"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
-import setGlobalTunConfig, {
-  setTunConfig,
-  setMixedConfig,
-  setGlobalMixedConfig,
-} from "@/config/merger/main"
+import { mergeConnectionConfig } from "@/lib/connection-config"
+import { requireEngineIdle } from "@/lib/require-engine-idle"
+import {
+  ROUTING_MODE_KEY,
+  normalizeRoutingMode,
+  nextRoutingMode,
+  routingModeLabel,
+  type RoutingMode,
+} from "@/lib/routing-mode"
 import { message } from "@tauri-apps/plugin-dialog"
-
-const ROUTING_MODE_KEY = "routing_mode"
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -28,13 +30,15 @@ export function ConnectionPanel({ className }: { className?: string }) {
   const { engineState, isConnected, isRunning, isStarting, isStopping, isFailed, start, stop, clearError } =
     useEngineState()
   const { activeIdentifier } = useSubscriptions()
-  const [routingMode, setRoutingMode] = useState<"rule" | "global" | "direct">("rule")
+  const [routingMode, setRoutingMode] = useState<RoutingMode>("rule")
   const [enableTun, setEnableTunState] = useState(false)
   const [uptime, setUptime] = useState(0)
   const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [isTunServiceInstalled, setIsTunServiceInstalled] = useState<boolean | null>(null)
   const [isInstallingService, setIsInstallingService] = useState(false)
+
+  const engineBusy = isConnected || isStarting || isStopping
 
   const checkTunService = useCallback(async () => {
     try {
@@ -50,21 +54,25 @@ export function ConnectionPanel({ className }: { className?: string }) {
     try {
       await invoke("engine_ensure_installed")
       setIsTunServiceInstalled(true)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
       console.error("Install helper service failed:", err)
-      await message(`安装辅助服务失败: ${err.message || err}`, {
+      await message(`安装辅助服务失败: ${msg}`, {
         title: "错误",
         kind: "error",
       })
     } finally {
       setIsInstallingService(false)
     }
-  };
+  }
 
-  // Load routing mode and TUN setting from store
   useEffect(() => {
-    getStoreValue(ROUTING_MODE_KEY, "rule").then((val) => {
-      setRoutingMode(val)
+    getStoreValue(ROUTING_MODE_KEY, "rule").then(async (val) => {
+      const mode = normalizeRoutingMode(val)
+      if (val === "direct") {
+        await setStoreValue(ROUTING_MODE_KEY, mode)
+      }
+      setRoutingMode(mode)
     })
     getEnableTun().then((val) => {
       setEnableTunState(val)
@@ -72,24 +80,29 @@ export function ConnectionPanel({ className }: { className?: string }) {
     checkTunService()
   }, [checkTunService])
 
-  const handleRoutingModeChange = async (mode: "rule" | "global" | "direct") => {
+  const handleRoutingModeChange = async (mode: RoutingMode) => {
+    if (engineBusy) {
+      if (!(await requireEngineIdle())) return
+    }
     setRoutingMode(mode)
     await setStoreValue(ROUTING_MODE_KEY, mode)
   }
 
   const handleEnableTunChange = async (useTun: boolean) => {
+    if (engineBusy) {
+      if (!(await requireEngineIdle())) return
+    }
     setEnableTunState(useTun)
     await setEnableTun(useTun)
   }
 
   const cycleRoutingMode = () => {
-    const modes: ("rule" | "global" | "direct")[] = ["rule", "global", "direct"]
-    const nextIndex = (modes.indexOf(routingMode) + 1) % modes.length
-    handleRoutingModeChange(modes[nextIndex])
+    const next = nextRoutingMode(routingMode)
+    void handleRoutingModeChange(next)
   }
 
   const toggleCaptureMode = () => {
-    handleEnableTunChange(!enableTun)
+    void handleEnableTunChange(!enableTun)
   }
 
   const since =
@@ -127,17 +140,11 @@ export function ConnectionPanel({ className }: { className?: string }) {
       const useTun = enableTun
 
       try {
-        const isGlobal = routingMode === "global"
-        if (useTun) {
-          const fn = isGlobal ? setGlobalTunConfig : setTunConfig
-          await fn(activeIdentifier)
-        } else {
-          const fn = isGlobal ? setGlobalMixedConfig : setMixedConfig
-          await fn(activeIdentifier)
-        }
-      } catch (err: any) {
+        await mergeConnectionConfig(activeIdentifier, routingMode, useTun)
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
         console.error("Config merge failed:", err)
-        await message(`配置解析合并失败: ${err.message || err}`, {
+        await message(`配置解析合并失败: ${msg}`, {
           title: "错误",
           kind: "error",
         })
@@ -170,7 +177,6 @@ export function ConnectionPanel({ className }: { className?: string }) {
   return (
     <Card className={cn("shrink-0 rounded-[20px] h-full", className)}>
       <CardContent className="flex flex-row items-center gap-6 p-4 sm:p-5 h-full">
-        {/* Left: Power Button */}
         <div
           className={cn(
             "size-28 sm:size-32 shrink-0 rounded-full flex items-center justify-center transition-all duration-500 p-3.5 relative border",
@@ -209,57 +215,64 @@ export function ConnectionPanel({ className }: { className?: string }) {
                 )}
               />
             </div>
-            <span className={cn(
-              "type-caption font-semibold tracking-wide transition-colors duration-300",
-              isFailed
-                ? "text-destructive"
-                : (isRunning && !isStopping)
-                  ? "text-primary"
-                  : (isStarting || isStopping)
-                    ? "text-primary/80"
-                    : "text-muted-foreground"
-            )}>
+            <span
+              className={cn(
+                "type-caption font-semibold tracking-wide transition-colors duration-300",
+                isFailed
+                  ? "text-destructive"
+                  : (isRunning && !isStopping)
+                    ? "text-primary"
+                    : (isStarting || isStopping)
+                      ? "text-primary/80"
+                      : "text-muted-foreground"
+              )}
+            >
               {isStarting ? "连接中" : isStopping ? "断开中" : isConnected ? "已连接" : isFailed ? "失败" : "未连接"}
             </span>
           </button>
         </div>
 
-        {/* Right: Info and Selectors */}
         <div className="flex min-w-0 flex-1 flex-col justify-between h-full py-1 gap-2.5">
-          {/* Uptime and Status */}
           <div className="flex justify-between items-center w-full px-0.5 border-b border-border/60 pb-2.5">
             <div className="flex flex-col gap-0.5">
               <span className={type.overline}>服务状态</span>
-              <span className={cn(
-                "flex items-center gap-1.5 type-value transition-colors duration-300",
-                (isConnected && !isStopping)
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-foreground"
-              )}>
+              <span
+                className={cn(
+                  "flex items-center gap-1.5 type-value transition-colors duration-300",
+                  isConnected && !isStopping
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-foreground"
+                )}
+              >
                 <span className={cn("size-2 rounded-full", statusColor)} />
                 {statusText}
               </span>
             </div>
             <div className="flex flex-col items-end gap-0.5">
               <span className={type.overline}>已连接时长</span>
-              <span className={cn(
-                "font-mono type-value-lg transition-colors duration-300",
-                isConnected
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-foreground"
-              )}>
+              <span
+                className={cn(
+                  "font-mono type-value-lg transition-colors duration-300",
+                  isConnected
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-foreground"
+                )}
+              >
                 {formatUptime(uptime)}
               </span>
             </div>
           </div>
 
-          {/* Premium Selectors */}
           <div className="flex flex-col gap-2 w-full">
             <div className="grid grid-cols-2 gap-2 w-full">
-              {/* Routing Card */}
               <button
                 onClick={cycleRoutingMode}
-                className={cn(surface.rowInteractive, "flex items-center gap-2 p-2 text-left group")}
+                disabled={isStarting || isStopping}
+                className={cn(
+                  surface.rowInteractive,
+                  "flex items-center gap-2 p-2 text-left group",
+                  (isStarting || isStopping) && "opacity-60 pointer-events-none"
+                )}
               >
                 <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:scale-105 transition-transform duration-300">
                   <GitForkIcon className="size-4" />
@@ -267,24 +280,28 @@ export function ConnectionPanel({ className }: { className?: string }) {
                 <div className="flex flex-col leading-tight min-w-0">
                   <span className={type.overline}>路由模式</span>
                   <span className={cn(type.value, "mt-0.5 truncate")}>
-                    {routingMode === "rule" && "规则分流"}
-                    {routingMode === "global" && "全局代理"}
-                    {routingMode === "direct" && "直接连接"}
+                    {routingModeLabel(routingMode)}
                   </span>
                 </div>
               </button>
 
-              {/* Capture Card */}
               <button
                 onClick={toggleCaptureMode}
-                className={cn(surface.rowInteractive, "flex items-center gap-2 p-2 text-left group")}
+                disabled={isStarting || isStopping}
+                className={cn(
+                  surface.rowInteractive,
+                  "flex items-center gap-2 p-2 text-left group",
+                  (isStarting || isStopping) && "opacity-60 pointer-events-none"
+                )}
               >
-                <div className={cn(
-                  "flex size-7 shrink-0 items-center justify-center rounded-lg group-hover:scale-105 transition-transform duration-300",
-                  enableTun
-                    ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                    : "bg-muted text-muted-foreground"
-                )}>
+                <div
+                  className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-lg group-hover:scale-105 transition-transform duration-300",
+                    enableTun
+                      ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
                   <CpuIcon className="size-4" />
                 </div>
                 <div className="flex flex-col leading-tight min-w-0">

@@ -1,6 +1,5 @@
 use std::sync::Arc;
-use tauri::AppHandle;
-use tauri::Emitter;
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
 use crate::core::monitor::spawn_process_monitor;
@@ -149,9 +148,13 @@ impl EngineManager for WindowsEngine {
             return Err("No running process found".to_string());
         };
 
+        let start_epoch = app
+            .state::<crate::engine::state_machine::EngineStateCell>()
+            .snapshot()
+            .epoch();
         Self::stop(app).await?;
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        Self::start(app, mode, config_path, 0).await
+        Self::start(app, mode, config_path, start_epoch).await
     }
 
     fn on_process_terminated(app: &AppHandle, _was_user_stop: bool) {

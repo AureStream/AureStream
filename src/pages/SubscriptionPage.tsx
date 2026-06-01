@@ -76,6 +76,7 @@ export function SubscriptionPage() {
     loading,
     refresh,
     selectSubscription,
+    requireIdleForMutation,
   } = useSubscriptions()
 
   const [name, setName] = useState("")
@@ -115,6 +116,7 @@ export function SubscriptionPage() {
   }
 
   const handleDelete = async (identifier: string) => {
+    if (!(await requireIdleForMutation())) return
     try {
       await deleteSubscription(identifier)
       await refresh()
@@ -124,6 +126,7 @@ export function SubscriptionPage() {
   }
 
   const handleSingleUpdate = async (identifier: string) => {
+    if (!(await requireIdleForMutation())) return
     try {
       const ok = await updateSubscription(identifier)
       if (ok) {
@@ -141,6 +144,7 @@ export function SubscriptionPage() {
 
   const handleUpdateAll = async () => {
     if (isUpdatingAll) return
+    if (!(await requireIdleForMutation())) return
     setIsUpdatingAll(true)
     try {
       for (const sub of subscriptions) {

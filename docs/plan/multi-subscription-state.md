@@ -6,7 +6,8 @@
 - **共享 React 状态**：`SubscriptionProvider`（`App.tsx` 根级）保证首页与订阅页读到同一份 `activeIdentifier` / `nodes`。
 - **按订阅记忆节点**：store 键 `selected_node_tag:<identifier>`；旧全局键 `selected_node_tag` 在首次读取时若与当前列表匹配则迁移。
 - **断开时切换订阅**：立即更新节点列表与 remembered 节点；测速缓存清空。
-- **已连接时切换订阅**：`selectSubscription` 弹出提示「请先断开连接后再切换订阅」，不修改活跃订阅。
+- **已连接时切换订阅**：`selectSubscription` 弹出提示「请先断开连接后再进行此操作」，不修改活跃订阅。
+- **已连接时更新/删除订阅**：同样需先断开（见 `requireIdleForMutation`）。
 - **节点 API**：仅在引擎 `running` 时调用 `selectProxyNode` / 轮询 `fetchSelectGroup`。
 
 ## 验证
