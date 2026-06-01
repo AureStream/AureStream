@@ -15,7 +15,9 @@ void aurestream_set_window_appearance(void* ns_window_ptr, int theme) {
     if (theme == 1) {
         appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
     } else if (theme == 2) {
-        appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+        if (@available(macOS 10.14, *)) {
+            appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+        }
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
