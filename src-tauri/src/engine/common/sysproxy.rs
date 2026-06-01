@@ -1,0 +1,61 @@
+use sysproxy_rs::Sysproxy;
+use tauri::{AppHandle, Emitter};
+
+use crate::{core::mixed_proxy_port, engine::EVENT_TAURI_LOG};
+
+const PROXY_HOST: &str = "127.0.0.1";
+
+#[cfg(target_os = "macos")]
+const DEFAULT_BYPASS: &str =
+    "127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,172.29.0.0/16,localhost,*.local,*.crashlytics.com,<local>";
+
+#[cfg(target_os = "linux")]
+const DEFAULT_BYPASS: &str =
+    "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,172.29.0.0/16,::1";
+
+#[cfg(target_os = "windows")]
+const DEFAULT_BYPASS: &str = "localhost;127.*;192.168.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;<local>";
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+const DEFAULT_BYPASS: &str = "localhost,127.0.0.1";
+
+pub(crate) async fn set_system_proxy(app: &AppHandle) -> anyhow::Result<()> {
+    let proxy_port = mixed_proxy_port(app);
+    let _ = app.emit(
+        EVENT_TAURI_LOG,
+        (
+            0,
+            format!("Start set system proxy: {}:{}", PROXY_HOST, proxy_port),
+        ),
+    );
+    let sys = Sysproxy {
+        enable: true,
+        host: PROXY_HOST.to_string(),
+        port: proxy_port,
+        bypass: DEFAULT_BYPASS.to_string(),
+    };
+    sys.set_system_proxy().map_err(|e| anyhow::anyhow!(e))?;
+    log::info!("Proxy set to {}:{}", PROXY_HOST, proxy_port);
+    Ok(())
+}
+
+pub(crate) async fn clear_system_proxy(app: &AppHandle) -> anyhow::Result<()> {
+    let _ = app.emit(EVENT_TAURI_LOG, (0, "Start unset system proxy"));
+    let mut sysproxy = match Sysproxy::get_system_proxy() {
+        Ok(proxy) => proxy,
+        Err(e) => {
+            let msg = format!("Sysproxy::get_system_proxy failed: {}", e);
+            let _ = app.emit(EVENT_TAURI_LOG, (1, msg.clone()));
+            return Err(anyhow::anyhow!(msg));
+        }
+    };
+    sysproxy.enable = false;
+    if let Err(e) = sysproxy.set_system_proxy() {
+        let msg = format!("Sysproxy::set_system_proxy failed: {}", e);
+        let _ = app.emit(EVENT_TAURI_LOG, (1, msg.clone()));
+        return Err(anyhow::anyhow!(msg));
+    }
+    let _ = app.emit(EVENT_TAURI_LOG, (0, "System proxy unset successfully"));
+    log::info!("Proxy unset");
+    Ok(())
+}

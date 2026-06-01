@@ -1,0 +1,12 @@
+{
+  "home": "Home",
+  "settings": "Settings",
+  "subscription": "Subscription",
+  "dns_settings": "DNS Settings",
+  "about_app": "About App",
+  "system_and_services": "System and Services",
+  "auto_start": "Auto Start",
+  "tun_service": "TUN Virtual Network Card Service",
+  "tray_and_ui": "System Tray & UI Interaction",
+  "network_and_proxy": "Network and Proxy Parameters"
+}

@@ -1,9 +1,8 @@
-//! Tauri 命令层。
-//!
-//! 共享类型已迁移至 [`crate::models::proxy_config`]。
-//! 此模块仅保留 Tauri command handler。
+pub mod network;
+pub mod prestart;
+pub mod shell;
+pub mod dns;
+pub mod config_fetch;
+pub mod whitelist;
+pub mod theme;
 
-pub mod builtin_config;
-pub mod mihomo_constants;
-pub mod mihomo_kernel;
-pub mod proxy;

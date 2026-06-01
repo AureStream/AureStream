@@ -1,53 +1,66 @@
 [package]
 name = "aurestream"
 version = "0.1.0"
-description = "AureStream — Mihomo-based proxy desktop application"
+description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "aurestream_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+cc = "1"
+
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "devtools", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
-tauri-plugin-mihomo = { git = "https://github.com/clash-verge-rev/tauri-plugin-mihomo" }
-tauri-plugin-log = { version = "2", features = ["tracing"] }
-log = "0.4"
+tauri-plugin-log = "2"
+tauri-plugin-http = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-store = "2"
+tauri-plugin-os = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.11", features = ["json", "blocking", "gzip"] }
 tokio = { version = "1", features = ["full"] }
-chrono = { version = "0.4", features = ["serde"] }
-serde_yaml = "0.9"
-base64 = "0.22"
-tauri-plugin-store = "2.4.3"
-# Phase 1: 基础设施依赖
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "uuid", "migrate"] }
-async-trait = "0.1"
-uuid = { version = "1", features = ["v4"] }
-thiserror = "2"
+anyhow = "1"
+log = "0.4"
+lazy_static = "1.5.0"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+flate2 = "1.0"
+libc = "0.2"
+webbrowser = "1.0.4"
+url = "2"
 sha2 = "0.10"
-hex = "0.4"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sysproxy-rs = { path = "sysproxy-rs" }
+tauri-plugin-deep-link = "2"
+onebox_lifecycle = { git = "https://github.com/OneOhCloud/onebox-lifecycle", tag = "v0.1.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-winreg = "0.52"
+tun-service = { path = "tun-service" }
+winapi = { version = "0.3", features = ["winbase"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-security-framework = "3"
-security-framework-sys = "2"
+system-configuration = "0.7"
+core-foundation = "0.9"
 
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-autostart = "2"
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+gdk = "0.18"
+
+[workspace]
+members = ["tun-service", "sysproxy-rs"]
+resolver = "2"

@@ -1,0 +1,12 @@
+{
+  "home": "首页",
+  "settings": "设置",
+  "subscription": "订阅管理",
+  "dns_settings": "DNS 与安全解析",
+  "about_app": "关于软件",
+  "system_and_services": "系统与服务设置",
+  "auto_start": "开机自启动",
+  "tun_service": "TUN 虚拟网卡服务",
+  "tray_and_ui": "系统托盘与交互",
+  "network_and_proxy": "网络与代理参数"
+}

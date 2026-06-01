@@ -7,53 +7,28 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependencies
-node_modules
-
-# Frontend (Vite)
-dist
-dist-ssr
+# Node modules
+node_modules/
+dist/
+dist-ssr/
 *.local
-.vite
-*.tsbuildinfo
-
-# Environment
-.env
-.env.*
-!.env.example
 
 # Editor
-.vscode/
-.idea
+.vscode/*
+!.vscode/extensions.json
+.idea/
 *.suo
-*.ntvs*
+*.ntvsca
 *.njsproj
 *.sln
 *.sw?
-
-# AI / IDE settings
-.claude/
-.agents/
-
-# OS
 .DS_Store
 
-# 本地打的 macOS 安装包（勿提交大体积二进制）
-/*.dmg
+# Tauri build outputs
+src-tauri/target/
+src-tauri/gen/
 
-# Test & coverage
-coverage
-*.lcov
-.nyc_output
-
-# Rust / Cargo artifacts (see also src-tauri/.gitignore)
-target/
-
-# Mihomo sidecar binaries (download via scripts/download-mihomo.sh)
-src-tauri/binaries/
-
-# Cargo：不提交 lockfile（由本地 / CI `cargo generate-lockfile` 生成）
-src-tauri/Cargo.lock
-
-# Cargo lockfile backups
-*.lock.bak
+# Agents / temp
+.agents/
+.gemini/
+.claude/
