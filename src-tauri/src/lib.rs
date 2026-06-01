@@ -6,6 +6,22 @@ mod utils;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                let portable_marker1 = exe_dir.join("aurestream.portable");
+                let portable_marker2 = exe_dir.join("portable");
+                if portable_marker1.exists() || portable_marker2.exists() {
+                    let portable_data_dir = exe_dir.join("portable-data");
+                    let portable_data_str = portable_data_dir.to_string_lossy().into_owned();
+                    std::env::set_var("APPDATA", &portable_data_str);
+                    std::env::set_var("LOCALAPPDATA", &portable_data_str);
+                }
+            }
+        }
+    }
+
     let migrations = app::database::get_migrations();
     let builder = tauri::Builder::default();
 
