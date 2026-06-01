@@ -115,6 +115,10 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
     let _ = app.emit(crate::engine::EVENT_TAURI_LOG, (0, format!("启动代理服务，模式: {}", mode_name)));
 
+    // Automatically check and kill any orphan/remnant processes occupying the target port before starting
+    let kill_res = crate::commands::prestart::kill_orphans(app.clone(), Some(mixed_port));
+    ::log::info!("[start] Prestart orphan check: {}", kill_res.message);
+
     {
         let cur = app.state::<EngineStateCell>().snapshot();
         if !matches!(cur, EngineState::Idle { .. } | EngineState::Failed { .. }) {
