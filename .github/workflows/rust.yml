@@ -75,20 +75,11 @@ jobs:
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      - name: 下载 macOS sing-box sidecar
-        run: |
-          # 如果仓库已经包含了 sidecar 二进制则跳过，否则下载最新版
-          if [ ! -f "src-tauri/binaries/sing-box-x86_64-apple-darwin" ]; then
-            echo "Sidecar not found, downloading latest sing-box..."
-            SINGBOX_VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
-            curl -L "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-darwin-amd64.tar.gz" | tar xz -C /tmp
-            cp "/tmp/sing-box-${SINGBOX_VERSION}-darwin-amd64/sing-box" src-tauri/binaries/sing-box-x86_64-apple-darwin
-            cp src-tauri/binaries/sing-box-x86_64-apple-darwin src-tauri/binaries/sing-box-aarch64-apple-darwin
-            chmod +x src-tauri/binaries/sing-box-x86_64-apple-darwin
-            chmod +x src-tauri/binaries/sing-box-aarch64-apple-darwin
-          else
-            echo "Sidecar binary already present, skipping download."
-          fi
+      - name: 下载外部二进制与数据库缓存资源
+        run: pnpm download-binaries
+
+      - name: 构建 macOS 特权辅助二进制 (Helper)
+        run: pnpm prebundle
 
       - name: 构建 macOS 安装包 (Universal Binary)
         uses: tauri-apps/tauri-action@v0
@@ -165,16 +156,11 @@ jobs:
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      - name: 检查 Windows sidecar 是否存在
-        shell: bash
-        run: |
-          if [ ! -f "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe" ]; then
-            echo "ERROR: Windows sidecar binary not found at src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe"
-            echo "Please add the binary to the repository or configure the download step."
-            exit 1
-          else
-            echo "Windows sidecar binary found."
-          fi
+      - name: 下载外部二进制与数据库缓存资源
+        run: pnpm download-binaries
+
+      - name: 构建 Windows TUN 特权服务
+        run: pnpm build-tun --release
 
       - name: 构建 Windows 安装包 (NSIS + MSI)
         uses: tauri-apps/tauri-action@v0
