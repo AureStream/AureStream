@@ -32,3 +32,10 @@ src-tauri/gen/
 .agents/
 .gemini/
 .claude/
+
+# Conf-template sync (auto-generated at build time)
+src/config/templates/generated.ts
+
+# External binaries (downloaded at build time)
+src-tauri/binaries/
+src-tauri/resources/*.db

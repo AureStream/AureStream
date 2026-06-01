@@ -215,12 +215,12 @@ impl EngineManager for LinuxEngine {
                 let should_set_system_proxy = matches!(mode, crate::engine::ProxyMode::SystemProxy);
                 let cmd = app
                     .shell()
-                    .sidecar("sing-box")
+                    .sidecar("aurestream-core")
                     .map_err(|e| format!("sidecar lookup failed: {}", e))?
                     .args(["run", "-c", &config_path, "--disable-color"]);
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
-                log::info!("[sing-box] spawned pid={} mode=SystemProxy", child_pid);
+                log::info!("[aurestream-core] spawned pid={} mode=SystemProxy", child_pid);
                 crate::core::monitor::spawn_process_monitor(
                     app.clone(),
                     rx,
@@ -252,7 +252,7 @@ impl EngineManager for LinuxEngine {
                 };
 
                 let sidecar_path =
-                    crate::engine::helper::get_sidecar_path(std::path::Path::new("sing-box"))
+                    crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
                         .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
                 let cmd = create_privileged_command(
                     app,

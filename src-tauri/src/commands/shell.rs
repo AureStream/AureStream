@@ -100,7 +100,7 @@ pub fn get_pending_deep_link(
 
 #[tauri::command]
 pub async fn version(app: tauri::AppHandle) -> Result<String, String> {
-    let sidecar_command = app.shell().sidecar("sing-box").map_err(|e| e.to_string())?;
+    let sidecar_command = app.shell().sidecar("aurestream-core").map_err(|e| e.to_string())?;
     let output = sidecar_command
         .arg("version")
         .output()

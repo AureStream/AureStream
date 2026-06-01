@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Linux dependencies
         if: startsWith(matrix.os, 'ubuntu')
@@ -58,12 +58,12 @@ jobs:
         run: choco install nsis -y
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -73,7 +73,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
 
       - name: Cache pnpm dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -123,17 +123,25 @@ jobs:
           BUNDLE_DIR="src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis"
           PORTABLE_DIR=$(mktemp -d)
 
-          cp "$RELEASE_DIR/AureStream.exe" "$PORTABLE_DIR/"
+          MAIN_EXE=$(find "$RELEASE_DIR" -maxdepth 1 -iname "aurestream.exe" -print -quit)
+          if [ -n "$MAIN_EXE" ]; then
+            cp "$MAIN_EXE" "$PORTABLE_DIR/aurestream.exe"
+          else
+            echo "Error: Main executable (aurestream.exe) not found in $RELEASE_DIR"
+            exit 1
+          fi
 
-          SINGBOX=$(find "$RELEASE_DIR" -maxdepth 1 -name "sing-box*.exe" -print -quit)
-          if [ -n "$SINGBOX" ]; then
-            cp "$SINGBOX" "$PORTABLE_DIR/"
+          AURESTREAM_CORE=$(find "$RELEASE_DIR" -maxdepth 1 -name "aurestream-core*.exe" -print -quit)
+          if [ -n "$AURESTREAM_CORE" ]; then
+            cp "$AURESTREAM_CORE" "$PORTABLE_DIR/"
           fi
           
           TUNSERVICE=$(find "$RELEASE_DIR" -maxdepth 1 -name "tun-service*.exe" -print -quit)
           if [ -n "$TUNSERVICE" ]; then
             cp "$TUNSERVICE" "$PORTABLE_DIR/"
           fi
+
+          touch "$PORTABLE_DIR/portable"
 
           VERSION=$(grep '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"([^"]+)".*/\1/')
           ZIP_NAME="AureStream_${VERSION}_windows_x64_portable.zip"
@@ -142,7 +150,7 @@ jobs:
           echo "Portable ZIP: $BUNDLE_DIR/$ZIP_NAME"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: AureStream-${{ matrix.name }}
           path: |
@@ -163,7 +171,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           pattern: AureStream-*

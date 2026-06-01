@@ -116,7 +116,7 @@ async function embeddingExternalBinaries(
 
         // Move file to target location
         const extractedFilePath = path.join(tmpDir, `${BINARY_NAME}-${SING_BOX_VERSION.substring(1)}-${platform}-${arch}/${BINARY_NAME}${extension}`);
-        const targetPath = `src-tauri/binaries/${BINARY_NAME}-${targetTriple}${extension}`;
+        const targetPath = `src-tauri/binaries/aurestream-core-${targetTriple}${extension}`;
 
         // Ensure target directory exists
         const targetDir = path.dirname(targetPath);

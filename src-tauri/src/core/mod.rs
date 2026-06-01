@@ -103,10 +103,7 @@ lazy_static! {
 #[tauri::command]
 pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Result<(), String> {
     let action = next_action_token();
-    let (pm_pid, pm_alive, pm_mode) = pm_snapshot();
     let mixed_port = mixed_proxy_port(&app);
-    let port_listening = probe_port_listening(mixed_port);
-    let cur_state_kind = app.state::<EngineStateCell>().snapshot().kind();
     let mode_name = match mode {
         ProxyMode::SystemProxy => "系统代理 (SystemProxy)",
         ProxyMode::ManualProxy => "手动代理 (ManualProxy)",
@@ -114,6 +111,10 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     };
     ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
     let _ = app.emit(crate::engine::EVENT_TAURI_LOG, (0, format!("启动代理服务，模式: {}", mode_name)));
+
+    // Automatically check and kill any orphan/remnant processes occupying the target port before starting
+    let kill_res = crate::commands::prestart::kill_orphans(app.clone(), Some(mixed_port));
+    ::log::info!("[start] Prestart orphan check: {}", kill_res.message);
 
     {
         let cur = app.state::<EngineStateCell>().snapshot();

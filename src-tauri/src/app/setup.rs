@@ -1,5 +1,7 @@
 use tauri::Emitter;
 use tauri::Manager;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::TrayIconBuilder;
 use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 
@@ -45,6 +47,41 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     // Spawn network lifecycle listener on Windows and macOS
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     spawn_lifecycle_listener(app.handle());
+
+    // ── System Tray ──────────────────────────────────────────────────
+    let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", "退出应用").build(app)?;
+    let tray_menu = MenuBuilder::new(app).items(&[&show_item, &quit_item]).build()?;
+
+    let _tray = TrayIconBuilder::with_id("main-tray")
+        .icon(app.default_window_icon().cloned().unwrap())
+        .menu(&tray_menu)
+        .on_menu_event(|app_handle, event| {
+            match event.id.as_ref() {
+                "show" => {
+                    if let Some(w) = app_handle.get_webview_window("main") {
+                        #[cfg(target_os = "linux")]
+                        {
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                        #[cfg(not(target_os = "linux"))]
+                        {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                }
+                "quit" => {
+                    let app_handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        crate::commands::shell::quit(app_handle).await;
+                    });
+                }
+                _ => {}
+            }
+        })
+        .build(app)?;
 
     Ok(())
 }

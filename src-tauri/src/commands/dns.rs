@@ -103,6 +103,7 @@ pub(crate) async fn probe_dns_server(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn probe_dns_reachable(dns: &str) -> bool {
     let (tx, mut rx) = mpsc::channel::<(String, std::time::Duration)>(1);
     probe_dns_server(dns.to_string(), Some(tx)).await;
