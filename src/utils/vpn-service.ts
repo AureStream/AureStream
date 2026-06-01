@@ -41,20 +41,3 @@ export async function getLanIp(): Promise<string> {
 export async function pingGoogle(): Promise<boolean> {
   return invoke("ping_google")
 }
-
-export async function prestartCheck(
-  port?: number
-): Promise<{ port_occupied: boolean; orphan_pids: number[] }> {
-  return invoke("prestart_check", { port: port ?? null })
-}
-
-export async function killOrphans(
-  port?: number
-): Promise<{
-  success: boolean
-  killed_pids: number[]
-  port_released: boolean
-  message: string
-}> {
-  return invoke("kill_orphans", { port: port ?? null })
-}

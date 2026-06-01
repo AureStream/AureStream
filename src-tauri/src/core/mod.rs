@@ -103,10 +103,7 @@ lazy_static! {
 #[tauri::command]
 pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Result<(), String> {
     let action = next_action_token();
-    let (_pm_pid, _pm_alive, _pm_mode) = pm_snapshot();
     let mixed_port = mixed_proxy_port(&app);
-    let _port_listening = probe_port_listening(mixed_port);
-    let _cur_state_kind = app.state::<EngineStateCell>().snapshot().kind();
     let mode_name = match mode {
         ProxyMode::SystemProxy => "系统代理 (SystemProxy)",
         ProxyMode::ManualProxy => "手动代理 (ManualProxy)",
