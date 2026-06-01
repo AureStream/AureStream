@@ -35,7 +35,7 @@ graph TD
         UI[AureStream Web 视图]
         SStore[LazyStore 存储 settings.json]
         Merger[配置合并生成系统]
-        ClashAPI[Clash API 交互客户端]
+        SingBoxAPI[sing-box 控制台 API 客户端]
     end
 
     subgraph TauriHost [后端主机层 - Rust]
@@ -70,7 +70,7 @@ graph TD
     SysProxyWrap -->|IPC/服务控制指令| TunSvc
     SysProxyWrap -->|XPC 进程通信| XPCSvc
     SysProxyWrap -->|DNS 劫持配置| PkExec
-    ClashAPI -.->|REST / WebSocket 通信:9191| SingBox
+    SingBoxAPI -.->|experimental.clash_api REST| SingBox
 ```
 
 ---
@@ -93,8 +93,9 @@ graph TD
   * `Idle`（空闲）➔ `Starting`（启动中）➔ `Running`（运行中）
   * `Running`（运行中）➔ `Stopping`（停止中）➔ `Idle`（空闲）
   * `Starting/Running` ➔ `Failed(reason)`（失败）➔ `Idle`（空闲）
+* **配置校验**（`src-tauri/src/core/config_check.rs`）：`start` 前执行 `aurestream-core check -c config.json`，失败则进入 `Failed` 并返回 stderr。
 * **就绪探测器 (`src-tauri/src/engine/common/readiness.rs`)**：
-  在侧车拉起后，异步轮询探测混合代理端口是否成功开启监听，探测成功后方才将状态转移至 `Running`。
+  在侧车拉起后，异步轮询 `experimental.clash_api.external_controller` 端口（默认 `9191`，与 `settings.json` 中 `singbox_api_port_key` 一致）；探测成功后方才将状态转移至 `Running`。停止时校验 mixed 代理端口（默认 `2345`）是否释放。
 
 ### 3.2 平台引擎特定实现 (`src-tauri/src/engine/`)
 为了在不同操作系统上管理网络代理和路由行为，AureStream 定义了统一的 `EngineManager` 接口特征（Trait）：
@@ -123,9 +124,21 @@ graph TD
   3. 将解析出的代理节点组装并注入到模板的 `outbounds` 节点组中。
   4. 将用户自定义的直连规则（`custom_ruleset_direct`）与代理规则（`custom_ruleset_proxy`）追加合并到 `route.rules` 中。
   5. 重新分配 Sing-Box 内置 DNS 地址，并将持久化缓存文件路径重定向（如 `mixed-cache-rule-v2.db`）。
-  6. 将组装完成的 JSON 文件写入到 Tauri 专属的应用配置目录。
+  6. 注入 `experimental.clash_api`（控制台地址与 secret）与 `cache_file`。
+  7. 将组装完成的 JSON 文件写入到 Tauri 专属的应用配置目录。
 
-### 4.2 数据存储与持久化
+### 4.2 sing-box 控制台 API（前端 `src/utils/singbox-api/`）
+
+前端通过 sing-box 官方 [experimental.clash_api](https://sing-box.sagernet.org/configuration/experimental/clash-api/) REST 与运行中的核心交互（非独立 Clash/Mihomo 进程）：
+
+| 能力 | HTTP |
+|------|------|
+| 当前 selector 组 | `GET /proxies/select` |
+| 切换节点 | `PUT /proxies/select` |
+| 延迟测试 | `GET /proxies/{name}/delay` |
+| 实时流量 | `GET /traffic`（NDJSON 流） |
+
+### 4.3 数据存储与持久化
 * **Tauri-plugin-store**：
   使用 `settings.json` 键值对存储轻量偏好（如默认端口、分流模式、开机自启、局域网共享等）。
 * **SQLite 本地数据库 (Tauri-plugin-sql)**：
@@ -155,12 +168,13 @@ sequence_chart
     Merger -> OS: 写入 config.json 配置文件
     UI -> Rust: 调用 tauri 命令 invoke("start", config_path, "SystemProxy")
     Rust -> Rust: 引擎状态转移为 Starting（启动中）
+    Rust -> Kernel: sing-box check 校验 config.json
     Rust -> PM: 进程管理器拉起子进程命令
     PM -> Kernel: 携带 -c 参数运行 sing-box
     Rust -> OS: 驱动系统代理 sysproxy_rs::set_system_proxy(127.0.0.1:2345)
     OS -> OS: 修改注册表，系统网络流量导向 2345 端口
-    Rust -> Rust: 开启 readiness 异步探测 2345 端口
-    Kernel -> Rust: 检测到 2345 端口开启监听
+    Rust -> Rust: readiness 探测控制台 API 端口（默认 9191）
+    Kernel -> Rust: 控制台端口可连接
     Rust -> Rust: 引擎状态转移为 Running（运行中）
     Rust -> UI: 发送 status-changed 事件通知前端
     UI -> 用户: 界面显示为“已连接”状态

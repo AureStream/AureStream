@@ -530,7 +530,7 @@ impl EngineManager for MacOSEngine {
         use tauri_plugin_shell::ShellExt;
 
         match mode {
-            crate::engine::ProxyMode::SystemProxy | crate::engine::ProxyMode::ManualProxy => {
+            crate::engine::ProxyMode::SystemProxy => {
                 let should_set_system_proxy = matches!(mode, crate::engine::ProxyMode::SystemProxy);
                 let cmd = app
                     .shell()
@@ -627,7 +627,7 @@ impl EngineManager for MacOSEngine {
             return Ok(());
         };
         match mode.as_ref() {
-            crate::engine::ProxyMode::SystemProxy | crate::engine::ProxyMode::ManualProxy => {
+            crate::engine::ProxyMode::SystemProxy => {
                 if matches!(mode.as_ref(), crate::engine::ProxyMode::SystemProxy) {
                     let _ = clear_system_proxy(app).await;
                 }
@@ -689,6 +689,11 @@ impl EngineManager for MacOSEngine {
         tokio::task::spawn_blocking(ensure_helper_installed)
             .await
             .map_err(|e| format!("ensure_installed join error: {}", e))?
+    }
+
+    async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
+        log::info!("[mac] uninstall_service requested (no-op on macOS)");
+        Ok(())
     }
 
     async fn probe(_app: &AppHandle) -> Result<String, String> {

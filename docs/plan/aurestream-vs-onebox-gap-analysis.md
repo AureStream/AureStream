@@ -52,13 +52,13 @@ AureStream 前端仅有 `vpn-service.ts`（用于调用 Tauri 指令启停进程
 * `utils/update.ts`：客户端在线自动升级、分阶段（dev/beta/stable）发布检测等。
 
 ### 2.3 页面模块（page/）
-AureStream 采用的是 `HomePage.tsx`、`SettingsPage.tsx` 和 `SubscriptionPage.tsx` 三个大包页面，而 OneBox 的结构更加解耦，AureStream 目前尚未实现以下独立页面和路由：
+AureStream 主界面采用 `HomePage.tsx`、`SubscriptionPage.tsx` 与 `SettingsPage.tsx` 三个页面；侧边栏仅保留首页、订阅管理与设置。以下 OneBox 独立页面**有意不纳入当前产品范围**（相关能力仍可通过配置合并层 / Store 在后台生效，但无独立 UI）：
 
-| 缺失页面/路由 | 功能描述 |
+| 页面（OneBox） | 说明 |
 |---|---|
-| `log.tsx` | 侧车日志监控器 + 配置查看器 + 模板编辑器三合一页面 |
-| `developer.tsx` | 开发者面板（提供 bypass-router、TUN 栈、系统代理、自动看门狗等的直观控制开关） |
-| `router.tsx` | 自定义路由分流规则配置面板（域名、后缀、CIDR 直连/代理规则） |
+| `log.tsx` | 侧车日志监控 — 后端 `read_logs` 保留，无前端入口 |
+| `developer.tsx` | 开发者开关 — Store 键仍可由配置流程读取 |
+| `router.tsx` | 自定义分流规则 — `getCustomRuleSet` 仍参与配置生成 |
 
 ### 2.4 其他基础设施
 * 缺少多窗口管理器 `window-manager.tsx`（主窗口与独立日志窗口的主题/状态同步）。
@@ -71,4 +71,4 @@ AureStream 采用的是 `HomePage.tsx`、`SettingsPage.tsx` 和 `SubscriptionPag
 1. **P0 (已完成)**：macOS 引擎看门狗、XPC helper 以及 Linux 引擎特权劫持机制已完全对接，测试通过。
 2. **P1**：从 OneBox 中补齐 `config_fetch.rs`（最优 DNS 测速拉取订阅）以及 `whitelist.rs`（白名单控制）。
 3. **P2**：重构并补齐前端内核交互组件 `clash-api.ts`，以便前端能实时与后台内核（例如日志流、连接数、节点延迟）交换数据。
-4. **P3**：补齐前端高级控制台页面，包含 `developer.tsx` 选项与 `router.tsx` 自定义分流规则编辑器。
+4. ~~**P3**：补齐前端高级控制台页面~~（当前产品范围外；若需恢复，可再评估独立页面或设置内折叠面板）。

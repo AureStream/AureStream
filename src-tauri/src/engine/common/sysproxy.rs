@@ -1,26 +1,24 @@
 use sysproxy_rs::Sysproxy;
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_store::StoreExt;
 
-use crate::{core::mixed_proxy_port, engine::EVENT_TAURI_LOG};
+use crate::core::mixed_proxy_port;
+use crate::engine::common::bypass::{self, PROXY_BYPASS_STORE_KEY};
+use crate::engine::EVENT_TAURI_LOG;
 
 const PROXY_HOST: &str = "127.0.0.1";
 
-#[cfg(target_os = "macos")]
-const DEFAULT_BYPASS: &str =
-    "127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,172.29.0.0/16,localhost,*.local,*.crashlytics.com,<local>";
-
-#[cfg(target_os = "linux")]
-const DEFAULT_BYPASS: &str =
-    "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,172.29.0.0/16,::1";
-
-#[cfg(target_os = "windows")]
-const DEFAULT_BYPASS: &str = "localhost;127.*;192.168.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;<local>";
-
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-const DEFAULT_BYPASS: &str = "localhost,127.0.0.1";
+fn proxy_bypass_list(app: &AppHandle) -> String {
+    let raw = app
+        .get_store("settings.json")
+        .and_then(|s| s.get(PROXY_BYPASS_STORE_KEY))
+        .and_then(|v| v.as_str().map(String::from));
+    bypass::bypass_from_store_value(raw)
+}
 
 pub(crate) async fn set_system_proxy(app: &AppHandle) -> anyhow::Result<()> {
     let proxy_port = mixed_proxy_port(app);
+    let bypass = proxy_bypass_list(app);
     let _ = app.emit(
         EVENT_TAURI_LOG,
         (
@@ -32,7 +30,7 @@ pub(crate) async fn set_system_proxy(app: &AppHandle) -> anyhow::Result<()> {
         enable: true,
         host: PROXY_HOST.to_string(),
         port: proxy_port,
-        bypass: DEFAULT_BYPASS.to_string(),
+        bypass,
     };
     sys.set_system_proxy().map_err(|e| anyhow::anyhow!(e))?;
     log::info!("Proxy set to {}:{}", PROXY_HOST, proxy_port);

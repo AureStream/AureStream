@@ -36,6 +36,7 @@ pub fn run() {
             core::reload_config,
             // engine probe commands
             engine::engine_ensure_installed,
+            engine::engine_uninstall_service,
             engine::engine_probe,
             // shell commands
             commands::shell::version,
@@ -53,7 +54,6 @@ pub fn run() {
             commands::network::check_captive_portal_status,
             commands::network::get_captive_redirect_url,
             commands::network::ping_tcp,
-            commands::network::start_traffic_listener,
             commands::network::get_geoip_info,
             // prestart commands
             commands::prestart::prestart_check,

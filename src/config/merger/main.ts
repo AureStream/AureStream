@@ -1,6 +1,7 @@
 import * as path from '@tauri-apps/api/path';
 import { getSubscriptionConfig } from '../../action/db';
-import { getAllowLan, getClashApiSecret, getClashApiPort, getCustomRuleSet, getStoreValue, isBypassRouterEnabled, setStoreValue } from '../../single/store';
+import { getAllowLan, getControllerSecret, getControllerPort, getCustomRuleSet, getStoreValue, isBypassRouterEnabled, setStoreValue } from '../../single/store';
+import { DIRECT_RULE_SLOT, LEGACY_DIRECT_RULE_SLOT, LEGACY_PROXY_RULE_SLOT, PROXY_RULE_SLOT, ruleSlotMatches } from '../rule-tags';
 import { STAGE_VERSION_STORE_KEY } from '../../types/definition';
 import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB } from './helper';
 
@@ -19,11 +20,11 @@ async function getConfigTemplate(mode: configType): Promise<any> {
 }
 
 async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
-    const port = await getClashApiPort();
+    const port = await getControllerPort();
     newConfig["experimental"] = newConfig["experimental"] || {};
     newConfig["experimental"]["clash_api"] = {
         "external_controller": `127.0.0.1:${port}`,
-        "secret": await getClashApiSecret(),
+        "secret": await getControllerSecret(),
     };
 
     newConfig["experimental"]["cache_file"] = {
@@ -50,7 +51,7 @@ export async function setMixedConfig(identifier: string) {
     if (directCustomRuleSet) {
         for (let i = 0; i < newConfig.route.rules.length; i++) {
             let rule = newConfig.route.rules[i];
-            if (rule.domain && Array.isArray(rule.domain) && rule.domain.includes('direct-tag.oneoh.cloud')) {
+            if (ruleSlotMatches(rule, DIRECT_RULE_SLOT, LEGACY_DIRECT_RULE_SLOT)) {
                 rule.domain.push(...directCustomRuleSet.domain);
                 rule.domain_suffix.push(...directCustomRuleSet.domain_suffix);
                 rule.ip_cidr.push(...directCustomRuleSet.ip_cidr);
@@ -62,7 +63,7 @@ export async function setMixedConfig(identifier: string) {
     if (proxyCustomRuleSet) {
         for (let i = 0; i < newConfig.route.rules.length; i++) {
             let rule = newConfig.route.rules[i];
-            if (rule.domain && Array.isArray(rule.domain) && rule.domain.includes('proxy-tag.oneoh.cloud')) {
+            if (ruleSlotMatches(rule, PROXY_RULE_SLOT, LEGACY_PROXY_RULE_SLOT)) {
                 rule.domain.push(...proxyCustomRuleSet.domain);
                 rule.domain_suffix.push(...proxyCustomRuleSet.domain_suffix);
                 rule.ip_cidr.push(...proxyCustomRuleSet.ip_cidr);
@@ -94,7 +95,7 @@ export async function setTunConfig(identifier: string) {
     if (directCustomRuleSet) {
         for (let i = 0; i < newConfig.route.rules.length; i++) {
             let rule = newConfig.route.rules[i];
-            if (rule.domain && Array.isArray(rule.domain) && rule.domain.includes('direct-tag.oneoh.cloud')) {
+            if (ruleSlotMatches(rule, DIRECT_RULE_SLOT, LEGACY_DIRECT_RULE_SLOT)) {
                 rule.domain.push(...directCustomRuleSet.domain);
                 rule.domain_suffix.push(...directCustomRuleSet.domain_suffix);
                 rule.ip_cidr.push(...directCustomRuleSet.ip_cidr);
@@ -106,7 +107,7 @@ export async function setTunConfig(identifier: string) {
     if (proxyCustomRuleSet) {
         for (let i = 0; i < newConfig.route.rules.length; i++) {
             let rule = newConfig.route.rules[i];
-            if (rule.domain && Array.isArray(rule.domain) && rule.domain.includes('proxy-tag.oneoh.cloud')) {
+            if (ruleSlotMatches(rule, PROXY_RULE_SLOT, LEGACY_PROXY_RULE_SLOT)) {
                 rule.domain.push(...proxyCustomRuleSet.domain);
                 rule.domain_suffix.push(...proxyCustomRuleSet.domain_suffix);
                 rule.ip_cidr.push(...proxyCustomRuleSet.ip_cidr);

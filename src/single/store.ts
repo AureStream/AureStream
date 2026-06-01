@@ -1,10 +1,25 @@
 import { invoke } from '@tauri-apps/api/core';
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
-import { ALLOWLAN_STORE_KEY, DEFAULT_PROXY_PORT, ENABLE_BYPASS_ROUTER_STORE_KEY, ENABLE_TUN_STORE_KEY, PROXY_PORT_STORE_KEY, SKIP_SYSTEM_PROXY_STORE_KEY, USE_DHCP_STORE_KEY, USER_AGENT_STORE_KEY } from '../types/definition';
+import {
+    ALLOWLAN_STORE_KEY,
+    CONTROLLER_PORT_STORE_KEY,
+    CONTROLLER_SECRET_STORE_KEY,
+    DEFAULT_CONTROLLER_PORT,
+    DEFAULT_PROXY_PORT,
+    ENABLE_BYPASS_ROUTER_STORE_KEY,
+    ENABLE_TUN_STORE_KEY,
+    LEGACY_CLASH_API_PORT_STORE_KEY,
+    LEGACY_CLASH_API_SECRET_STORE_KEY,
+    PROXY_BYPASS_STORE_KEY,
+    PROXY_PORT_STORE_KEY,
+    SKIP_SYSTEM_PROXY_STORE_KEY,
+    TUN_STACK_STORE_KEY,
+    USE_DHCP_STORE_KEY,
+    USER_AGENT_STORE_KEY,
+} from '../types/definition';
 
 export const LANGUAGE_STORE_KEY = 'language';
-export const CLASH_API_SECRET = 'clash_api_secret_key';
 
 export const store = new LazyStore('settings.json', {
     defaults: {},
@@ -64,21 +79,47 @@ export async function setAllowLan(value: boolean) {
     await store.save();
 }
 
-export async function getClashApiSecret(): Promise<string> {
-    const secret = await store.get(CLASH_API_SECRET);
-    if (secret) {
-        return secret as string;
-    } else {
-        const array = new Uint8Array(12);
-        crypto.getRandomValues(array);
-        const randomSecret = Array.from(array)
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-        await store.set(CLASH_API_SECRET, randomSecret);
-        await store.save();
-        return randomSecret;
+async function readPortWithLegacy(
+    primaryKey: string,
+    legacyKey: string,
+    defaultPort: number
+): Promise<number> {
+    const raw = (await store.get(primaryKey)) ?? (await store.get(legacyKey));
+    const port = typeof raw === 'number' ? raw : Number(raw);
+    if (Number.isInteger(port) && port > 0 && port <= 65535) {
+        if (!(await store.get(primaryKey)) && (await store.get(legacyKey))) {
+            await store.set(primaryKey, port);
+            await store.save();
+        }
+        return port;
     }
+    return defaultPort;
 }
+
+/** Bearer secret for sing-box experimental.clash_api. */
+export async function getControllerSecret(): Promise<string> {
+    let secret =
+        (await store.get(CONTROLLER_SECRET_STORE_KEY)) ??
+        (await store.get(LEGACY_CLASH_API_SECRET_STORE_KEY));
+    if (secret) {
+        if (!(await store.get(CONTROLLER_SECRET_STORE_KEY))) {
+            await store.set(CONTROLLER_SECRET_STORE_KEY, secret);
+            await store.save();
+        }
+        return secret as string;
+    }
+    const array = new Uint8Array(12);
+    crypto.getRandomValues(array);
+    const randomSecret = Array.from(array)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    await store.set(CONTROLLER_SECRET_STORE_KEY, randomSecret);
+    await store.save();
+    return randomSecret;
+}
+
+/** @deprecated Use getControllerSecret */
+export const getClashApiSecret = getControllerSecret;
 
 export async function isBypassRouterEnabled(): Promise<boolean> {
     let b = await store.get(ENABLE_BYPASS_ROUTER_STORE_KEY);
@@ -181,22 +222,56 @@ export async function setProxyPort(port: number): Promise<void> {
     await store.save();
 }
 
-export const CLASH_API_PORT_STORE_KEY = 'clash_api_port_key';
-export const DEFAULT_CLASH_API_PORT = 9191;
-
-export async function getClashApiPort(): Promise<number> {
-    const raw = await store.get(CLASH_API_PORT_STORE_KEY);
-    const port = typeof raw === 'number' ? raw : Number(raw);
-    if (Number.isInteger(port) && port > 0 && port <= 65535) {
-        return port;
-    }
-    return DEFAULT_CLASH_API_PORT;
+export async function getProxyBypass(): Promise<string> {
+    const raw = await store.get(PROXY_BYPASS_STORE_KEY) as string | undefined;
+    return raw?.trim() ? raw : '';
 }
 
-export async function setClashApiPort(port: number): Promise<void> {
+export async function setProxyBypass(value: string): Promise<void> {
+    await store.set(PROXY_BYPASS_STORE_KEY, value);
+    await store.save();
+}
+
+/** sing-box experimental.clash_api external_controller port */
+export async function getControllerPort(): Promise<number> {
+    return readPortWithLegacy(
+        CONTROLLER_PORT_STORE_KEY,
+        LEGACY_CLASH_API_PORT_STORE_KEY,
+        DEFAULT_CONTROLLER_PORT
+    );
+}
+
+export async function setControllerPort(port: number): Promise<void> {
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-        throw new Error('invalid_clash_api_port');
+        throw new Error('invalid_controller_port');
     }
-    await store.set(CLASH_API_PORT_STORE_KEY, port);
+    await store.set(CONTROLLER_PORT_STORE_KEY, port);
+    await store.save();
+}
+
+/** @deprecated Use getControllerPort */
+export const getClashApiPort = getControllerPort;
+/** @deprecated Use setControllerPort */
+export const setClashApiPort = setControllerPort;
+
+export type TunStack = 'system' | 'gvisor' | 'mixed';
+
+export const DEFAULT_TUN_STACK: TunStack = 'system';
+
+const TUN_STACK_VALUES: TunStack[] = ['system', 'gvisor', 'mixed'];
+
+export async function getTunStack(): Promise<TunStack> {
+    const raw = await store.get(TUN_STACK_STORE_KEY) as string | undefined;
+    if (raw && TUN_STACK_VALUES.includes(raw as TunStack)) {
+        return raw as TunStack;
+    }
+    return DEFAULT_TUN_STACK;
+}
+
+export async function setTunStack(value: TunStack): Promise<void> {
+    if (!TUN_STACK_VALUES.includes(value)) {
+        throw new Error('invalid_tun_stack');
+    }
+    await store.set(TUN_STACK_STORE_KEY, value);
     await store.save();
 }

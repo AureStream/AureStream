@@ -103,7 +103,7 @@ jobs:
 
       - name: Build macOS privileged helper
         if: runner.os == 'macOS'
-        run: pnpm prebundle
+        run: pnpm pre-bundle
 
       - name: Build Tauri bundle
         uses: tauri-apps/tauri-action@v0

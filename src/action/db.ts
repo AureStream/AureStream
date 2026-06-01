@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
-import { Subscription, SubscriptionConfig } from '../types/definition';
+import { buildSubscriptionUserAgent, Subscription, SubscriptionConfig } from '../types/definition';
 
 export interface ResponseHeaders {
     'subscription-userinfo'?: string;
@@ -40,7 +40,7 @@ export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
             throw new FileError(`${error}`);
         }
     } else {
-        const userAgent = "AureStream/0.1.0 (sing-box/1.12.0)";
+        const userAgent = buildSubscriptionUserAgent();
         const result = await invoke<{
             data: unknown;
             headers: Record<string, string>;

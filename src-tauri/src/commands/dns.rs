@@ -237,12 +237,13 @@ fn _ipaddr_unused(_: IpAddr) {}
 #[tauri::command]
 pub async fn get_optimal_local_dns_server(app: AppHandle) -> Option<String> {
     use crate::app::state::AppData;
+    use crate::engine::state_machine::{EngineState, EngineStateCell};
 
     let app_data = app.state::<AppData>();
-    let running = {
-        let secret = app_data.get_clash_secret().unwrap_or_default();
-        crate::core::is_running(app.clone(), secret).await
-    };
+    let running = matches!(
+        app.state::<EngineStateCell>().snapshot(),
+        EngineState::Running { .. }
+    );
 
     if running {
         if let Some(cached) = app_data.get_cached_dns() {

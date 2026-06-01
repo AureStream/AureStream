@@ -11,7 +11,6 @@ pub struct AppData {
     pub cached_dns: Mutex<Option<String>>,
     pub log_buffer: Mutex<Vec<String>>,
     pub error_log_buffer: Mutex<Vec<String>>,
-    pub clash_secret: Mutex<Option<String>>,
     pub pending_deep_link: Mutex<Option<DeepLinkPayload>>,
 }
 
@@ -26,7 +25,6 @@ impl AppData {
             log_buffer: Mutex::new(Vec::new()),
             error_log_buffer: Mutex::new(Vec::new()),
             cached_dns: Mutex::new(None),
-            clash_secret: Mutex::new(None),
             pending_deep_link: Mutex::new(None),
         }
     }
@@ -74,16 +72,4 @@ impl AppData {
         }
     }
 
-    pub fn get_clash_secret(&self) -> Option<String> {
-        if let Ok(secret) = self.clash_secret.lock() {
-            secret.clone()
-        } else {
-            None
-        }
-    }
-    pub fn set_clash_secret(&self, secret: Option<String>) {
-        if let Ok(mut sec) = self.clash_secret.lock() {
-            *sec = secret;
-        }
-    }
 }

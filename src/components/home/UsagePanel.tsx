@@ -3,6 +3,8 @@ import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 import { CartesianGrid, Area, AreaChart, XAxis } from "recharts"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { surface, type as text } from "@/lib/typography"
+import { cn } from "@/lib/utils"
 import {
   ChartContainer,
   ChartLegend,
@@ -13,10 +15,10 @@ import {
 } from "@/components/ui/chart"
 import type { TrafficPoint } from "@/types/engine-state"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getClashApiSecret, getClashApiPort } from "@/single/store"
+import { subscribeTraffic } from "@/utils/singbox-api"
 
 const chartConfig = {
-  download: { label: "下载", color: "#3b59ff" },
+  download: { label: "下载", color: "var(--primary)" },
   upload: { label: "上传", color: "#10b981" },
 } satisfies ChartConfig
 
@@ -52,13 +54,14 @@ function StatBox({
 }) {
   const isUpload = type === "upload"
   return (
-    <div className="flex items-center gap-2.5 rounded-[14px] border border-slate-100 dark:border-white/[0.08] bg-[#f8fafc]/30 dark:bg-white/[0.04] px-2.5 py-2 flex-1 min-w-0">
+    <div className={cn(surface.chip, "flex items-center gap-2.5 flex-1 min-w-0 py-2")}>
       <div
-        className={`flex size-7 sm:size-8 items-center justify-center rounded-lg shrink-0 ${
+        className={cn(
+          "flex size-8 items-center justify-center rounded-lg shrink-0",
           isUpload
-            ? "bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400"
-            : "bg-blue-50 text-blue-500 dark:bg-blue-500/10 dark:text-blue-400"
-        }`}
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            : "bg-primary/10 text-primary"
+        )}
       >
         {isUpload ? (
           <ArrowUpIcon className="size-3.5 sm:size-4" />
@@ -67,10 +70,10 @@ function StatBox({
         )}
       </div>
       <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 font-mono leading-tight truncate">
+        <span className={cn(text.value, "font-mono truncate")}>
           {formatSpeed(bytesPerSecond)}
         </span>
-        <span className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 font-semibold truncate mt-0.5">
+        <span className={cn(text.caption, "truncate mt-0.5")}>
           {label} · {formatTotal(totalBytes)}
         </span>
       </div>
@@ -92,37 +95,7 @@ export function UsagePanel() {
     }))
   )
   useEffect(() => {
-    let unlisten: (() => void) | undefined
-    let active = true
-
-    const setupListener = async () => {
-      const { listen } = await import("@tauri-apps/api/event")
-      const { invoke } = await import("@tauri-apps/api/core")
-
-      const fn = await listen<{ up: number; down: number }>("traffic-tick", (event) => {
-        if (!active) return
-        const { up, down } = event.payload
-        setUploadSpeed(up)
-        setDownloadSpeed(down)
-        setUploadTotal((prev) => prev + up)
-        setDownloadTotal((prev) => prev + down)
-        setHistory((prev) => {
-          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
-          return next.map((p, i) => ({ ...p, time: `${i}` }))
-        })
-      })
-      unlisten = fn
-
-      if (isRunning && active) {
-        const secret = await getClashApiSecret()
-        const port = await getClashApiPort()
-        await invoke("start_traffic_listener", { port, secret })
-      }
-    }
-
-    if (isRunning) {
-      setupListener()
-    } else {
+    if (!isRunning) {
       setUploadSpeed(0)
       setDownloadSpeed(0)
       setUploadTotal(0)
@@ -134,13 +107,34 @@ export function UsagePanel() {
           upload: 0,
         }))
       )
+      return
     }
+
+    const abort = new AbortController()
+    let active = true
+
+    subscribeTraffic(
+      ({ up, down }) => {
+        if (!active) return
+        setUploadSpeed(up)
+        setDownloadSpeed(down)
+        setUploadTotal((prev) => prev + up)
+        setDownloadTotal((prev) => prev + down)
+        setHistory((prev) => {
+          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
+          return next.map((p, i) => ({ ...p, time: `${i}` }))
+        })
+      },
+      abort.signal
+    ).catch((err) => {
+      if (!abort.signal.aborted) {
+        console.error("[UsagePanel] sing-box /traffic stream failed:", err)
+      }
+    })
 
     return () => {
       active = false
-      if (unlisten) {
-        unlisten()
-      }
+      abort.abort()
     }
   }, [isRunning])
 
@@ -173,8 +167,8 @@ export function UsagePanel() {
           >
             <defs>
               <linearGradient id="colorDownload" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b59ff" stopOpacity={0.22}/>
-                <stop offset="100%" stopColor="#3b59ff" stopOpacity={0}/>
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22}/>
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0}/>
               </linearGradient>
               <linearGradient id="colorUpload" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#10b981" stopOpacity={0.22}/>
@@ -184,8 +178,8 @@ export function UsagePanel() {
             <CartesianGrid
               vertical={false}
               strokeDasharray="3 3"
-              stroke="#f1f5f9"
-              className="dark:stroke-white/[0.06]"
+              stroke="var(--border)"
+              className="opacity-60"
             />
             <XAxis dataKey="time" hide />
             <ChartTooltip content={<ChartTooltipContent />} />
@@ -193,7 +187,7 @@ export function UsagePanel() {
             <Area
               type="basis"
               dataKey="download"
-              stroke="#3b59ff"
+              stroke="var(--primary)"
               strokeWidth={1.5}
               fillOpacity={1}
               fill="url(#colorDownload)"

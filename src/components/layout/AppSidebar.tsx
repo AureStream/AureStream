@@ -5,9 +5,6 @@ import {
   ZapIcon,
   SunIcon,
   MoonIcon,
-  TerminalIcon,
-  GitForkIcon,
-  CpuIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -23,9 +20,6 @@ import { useTheme } from "@/contexts/ThemeContext"
 const navItems = [
   { id: "home", icon: HomeIcon, label: "首页" },
   { id: "subscription", icon: BoxIcon, label: "订阅管理" },
-  { id: "router", icon: GitForkIcon, label: "路由规则" },
-  { id: "log", icon: TerminalIcon, label: "日志面板" },
-  { id: "developer", icon: CpuIcon, label: "开发者选项" },
   { id: "settings", icon: SettingsIcon, label: "设置" },
 ] as const
 
@@ -51,12 +45,10 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   return (
     <Card className="w-16 shrink-0 py-4.5 !gap-0 flex flex-col items-center justify-between">
       <div className="flex flex-col items-center gap-7 w-full flex-1">
-        {/* Top Logo */}
         <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
           <ZapIcon className="size-5 fill-white/10" />
         </div>
 
-        {/* Navigation */}
         <nav className="flex flex-col items-center gap-3.5 w-full px-2">
           {navItems.map((item) => {
             const isActive = item.id === activeId
@@ -69,7 +61,7 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
                     className={cn(
                       "size-11 rounded-2xl transition-all duration-200",
                       isActive
-                        ? "bg-[#eef2ff] text-[#3b59ff] border border-[#e0e7ff] shadow-sm dark:bg-white/[0.1] dark:text-white dark:border-white/[0.15]"
+                        ? "bg-secondary text-secondary-foreground border border-primary/20 shadow-sm"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     )}
                     onClick={() => onActiveIdChange(item.id)}
@@ -86,7 +78,6 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
         </nav>
       </div>
 
-      {/* Bottom Actions - Theme Toggle */}
       <div className="flex flex-col items-center gap-3 w-full px-2 mt-auto pt-4">
         <Tooltip>
           <TooltipTrigger asChild>
