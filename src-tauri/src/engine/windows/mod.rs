@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use tauri::AppHandle;
 use tauri::Emitter;
-use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
 use crate::core::monitor::spawn_process_monitor;
@@ -10,45 +9,6 @@ use crate::engine::sysproxy::{clear_system_proxy, set_system_proxy};
 use crate::engine::{EngineManager, ProxyMode, EVENT_TAURI_LOG};
 
 pub struct WindowsEngine;
-
-fn resolve_executable_path(app: &AppHandle, name: &str) -> Result<std::path::PathBuf, String> {
-    let triple = if cfg!(target_arch = "aarch64") {
-        "aarch64-pc-windows-msvc"
-    } else {
-        "x86_64-pc-windows-msvc"
-    };
-
-    let exe_dir = tauri::utils::platform::current_exe()
-        .map(|p| p.parent().map(|parent| parent.to_path_buf()))
-        .ok()
-        .flatten();
-
-    let resource_dir = app.path().resource_dir().ok();
-
-    let mut candidates = Vec::new();
-
-    if let Some(ref dir) = exe_dir {
-        candidates.push(dir.join(format!("{}-{}.exe", name, triple)));
-        candidates.push(dir.join(format!("{}.exe", name)));
-    }
-
-    if let Some(ref dir) = resource_dir {
-        candidates.push(dir.join(format!("binaries/{}-{}.exe", name, triple)));
-        candidates.push(dir.join(format!("binaries/{}.exe", name)));
-    }
-
-    for path in candidates {
-        if path.exists() {
-            log::info!("[win] resolved executable '{}' path: {:?}", name, path);
-            return Ok(path);
-        }
-    }
-
-    Err(format!(
-        "Executable '{}' not found. Tried looking next to the running app and in resources.",
-        name
-    ))
-}
 
 impl EngineManager for WindowsEngine {
     async fn start(
@@ -63,11 +23,11 @@ impl EngineManager for WindowsEngine {
             // First, make sure the service is installed
             Self::ensure_installed(app).await?;
 
-            // Resolve the paths
-            let core_path = resolve_executable_path(app, "aurestream-core")?;
+            // Resolve the paths using the standard Tauri v2 sidecar layout
+            let core_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
+                .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
 
             let config_path_str = config_path.as_str();
-            let core_path_str = core_path.to_string_lossy();
             let args = [config_path_str, "-", &core_path_str];
 
             log::info!("[win] starting AureStreamTunService with args: {:?}", args);
@@ -201,8 +161,10 @@ impl EngineManager for WindowsEngine {
         });
     }
 
-    async fn ensure_installed(app: &AppHandle) -> Result<(), String> {
-        let tun_service_path = resolve_executable_path(app, "tun-service")?;
+    async fn ensure_installed(_app: &AppHandle) -> Result<(), String> {
+        let tun_service_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
+            .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
+        let tun_service_path = std::path::PathBuf::from(tun_service_path_str);
 
         use tun_service::scm::{self, QueriedState};
         let state = scm::query_state();
