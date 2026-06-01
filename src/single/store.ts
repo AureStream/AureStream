@@ -180,3 +180,23 @@ export async function setProxyPort(port: number): Promise<void> {
     await store.set(PROXY_PORT_STORE_KEY, port);
     await store.save();
 }
+
+export const CLASH_API_PORT_STORE_KEY = 'clash_api_port_key';
+export const DEFAULT_CLASH_API_PORT = 9191;
+
+export async function getClashApiPort(): Promise<number> {
+    const raw = await store.get(CLASH_API_PORT_STORE_KEY);
+    const port = typeof raw === 'number' ? raw : Number(raw);
+    if (Number.isInteger(port) && port > 0 && port <= 65535) {
+        return port;
+    }
+    return DEFAULT_CLASH_API_PORT;
+}
+
+export async function setClashApiPort(port: number): Promise<void> {
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        throw new Error('invalid_clash_api_port');
+    }
+    await store.set(CLASH_API_PORT_STORE_KEY, port);
+    await store.save();
+}

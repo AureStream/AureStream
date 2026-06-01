@@ -5,8 +5,6 @@ import {
   MoonIcon,
   MonitorIcon,
   InfoIcon,
-  CheckCircle2Icon,
-  AlertCircleIcon,
   RefreshCwIcon,
   AppWindowIcon,
   ShieldIcon,
@@ -19,17 +17,16 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/contexts/ThemeContext"
-import { getEnableTun, setEnableTun } from "@/single/store"
+import { getProxyPort, setProxyPort, getClashApiPort, setClashApiPort } from "@/single/store"
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
-  const [port, setPort] = useState("7890")
+  const [port, setPort] = useState("2345")
+  const [apiPort, setApiPort] = useState("9191")
   const [bypassList, setBypassList] = useState(
     "localhost, 127.0.0.1, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, *.local, <local>"
   )
   const [autoStart, setAutoStart] = useState(true)
-  const [tunInstalled, setTunInstalled] = useState(false)
-  const [tunInstalling, setTunInstalling] = useState(false)
 
   // New states for Tray & Interaction card
   const [hideOnLaunch, setHideOnLaunch] = useState(false)
@@ -45,21 +42,27 @@ export function SettingsPage() {
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest">("idle")
 
   useEffect(() => {
-    async function loadTunStatus() {
-      const enabled = await getEnableTun()
-      setTunInstalled(enabled)
+    async function loadSettings() {
+      const p = await getProxyPort()
+      setPort(String(p))
+      const ap = await getClashApiPort()
+      setApiPort(String(ap))
     }
-    loadTunStatus()
+    loadSettings()
   }, [])
 
-  const handleInstallTun = async () => {
-    setTunInstalling(true)
-    const nextVal = !tunInstalled
-    await setEnableTun(nextVal)
-    setTimeout(() => {
-      setTunInstalled(nextVal)
-      setTunInstalling(false)
-    }, 800)
+  const handleProxyPortChange = async (val: number) => {
+    setPort(String(val))
+    if (val > 0 && val <= 65535) {
+      await setProxyPort(val)
+    }
+  }
+
+  const handleApiPortChange = async (val: number) => {
+    setApiPort(String(val))
+    if (val > 0 && val <= 65535) {
+      await setClashApiPort(val)
+    }
   }
 
   const handleCheckUpdate = () => {
@@ -87,66 +90,14 @@ export function SettingsPage() {
             <div className="flex items-center justify-between rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">开机自启动</span>
-                <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">在系统启动时自动运行客户端</span>
+                <span className="text-[9px] text-slate-550 dark:text-slate-400 font-semibold mt-0.5">在系统启动时自动运行客户端</span>
               </div>
               <Switch checked={autoStart} onCheckedChange={setAutoStart} size="sm" />
-            </div>
-
-            {/* TUN Service Card */}
-            <div className="flex flex-col gap-2 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">TUN 虚拟网卡服务</span>
-                  <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">接管整机网络流量，免配置系统代理</span>
-                </div>
-                <span
-                  className={cn(
-                    "rounded-md px-1.5 py-0.5 text-[9px] font-bold shrink-0",
-                    tunInstalled ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400" : "bg-slate-100 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400"
-                  )}
-                >
-                  {tunInstalled ? "已启用" : "未安装"}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-white/[0.06]">
-                <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 font-semibold">
-                  {tunInstalled ? (
-                    <>
-                      <CheckCircle2Icon className="size-3 text-emerald-500" />
-                      <span className="text-emerald-600 font-bold dark:text-emerald-400">网卡运行正常 (aure-tun)</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircleIcon className="size-3 text-amber-500" />
-                      <span>推荐开启，支持终端代理接管</span>
-                    </>
-                  )}
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={tunInstalling}
-                  onClick={handleInstallTun}
-                  className={cn(
-                    "h-6 px-2.5 rounded-md text-[9px] font-bold transition-all duration-200 cursor-pointer",
-                    tunInstalled
-                      ? "bg-rose-50 text-rose-600 hover:bg-rose-100/60 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-900/30"
-                      : "bg-[#eef2ff] text-[#3b59ff] hover:bg-blue-100/60 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
-                  )}
-                >
-                  {tunInstalling ? (
-                    <RefreshCwIcon className="size-3 mr-1 animate-spin" />
-                  ) : null}
-                  {tunInstalled ? "卸载服务" : "立即安装"}
-                </Button>
-              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 2: Tray & UI Interaction (New Card) */}
+        {/* Card 2: Tray & UI Interaction */}
         <Card className="shrink-0 rounded-[20px]">
           <CardContent className="flex flex-col gap-2 pt-3 pb-3 px-4">
             <div className="flex items-center gap-1.5 shrink-0 mb-1">
@@ -186,7 +137,7 @@ export function SettingsPage() {
               <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">网络与代理参数</span>
             </div>
 
-            {/* Port Setting */}
+            {/* Proxy Port Setting */}
             <div className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 shrink-0 dark:border-white/[0.06] dark:bg-white/[0.04]">
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">混合代理端口 (Mixed Port)</span>
@@ -196,12 +147,35 @@ export function SettingsPage() {
                 <input
                   type="number"
                   value={port}
-                  onChange={(e) => setPort(e.target.value)}
+                  onChange={(e) => handleProxyPortChange(Number(e.target.value))}
                   className="w-16 h-6.5 rounded-md border border-slate-200 bg-white px-2 text-center text-xs font-bold text-slate-800 focus:border-[#007ACC] outline-none transition-all dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
                 />
                 <Button
                   variant="ghost"
-                  onClick={() => setPort("7890")}
+                  onClick={() => handleProxyPortChange(2345)}
+                  className="h-6.5 px-2 rounded-md text-[9px] font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  重置
+                </Button>
+              </div>
+            </div>
+
+            {/* Clash API Port Setting */}
+            <div className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 shrink-0 dark:border-white/[0.06] dark:bg-white/[0.04]">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">控制台 API 端口 (API Port)</span>
+                <span className="text-[9px] text-slate-550 dark:text-slate-400 font-semibold mt-0.5">Clash 核心控制器接口监听端口</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  value={apiPort}
+                  onChange={(e) => handleApiPortChange(Number(e.target.value))}
+                  className="w-16 h-6.5 rounded-md border border-slate-200 bg-white px-2 text-center text-xs font-bold text-slate-800 focus:border-[#007ACC] outline-none transition-all dark:border-white/[0.08] dark:bg-black dark:text-slate-200"
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => handleApiPortChange(9191)}
                   className="h-6.5 px-2 rounded-md text-[9px] font-bold text-slate-500 hover:text-slate-700 transition-colors"
                 >
                   重置

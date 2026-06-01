@@ -1,31 +1,96 @@
 import { useState, useEffect, useCallback } from "react"
 import { RefreshCwIcon } from "lucide-react"
-import { CN } from "country-flag-icons/react/1x1"
+import { invoke } from "@tauri-apps/api/core"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { getLanIp } from "@/utils/vpn-service"
+import { useEngineState } from "@/hooks/useEngineState"
+
+interface GeoIpInfo {
+  ip: string
+  countryName: string
+  countryCode: string
+  region: string
+  isp: string
+}
+
+function getFlagEmojiByCode(countryCode: string): string {
+  if (!countryCode || countryCode.length !== 2) return "🌐"
+  const codePoints = countryCode
+    .toUpperCase()
+    .split("")
+    .map((char) => 127397 + char.charCodeAt(0))
+  try {
+    return String.fromCodePoint(...codePoints)
+  } catch {
+    return "🌐"
+  }
+}
 
 export function NetworkPanel() {
-  const [lanIp, setLanIp] = useState<string>("获取中...")
+  const { isRunning } = useEngineState()
+  const [networkInfo, setNetworkInfo] = useState<GeoIpInfo>({
+    ip: "获取中...",
+    countryName: "获取中...",
+    countryCode: "UN",
+    region: "获取中...",
+    isp: "获取中...",
+  })
   const [refreshing, setRefreshing] = useState(false)
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
+    // Use Rust backend to query GeoIP — this routes through the configured proxy engine
+    // so the returned IP/location reflects the active proxy node, not the WebView's direct connection.
     try {
-      const ip = await getLanIp()
-      setLanIp(ip || "未知")
-    } catch {
-      setLanIp("获取失败")
+      const info = await invoke<{
+        ip: string
+        countryName: string
+        countryCode: string
+        region: string
+        isp: string
+      }>("get_geoip_info", { useProxy: isRunning })
+      setNetworkInfo({
+        ip: info.ip || "未知",
+        countryName: info.countryName || "未知",
+        countryCode: info.countryCode || "UN",
+        region: info.region || "未知",
+        isp: info.isp || "未知",
+      })
+    } catch (e) {
+      console.warn("get_geoip_info via Rust failed:", e)
+      setNetworkInfo({
+        ip: "未知 / 获取失败",
+        countryName: "未知",
+        countryCode: "UN",
+        region: "未知",
+        isp: "未知",
+      })
     } finally {
       setRefreshing(false)
     }
-  }, [])
+  }, [isRunning])
 
   useEffect(() => {
-    refresh()
+    if (isRunning) {
+      const timer = setTimeout(() => {
+        refresh()
+      }, 800)
+      return () => clearTimeout(timer)
+    } else {
+      refresh()
+    }
+  }, [isRunning, refresh])
+
+  useEffect(() => {
+    const handleNodeChange = () => {
+      refresh()
+    }
+    window.addEventListener("node-changed", handleNodeChange)
+    return () => {
+      window.removeEventListener("node-changed", handleNodeChange)
+    }
   }, [refresh])
 
   return (
@@ -35,13 +100,12 @@ export function NetworkPanel() {
           <span className="text-slate-500 font-medium">国家/地区</span>
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-1.5">
-              <CN className="h-4 shrink-0" />
-              <Badge
-                variant="ghost"
-                className="h-5 rounded-md bg-[#eef2ff] px-1.5 text-[10px] font-bold text-[#3b59ff] hover:bg-[#eef2ff] dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/10"
-              >
-                中国
-              </Badge>
+              <span className="text-sm leading-none shrink-0" role="img" aria-label="国旗">
+                {getFlagEmojiByCode(networkInfo.countryCode)}
+              </span>
+              <span className="truncate text-slate-800 dark:text-slate-200 font-bold">
+                {networkInfo.countryName}
+              </span>
             </div>
             <Button
               variant="ghost"
@@ -63,7 +127,7 @@ export function NetworkPanel() {
         <div className="flex items-center justify-between gap-4 text-xs font-semibold">
           <span className="text-slate-500 font-medium">IP 地址</span>
           <span className="truncate text-slate-800 dark:text-slate-200 font-bold font-mono">
-            {lanIp}
+            {networkInfo.ip}
           </span>
         </div>
 
@@ -72,7 +136,7 @@ export function NetworkPanel() {
         <div className="flex items-center justify-between gap-4 text-xs font-semibold">
           <span className="text-slate-500 font-medium">地理位置</span>
           <span className="truncate text-slate-800 dark:text-slate-200 font-bold">
-            待查询
+            {networkInfo.region}
           </span>
         </div>
 
@@ -81,7 +145,7 @@ export function NetworkPanel() {
         <div className="flex items-center justify-between gap-4 text-xs font-semibold">
           <span className="text-slate-500 font-medium">网络提供商</span>
           <span className="truncate text-slate-800 dark:text-slate-200 font-bold">
-            待查询
+            {networkInfo.isp}
           </span>
         </div>
       </CardContent>

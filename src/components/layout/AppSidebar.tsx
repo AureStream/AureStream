@@ -5,6 +5,9 @@ import {
   ZapIcon,
   SunIcon,
   MoonIcon,
+  TerminalIcon,
+  GitForkIcon,
+  CpuIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -20,6 +23,9 @@ import { useTheme } from "@/contexts/ThemeContext"
 const navItems = [
   { id: "home", icon: HomeIcon, label: "首页" },
   { id: "subscription", icon: BoxIcon, label: "订阅管理" },
+  { id: "router", icon: GitForkIcon, label: "路由规则" },
+  { id: "log", icon: TerminalIcon, label: "日志面板" },
+  { id: "developer", icon: CpuIcon, label: "开发者选项" },
   { id: "settings", icon: SettingsIcon, label: "设置" },
 ] as const
 
