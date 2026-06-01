@@ -19,8 +19,8 @@ import { useTheme } from "@/contexts/ThemeContext"
 import {
   getProxyPort,
   setProxyPort,
-  getClashApiPort,
-  setClashApiPort,
+  getControllerPort,
+  setControllerPort,
   getTunStack,
   setTunStack,
   type TunStack,
@@ -114,7 +114,7 @@ export function SettingsPage() {
     async function loadSettings() {
       const p = await getProxyPort()
       setPort(String(p))
-      const ap = await getClashApiPort()
+      const ap = await getControllerPort()
       setApiPort(String(ap))
       const stack = await getTunStack()
       setTunStackState(stack)
@@ -143,7 +143,7 @@ export function SettingsPage() {
   const handleApiPortChange = async (val: number) => {
     setApiPort(String(val))
     if (val > 0 && val <= 65535) {
-      await setClashApiPort(val)
+      await setControllerPort(val)
     }
   }
 
@@ -446,7 +446,7 @@ export function SettingsPage() {
 
                 <div className="flex items-center justify-between gap-4 py-1 shrink-0">
                   <div className="flex flex-col min-w-0">
-                    <span className={type.label}>控制台 API 端口</span>
+                    <span className={type.label}>sing-box 控制台端口</span>
                     <span className={cn(type.caption, "mt-0.5 truncate")}>控制器监听端口</span>
                   </div>
                   <div className="flex items-center shrink-0">

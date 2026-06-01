@@ -7,7 +7,8 @@ use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Int
 use crate::engine::{EngineManager, PlatformEngine, EVENT_STATUS_CHANGED};
 
 use super::log::{create_singbox_log_writer, write_singbox_log};
-use super::{ProcessManager, ProxyMode};
+use super::process::ProcessManager;
+use super::ProxyMode;
 
 pub(crate) fn spawn_process_monitor(
     app: tauri::AppHandle,

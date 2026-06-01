@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 import type { EngineState } from "@/types/engine-state"
 
-export type ProxyMode = "SystemProxy" | "ManualProxy" | "IntoProxy"
+export type ProxyMode = "SystemProxy" | "IntoProxy"
 
 export async function startEngine(
   path: string,
@@ -18,8 +18,8 @@ export async function getEngineState(): Promise<EngineState> {
   return invoke("get_engine_state")
 }
 
-export async function isRunning(secret: string): Promise<boolean> {
-  return invoke("is_running", { secret })
+export async function isEngineRunning(): Promise<boolean> {
+  return invoke("is_running")
 }
 
 export async function clearEngineError(): Promise<void> {

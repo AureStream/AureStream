@@ -337,7 +337,7 @@ export function SubscriptionPage() {
               <div className="flex flex-col gap-1">
                 <label className={type.label}>订阅链接 (URL)</label>
                 <textarea
-                  placeholder="粘贴您的 v2ray/clash 订阅链接..."
+                  placeholder="粘贴订阅链接（sing-box / 通用代理订阅）..."
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   rows={3}
@@ -401,7 +401,7 @@ export function SubscriptionPage() {
             </div>
 
             <div className={cn(type.description, "space-y-2.5")}>
-              <p>1. 支持各大网络代理 service 商的标准 Clash/v2ray 订阅协议格式。</p>
+              <p>1. 支持常见代理订阅链接；节点由 sing-box 解析并写入配置。</p>
               <p>2. 请务必保管好您的订阅地址链接，切勿随意分享给他人以免造成流量泄露。</p>
               <p>3. 订阅更新时将自动同步最新的服务器节点，请保持网络连接通畅。</p>
               <p>4. 当流量耗尽或接近过期时，订阅状态会自动变色提醒。</p>

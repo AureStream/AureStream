@@ -7,10 +7,39 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { useEngineState } from "@/hooks/useEngineState"
-import { fetchSelectGroup, selectProxyNode, pingNodeTcp } from "@/utils/clash-api"
+import { fetchSelectGroup, selectProxyNode, pingNodeTcp } from "@/utils/singbox-api"
 import { getStoreValue, setStoreValue } from "@/single/store"
+import {
+  LEGACY_SELECTED_NODE_TAG_KEY,
+  selectedNodeTagStoreKey,
+} from "@/types/definition"
 
-const SELECTED_NODE_KEY = "selected_node_tag"
+async function getSavedNodeTag(
+  subscriptionId: string,
+  nodeNames: string[]
+): Promise<string> {
+  if (!subscriptionId) return ""
+  const key = selectedNodeTagStoreKey(subscriptionId)
+  let saved = (await getStoreValue(key)) as string | undefined
+  if (!saved) {
+    const legacy = (await getStoreValue(LEGACY_SELECTED_NODE_TAG_KEY)) as
+      | string
+      | undefined
+    if (legacy && nodeNames.includes(legacy)) {
+      saved = legacy
+      await setStoreValue(key, legacy)
+    }
+  }
+  return saved && nodeNames.includes(saved) ? saved : ""
+}
+
+async function setSavedNodeTag(
+  subscriptionId: string,
+  nodeTag: string
+): Promise<void> {
+  if (!subscriptionId) return
+  await setStoreValue(selectedNodeTagStoreKey(subscriptionId), nodeTag)
+}
 
 function getFlagEmoji(name: string): string {
   const n = name.toUpperCase()
@@ -30,7 +59,7 @@ function getFlagEmoji(name: string): string {
 }
 
 export function NodeSelector() {
-  const { nodes, loading: subLoading } = useSubscriptions()
+  const { nodes, loading: subLoading, activeIdentifier } = useSubscriptions()
   const { isRunning } = useEngineState()
 
   const [selectedTag, setSelectedTag] = useState("")
@@ -38,39 +67,52 @@ export function NodeSelector() {
   const [isTestingSpeed, setIsTestingSpeed] = useState(false)
   const [sortMode, setSortMode] = useState<"default" | "latency" | "name">("default")
 
-  // Sync selected node tag from store or clash API
+  const nodeNames = useMemo(() => nodes.map((n) => n.name), [nodes])
+
+  // Clear stale latency data when active subscription or node list changes
   useEffect(() => {
-    let active = true
+    setLatencies({})
+    setSelectedTag("")
+  }, [activeIdentifier])
+
+  // Sync selected node tag from store or sing-box controller API
+  useEffect(() => {
+    if (!activeIdentifier || nodeNames.length === 0) {
+      setSelectedTag("")
+      return
+    }
+
+    let cancelled = false
     const syncActiveNode = async () => {
+      if (cancelled) return
       if (isRunning) {
         const group = await fetchSelectGroup()
-        if (group && active) {
+        if (group && !cancelled) {
           setSelectedTag(group.now)
-          await setStoreValue(SELECTED_NODE_KEY, group.now)
+          await setSavedNodeTag(activeIdentifier, group.now)
         }
       } else {
-        const saved = await getStoreValue(SELECTED_NODE_KEY)
-        const hasSaved = nodes.some((n) => n.name === saved)
-        if (saved && hasSaved && active) {
+        const saved = await getSavedNodeTag(activeIdentifier, nodeNames)
+        if (cancelled) return
+        if (saved) {
           setSelectedTag(saved)
-        } else if (nodes.length > 0 && active) {
-          setSelectedTag(nodes[0].name)
-          await setStoreValue(SELECTED_NODE_KEY, nodes[0].name)
+        } else if (nodeNames.length > 0) {
+          const first = nodeNames[0]
+          setSelectedTag(first)
+          await setSavedNodeTag(activeIdentifier, first)
         }
       }
     }
 
     const initNodeOnStartup = async () => {
-      if (isRunning) {
-        // Wait 500ms for Clash API to fully spin up
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        const saved = await getStoreValue(SELECTED_NODE_KEY)
-        const hasSaved = nodes.some((n) => n.name === saved)
-        if (saved && hasSaved && active) {
-          await selectProxyNode(saved)
-        } else if (nodes.length > 0 && active) {
-          await selectProxyNode(nodes[0].name)
-        }
+      if (!isRunning) return
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      if (cancelled) return
+      const saved = await getSavedNodeTag(activeIdentifier, nodeNames)
+      if (saved) {
+        await selectProxyNode(saved)
+      } else if (nodeNames.length > 0) {
+        await selectProxyNode(nodeNames[0])
       }
     }
 
@@ -78,21 +120,20 @@ export function NodeSelector() {
       syncActiveNode()
     })
 
-    // Poll current node if running
-    let interval: ReturnType<typeof setInterval>
+    let interval: ReturnType<typeof setInterval> | undefined
     if (isRunning) {
       interval = setInterval(syncActiveNode, 3000)
     }
 
     return () => {
-      active = false
+      cancelled = true
       if (interval) clearInterval(interval)
     }
-  }, [isRunning, nodes])
+  }, [isRunning, activeIdentifier, nodeNames])
 
   const handleSelectNode = async (nodeTag: string) => {
     setSelectedTag(nodeTag)
-    await setStoreValue(SELECTED_NODE_KEY, nodeTag)
+    await setSavedNodeTag(activeIdentifier, nodeTag)
     if (isRunning) {
       await selectProxyNode(nodeTag)
       // Dispatch once quickly in case connection is fast

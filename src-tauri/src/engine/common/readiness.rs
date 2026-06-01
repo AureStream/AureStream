@@ -5,14 +5,15 @@ use tokio::net::TcpStream;
 use tokio::time::{sleep, timeout, Instant};
 
 use super::state_machine::{transition, EngineState, EngineStateCell, Intent};
+use crate::core::controller_port;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
-const PROBE_ADDR: &str = "127.0.0.1:9191";
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(150);
 
 pub fn spawn(app: AppHandle, start_epoch: u64) {
     tokio::spawn(async move {
+        let probe_port = controller_port(&app);
         let deadline = Instant::now() + STARTUP_TIMEOUT;
         loop {
             let snap = app.state::<EngineStateCell>().snapshot();
@@ -20,7 +21,7 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
                 return;
             }
 
-            if probe_once().await {
+            if probe_controller_once(probe_port).await {
                 let _ = transition(&app, Intent::MarkRunning);
                 return;
             }
@@ -29,7 +30,9 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
                 let _ = transition(
                     &app,
                     Intent::Fail {
-                        reason: "startup timeout".into(),
+                        reason: format!(
+                            "startup timeout (controller 127.0.0.1:{probe_port} not ready)"
+                        ),
                     },
                 );
                 return;
@@ -40,9 +43,10 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
     });
 }
 
-async fn probe_once() -> bool {
+async fn probe_controller_once(port: u16) -> bool {
+    let addr = format!("127.0.0.1:{}", port);
     matches!(
-        timeout(PROBE_CONNECT_TIMEOUT, TcpStream::connect(PROBE_ADDR)).await,
+        timeout(PROBE_CONNECT_TIMEOUT, TcpStream::connect(addr)).await,
         Ok(Ok(_))
     )
 }

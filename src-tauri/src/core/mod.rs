@@ -1,20 +1,24 @@
+pub(crate) mod config_check;
 pub(crate) mod log;
 pub(crate) mod monitor;
+pub(crate) mod ports;
+pub(crate) mod process;
 
 pub use self::log::cleanup_old_app_logs;
+pub(crate) use ports::{controller_port, mixed_proxy_port, probe_port_listening};
+pub(crate) use process::{pm_snapshot, ProcessManager};
 
-use lazy_static::lazy_static;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
-use crate::app::state::AppData;
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 use crate::engine::{readiness, EVENT_STATUS_CHANGED};
 use crate::engine::{EngineManager, PlatformEngine};
 use tauri::Emitter;
-use tauri_plugin_shell::process::CommandChild;
+
+pub use crate::engine::ProxyMode;
 
 pub(crate) fn next_action_token() -> u64 {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -30,72 +34,16 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
-pub(crate) const DEFAULT_MIXED_PROXY_PORT: u16 = 2345;
+fn clear_orphans_on_proxy_ports(app: &AppHandle) {
+    let mixed_port = mixed_proxy_port(app);
+    let res = crate::commands::prestart::kill_orphans(app.clone(), Some(mixed_port));
+    ::log::info!("[start] prestart mixed :{mixed_port}: {}", res.message);
 
-pub(crate) fn mixed_proxy_port(app: &AppHandle) -> u16 {
-    use tauri_plugin_store::StoreExt;
-    app.get_store("settings.json")
-        .and_then(|s| s.get("proxy_port_key"))
-        .and_then(|v| v.as_u64())
-        .and_then(|port| u16::try_from(port).ok())
-        .filter(|port| *port > 0)
-        .unwrap_or(DEFAULT_MIXED_PROXY_PORT)
-}
-
-pub(crate) fn probe_port_listening(port: u16) -> bool {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
-}
-
-#[cfg(unix)]
-pub(crate) fn pid_is_alive(pid: u32) -> bool {
-    unsafe { libc::kill(pid as i32, 0) == 0 }
-}
-
-#[cfg(not(unix))]
-pub(crate) fn pid_is_alive(_pid: u32) -> bool {
-    true
-}
-
-fn pm_snapshot() -> (Option<u32>, Option<bool>, Option<ProxyMode>) {
-    let mgr = ProcessManager::acquire();
-    let pid = mgr.child.as_ref().map(|c| c.pid());
-    let alive = pid.map(pid_is_alive);
-    let mode = mgr.mode.as_ref().map(|m| (**m).clone());
-    (pid, alive, mode)
-}
-
-pub use crate::engine::ProxyMode;
-
-pub(crate) struct ProcessManager {
-    pub(crate) child: Option<CommandChild>,
-    pub(crate) mode: Option<Arc<ProxyMode>>,
-    pub(crate) config_path: Option<Arc<String>>,
-    pub(crate) is_stopping: bool,
-}
-
-impl ProcessManager {
-    pub(crate) fn acquire() -> std::sync::MutexGuard<'static, ProcessManager> {
-        PROCESS_MANAGER.lock().unwrap_or_else(|e| e.into_inner())
+    let ctrl_port = controller_port(app);
+    if ctrl_port != mixed_port {
+        let res = crate::commands::prestart::kill_orphans(app.clone(), Some(ctrl_port));
+        ::log::info!("[start] prestart controller :{ctrl_port}: {}", res.message);
     }
-
-    pub(crate) fn reset(&mut self) {
-        self.child = None;
-        self.mode = None;
-        self.config_path = None;
-        self.is_stopping = false;
-    }
-}
-
-lazy_static! {
-    pub(crate) static ref PROCESS_MANAGER: Arc<Mutex<ProcessManager>> =
-        Arc::new(Mutex::new(ProcessManager {
-            child: None,
-            mode: None,
-            config_path: None,
-            is_stopping: false,
-        }));
 }
 
 // ── Tauri Commands ────────────────────────────────────────────────────
@@ -103,18 +51,14 @@ lazy_static! {
 #[tauri::command]
 pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Result<(), String> {
     let action = next_action_token();
-    let mixed_port = mixed_proxy_port(&app);
     let mode_name = match mode {
         ProxyMode::SystemProxy => "系统代理 (SystemProxy)",
-        ProxyMode::ManualProxy => "手动代理 (ManualProxy)",
         ProxyMode::IntoProxy => "TUN虚拟网卡 (IntoProxy)",
     };
     ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
     let _ = app.emit(crate::engine::EVENT_TAURI_LOG, (0, format!("启动代理服务，模式: {}", mode_name)));
 
-    // Automatically check and kill any orphan/remnant processes occupying the target port before starting
-    let kill_res = crate::commands::prestart::kill_orphans(app.clone(), Some(mixed_port));
-    ::log::info!("[start] Prestart orphan check: {}", kill_res.message);
+    clear_orphans_on_proxy_ports(&app);
 
     {
         let cur = app.state::<EngineStateCell>().snapshot();
@@ -128,7 +72,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     }
     let mode_label = match mode {
         ProxyMode::IntoProxy => "tun",
-        ProxyMode::SystemProxy | ProxyMode::ManualProxy => "mixed",
+        ProxyMode::SystemProxy => "mixed",
     };
     if let Err(e) = transition(
         &app,
@@ -139,6 +83,12 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         return Err(format!("state transition rejected: {}", e));
     }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
+
+    if let Err(e) = config_check::verify(&app, &path).await {
+        ::log::error!("[start] action={action} config check failed: {}", e);
+        let _ = transition(&app, Intent::Fail { reason: e.clone() });
+        return Err(e);
+    }
 
     if let Err(e) = PlatformEngine::start(&app, mode.clone(), path, start_epoch).await {
         ::log::error!(
@@ -221,11 +171,11 @@ pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn is_running(app: AppHandle, secret: String) -> bool {
-    let app_data = app.state::<AppData>();
-    app_data.set_clash_secret(Some(secret));
-    let state = app.state::<EngineStateCell>().snapshot();
-    matches!(state, EngineState::Running { .. })
+pub fn is_running(app: AppHandle) -> bool {
+    matches!(
+        app.state::<EngineStateCell>().snapshot(),
+        EngineState::Running { .. }
+    )
 }
 
 #[tauri::command]
@@ -241,14 +191,9 @@ pub fn clear_engine_error(app: AppHandle) {
     }
 }
 
-#[allow(dead_code)]
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn get_running_config() -> Option<(ProxyMode, String)> {
-    let manager = ProcessManager::acquire();
-    match (manager.mode.as_ref(), manager.config_path.as_ref()) {
-        (Some(mode), Some(path)) => Some(((**mode).clone(), (**path).clone())),
-        _ => None,
-    }
+    process::running_config()
 }
 
 #[tauri::command]
@@ -268,18 +213,31 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
 
     #[cfg(any(unix, target_os = "windows"))]
     {
-        let needs_proxy_reset = {
+        let (needs_proxy_reset, config_path) = {
             let manager = ProcessManager::acquire();
-            match manager.mode.as_ref().map(|m| m.as_ref()) {
+            let path = manager
+                .config_path
+                .as_ref()
+                .map(|p| p.as_str().to_string());
+            let needs_proxy_reset = match manager.mode.as_ref().map(|m| m.as_ref()) {
                 Some(ProxyMode::IntoProxy) => false,
                 Some(ProxyMode::SystemProxy) => true,
-                Some(ProxyMode::ManualProxy) => false,
                 None => {
                     ::log::warn!("[reload] action={action} rejected: no running process");
                     return Err("No running process found".to_string());
                 }
-            }
+            };
+            (needs_proxy_reset, path)
         };
+
+        let Some(path) = config_path else {
+            return Err("No config path for running process".to_string());
+        };
+
+        if let Err(e) = config_check::verify(&app, &path).await {
+            ::log::error!("[reload] action={action} config check failed: {}", e);
+            return Err(e);
+        }
 
         ::log::info!("[reload] action={action} dispatching PlatformEngine::restart");
         PlatformEngine::restart(&app).await?;

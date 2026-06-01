@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/chart"
 import type { TrafficPoint } from "@/types/engine-state"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getClashApiSecret, getClashApiPort } from "@/single/store"
+import { subscribeTraffic } from "@/utils/singbox-api"
 
 const chartConfig = {
   download: { label: "下载", color: "var(--primary)" },
@@ -95,37 +95,7 @@ export function UsagePanel() {
     }))
   )
   useEffect(() => {
-    let unlisten: (() => void) | undefined
-    let active = true
-
-    const setupListener = async () => {
-      const { listen } = await import("@tauri-apps/api/event")
-      const { invoke } = await import("@tauri-apps/api/core")
-
-      const fn = await listen<{ up: number; down: number }>("traffic-tick", (event) => {
-        if (!active) return
-        const { up, down } = event.payload
-        setUploadSpeed(up)
-        setDownloadSpeed(down)
-        setUploadTotal((prev) => prev + up)
-        setDownloadTotal((prev) => prev + down)
-        setHistory((prev) => {
-          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
-          return next.map((p, i) => ({ ...p, time: `${i}` }))
-        })
-      })
-      unlisten = fn
-
-      if (isRunning && active) {
-        const secret = await getClashApiSecret()
-        const port = await getClashApiPort()
-        await invoke("start_traffic_listener", { port, secret })
-      }
-    }
-
-    if (isRunning) {
-      setupListener()
-    } else {
+    if (!isRunning) {
       setUploadSpeed(0)
       setDownloadSpeed(0)
       setUploadTotal(0)
@@ -137,13 +107,34 @@ export function UsagePanel() {
           upload: 0,
         }))
       )
+      return
     }
+
+    const abort = new AbortController()
+    let active = true
+
+    subscribeTraffic(
+      ({ up, down }) => {
+        if (!active) return
+        setUploadSpeed(up)
+        setDownloadSpeed(down)
+        setUploadTotal((prev) => prev + up)
+        setDownloadTotal((prev) => prev + down)
+        setHistory((prev) => {
+          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
+          return next.map((p, i) => ({ ...p, time: `${i}` }))
+        })
+      },
+      abort.signal
+    ).catch((err) => {
+      if (!abort.signal.aborted) {
+        console.error("[UsagePanel] sing-box /traffic stream failed:", err)
+      }
+    })
 
     return () => {
       active = false
-      if (unlisten) {
-        unlisten()
-      }
+      abort.abort()
     }
   }, [isRunning])
 
