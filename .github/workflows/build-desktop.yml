@@ -126,7 +126,13 @@ jobs:
           BUNDLE_DIR="src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis"
           PORTABLE_DIR=$(mktemp -d)
 
-          cp "$RELEASE_DIR/AureStream.exe" "$PORTABLE_DIR/"
+          MAIN_EXE=$(find "$RELEASE_DIR" -maxdepth 1 -iname "aurestream.exe" -print -quit)
+          if [ -n "$MAIN_EXE" ]; then
+            cp "$MAIN_EXE" "$PORTABLE_DIR/aurestream.exe"
+          else
+            echo "Error: Main executable (aurestream.exe) not found in $RELEASE_DIR"
+            exit 1
+          fi
 
           AURESTREAM_CORE=$(find "$RELEASE_DIR" -maxdepth 1 -name "aurestream-core*.exe" -print -quit)
           if [ -n "$AURESTREAM_CORE" ]; then
