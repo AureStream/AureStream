@@ -36,6 +36,7 @@ pub fn run() {
             core::reload_config,
             // engine probe commands
             engine::engine_ensure_installed,
+            engine::engine_uninstall_service,
             engine::engine_probe,
             // shell commands
             commands::shell::version,

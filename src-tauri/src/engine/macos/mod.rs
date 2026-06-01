@@ -691,6 +691,11 @@ impl EngineManager for MacOSEngine {
             .map_err(|e| format!("ensure_installed join error: {}", e))?
     }
 
+    async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
+        log::info!("[mac] uninstall_service requested (no-op on macOS)");
+        Ok(())
+    }
+
     async fn probe(_app: &AppHandle) -> Result<String, String> {
         tokio::task::spawn_blocking(macos_helper::api::ping)
             .await

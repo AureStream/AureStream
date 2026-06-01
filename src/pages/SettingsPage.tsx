@@ -18,6 +18,8 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/contexts/ThemeContext"
 import { getProxyPort, setProxyPort, getClashApiPort, setClashApiPort } from "@/single/store"
+import { invoke } from "@tauri-apps/api/core"
+import { message } from "@tauri-apps/plugin-dialog"
 
 export function SettingsPage() {
   const { theme, setTheme } = useTheme()
@@ -40,6 +42,71 @@ export function SettingsPage() {
 
   // States for About Card updates
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest">("idle")
+
+  // States for TUN service management
+  const [serviceStatus, setServiceStatus] = useState<"checking" | "installed" | "not_installed" | "failed">("checking")
+  const [actionLoading, setActionLoading] = useState(false)
+  const [activeAction, setActiveAction] = useState<"install" | "uninstall" | null>(null)
+
+  const checkServiceStatus = async () => {
+    setServiceStatus("checking")
+    try {
+      await invoke("engine_probe")
+      setServiceStatus("installed")
+    } catch {
+      setServiceStatus("not_installed")
+    }
+  }
+
+  useEffect(() => {
+    checkServiceStatus()
+  }, [])
+
+  const handleInstallService = async () => {
+    setActionLoading(true)
+    setActiveAction("install")
+    try {
+      await invoke("engine_ensure_installed")
+      setServiceStatus("installed")
+      await message("辅助服务安装/更新成功", {
+        title: "成功",
+        kind: "info",
+      })
+    } catch (err: any) {
+      console.error("Install helper service failed:", err)
+      await message(`安装辅助服务失败: ${err.message || err}`, {
+        title: "错误",
+        kind: "error",
+      })
+      await checkServiceStatus()
+    } finally {
+      setActionLoading(false)
+      setActiveAction(null)
+    }
+  }
+
+  const handleUninstallService = async () => {
+    setActionLoading(true)
+    setActiveAction("uninstall")
+    try {
+      await invoke("engine_uninstall_service")
+      setServiceStatus("not_installed")
+      await message("辅助服务已成功卸载", {
+        title: "成功",
+        kind: "info",
+      })
+    } catch (err: any) {
+      console.error("Uninstall helper service failed:", err)
+      await message(`卸载辅助服务失败: ${err.message || err}`, {
+        title: "错误",
+        kind: "error",
+      })
+      await checkServiceStatus()
+    } finally {
+      setActionLoading(false)
+      setActiveAction(null)
+    }
+  }
 
   useEffect(() => {
     async function loadSettings() {
@@ -93,6 +160,50 @@ export function SettingsPage() {
                 <span className="text-[9px] text-slate-550 dark:text-slate-400 font-semibold mt-0.5">在系统启动时自动运行客户端</span>
               </div>
               <Switch checked={autoStart} onCheckedChange={setAutoStart} size="sm" />
+            </div>
+
+            {/* TUN Service Management */}
+            <div className="flex flex-col gap-2 rounded-[12px] border border-slate-200/60 bg-white/40 p-2.5 hover:bg-white/70 transition-all duration-200 dark:border-white/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">TUN 网卡辅助服务</span>
+                  <span className="text-[9px] text-slate-550 dark:text-slate-400 font-semibold mt-0.5">
+                    {serviceStatus === "checking" && "正在检测服务状态..."}
+                    {serviceStatus === "installed" && "服务已安装并就绪"}
+                    {serviceStatus === "not_installed" && "未安装辅助服务，无法使用 TUN 模式"}
+                    {serviceStatus === "failed" && "服务检测失败"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn(
+                    "size-2 rounded-full",
+                    serviceStatus === "installed" ? "bg-green-500" : serviceStatus === "checking" ? "bg-blue-400 animate-pulse" : "bg-slate-400"
+                  )} />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-1">
+                {serviceStatus === "installed" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={actionLoading}
+                    onClick={handleUninstallService}
+                    className="flex-1 h-7 rounded-lg text-[9px] font-bold border-rose-100 text-rose-600 hover:bg-rose-50/50 dark:border-rose-950/40 dark:text-rose-450 dark:hover:bg-rose-950/20"
+                  >
+                    {actionLoading && activeAction === "uninstall" ? "正在卸载..." : "卸载服务"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={serviceStatus === "checking" || actionLoading}
+                    onClick={handleInstallService}
+                    className="flex-1 h-7 rounded-lg text-[9px] font-bold border-blue-100 text-[#3b59ff] hover:bg-blue-50/50 dark:border-blue-950/40 dark:text-blue-400 dark:hover:bg-blue-950/20"
+                  >
+                    {actionLoading && activeAction === "install" ? "正在安装..." : "安装服务"}
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

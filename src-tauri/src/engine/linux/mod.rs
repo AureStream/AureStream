@@ -371,6 +371,11 @@ impl EngineManager for LinuxEngine {
         }
     }
 
+    async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
+        log::info!("[linux] uninstall_service requested (no-op on Linux)");
+        Ok(())
+    }
+
     async fn probe(_app: &AppHandle) -> Result<String, String> {
         if std::path::Path::new(HELPER_PATH).exists() {
             Ok("available".into())

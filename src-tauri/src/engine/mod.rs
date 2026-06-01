@@ -30,6 +30,7 @@ pub trait EngineManager {
     fn on_process_terminated(_app: &AppHandle, _was_user_stop: bool) {}
 
     async fn ensure_installed(app: &AppHandle) -> Result<(), String>;
+    async fn uninstall_service(app: &AppHandle) -> Result<(), String>;
     async fn probe(app: &AppHandle) -> Result<String, String>;
 
     fn start_settle_delay(mode: &ProxyMode) -> std::time::Duration {
@@ -56,6 +57,11 @@ pub mod windows;
 #[tauri::command]
 pub async fn engine_ensure_installed(app: AppHandle) -> Result<(), String> {
     PlatformEngine::ensure_installed(&app).await
+}
+
+#[tauri::command]
+pub async fn engine_uninstall_service(app: AppHandle) -> Result<(), String> {
+    PlatformEngine::uninstall_service(&app).await
 }
 
 #[tauri::command]
