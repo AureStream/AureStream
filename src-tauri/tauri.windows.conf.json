@@ -1,7 +1,7 @@
 {
   "bundle": {
     "externalBin": [
-      "binaries/sing-box",
+      "binaries/aurestream-core",
       "binaries/tun-service"
     ]
   }

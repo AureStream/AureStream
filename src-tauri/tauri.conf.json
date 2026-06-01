@@ -27,7 +27,7 @@
     "active": true,
     "targets": "all",
     "externalBin": [
-      "binaries/sing-box"
+      "binaries/aurestream-core"
     ],
     "icon": [
       "icons/32x32.png",

@@ -31,11 +31,11 @@ impl EngineManager for WindowsEngine {
                 "x86_64-pc-windows-msvc"
             };
             let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
-            let sing_box_path = resource_dir.join(format!("binaries/sing-box-{}.exe", triple));
+            let core_path = resource_dir.join(format!("binaries/aurestream-core-{}.exe", triple));
 
             let config_path_str = config_path.as_str();
-            let sing_box_path_str = sing_box_path.to_string_lossy();
-            let args = [config_path_str, "-", &sing_box_path_str];
+            let core_path_str = core_path.to_string_lossy();
+            let args = [config_path_str, "-", &core_path_str];
 
             log::info!("[win] starting AureStreamTunService with args: {:?}", args);
             tun_service::scm::start_service_with_args(&args).map_err(|e| {
@@ -52,12 +52,12 @@ impl EngineManager for WindowsEngine {
         } else {
             let cmd = app
                 .shell()
-                .sidecar("sing-box")
+                .sidecar("aurestream-core")
                 .map_err(|e| format!("sidecar lookup failed: {}", e))?
                 .args(["run", "-c", &config_path, "--disable-color"]);
             let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
             let child_pid = child.pid();
-            log::info!("[sing-box] spawned pid={} mode={:?}", child_pid, mode);
+            log::info!("[aurestream-core] spawned pid={} mode={:?}", child_pid, mode);
 
             spawn_process_monitor(
                 app.clone(),

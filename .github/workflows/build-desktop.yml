@@ -128,9 +128,9 @@ jobs:
 
           cp "$RELEASE_DIR/AureStream.exe" "$PORTABLE_DIR/"
 
-          SINGBOX=$(find "$RELEASE_DIR" -maxdepth 1 -name "sing-box*.exe" -print -quit)
-          if [ -n "$SINGBOX" ]; then
-            cp "$SINGBOX" "$PORTABLE_DIR/"
+          AURESTREAM_CORE=$(find "$RELEASE_DIR" -maxdepth 1 -name "aurestream-core*.exe" -print -quit)
+          if [ -n "$AURESTREAM_CORE" ]; then
+            cp "$AURESTREAM_CORE" "$PORTABLE_DIR/"
           fi
           
           TUNSERVICE=$(find "$RELEASE_DIR" -maxdepth 1 -name "tun-service*.exe" -print -quit)

@@ -170,9 +170,9 @@ static NSString *copyCallerSingBoxPath(NSXPCConnection *connection) {
     }
 
     NSURL *url = (__bridge_transfer NSURL *)bundleURL;
-    NSString *sidecar = [url.path stringByAppendingPathComponent:@"Contents/MacOS/sing-box"];
+    NSString *sidecar = [url.path stringByAppendingPathComponent:@"Contents/MacOS/aurestream-core"];
     if (![[NSFileManager defaultManager] fileExistsAtPath:sidecar]) {
-        NSLog(@"[helper] derived sing-box path does not exist: %@", sidecar);
+        NSLog(@"[helper] derived aurestream-core path does not exist: %@", sidecar);
         return nil;
     }
     return sidecar;

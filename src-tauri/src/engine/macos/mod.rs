@@ -534,12 +534,12 @@ impl EngineManager for MacOSEngine {
                 let should_set_system_proxy = matches!(mode, crate::engine::ProxyMode::SystemProxy);
                 let cmd = app
                     .shell()
-                    .sidecar("sing-box")
+                    .sidecar("aurestream-core")
                     .map_err(|e| format!("sidecar lookup failed: {}", e))?
                     .args(["run", "-c", &config_path, "--disable-color"]);
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
-                log::info!("[sing-box] spawned pid={} mode=SystemProxy", child_pid);
+                log::info!("[aurestream-core] spawned pid={} mode=SystemProxy", child_pid);
                 crate::core::monitor::spawn_process_monitor(
                     app.clone(),
                     rx,
@@ -718,12 +718,12 @@ impl EngineManager for MacOSEngine {
                 Err(e) => log::warn!("[reload] flush_dns_cache join error: {}", e),
             }
         } else {
-            match Command::new("pgrep").args(["-lf", "sing-box"]).output() {
+            match Command::new("pgrep").args(["-lf", "aurestream-core"]).output() {
                 Ok(out) => {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let lines: Vec<&str> = stdout.lines().collect();
                     log::info!(
-                        "[reload] pgrep pre-pkill: {} sing-box process(es) {:?}",
+                        "[reload] pgrep pre-pkill: {} aurestream-core process(es) {:?}",
                         lines.len(),
                         lines
                     );
@@ -740,7 +740,7 @@ impl EngineManager for MacOSEngine {
             );
 
             let output = Command::new("pkill")
-                .args(["-HUP", "sing-box"])
+                .args(["-HUP", "aurestream-core"])
                 .output()
                 .map_err(|e| format!("Failed to send SIGHUP: {}", e))?;
             let code = output.status.code();
@@ -749,7 +749,7 @@ impl EngineManager for MacOSEngine {
             if !output.status.success() {
                 if code == Some(1) {
                     log::warn!(
-                        "[reload] pkill -HUP matched 0 processes (code=1) — sing-box may already be dead"
+                        "[reload] pkill -HUP matched 0 processes (code=1) — aurestream-core may already be dead"
                     );
                     return Err(format!("pkill -HUP matched nothing: {}", stderr));
                 }
