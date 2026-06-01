@@ -29,7 +29,7 @@ fn compress_singbox_log(log_path: &Path) -> std::io::Result<()> {
 
             encoder.finish()?;
             std::fs::remove_file(log_path)?;
-            log::info!("Compressed sing-box log to: {}", compressed_path.display());
+            log::info!("Compressed aurestream-core log to: {}", compressed_path.display());
         }
     }
     Ok(())
@@ -39,14 +39,14 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
     std::fs::create_dir_all(log_dir)?;
 
     let date = today_date_string();
-    let log_path = log_dir.join(format!("sing-box-{}.log", date));
+    let log_path = log_dir.join(format!("aurestream-core-{}.log", date));
     let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 86400);
 
     if let Ok(entries) = std::fs::read_dir(log_dir) {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            if !name_str.starts_with("sing-box-") {
+            if !name_str.starts_with("aurestream-core-") {
                 continue;
             }
 
@@ -60,7 +60,7 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
                 let modified = meta.modified().unwrap_or(std::time::SystemTime::now());
                 if modified < cutoff {
                     let _ = std::fs::remove_file(entry.path());
-                    log::info!("Removed old sing-box log: {}", name_str);
+                    log::info!("Removed aurestream-core log: {}", name_str);
                     continue;
                 }
             }
@@ -93,7 +93,8 @@ pub(super) fn create_singbox_log_writer(app: &AppHandle) -> Option<std::fs::File
 
 pub(super) fn write_singbox_log(writer: &mut Option<std::fs::File>, line: &str) {
     if let Some(ref mut file) = writer {
-        let _ = writeln!(file, "{}", line);
+        let trimmed = line.trim_end_matches(|c| c == '\r' || c == '\n');
+        let _ = writeln!(file, "{}", trimmed);
     }
 }
 

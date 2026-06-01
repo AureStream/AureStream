@@ -6,12 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "pnpm run sync-templates",
     "build": "tsc && vite build",
+    "prebuild": "pnpm run sync-templates",
     "preview": "vite preview",
     "tauri": "tauri",
     "download-binaries": "tsx scripts/download-binaries.ts",
     "build-tun": "tsx scripts/build-tun-service.ts",
-    "prebundle": "tsx scripts/prebundle.ts"
+    "pre-bundle": "tsx scripts/prebundle.ts",
+    "sync-templates": "tsx scripts/sync-templates.ts",
+    "release": "pnpm download-binaries && pnpm build-tun --release && pnpm build && pnpm tauri build"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.7",
@@ -45,6 +49,7 @@
     "@types/react-dom": "^19.1.6",
     "@types/unzipper": "^0.10.11",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsonc-parser": "^3.3.1",
     "tailwindcss": "^4.1.8",
     "tar": "^7.5.15",
     "tsx": "^4.19.0",

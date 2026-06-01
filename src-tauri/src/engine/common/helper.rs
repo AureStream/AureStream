@@ -5,15 +5,24 @@ use tauri::utils::platform;
 pub fn get_sidecar_path(program: &Path) -> Result<String, anyhow::Error> {
     match platform::current_exe()?.parent() {
         #[cfg(windows)]
-        Some(exe_dir) => Ok(exe_dir
-            .join(program)
-            .with_extension("exe")
-            .to_string_lossy()
-            .into_owned()),
+        Some(exe_dir) => {
+            let raw = exe_dir
+                .join(program)
+                .with_extension("exe")
+                .to_string_lossy()
+                .into_owned();
+            // Strip \\?\ verbatim prefix so SYSTEM services can spawn the binary
+            Ok(strip_verbatim_prefix(&raw).to_string())
+        }
         #[cfg(not(windows))]
         Some(exe_dir) => Ok(exe_dir.join(program).to_string_lossy().into_owned()),
         None => Err(anyhow::anyhow!("Failed to get the executable directory")),
     }
+}
+
+#[cfg(windows)]
+fn strip_verbatim_prefix(s: &str) -> &str {
+    s.strip_prefix(r"\\?\").unwrap_or(s)
 }
 
 pub fn extract_tun_gateway_from_config(config_path: &str) -> Option<String> {

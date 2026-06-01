@@ -15,8 +15,10 @@
 #![allow(dead_code)]
 
 use std::ffi::OsStr;
+use std::io::{BufRead, BufReader};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::process::CommandExt;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// `CREATE_NO_WINDOW` — passed via `CommandExt::creation_flags` to stop Windows
@@ -177,9 +179,12 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // Spawn sing-box. `CREATE_NO_WINDOW` is required — without it the service
     // (which has no console) spawning a console-subsystem child causes Windows
     // to pop a fresh terminal on the user's desktop.
+    // stdout/stderr are piped so we can log sing-box output for diagnostics.
     let mut child = match std::process::Command::new(&sidecar)
         .args(["run", "-c", &config, "--disable-color"])
         .creation_flags(CREATE_NO_WINDOW)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Ok(c) => c,
@@ -192,6 +197,26 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         }
     };
     dns::log_line(&format!("sing-box spawned pid={}", child.id()));
+
+    // Spawn reader threads to capture sing-box output into the service log.
+    if let Some(stdout) = child.stdout.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                if let Ok(l) = line {
+                    dns::log_line(&format!("[sing-box] {}", l));
+                }
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines() {
+                if let Ok(l) = line {
+                    dns::log_line(&format!("[sing-box:err] {}", l));
+                }
+            }
+        });
+    }
 
     set_state(SERVICE_RUNNING, 0, 0);
 
