@@ -128,6 +128,16 @@ export function NodeSelector() {
     }
   }
 
+  // Auto speed test when nodes list is loaded or updated and no latencies are tested yet
+  useEffect(() => {
+    if (nodes.length > 0 && !isTestingSpeed) {
+      const hasNoLatency = nodes.every((node) => latencies[node.name] === undefined)
+      if (hasNoLatency) {
+        handleSpeedTest()
+      }
+    }
+  }, [nodes])
+
   // Map nodes to include latency details and sort if chosen
   const displayNodes = useMemo(() => {
     const mapped = nodes.map((node) => {
