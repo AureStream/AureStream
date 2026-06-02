@@ -39,6 +39,15 @@ export const SSI_STORE_KEY = "selected_subscription_identifier";
 export const SELECTED_NODE_TAG_STORE_PREFIX = "selected_node_tag:";
 /** @deprecated Legacy global key; migrated on read when per-sub key is empty. */
 export const LEGACY_SELECTED_NODE_TAG_KEY = "selected_node_tag";
+export const AUTO_UPDATE_STORE_KEY = "auto_update_key";
+export const UPDATE_INTERVAL_STORE_KEY = "update_interval_key";
+export type UpdateInterval = "6h" | "12h" | "24h" | "7d";
+export const INTERVAL_SECONDS: Record<UpdateInterval, number> = {
+  "6h": 6 * 3600,
+  "12h": 12 * 3600,
+  "24h": 24 * 3600,
+  "7d": 7 * 24 * 3600,
+};
 
 export function selectedNodeTagStoreKey(identifier: string): string {
   return `${SELECTED_NODE_TAG_STORE_PREFIX}${identifier}`;

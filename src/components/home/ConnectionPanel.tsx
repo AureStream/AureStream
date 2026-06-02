@@ -106,25 +106,23 @@ export function ConnectionPanel({ className }: { className?: string }) {
     void handleEnableTunChange(!enableTun)
   }
 
-  const since =
-    engineState.kind === "running" || engineState.kind === "starting"
-      ? engineState.since
-      : null
-
   useEffect(() => {
-    if (since !== null) {
+    if (engineState.kind === "running") {
+      const runningSince = engineState.since
       const update = () =>
-        setUptime(Math.max(0, Math.floor(Date.now() / 1000 - since)))
+        setUptime(Math.max(0, Math.floor(Date.now() / 1000 - runningSince)))
       update()
       uptimeRef.current = setInterval(update, 1000)
       return () => {
         if (uptimeRef.current) clearInterval(uptimeRef.current)
       }
+    } else if (engineState.kind === "stopping") {
+      if (uptimeRef.current) clearInterval(uptimeRef.current)
     } else {
       setUptime(0)
       if (uptimeRef.current) clearInterval(uptimeRef.current)
     }
-  }, [since])
+  }, [engineState.kind, "since" in engineState ? engineState.since : undefined])
 
   const handleToggle = async () => {
     if (isConnected || isStarting) {

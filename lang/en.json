@@ -148,5 +148,8 @@
   "please_select_valid_subscription": "Please add and select a valid subscription on the subscription page first",
   "config_parse_merge_failed": "Config parse and merge failed",
   "on": "On",
-  "off": "Off"
+  "off": "Off",
+  "never": "Never",
+  "update_time": "Updated At"
 }
+

@@ -60,6 +60,7 @@ pub fn on_run_event(app_handle: &AppHandle, event: RunEvent) {
             use crate::engine::cleanup_on_shutdown;
             log::info!("[exit] RunEvent::Exit fired, performing final proxy cleanup");
             cleanup_on_shutdown();
+            crate::app::single_instance::cleanup();
         }
         _ => {
             #[cfg(not(target_os = "macos"))]

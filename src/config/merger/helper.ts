@@ -1,5 +1,5 @@
 import { type } from '@tauri-apps/plugin-os';
-import { getDirectDNS, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
+import { getDirectDNS, getProxyDnsServer, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
 import { TUN_INTERFACE_NAME } from "../../types/definition";
 import { writeConfigFile } from "../helper";
 
@@ -34,7 +34,27 @@ export async function updateDHCPSettings2Config(newConfig: any) {
     }
 }
 
-export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData: any, newConfig: any) {
+/**
+ * Patch the DNS proxy server using the benchmarked fastest global DNS.
+ * Falls back to UDP 8.8.8.8 if the benchmark hasn't completed yet.
+ * Adds a secondary DNS server for redundancy.
+ */
+export async function patchDnsProxyConfig(newConfig: any) {
+    if (!newConfig?.dns?.servers) return;
+
+    const bestGlobalDns = await getProxyDnsServer();
+    console.log(`[CONFIG] Best global DNS from benchmark: ${bestGlobalDns}`);
+
+    for (const server of newConfig.dns.servers) {
+        if (server.tag === "dns_proxy") {
+            server.type = "udp";
+            server.server = bestGlobalDns;
+            console.log(`[CONFIG] dns_proxy configured: udp/${bestGlobalDns}`);
+        }
+    }
+}
+
+export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData: any, newConfig: any, defaultNodeTag?: string) {
     if (!dbConfigData?.outbounds) {
         throw new Error('subscription_config_missing');
     }
@@ -43,7 +63,8 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
     const outboundsUrltestIndex = 2;
 
     const outbound_groups = newConfig["outbounds"];
-    const outboundsSelector = outbound_groups[outboundsSelectorIndex]["outbounds"];
+    const selectorGroup = outbound_groups[outboundsSelectorIndex];
+    const outboundsSelector = selectorGroup["outbounds"];
     const outboundsUrltest = outbound_groups[outboundsUrltestIndex]["outbounds"];
 
     const seenTags = new Set<string>();
@@ -62,6 +83,14 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
     for (let i = 0; i < vpnServerList.length; i++) {
         vpnServerList[i]["domain_resolver"] = "system";
         outboundsSelector.push(vpnServerList[i].tag);
+    }
+
+    // Set default selected node for the selector group if valid
+    if (defaultNodeTag && selectorGroup.type === "selector") {
+        const hasNode = vpnServerList.some((n: any) => n.tag === defaultNodeTag);
+        if (hasNode) {
+            selectorGroup["default"] = defaultNodeTag;
+        }
     }
 
     const urltestNameList: string[] = vpnServerList.map((item: any) => item.tag);

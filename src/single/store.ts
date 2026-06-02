@@ -198,6 +198,20 @@ export async function getDirectDNS(): Promise<string> {
     }
 }
 
+/** Get the fastest global DNS server (benchmarked at startup). */
+export async function getProxyDnsServer(): Promise<string> {
+    let s = await store.get('proxy_dns') as string | undefined;
+    if (s) {
+        return s;
+    }
+    try {
+        let defaultValue = await invoke('get_optimal_global_dns_server') as string;
+        return defaultValue || '8.8.8.8';
+    } catch {
+        return '8.8.8.8';
+    }
+}
+
 export async function getUserAgent(): Promise<string> {
     const ua = await store.get(USER_AGENT_STORE_KEY) as string | undefined;
     return ua || 'default';

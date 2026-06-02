@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   BoxIcon,
   PlusIcon,
@@ -22,6 +22,12 @@ import { badge, btn, iconBadge, surface, type } from "@/lib/typography"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { insertSubscription, deleteSubscription, updateSubscription } from "@/action/db"
 import { message } from "@tauri-apps/plugin-dialog"
+import { getStoreValue, setStoreValue, getEnableTun } from "@/single/store"
+import { AUTO_UPDATE_STORE_KEY, UPDATE_INTERVAL_STORE_KEY } from "@/types/definition"
+import type { UpdateInterval } from "@/types/definition"
+import { mergeConnectionConfig } from "@/lib/connection-config"
+import { ROUTING_MODE_KEY, normalizeRoutingMode } from "@/lib/routing-mode"
+import { getEngineState } from "@/utils/vpn-service"
 
 const getFriendlyNameFromUrl = (urlStr: string, t: (key: string) => string): string => {
   try {
@@ -62,6 +68,13 @@ function formatExpiry(expireTimeMs: number, t: (key: string) => string): string 
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
+function formatLastUpdate(timestamp: number, t: (key: string) => string): string {
+  if (!timestamp || timestamp <= 0) return t("never")
+  const date = new Date(timestamp * 1000)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 function getStatus(expireTimeMs: number): "active" | "expired" | "expiring" {
   if (!expireTimeMs || expireTimeMs <= 0) return "active"
   const now = Date.now()
@@ -84,9 +97,43 @@ export function SubscriptionPage() {
   const [name, setName] = useState("")
   const [url, setUrl] = useState("")
   const [autoUpdate, setAutoUpdate] = useState(true)
-  const [updateInterval, setUpdateInterval] = useState<"6h" | "12h" | "24h" | "7d">("24h")
+  const [updateInterval, setUpdateInterval] = useState<UpdateInterval>("24h")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUpdatingAll, setIsUpdatingAll] = useState(false)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  // Load persisted auto-update settings
+  useEffect(() => {
+    getStoreValue(AUTO_UPDATE_STORE_KEY, true).then(setAutoUpdate)
+    getStoreValue(UPDATE_INTERVAL_STORE_KEY, "24h").then((v) => setUpdateInterval(v as UpdateInterval))
+  }, [])
+
+  const handleAutoUpdateChange = async (val: boolean) => {
+    setAutoUpdate(val)
+    await setStoreValue(AUTO_UPDATE_STORE_KEY, val)
+  }
+
+  const handleUpdateIntervalChange = async (val: UpdateInterval) => {
+    setUpdateInterval(val)
+    await setStoreValue(UPDATE_INTERVAL_STORE_KEY, val)
+  }
+
+  /** Rebuild config.json and hot-reload if this is the active subscription and engine is running. */
+  async function reloadIfActiveAndRunning(identifier: string) {
+    if (identifier !== activeIdentifier) return
+    const state = await getEngineState()
+    if (state.kind !== "running") return
+    try {
+      const routingRaw = await getStoreValue(ROUTING_MODE_KEY, "rule")
+      const routingMode = normalizeRoutingMode(routingRaw)
+      const enableTun = await getEnableTun()
+      await mergeConnectionConfig(activeIdentifier, routingMode, enableTun)
+      const { invoke } = await import("@tauri-apps/api/core")
+      await invoke("reload_config")
+    } catch (e) {
+      console.error("[subscription] config reload after update failed:", e)
+    }
+  }
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -128,11 +175,12 @@ export function SubscriptionPage() {
   }
 
   const handleSingleUpdate = async (identifier: string) => {
-    if (!(await requireIdleForMutation())) return
+    setUpdatingId(identifier)
     try {
       const ok = await updateSubscription(identifier)
       if (ok) {
         await refresh()
+        await reloadIfActiveAndRunning(identifier)
       } else {
         await message(t("update_subscription_failed"), {
           title: t("update_failed"),
@@ -141,18 +189,26 @@ export function SubscriptionPage() {
       }
     } catch (err) {
       console.error(err)
+    } finally {
+      setUpdatingId(null)
     }
   }
 
   const handleUpdateAll = async () => {
     if (isUpdatingAll) return
-    if (!(await requireIdleForMutation())) return
     setIsUpdatingAll(true)
+    let activeWasUpdated = false
     try {
       for (const sub of subscriptions) {
-        await updateSubscription(sub.identifier)
+        const ok = await updateSubscription(sub.identifier)
+        if (ok && sub.identifier === activeIdentifier) {
+          activeWasUpdated = true
+        }
       }
       await refresh()
+      if (activeWasUpdated) {
+        await reloadIfActiveAndRunning(activeIdentifier)
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -251,13 +307,14 @@ export function SubscriptionPage() {
                               variant="ghost"
                               size="icon"
                               className="size-7 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                              disabled={updatingId === sub.identifier}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleSingleUpdate(sub.identifier)
                               }}
                               aria-label={t("update_subscription")}
                             >
-                              <RefreshCwIcon className="size-3.5" />
+                              <RefreshCwIcon className={cn("size-3.5", updatingId === sub.identifier && "animate-spin")} />
                             </Button>
                             <Button
                               variant="ghost"
@@ -298,15 +355,23 @@ export function SubscriptionPage() {
                         </div>
 
                         {/* Footer Info */}
-                        <div className={cn("flex items-center justify-between mt-1 pt-1.5 border-t border-border/60", type.caption)}>
-                          <span className="flex items-center gap-1">
-                            <CalendarIcon className="size-3" />
-                            {t("expire_time")}: {formatExpiry(sub.expire_time, t)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className={cn("size-1.5 rounded-full", autoUpdate ? "bg-emerald-500" : "bg-slate-350 dark:bg-slate-600")} />
-                            {t("auto_update")}: {autoUpdate ? updateInterval : t("close")}
-                          </span>
+                        <div className={cn("flex flex-col gap-1.5 mt-1 pt-1.5 border-t border-border/60", type.caption)}>
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <CalendarIcon className="size-3" />
+                              {t("expire_time")}: {formatExpiry(sub.expire_time, t)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className={cn("size-1.5 rounded-full", autoUpdate ? "bg-emerald-500" : "bg-slate-350 dark:bg-slate-600")} />
+                              {t("auto_update")}: {autoUpdate ? updateInterval : t("close")}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-muted-foreground/80">
+                            <span className="flex items-center gap-1">
+                              <RefreshCwIcon className="size-3" />
+                              {t("update_time")}: {formatLastUpdate(sub.last_update_time, t)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )
@@ -358,7 +423,7 @@ export function SubscriptionPage() {
                     <span className={type.label}>{t("auto_update")}</span>
                     <span className={type.caption}>{t("auto_update_enabled")}</span>
                   </div>
-                  <Switch size="sm" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
+                  <Switch size="sm" checked={autoUpdate} onCheckedChange={handleAutoUpdateChange} />
                 </div>
 
                 {autoUpdate && (
@@ -369,7 +434,7 @@ export function SubscriptionPage() {
                         <button
                           key={interval}
                           type="button"
-                          onClick={() => setUpdateInterval(interval)}
+                          onClick={() => handleUpdateIntervalChange(interval)}
                           className={cn(
                             btn.pill,
                             "h-8",

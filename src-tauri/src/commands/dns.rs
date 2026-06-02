@@ -1,6 +1,7 @@
 //! DNS benchmarking, low-level UDP DNS resolution, and "best local DNS"
 //! picker exposed as a Tauri command.
 
+use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use tauri::{AppHandle, Manager};
@@ -8,6 +9,34 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
+/// DNS servers classified by region for targeted benchmarking.
+const CN_DNS_SERVERS: &[&str] = &[
+    "1.2.4.8",
+    "114.114.114.114",
+    "114.114.115.115",
+    "119.29.29.29",
+    "180.184.1.1",
+    "180.184.2.2",
+    "180.76.76.76",
+    "210.2.4.8",
+    "223.5.5.5",
+    "223.6.6.6",
+];
+
+const GLOBAL_DNS_SERVERS: &[&str] = &[
+    "1.1.1.1",
+    "8.8.4.4",
+    "8.8.8.8",
+    "9.9.9.9",
+    "149.112.112.112",
+    "149.112.112.9",
+    "208.67.220.220",
+    "208.67.220.222",
+    "208.67.222.220",
+    "208.67.222.222",
+];
+
+/// All 29 servers (kept for backward compat and fallback).
 pub(crate) static DNSSERVERDICT: [&str; 29] = [
     "1.1.1.1", // Cloudflare DNS
     "1.2.4.8", // CN DNS
@@ -110,6 +139,7 @@ pub(crate) async fn probe_dns_reachable(dns: &str) -> bool {
     rx.recv().await.is_some()
 }
 
+#[allow(dead_code)]
 pub async fn get_best_dns_server() -> Option<String> {
     let backup_dns = "223.5.5.5".to_string();
     let (tx, mut rx) = mpsc::channel::<(String, std::time::Duration)>(1);
@@ -126,16 +156,68 @@ pub async fn get_best_dns_server() -> Option<String> {
 
     match rx.recv().await {
         Some((dns, _)) => {
-            let padded_dns: String = format!("{:<20}", dns);
-            log::info!("✓ DNS {} is selected as the optimal server", padded_dns);
+            log::info!("✓ DNS {} is selected as the optimal server", dns);
             Some(dns)
         }
         None => {
-            let padded_dns: String = format!("{:<20}", backup_dns);
-            log::info!("✗ All DNS servers failed, falling back to: {}", padded_dns);
+            log::info!("✗ All DNS servers failed, falling back to: {}", backup_dns);
             Some(backup_dns)
         }
     }
+}
+
+/// Benchmark all DNS servers and return the fastest per region (CN + global).
+pub async fn get_best_dns_per_region() -> (Option<String>, Option<String>) {
+    let default_cn = "223.5.5.5".to_string();
+    let default_global = "8.8.8.8".to_string();
+
+    let cn_set: HashSet<&str> = CN_DNS_SERVERS.iter().cloned().collect();
+    let global_set: HashSet<&str> = GLOBAL_DNS_SERVERS.iter().cloned().collect();
+
+    let (tx, mut rx) = mpsc::channel::<(String, std::time::Duration)>(64);
+
+    // Fire all probes in parallel
+    for dns in DNSSERVERDICT {
+        let dns = dns.to_string();
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            probe_dns_server(dns, Some(tx)).await;
+        });
+    }
+    drop(tx);
+
+    let mut cn_best: Option<(String, std::time::Duration)> = None;
+    let mut global_best: Option<(String, std::time::Duration)> = None;
+
+    while let Some((dns, latency)) = rx.recv().await {
+        if cn_set.contains(dns.as_str()) {
+            if cn_best.as_ref().map_or(true, |(_, l)| latency < *l) {
+                cn_best = Some((dns, latency));
+            }
+        } else if global_set.contains(dns.as_str()) {
+            if global_best.as_ref().map_or(true, |(_, l)| latency < *l) {
+                global_best = Some((dns, latency));
+            }
+        }
+    }
+
+    let best_cn = cn_best.map(|(dns, lat)| {
+        log::info!("✓ Best CN  DNS: {:<20} ({:?})", dns, lat);
+        dns
+    }).or_else(|| {
+        log::info!("⚠ No CN DNS responded, using default: {}", default_cn);
+        Some(default_cn)
+    });
+
+    let best_global = global_best.map(|(dns, lat)| {
+        log::info!("✓ Best GLOBAL DNS: {:<20} ({:?})", dns, lat);
+        dns
+    }).or_else(|| {
+        log::info!("⚠ No global DNS responded, using default: {}", default_global);
+        Some(default_global)
+    });
+
+    (best_cn, best_global)
 }
 
 fn build_dns_a_query(hostname: &str) -> Option<Vec<u8>> {
@@ -246,17 +328,52 @@ pub async fn get_optimal_local_dns_server(app: AppHandle) -> Option<String> {
     );
 
     if running {
-        if let Some(cached) = app_data.get_cached_dns() {
-            log::info!("sing-box is running, using cached DNS: {}", cached);
+        if let Some(cached) = app_data.get_cached_cn_dns() {
+            log::info!("sing-box is running, using cached CN DNS: {}", cached);
             return Some(cached);
         }
     }
 
-    log::info!("Fetching best DNS server...");
-    let best_dns = get_best_dns_server().await;
-    if let Some(ref dns) = best_dns {
-        app_data.set_cached_dns(Some(dns.clone()));
-        log::info!("Updated cached DNS: {}", dns);
+    log::info!("Benchmarking DNS servers for best CN + global...");
+    let (best_cn, best_global) = get_best_dns_per_region().await;
+    if let Some(ref dns) = best_cn {
+        app_data.set_cached_cn_dns(Some(dns.clone()));
+        log::info!("Cached best CN DNS: {}", dns);
     }
-    best_dns
+    if let Some(ref dns) = best_global {
+        app_data.set_cached_global_dns(Some(dns.clone()));
+        log::info!("Cached best global DNS: {}", dns);
+    }
+    best_cn
+}
+
+/// Returns the fastest globally-routed DNS server (for proxy DNS).
+#[tauri::command]
+pub async fn get_optimal_global_dns_server(app: AppHandle) -> Option<String> {
+    use crate::app::state::AppData;
+    use crate::engine::state_machine::{EngineState, EngineStateCell};
+
+    let app_data = app.state::<AppData>();
+    let running = matches!(
+        app.state::<EngineStateCell>().snapshot(),
+        EngineState::Running { .. }
+    );
+
+    if running {
+        if let Some(cached) = app_data.get_cached_global_dns() {
+            log::info!("sing-box is running, using cached global DNS: {}", cached);
+            return Some(cached);
+        }
+    }
+
+    log::info!("Benchmarking DNS servers for best global...");
+    let (best_cn, best_global) = get_best_dns_per_region().await;
+    if let Some(ref dns) = best_cn {
+        app_data.set_cached_cn_dns(Some(dns.clone()));
+    }
+    if let Some(ref dns) = best_global {
+        app_data.set_cached_global_dns(Some(dns.clone()));
+        log::info!("Cached best global DNS: {}", dns);
+    }
+    best_global
 }

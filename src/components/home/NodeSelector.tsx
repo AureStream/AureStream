@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { ArrowDownUpIcon, ActivityIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import * as Flags from "country-flag-icons/react/3x2"
@@ -70,6 +70,28 @@ export function NodeSelector() {
   const [isTestingSpeed, setIsTestingSpeed] = useState(false)
   const [sortMode, setSortMode] = useState<"default" | "latency" | "name">("default")
 
+  // Ref to suppress syncActiveNode from overwriting a manual node switch in progress
+  const manualSwitchRef = useRef(false)
+  // Timer handle for clearing the manual-switch grace period (cancel on rapid re-clicks)
+  const manualSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Ref mirror of selectedTag so callbacks always read the latest value
+  const selectedTagRef = useRef(selectedTag)
+  useEffect(() => { selectedTagRef.current = selectedTag }, [selectedTag])
+
+  /** Arm the manual-switch guard; cancels any prior grace-period timer. */
+  function beginManualSwitch() {
+    if (manualSwitchTimerRef.current) clearTimeout(manualSwitchTimerRef.current)
+    manualSwitchRef.current = true
+  }
+
+  /** Clear the manual-switch guard after `delayMs` (cancelled if a newer switch begins). */
+  function endManualSwitchAfter(delayMs: number) {
+    manualSwitchTimerRef.current = setTimeout(() => {
+      manualSwitchRef.current = false
+      manualSwitchTimerRef.current = null
+    }, delayMs)
+  }
+
   const nodeNames = useMemo(() => nodes.map((n) => n.name), [nodes])
 
   // Clear stale latency data when active subscription or node list changes
@@ -88,11 +110,15 @@ export function NodeSelector() {
     let cancelled = false
     const syncActiveNode = async () => {
       if (cancelled) return
+      // Never overwrite a manual switch that's still in progress
+      if (manualSwitchRef.current) return
       if (isRunning) {
         const group = await fetchSelectGroup()
         if (group && !cancelled) {
-          setSelectedTag(group.now)
-          await setSavedNodeTag(activeIdentifier, group.now)
+          if (group.now !== selectedTagRef.current) {
+            setSelectedTag(group.now)
+            await setSavedNodeTag(activeIdentifier, group.now)
+          }
         }
       } else {
         const saved = await getSavedNodeTag(activeIdentifier, nodeNames)
@@ -112,10 +138,11 @@ export function NodeSelector() {
       await new Promise((resolve) => setTimeout(resolve, 500))
       if (cancelled) return
       const saved = await getSavedNodeTag(activeIdentifier, nodeNames)
-      if (saved) {
-        await selectProxyNode(saved)
-      } else if (nodeNames.length > 0) {
-        await selectProxyNode(nodeNames[0])
+      const target = saved || (nodeNames.length > 0 ? nodeNames[0] : "")
+      if (target) {
+        beginManualSwitch()
+        await selectProxyNode(target)
+        endManualSwitchAfter(3000)
       }
     }
 
@@ -131,14 +158,27 @@ export function NodeSelector() {
     return () => {
       cancelled = true
       if (interval) clearInterval(interval)
+      if (manualSwitchTimerRef.current) clearTimeout(manualSwitchTimerRef.current)
     }
   }, [isRunning, activeIdentifier, nodeNames])
 
   const handleSelectNode = async (nodeTag: string) => {
+    if (selectedTagRef.current === nodeTag) return
+
+    const previousTag = selectedTagRef.current
     setSelectedTag(nodeTag)
+    beginManualSwitch()
     await setSavedNodeTag(activeIdentifier, nodeTag)
+
     if (isRunning) {
-      await selectProxyNode(nodeTag)
+      const ok = await selectProxyNode(nodeTag)
+      if (!ok) {
+        // API call failed — revert UI to the actual previous state
+        setSelectedTag(previousTag)
+        await setSavedNodeTag(activeIdentifier, previousTag)
+        manualSwitchRef.current = false
+        return
+      }
       // Dispatch once quickly in case connection is fast
       setTimeout(() => {
         window.dispatchEvent(new Event("node-changed"))
@@ -148,6 +188,9 @@ export function NodeSelector() {
         window.dispatchEvent(new Event("node-changed"))
       }, 1800)
     }
+
+    // Allow sync polling to resume after a grace period
+    endManualSwitchAfter(3000)
   }
 
   const handleSpeedTest = async () => {

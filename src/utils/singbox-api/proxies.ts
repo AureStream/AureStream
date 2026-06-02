@@ -1,11 +1,14 @@
 import type { SingBoxProxyGroup } from "@/types/singbox"
 import { controllerFetch } from "./client"
 
-/** GET /proxies/select — current selector outbound group. */
+/** GET /proxies/ExitGateway — current selector outbound group. */
 export async function fetchSelectGroup(): Promise<SingBoxProxyGroup | null> {
   try {
-    const res = await controllerFetch("/proxies/select")
-    if (!res.ok) return null
+    const res = await controllerFetch("/proxies/ExitGateway")
+    if (!res.ok) {
+      console.error(`[singbox-api] fetchSelectGroup: HTTP ${res.status} ${res.statusText}`)
+      return null
+    }
     return (await res.json()) as SingBoxProxyGroup
   } catch (e) {
     console.error("[singbox-api] fetchSelectGroup failed:", e)
@@ -13,17 +16,20 @@ export async function fetchSelectGroup(): Promise<SingBoxProxyGroup | null> {
   }
 }
 
-/** PUT /proxies/select — switch active node in selector group. */
+/** PUT /proxies/ExitGateway — switch active node in selector group. */
 export async function selectProxyNode(nodeName: string): Promise<boolean> {
   try {
-    const res = await controllerFetch("/proxies/select", {
+    const res = await controllerFetch("/proxies/ExitGateway", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: nodeName }),
     })
+    if (!res.ok) {
+      console.error(`[singbox-api] selectProxyNode("${nodeName}"): HTTP ${res.status} ${res.statusText}`)
+    }
     return res.ok
   } catch (e) {
-    console.error("[singbox-api] selectProxyNode failed:", e)
+    console.error(`[singbox-api] selectProxyNode("${nodeName}") failed:`, e)
     return false
   }
 }
