@@ -53,9 +53,22 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     let quit_item = MenuItemBuilder::with_id("quit", "退出应用").build(app)?;
     let tray_menu = MenuBuilder::new(app).items(&[&show_item, &quit_item]).build()?;
 
-    let _tray = TrayIconBuilder::with_id("main-tray")
-        .icon(app.default_window_icon().cloned().unwrap())
-        .menu(&tray_menu)
+    #[cfg(target_os = "macos")]
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../images/logo2.png"))?;
+    #[cfg(not(target_os = "macos"))]
+    let tray_icon = app.default_window_icon().cloned().unwrap();
+
+    #[allow(unused_mut)]
+    let mut tray_builder = TrayIconBuilder::with_id("main-tray")
+        .icon(tray_icon)
+        .menu(&tray_menu);
+
+    #[cfg(target_os = "macos")]
+    {
+        tray_builder = tray_builder.icon_as_template(true);
+    }
+
+    let _tray = tray_builder
         .on_menu_event(|app_handle, event| {
             match event.id.as_ref() {
                 "show" => {

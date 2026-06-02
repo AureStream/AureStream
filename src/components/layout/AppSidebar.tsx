@@ -45,8 +45,8 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   return (
     <Card className="w-16 shrink-0 py-4.5 !gap-0 flex flex-col items-center justify-between">
       <div className="flex flex-col items-center gap-7 w-full flex-1">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity">
-          <ZapIcon className="size-5 fill-white/10" />
+        <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden p-1.5">
+          <img src="/logo2.png" className="size-full object-contain" alt="AureStream Logo" />
         </div>
 
         <nav className="flex flex-col items-center gap-3.5 w-full px-2">

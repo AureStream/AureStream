@@ -19,7 +19,16 @@
     "os:allow-os-type",
     "shell:default",
     "shell:allow-execute",
-    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/aurestream-core",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    },
     "shell:allow-stdin-write",
     "shell:allow-kill",
     "shell:allow-open",
