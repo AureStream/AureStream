@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 import { RefreshCwIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { invoke } from "@tauri-apps/api/core"
+import * as Flags from "country-flag-icons/react/3x2"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,19 +16,6 @@ interface GeoIpInfo {
   countryCode: string
   region: string
   isp: string
-}
-
-function getFlagEmojiByCode(countryCode: string): string {
-  if (!countryCode || countryCode.length !== 2) return "🌐"
-  const codePoints = countryCode
-    .toUpperCase()
-    .split("")
-    .map((char) => 127397 + char.charCodeAt(0))
-  try {
-    return String.fromCodePoint(...codePoints)
-  } catch {
-    return "🌐"
-  }
 }
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -110,8 +98,14 @@ export function NetworkPanel() {
           <span className={type.kvLabel}>{t("country_region")}</span>
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-sm leading-none shrink-0" role="img" aria-label={t("flag")}>
-                {getFlagEmojiByCode(networkInfo.countryCode)}
+              <span className="flex items-center shrink-0 w-5 h-3.5 overflow-hidden rounded-xs border border-border/20" role="img" aria-label={t("flag")}>
+                {(() => {
+                  const Flag = (Flags as any)[networkInfo.countryCode.toUpperCase()]
+                  if (Flag) {
+                    return <Flag className="w-full h-full object-cover" />
+                  }
+                  return <span className="text-sm">🌐</span>
+                })()}
               </span>
               <span className={type.kvValue}>{networkInfo.countryName}</span>
             </div>
