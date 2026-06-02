@@ -4,6 +4,7 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
 import { HomePage } from "@/pages/HomePage"
 import { SubscriptionPage } from "@/pages/SubscriptionPage"
 import { SettingsPage } from "@/pages/SettingsPage"
+import "@/lib/i18n"
 
 function App() {
   const [activeTab, setActiveTab] = useState("home")
