@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { PowerIcon, GitForkIcon, CpuIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
 import { surface, type } from "@/lib/typography"
@@ -14,7 +15,6 @@ import {
   ROUTING_MODE_KEY,
   normalizeRoutingMode,
   nextRoutingMode,
-  routingModeLabel,
   type RoutingMode,
 } from "@/lib/routing-mode"
 import { message } from "@tauri-apps/plugin-dialog"
@@ -27,6 +27,7 @@ function formatUptime(seconds: number): string {
 }
 
 export function ConnectionPanel({ className }: { className?: string }) {
+  const { t } = useTranslation()
   const { engineState, isConnected, isRunning, isStarting, isStopping, isFailed, start, stop, clearError } =
     useEngineState()
   const { activeIdentifier } = useSubscriptions()
@@ -57,8 +58,8 @@ export function ConnectionPanel({ className }: { className?: string }) {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error("Install helper service failed:", err)
-      await message(`安装辅助服务失败: ${msg}`, {
-        title: "错误",
+      await message(`${t("install_service_failed")}: ${msg}`, {
+        title: t("error"),
         kind: "error",
       })
     } finally {
@@ -105,33 +106,31 @@ export function ConnectionPanel({ className }: { className?: string }) {
     void handleEnableTunChange(!enableTun)
   }
 
-  const since =
-    engineState.kind === "running" || engineState.kind === "starting"
-      ? engineState.since
-      : null
-
   useEffect(() => {
-    if (since !== null) {
+    if (engineState.kind === "running") {
+      const runningSince = engineState.since
       const update = () =>
-        setUptime(Math.max(0, Math.floor(Date.now() / 1000 - since)))
+        setUptime(Math.max(0, Math.floor(Date.now() / 1000 - runningSince)))
       update()
       uptimeRef.current = setInterval(update, 1000)
       return () => {
         if (uptimeRef.current) clearInterval(uptimeRef.current)
       }
+    } else if (engineState.kind === "stopping") {
+      if (uptimeRef.current) clearInterval(uptimeRef.current)
     } else {
       setUptime(0)
       if (uptimeRef.current) clearInterval(uptimeRef.current)
     }
-  }, [since])
+  }, [engineState.kind, "since" in engineState ? engineState.since : undefined])
 
   const handleToggle = async () => {
     if (isConnected || isStarting) {
       await stop()
     } else {
       if (!activeIdentifier) {
-        await message("请先在订阅页面添加并选择一个有效的订阅", {
-          title: "提示",
+        await message(t("please_select_valid_subscription"), {
+          title: t("hint"),
           kind: "warning",
         })
         return
@@ -144,8 +143,8 @@ export function ConnectionPanel({ className }: { className?: string }) {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Config merge failed:", err)
-        await message(`配置解析合并失败: ${msg}`, {
-          title: "错误",
+        await message(`${t("config_parse_merge_failed")}: ${msg}`, {
+          title: t("error"),
           kind: "error",
         })
         return
@@ -161,12 +160,12 @@ export function ConnectionPanel({ className }: { className?: string }) {
   }
 
   const statusText = isStarting
-    ? "正在连接..."
+    ? t("connecting_status")
     : isFailed
-      ? "连接失败"
-      : isConnected
-        ? "安全代理已连接"
-        : "安全代理已断开"
+    ? t("connection_failed")
+    : isConnected
+    ? t("secure_proxy_connected")
+    : t("secure_proxy_disconnected")
 
   const statusColor = isFailed
     ? "bg-red-500"
@@ -216,52 +215,52 @@ export function ConnectionPanel({ className }: { className?: string }) {
               />
             </div>
             <span
-              className={cn(
-                "type-caption font-semibold tracking-wide transition-colors duration-300",
-                isFailed
-                  ? "text-destructive"
-                  : (isRunning && !isStopping)
+                className={cn(
+                  "type-caption font-semibold tracking-wide transition-colors duration-300",
+                  isFailed
+                    ? "text-destructive"
+                    : (isRunning && !isStopping)
                     ? "text-primary"
                     : (isStarting || isStopping)
-                      ? "text-primary/80"
-                      : "text-muted-foreground"
-              )}
-            >
-              {isStarting ? "连接中" : isStopping ? "断开中" : isConnected ? "已连接" : isFailed ? "失败" : "未连接"}
-            </span>
+                    ? "text-primary/80"
+                    : "text-muted-foreground"
+                )}
+              >
+                {isStarting ? t("connecting") : isStopping ? t("disconnecting") : isConnected ? t("connected") : isFailed ? t("failed") : t("not_connected")}
+              </span>
           </button>
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col justify-between h-full py-1 gap-2.5">
           <div className="flex justify-between items-center w-full px-0.5 border-b border-border/60 pb-2.5">
-            <div className="flex flex-col gap-0.5">
-              <span className={type.overline}>服务状态</span>
-              <span
-                className={cn(
-                  "flex items-center gap-1.5 type-value transition-colors duration-300",
-                  isConnected && !isStopping
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-foreground"
-                )}
-              >
-                <span className={cn("size-2 rounded-full", statusColor)} />
-                {statusText}
-              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className={type.overline}>{t("service_status")}</span>
+                <span
+                  className={cn(
+                    "flex items-center gap-1.5 type-value transition-colors duration-300",
+                    isConnected && !isStopping
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-foreground"
+                  )}
+                >
+                  <span className={cn("size-2 rounded-full", statusColor)} />
+                  {statusText}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-0.5">
+                <span className={type.overline}>{t("connected_duration")}</span>
+                <span
+                  className={cn(
+                    "font-mono type-value-lg transition-colors duration-300",
+                    isConnected
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-foreground"
+                  )}
+                >
+                  {formatUptime(uptime)}
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col items-end gap-0.5">
-              <span className={type.overline}>已连接时长</span>
-              <span
-                className={cn(
-                  "font-mono type-value-lg transition-colors duration-300",
-                  isConnected
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-foreground"
-                )}
-              >
-                {formatUptime(uptime)}
-              </span>
-            </div>
-          </div>
 
           <div className="flex flex-col gap-2 w-full">
             <div className="grid grid-cols-2 gap-2 w-full">
@@ -278,9 +277,9 @@ export function ConnectionPanel({ className }: { className?: string }) {
                   <GitForkIcon className="size-4" />
                 </div>
                 <div className="flex flex-col leading-tight min-w-0">
-                  <span className={type.overline}>路由模式</span>
+                  <span className={type.overline}>{t("routing_mode")}</span>
                   <span className={cn(type.value, "mt-0.5 truncate")}>
-                    {routingModeLabel(routingMode)}
+                    {t(`routing_mode_${routingMode}` as any)}
                   </span>
                 </div>
               </button>
@@ -305,9 +304,9 @@ export function ConnectionPanel({ className }: { className?: string }) {
                   <CpuIcon className="size-4" />
                 </div>
                 <div className="flex flex-col leading-tight min-w-0">
-                  <span className={type.overline}>接管模式</span>
+                  <span className={type.overline}>{t("capture_mode")}</span>
                   <span className={cn(type.value, "mt-0.5 truncate")}>
-                    {enableTun ? "Tun网卡" : "系统代理"}
+                    {enableTun ? t("tun_nic") : t("system_proxy")}
                   </span>
                 </div>
               </button>
@@ -317,31 +316,31 @@ export function ConnectionPanel({ className }: { className?: string }) {
               {!enableTun ? (
                 <div className="flex items-center gap-1.5 px-1 py-0.5 type-caption font-medium animate-in fade-in duration-200">
                   <span className="size-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
-                  <span>系统代理模式已就绪</span>
+                  <span>{t("system_proxy_ready")}</span>
                 </div>
               ) : (
                 <div className="w-full">
                   {isTunServiceInstalled === false && (
                     <div className="flex items-center justify-between rounded-lg border border-rose-200/50 bg-rose-50/50 px-2.5 py-1 dark:border-rose-500/20 dark:bg-rose-950/20 animate-in fade-in duration-200 w-full">
-                      <span className="type-caption font-semibold text-destructive">未安装网卡服务</span>
+                      <span className="type-caption font-semibold text-destructive">{t("tun_service_not_installed")}</span>
                       <button
                         onClick={handleInstallTunService}
                         disabled={isInstallingService}
                         className={cn(type.link, "cursor-pointer disabled:opacity-50")}
                       >
-                        {isInstallingService ? "安装中..." : "立即安装"}
+                        {isInstallingService ? t("installing") : t("install_now")}
                       </button>
                     </div>
                   )}
                   {isTunServiceInstalled === true && (
                     <div className="flex items-center gap-1.5 px-1 py-0.5 type-caption font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
                       <span className="size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-                      <span>网卡服务已就绪</span>
+                      <span>{t("tun_service_ready")}</span>
                     </div>
                   )}
                   {isTunServiceInstalled === null && (
                     <span className={cn(type.caption, "animate-in fade-in duration-200")}>
-                      正在检测服务状态...
+                      {t("checking_service_status")}
                     </span>
                   )}
                 </div>

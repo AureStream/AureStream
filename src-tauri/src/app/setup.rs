@@ -26,13 +26,31 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
 
     crate::commands::whitelist::spawn_whitelist_refresh_task(app.handle().clone());
 
-    // macOS：以无 Dock 图标的附件模式运行，启动时直接显示主窗口
+    use tauri_plugin_store::StoreExt;
+
+    let hide_on_launch = if let Ok(store) = app.handle().store("settings.json") {
+        store.get("hide_on_launch_key")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    // macOS：以无 Dock 图标的附件模式运行
     #[cfg(target_os = "macos")]
     {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+    }
+
+    if hide_on_launch {
+        log::info!("[setup] hide_on_launch is enabled, hiding main window on start");
         if let Some(w) = app.get_webview_window("main") {
-            w.show().unwrap();
-            w.set_focus().unwrap();
+            let _ = w.hide();
+        }
+    } else {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.set_focus();
         }
     }
 
@@ -53,9 +71,22 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     let quit_item = MenuItemBuilder::with_id("quit", "退出应用").build(app)?;
     let tray_menu = MenuBuilder::new(app).items(&[&show_item, &quit_item]).build()?;
 
-    let _tray = TrayIconBuilder::with_id("main-tray")
-        .icon(app.default_window_icon().cloned().unwrap())
-        .menu(&tray_menu)
+    #[cfg(target_os = "macos")]
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../images/logo2.png"))?;
+    #[cfg(not(target_os = "macos"))]
+    let tray_icon = app.default_window_icon().cloned().unwrap();
+
+    #[allow(unused_mut)]
+    let mut tray_builder = TrayIconBuilder::with_id("main-tray")
+        .icon(tray_icon)
+        .menu(&tray_menu);
+
+    #[cfg(target_os = "macos")]
+    {
+        tray_builder = tray_builder.icon_as_template(true);
+    }
+
+    let _tray = tray_builder
         .on_menu_event(|app_handle, event| {
             match event.id.as_ref() {
                 "show" => {

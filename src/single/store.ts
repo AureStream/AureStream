@@ -17,6 +17,9 @@ import {
     TUN_STACK_STORE_KEY,
     USE_DHCP_STORE_KEY,
     USER_AGENT_STORE_KEY,
+    AUTO_START_STORE_KEY,
+    HIDE_ON_LAUNCH_STORE_KEY,
+    MINIMIZE_TO_TRAY_STORE_KEY,
 } from '../types/definition';
 
 export const LANGUAGE_STORE_KEY = 'language';
@@ -195,6 +198,20 @@ export async function getDirectDNS(): Promise<string> {
     }
 }
 
+/** Get the fastest global DNS server (benchmarked at startup). */
+export async function getProxyDnsServer(): Promise<string> {
+    let s = await store.get('proxy_dns') as string | undefined;
+    if (s) {
+        return s;
+    }
+    try {
+        let defaultValue = await invoke('get_optimal_global_dns_server') as string;
+        return defaultValue || '8.8.8.8';
+    } catch {
+        return '8.8.8.8';
+    }
+}
+
 export async function getUserAgent(): Promise<string> {
     const ua = await store.get(USER_AGENT_STORE_KEY) as string | undefined;
     return ua || 'default';
@@ -273,5 +290,35 @@ export async function setTunStack(value: TunStack): Promise<void> {
         throw new Error('invalid_tun_stack');
     }
     await store.set(TUN_STACK_STORE_KEY, value);
+    await store.save();
+}
+
+export async function getAutoStart(): Promise<boolean> {
+    const raw = await store.get(AUTO_START_STORE_KEY);
+    return raw === undefined ? true : Boolean(raw);
+}
+
+export async function setAutoStartStore(value: boolean): Promise<void> {
+    await store.set(AUTO_START_STORE_KEY, value);
+    await store.save();
+}
+
+export async function getHideOnLaunch(): Promise<boolean> {
+    const raw = await store.get(HIDE_ON_LAUNCH_STORE_KEY);
+    return raw === undefined ? false : Boolean(raw);
+}
+
+export async function setHideOnLaunchStore(value: boolean): Promise<void> {
+    await store.set(HIDE_ON_LAUNCH_STORE_KEY, value);
+    await store.save();
+}
+
+export async function getMinimizeToTray(): Promise<boolean> {
+    const raw = await store.get(MINIMIZE_TO_TRAY_STORE_KEY);
+    return raw === undefined ? true : Boolean(raw);
+}
+
+export async function setMinimizeToTrayStore(value: boolean): Promise<void> {
+    await store.set(MINIMIZE_TO_TRAY_STORE_KEY, value);
     await store.save();
 }

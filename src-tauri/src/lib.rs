@@ -6,6 +6,9 @@ mod utils;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Enforce single instance — second instance exits after focusing existing window
+    app::single_instance::ensure_single_instance();
+
     #[cfg(target_os = "windows")]
     {
         if let Ok(exe_path) = std::env::current_exe() {
@@ -60,6 +63,7 @@ pub fn run() {
             commands::prestart::kill_orphans,
             // dns and config fetch commands
             commands::dns::get_optimal_local_dns_server,
+            commands::dns::get_optimal_global_dns_server,
             commands::config_fetch::fetch_config_with_optimal_dns,
             commands::config_fetch::verify_deep_link_url,
             // native theme commands

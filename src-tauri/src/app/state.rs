@@ -8,7 +8,8 @@ pub struct DeepLinkPayload {
 }
 
 pub struct AppData {
-    pub cached_dns: Mutex<Option<String>>,
+    pub cached_cn_dns: Mutex<Option<String>>,
+    pub cached_global_dns: Mutex<Option<String>>,
     pub log_buffer: Mutex<Vec<String>>,
     pub error_log_buffer: Mutex<Vec<String>>,
     pub pending_deep_link: Mutex<Option<DeepLinkPayload>>,
@@ -24,7 +25,8 @@ impl AppData {
         Self {
             log_buffer: Mutex::new(Vec::new()),
             error_log_buffer: Mutex::new(Vec::new()),
-            cached_dns: Mutex::new(None),
+            cached_cn_dns: Mutex::new(None),
+            cached_global_dns: Mutex::new(None),
             pending_deep_link: Mutex::new(None),
         }
     }
@@ -58,16 +60,30 @@ impl AppData {
         }
     }
 
-    pub fn get_cached_dns(&self) -> Option<String> {
-        if let Ok(cache) = self.cached_dns.lock() {
+    pub fn get_cached_cn_dns(&self) -> Option<String> {
+        if let Ok(cache) = self.cached_cn_dns.lock() {
             cache.clone()
         } else {
             None
         }
     }
 
-    pub fn set_cached_dns(&self, dns: Option<String>) {
-        if let Ok(mut cache) = self.cached_dns.lock() {
+    pub fn set_cached_cn_dns(&self, dns: Option<String>) {
+        if let Ok(mut cache) = self.cached_cn_dns.lock() {
+            *cache = dns;
+        }
+    }
+
+    pub fn get_cached_global_dns(&self) -> Option<String> {
+        if let Ok(cache) = self.cached_global_dns.lock() {
+            cache.clone()
+        } else {
+            None
+        }
+    }
+
+    pub fn set_cached_global_dns(&self, dns: Option<String>) {
+        if let Ok(mut cache) = self.cached_global_dns.lock() {
             *cache = dns;
         }
     }

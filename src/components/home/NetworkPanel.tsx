@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react"
 import { RefreshCwIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { invoke } from "@tauri-apps/api/core"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { useEngineState } from "@/hooks/useEngineState"
+import { getCountryCode, getFlagComponent } from "@/lib/country-flags"
 import { type } from "@/lib/typography"
 
 interface GeoIpInfo {
@@ -14,19 +16,6 @@ interface GeoIpInfo {
   countryCode: string
   region: string
   isp: string
-}
-
-function getFlagEmojiByCode(countryCode: string): string {
-  if (!countryCode || countryCode.length !== 2) return "🌐"
-  const codePoints = countryCode
-    .toUpperCase()
-    .split("")
-    .map((char) => 127397 + char.charCodeAt(0))
-  try {
-    return String.fromCodePoint(...codePoints)
-  } catch {
-    return "🌐"
-  }
 }
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -39,13 +28,14 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 export function NetworkPanel() {
+  const { t } = useTranslation()
   const { isRunning } = useEngineState()
   const [networkInfo, setNetworkInfo] = useState<GeoIpInfo>({
-    ip: "获取中...",
-    countryName: "获取中...",
+    ip: t("loading"),
+    countryName: t("loading"),
     countryCode: "UN",
-    region: "获取中...",
-    isp: "获取中...",
+    region: t("loading"),
+    isp: t("loading"),
   })
   const [refreshing, setRefreshing] = useState(false)
 
@@ -60,25 +50,25 @@ export function NetworkPanel() {
         isp: string
       }>("get_geoip_info", { useProxy: isRunning })
       setNetworkInfo({
-        ip: info.ip || "未知",
-        countryName: info.countryName || "未知",
+        ip: info.ip || t("unknown"),
+        countryName: info.countryName || t("unknown"),
         countryCode: info.countryCode || "UN",
-        region: info.region || "未知",
-        isp: info.isp || "未知",
+        region: info.region || t("unknown"),
+        isp: info.isp || t("unknown"),
       })
     } catch (e) {
       console.warn("get_geoip_info via Rust failed:", e)
       setNetworkInfo({
-        ip: "未知 / 获取失败",
-        countryName: "未知",
+        ip: t("unknown_or_fetch_failed"),
+        countryName: t("unknown"),
         countryCode: "UN",
-        region: "未知",
-        isp: "未知",
+        region: t("unknown"),
+        isp: t("unknown"),
       })
     } finally {
       setRefreshing(false)
     }
-  }, [isRunning])
+  }, [isRunning, t])
 
   useEffect(() => {
     if (isRunning) {
@@ -105,11 +95,29 @@ export function NetworkPanel() {
     <Card className="shrink-0 rounded-[20px] shadow-sm">
       <CardContent className="flex flex-col gap-0 py-4 px-4">
         <div className="flex items-center justify-between gap-4">
-          <span className={type.kvLabel}>国家/地区</span>
+          <span className={type.kvLabel}>{t("country_region")}</span>
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-sm leading-none shrink-0" role="img" aria-label="国旗">
-                {getFlagEmojiByCode(networkInfo.countryCode)}
+              <span
+                className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/20 bg-background"
+                role="img"
+                aria-label={t("flag")}
+              >
+                {(() => {
+                  const code =
+                    getCountryCode(networkInfo.countryCode) ||
+                    getCountryCode(networkInfo.countryName)
+                  const Flag = getFlagComponent(code)
+                  if (Flag) {
+                    return (
+                      <Flag
+                        className="absolute inset-0 block size-full"
+                        aria-hidden="true"
+                      />
+                    )
+                  }
+                  return <span className="text-sm">🌐</span>
+                })()}
               </span>
               <span className={type.kvValue}>{networkInfo.countryName}</span>
             </div>
@@ -117,7 +125,7 @@ export function NetworkPanel() {
               variant="ghost"
               size="icon"
               className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              aria-label="刷新网络信息"
+              aria-label={t("refresh_network_info")}
               onClick={refresh}
               disabled={refreshing}
             >
@@ -128,11 +136,11 @@ export function NetworkPanel() {
 
         <Separator className="my-2.5 bg-border/60" />
 
-        <InfoRow label="IP 地址" value={networkInfo.ip} mono />
+        <InfoRow label={t("ip_address")} value={networkInfo.ip} mono />
         <Separator className="my-2.5 bg-border/60" />
-        <InfoRow label="地理位置" value={networkInfo.region} />
+        <InfoRow label={t("location")} value={networkInfo.region} />
         <Separator className="my-2.5 bg-border/60" />
-        <InfoRow label="网络提供商" value={networkInfo.isp} />
+        <InfoRow label={t("isp")} value={networkInfo.isp} />
       </CardContent>
     </Card>
   )

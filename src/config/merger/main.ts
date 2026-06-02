@@ -2,8 +2,8 @@ import * as path from '@tauri-apps/api/path';
 import { getSubscriptionConfig } from '../../action/db';
 import { getAllowLan, getControllerSecret, getControllerPort, getCustomRuleSet, getStoreValue, isBypassRouterEnabled, setStoreValue } from '../../single/store';
 import { DIRECT_RULE_SLOT, LEGACY_DIRECT_RULE_SLOT, LEGACY_PROXY_RULE_SLOT, PROXY_RULE_SLOT, ruleSlotMatches } from '../rule-tags';
-import { STAGE_VERSION_STORE_KEY } from '../../types/definition';
-import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB } from './helper';
+import { STAGE_VERSION_STORE_KEY, selectedNodeTagStoreKey, LEGACY_SELECTED_NODE_TAG_KEY } from '../../types/definition';
+import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB, patchDnsProxyConfig } from './helper';
 
 import { configType, getConfigTemplateCacheKey } from '../common';
 import { getBuiltInTemplate } from '../templates';
@@ -35,10 +35,24 @@ async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string)
     };
 }
 
+async function getSavedDefaultNode(identifier: string): Promise<string> {
+    if (!identifier) return '';
+    const key = selectedNodeTagStoreKey(identifier);
+    let saved = await getStoreValue(key, '') as string;
+    if (!saved) {
+        const legacy = await getStoreValue(LEGACY_SELECTED_NODE_TAG_KEY, '') as string;
+        if (legacy) {
+            saved = legacy;
+        }
+    }
+    return saved;
+}
+
 export async function setMixedConfig(identifier: string) {
     const newConfig = await getConfigTemplate('mixed');
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
+    await patchDnsProxyConfig(newConfig);
 
     console.log("写入[规则]系统代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
@@ -78,13 +92,15 @@ export async function setMixedConfig(identifier: string) {
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
 
     await updateDHCPSettings2Config(newConfig);
-    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
+    const defaultNode = await getSavedDefaultNode(identifier);
+    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
 }
 
 export async function setTunConfig(identifier: string) {
     const newConfig = await getConfigTemplate('tun');
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
+    await patchDnsProxyConfig(newConfig);
     console.log("写入[规则]TUN代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
     const appConfigPath = await path.appConfigDir();
@@ -124,13 +140,15 @@ export async function setTunConfig(identifier: string) {
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
 
     await updateDHCPSettings2Config(newConfig);
-    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
+    const defaultNode = await getSavedDefaultNode(identifier);
+    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
 }
 
 export async function setGlobalMixedConfig(identifier: string) {
     const newConfig = await getConfigTemplate('mixed-global');
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
+    await patchDnsProxyConfig(newConfig);
 
     console.log("写入[全局]系统代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
@@ -143,13 +161,15 @@ export async function setGlobalMixedConfig(identifier: string) {
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
 
     await updateDHCPSettings2Config(newConfig);
-    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
+    const defaultNode = await getSavedDefaultNode(identifier);
+    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
 }
 
 export default async function setGlobalTunConfig(identifier: string) {
     const newConfig = await getConfigTemplate('tun-global');
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
+    await patchDnsProxyConfig(newConfig);
 
     console.log("写入[全局]TUN代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
@@ -165,5 +185,6 @@ export default async function setGlobalTunConfig(identifier: string) {
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
 
     await updateDHCPSettings2Config(newConfig);
-    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
+    const defaultNode = await getSavedDefaultNode(identifier);
+    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
 }

@@ -5,3 +5,8 @@ declare module "country-flag-icons/react/1x1" {
   export const CN: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }
 
+declare module "country-flag-icons/react/3x2" {
+  const content: any
+  export = content
+}
+

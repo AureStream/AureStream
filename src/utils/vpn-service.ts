@@ -26,6 +26,10 @@ export async function clearEngineError(): Promise<void> {
   return invoke("clear_engine_error")
 }
 
+export async function reloadConfig(): Promise<string> {
+  return invoke("reload_config")
+}
+
 export async function getAppVersion(): Promise<string> {
   return invoke("get_app_version")
 }

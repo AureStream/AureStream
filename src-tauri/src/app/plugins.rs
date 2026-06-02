@@ -40,4 +40,8 @@ pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Bu
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--silently"]),
+        ))
 }

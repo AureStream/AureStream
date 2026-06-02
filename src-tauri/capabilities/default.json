@@ -19,7 +19,16 @@
     "os:allow-os-type",
     "shell:default",
     "shell:allow-execute",
-    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/aurestream-core",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    },
     "shell:allow-stdin-write",
     "shell:allow-kill",
     "shell:allow-open",
@@ -34,6 +43,9 @@
     "process:allow-exit",
     "process:allow-restart",
     "dialog:default",
-    "log:default"
+    "log:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }
