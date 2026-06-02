@@ -161,259 +161,261 @@ export function SubscriptionPage() {
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-3 sm:gap-5">
-      {/* Left side: Subscription list */}
-      <div className="flex min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden">
-        <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">
-          <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
-            <div className="flex items-center gap-1.5">
-              <div className={iconBadge.purple}>
-                <BoxIcon />
-              </div>
-              <span className={type.sectionTitle}>{t("subscriptions_saved")}</span>
-              <span className={badge.brand}>{t("total")} {subscriptions.length} {t("subscriptions_count")}</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={handleUpdateAll}
-              disabled={isUpdatingAll || subscriptions.length === 0}
-              className={cn(btn.accent, "h-8 px-2")}
-            >
-              <RefreshCwIcon className={cn("size-3.5 mr-0.5", isUpdatingAll && "animate-spin")} />
-              {isUpdatingAll ? t("updating") : t("update_all")}
-            </Button>
-          </div>
-
-          <CardContent className="flex min-h-0 flex-1 flex-col pt-0 overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin flex flex-col gap-3 pb-4">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
-                  <span className={type.description}>{t("loading")}</span>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden h-full">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-3.5 sm:gap-4.5 h-full overflow-y-auto lg:overflow-hidden pr-0.5 pb-2">
+        {/* Left side: Subscription list */}
+        <div className="flex min-h-0 flex-col gap-3 sm:gap-4 lg:h-full lg:overflow-hidden">
+          <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden">
+            <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
+              <div className="flex items-center gap-1.5">
+                <div className={iconBadge.purple}>
+                  <BoxIcon />
                 </div>
-              ) : subscriptions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
-                  <AlertCircleIcon className="size-8 opacity-40" />
-                  <span className={type.description}>{t("no_subscription_yet")}</span>
-                </div>
-              ) : (
-                subscriptions.map((sub) => {
-                  const percent = sub.total_traffic > 0 ? (sub.used_traffic / sub.total_traffic) * 100 : 0
-                  const isCurrent = sub.identifier === activeIdentifier
-                  const status = getStatus(sub.expire_time)
-                  return (
-                    <div
-                      key={sub.identifier}
-                      onClick={() => selectSubscription(sub.identifier)}
-                      className={cn(
-                        "flex flex-col gap-2 rounded-[16px] border p-3.5 transition-all duration-200 cursor-pointer",
-                        isCurrent
-                          ? "bg-secondary border-primary/30 shadow-sm"
-                          : status === "expired"
-                          ? "bg-card border-border/60 opacity-60"
-                          : "bg-card border-border/60 shadow-sm hover:border-primary/20 hover:bg-muted/20"
-                      )}
-                    >
-                      {/* Subscription Info Header */}
-                      <div className="flex items-start justify-between gap-3 min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={cn(type.label, "truncate font-semibold")}>
-                              {sub.name}
-                            </span>
-                            <span
-                              className={cn(
-                                "shrink-0",
-                                status === "active" && badge.success,
-                                status === "expiring" && badge.warning,
-                                status === "expired" && badge.danger
-                              )}
-                            >
-                              {status === "active" && t("in_service")}
-                              {status === "expiring" && t("expiring_soon")}
-                              {status === "expired" && t("expired")}
-                            </span>
-                          </div>
-                          <div className={cn("flex items-center gap-1 mt-1", type.caption)}>
-                            <LinkIcon className="size-3 shrink-0" />
-                            <span className="truncate">{sub.subscription_url}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isCurrent && (
-                            <div className={cn(badge.success, "h-6 gap-1 px-2")}>
-                              <CheckCircle2Icon className="size-3" />
-                              {t("in_use")}
-                            </div>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleSingleUpdate(sub.identifier)
-                            }}
-                            aria-label={t("update_subscription")}
-                          >
-                            <RefreshCwIcon className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDelete(sub.identifier)
-                            }}
-                            aria-label={t("delete_subscription")}
-                          >
-                            <Trash2Icon className="size-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Traffic progress */}
-                      <div className="flex flex-col gap-1.5 mt-1">
-                        <div className={cn("flex items-center justify-between", type.caption)}>
-                          <span>{t("used")}: {formatBytes(sub.used_traffic)} / {formatBytes(sub.total_traffic)}</span>
-                          <span className={cn("font-semibold", percent > 85 ? "text-destructive" : percent > 60 ? "text-amber-600 dark:text-amber-400" : "text-primary")}>
-                            {percent.toFixed(1)}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={percent}
-                          className={cn(
-                            "h-1.5 bg-muted",
-                            status === "expired"
-                              ? "[&>div]:bg-rose-500"
-                              : percent > 85
-                              ? "[&>div]:bg-rose-500"
-                              : percent > 60
-                              ? "[&>div]:bg-amber-500"
-                              : "[&>div]:bg-primary"
-                          )}
-                        />
-                      </div>
-
-                      {/* Footer Info */}
-                      <div className={cn("flex items-center justify-between mt-1 pt-1.5 border-t border-border/60", type.caption)}>
-                        <span className="flex items-center gap-1">
-                          <CalendarIcon className="size-3" />
-                          {t("expire_time")}: {formatExpiry(sub.expire_time, t)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className={cn("size-1.5 rounded-full", autoUpdate ? "bg-emerald-500" : "bg-slate-350 dark:bg-slate-600")} />
-                          {t("auto_update")}: {autoUpdate ? updateInterval : t("close")}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Right side: Add subscription & Info card */}
-      <div className="flex min-h-0 flex-col gap-3 sm:gap-4 overflow-hidden">
-        {/* Add subscription Form */}
-        <Card className="shrink-0 rounded-[20px]">
-          <CardContent className="flex flex-col gap-3.5 py-4 px-4">
-            <div className="flex items-center gap-2">
-              <div className={iconBadge.blue}>
-                <PlusIcon />
+                <span className={type.sectionTitle}>{t("subscriptions_saved")}</span>
+                <span className={badge.brand}>{t("total")} {subscriptions.length} {t("subscriptions_count")}</span>
               </div>
-              <span className={type.sectionTitle}>{t("add_subscription")}</span>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={handleUpdateAll}
+                disabled={isUpdatingAll || subscriptions.length === 0}
+                className={cn(btn.accent, "h-8 px-2")}
+              >
+                <RefreshCwIcon className={cn("size-3.5 mr-0.5", isUpdatingAll && "animate-spin")} />
+                {isUpdatingAll ? t("updating") : t("update_all")}
+              </Button>
             </div>
 
-            <form onSubmit={handleAdd} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <label className={type.label}>{t("subscription_name_optional")}</label>
-                <input
-                  type="text"
-                  placeholder={t("auto_generate_name")}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="ui-input"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className={type.label}>{t("subscription_url")}</label>
-                <textarea
-                  placeholder={t("paste_subscription_url")}
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  rows={3}
-                  className="ui-textarea"
-                  required
-                />
-              </div>
-
-              <div className={cn(surface.row, "flex items-center justify-between px-3 py-2 mt-0.5")}>
-                <div className="flex flex-col">
-                  <span className={type.label}>{t("auto_update")}</span>
-                  <span className={type.caption}>{t("auto_update_enabled")}</span>
-                </div>
-                <Switch size="sm" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
-              </div>
-
-              {autoUpdate && (
-                <div className="flex flex-col gap-1">
-                  <label className={type.label}>{t("update_interval")}</label>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {(["6h", "12h", "24h", "7d"] as const).map((interval) => (
-                      <button
-                        key={interval}
-                        type="button"
-                        onClick={() => setUpdateInterval(interval)}
+            <CardContent className="flex min-h-0 flex-1 flex-col pt-0 overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin flex flex-col gap-3 pb-4">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
+                    <span className={type.description}>{t("loading")}</span>
+                  </div>
+                ) : subscriptions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
+                    <AlertCircleIcon className="size-8 opacity-40" />
+                    <span className={type.description}>{t("no_subscription_yet")}</span>
+                  </div>
+                ) : (
+                  subscriptions.map((sub) => {
+                    const percent = sub.total_traffic > 0 ? (sub.used_traffic / sub.total_traffic) * 100 : 0
+                    const isCurrent = sub.identifier === activeIdentifier
+                    const status = getStatus(sub.expire_time)
+                    return (
+                      <div
+                        key={sub.identifier}
+                        onClick={() => selectSubscription(sub.identifier)}
                         className={cn(
-                          btn.pill,
-                          "h-8",
-                          updateInterval === interval && btn.pillActive
+                          "flex flex-col gap-2 rounded-[16px] border p-3.5 transition-all duration-200 cursor-pointer",
+                          isCurrent
+                            ? "bg-secondary border-primary/30 shadow-sm"
+                            : status === "expired"
+                            ? "bg-card border-border/60 opacity-60"
+                            : "bg-card border-border/60 shadow-sm hover:border-primary/20 hover:bg-muted/20"
                         )}
                       >
-                        {interval === "6h" && t("6hours")}
-                        {interval === "12h" && t("12hours")}
-                        {interval === "24h" && t("every_day")}
-                        {interval === "7d" && t("every_week")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                        {/* Subscription Info Header */}
+                        <div className="flex items-start justify-between gap-3 min-w-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={cn(type.label, "truncate font-semibold")}>
+                                {sub.name}
+                              </span>
+                              <span
+                                className={cn(
+                                  "shrink-0",
+                                  status === "active" && badge.success,
+                                  status === "expiring" && badge.warning,
+                                  status === "expired" && badge.danger
+                                )}
+                              >
+                                {status === "active" && t("in_service")}
+                                {status === "expiring" && t("expiring_soon")}
+                                {status === "expired" && t("expired")}
+                              </span>
+                            </div>
+                            <div className={cn("flex items-center gap-1 mt-1", type.caption)}>
+                              <LinkIcon className="size-3 shrink-0" />
+                              <span className="truncate">{sub.subscription_url}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isCurrent && (
+                              <div className={cn(badge.success, "h-6 gap-1 px-2")}>
+                                <CheckCircle2Icon className="size-3" />
+                                {t("in_use")}
+                              </div>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleSingleUpdate(sub.identifier)
+                              }}
+                              aria-label={t("update_subscription")}
+                            >
+                              <RefreshCwIcon className="size-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDelete(sub.identifier)
+                              }}
+                              aria-label={t("delete_subscription")}
+                            >
+                              <Trash2Icon className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
 
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-xs shadow-sm mt-1 transition-all"
-              >
-                {isSubmitting ? t("fetching") : t("save_subscription")}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                        {/* Traffic progress */}
+                        <div className="flex flex-col gap-1.5 mt-1">
+                          <div className={cn("flex items-center justify-between", type.caption)}>
+                            <span>{t("used")}: {formatBytes(sub.used_traffic)} / {formatBytes(sub.total_traffic)}</span>
+                            <span className={cn("font-semibold", percent > 85 ? "text-destructive" : percent > 60 ? "text-amber-600 dark:text-amber-400" : "text-primary")}>
+                              {percent.toFixed(1)}%
+                            </span>
+                          </div>
+                          <Progress
+                            value={percent}
+                            className={cn(
+                              "h-1.5 bg-muted",
+                              status === "expired"
+                                ? "[&>div]:bg-rose-500"
+                                : percent > 85
+                                ? "[&>div]:bg-rose-500"
+                                : percent > 60
+                                ? "[&>div]:bg-amber-500"
+                                : "[&>div]:bg-primary"
+                            )}
+                          />
+                        </div>
 
-        {/* Tip / Info Card */}
-        <Card className="flex-1 rounded-[20px] overflow-hidden">
-          <CardContent className="flex flex-col gap-3.5 py-4 px-4 h-full">
-            <div className="flex items-center gap-2">
-              <div className={iconBadge.emerald}>
-                <ShieldCheckIcon />
+                        {/* Footer Info */}
+                        <div className={cn("flex items-center justify-between mt-1 pt-1.5 border-t border-border/60", type.caption)}>
+                          <span className="flex items-center gap-1">
+                            <CalendarIcon className="size-3" />
+                            {t("expire_time")}: {formatExpiry(sub.expire_time, t)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className={cn("size-1.5 rounded-full", autoUpdate ? "bg-emerald-500" : "bg-slate-350 dark:bg-slate-600")} />
+                            {t("auto_update")}: {autoUpdate ? updateInterval : t("close")}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
-              <span className={type.sectionTitle}>{t("subscription_instructions")}</span>
-            </div>
+            </CardContent>
+          </Card>
+        </div>
 
-            <div className={cn(type.description, "space-y-2.5")}>
-              <p>{t("instruction_1")}</p>
-              <p>{t("instruction_2")}</p>
-              <p>{t("instruction_3")}</p>
-              <p>{t("instruction_4")}</p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Right side: Add subscription & Info card */}
+        <div className="flex min-h-0 flex-col gap-3 sm:gap-4 lg:h-full lg:overflow-hidden">
+          {/* Add subscription Form */}
+          <Card className="shrink-0 rounded-[20px]">
+            <CardContent className="flex flex-col gap-3.5 py-4 px-4">
+              <div className="flex items-center gap-2">
+                <div className={iconBadge.blue}>
+                  <PlusIcon />
+                </div>
+                <span className={type.sectionTitle}>{t("add_subscription")}</span>
+              </div>
+
+              <form onSubmit={handleAdd} className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className={type.label}>{t("subscription_name_optional")}</label>
+                  <input
+                    type="text"
+                    placeholder={t("auto_generate_name")}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="ui-input"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className={type.label}>{t("subscription_url")}</label>
+                  <textarea
+                    placeholder={t("paste_subscription_url")}
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    rows={3}
+                    className="ui-textarea"
+                    required
+                  />
+                </div>
+
+                <div className={cn(surface.row, "flex items-center justify-between px-3 py-2 mt-0.5")}>
+                  <div className="flex flex-col">
+                    <span className={type.label}>{t("auto_update")}</span>
+                    <span className={type.caption}>{t("auto_update_enabled")}</span>
+                  </div>
+                  <Switch size="sm" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
+                </div>
+
+                {autoUpdate && (
+                  <div className="flex flex-col gap-1">
+                    <label className={type.label}>{t("update_interval")}</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(["6h", "12h", "24h", "7d"] as const).map((interval) => (
+                        <button
+                          key={interval}
+                          type="button"
+                          onClick={() => setUpdateInterval(interval)}
+                          className={cn(
+                            btn.pill,
+                            "h-8",
+                            updateInterval === interval && btn.pillActive
+                          )}
+                        >
+                          {interval === "6h" && t("6hours")}
+                          {interval === "12h" && t("12hours")}
+                          {interval === "24h" && t("every_day")}
+                          {interval === "7d" && t("every_week")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-xs shadow-sm mt-1 transition-all"
+                >
+                  {isSubmitting ? t("fetching") : t("save_subscription")}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Tip / Info Card */}
+          <Card className="flex-1 rounded-[20px] overflow-hidden">
+            <CardContent className="flex flex-col gap-3.5 py-4 px-4 h-full">
+              <div className="flex items-center gap-2">
+                <div className={iconBadge.emerald}>
+                  <ShieldCheckIcon />
+                </div>
+                <span className={type.sectionTitle}>{t("subscription_instructions")}</span>
+              </div>
+
+              <div className={cn(type.description, "space-y-2.5")}>
+                <p>{t("instruction_1")}</p>
+                <p>{t("instruction_2")}</p>
+                <p>{t("instruction_3")}</p>
+                <p>{t("instruction_4")}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
