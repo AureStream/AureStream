@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { ArrowDownUpIcon, ActivityIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import * as Flags from "country-flag-icons/react/3x2"
 
 import { cn } from "@/lib/utils"
 import { badge, btn, type } from "@/lib/typography"
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { useEngineState } from "@/hooks/useEngineState"
+import { getCountryCode, getFlagComponent } from "@/lib/country-flags"
 import { fetchSelectGroup, selectProxyNode, pingNodeTcp } from "@/utils/singbox-api"
 import { getStoreValue, setStoreValue } from "@/single/store"
 import {
@@ -41,23 +41,6 @@ async function setSavedNodeTag(
 ): Promise<void> {
   if (!subscriptionId) return
   await setStoreValue(selectedNodeTagStoreKey(subscriptionId), nodeTag)
-}
-
-function getCountryCode(name: string): string {
-  const n = name.toUpperCase()
-  if (n.includes("HK") || n.includes("香港") || n.includes("HONG")) return "HK"
-  if (n.includes("JP") || n.includes("日本") || n.includes("JAPAN")) return "JP"
-  if (n.includes("US") || n.includes("美国") || n.includes("UNITED STATES") || n.includes("USA")) return "US"
-  if (n.includes("SG") || n.includes("新加坡") || n.includes("SINGAPORE")) return "SG"
-  if (n.includes("TW") || n.includes("台湾") || n.includes("TAIWAN")) return "TW"
-  if (n.includes("KR") || n.includes("韩国") || n.includes("KOREA")) return "KR"
-  if (n.includes("CN") || n.includes("中国") || n.includes("CHINA")) return "CN"
-  if (n.includes("UK") || n.includes("英国") || n.includes("UNITED KINGDOM") || n.includes("GB")) return "GB"
-  if (n.includes("DE") || n.includes("德国") || n.includes("GERMANY")) return "DE"
-  if (n.includes("FR") || n.includes("法国") || n.includes("FRANCE")) return "FR"
-  if (n.includes("CA") || n.includes("加拿大") || n.includes("CANADA")) return "CA"
-  if (n.includes("RU") || n.includes("俄罗斯") || n.includes("RUSSIA")) return "RU"
-  return ""
 }
 
 export function NodeSelector() {
@@ -327,7 +310,7 @@ export function NodeSelector() {
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                       <div
                         className={cn(
-                          "flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-xl transition-colors text-base sm:text-lg overflow-hidden border border-border/40",
+                          "relative flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-full transition-colors text-base sm:text-lg overflow-hidden border border-border/40",
                           isSelected
                             ? "bg-secondary text-primary"
                             : "bg-background text-muted-foreground border border-border"
@@ -335,9 +318,14 @@ export function NodeSelector() {
                       >
                         {(() => {
                           const code = getCountryCode(node.name)
-                          const Flag = code ? (Flags as any)[code] : null
+                          const Flag = getFlagComponent(code)
                           if (Flag) {
-                            return <Flag className="w-full h-full object-cover" />
+                            return (
+                              <Flag
+                                className="absolute inset-0 block size-full"
+                                aria-label={t("flag")}
+                              />
+                            )
                           }
                           return <span className="text-base">🌐</span>
                         })()}

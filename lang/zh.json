@@ -121,7 +121,7 @@
   "tun_service_ready": "网卡服务已就绪",
   "checking_service_status": "正在检测服务状态...",
   "select_proxy_node": "选择代理节点",
-  "total_nodes": "个节点",
+  "total_nodes": "{{count}} 个节点",
   "one_click_speed_test": "一键测速",
   "default_sort": "默认排序",
   "latency_sort": "延迟排序",
@@ -152,4 +152,3 @@
   "never": "从未更新",
   "update_time": "更新时间"
 }
-

@@ -121,7 +121,7 @@
   "tun_service_ready": "Network card service ready",
   "checking_service_status": "Checking service status...",
   "select_proxy_node": "Select Proxy Node",
-  "total_nodes": "nodes",
+  "total_nodes": "{{count}} nodes",
   "one_click_speed_test": "Test All",
   "default_sort": "Default",
   "latency_sort": "Latency",
@@ -152,4 +152,3 @@
   "never": "Never",
   "update_time": "Updated At"
 }
-

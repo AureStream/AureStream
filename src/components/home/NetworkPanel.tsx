@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from "react"
 import { RefreshCwIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { invoke } from "@tauri-apps/api/core"
-import * as Flags from "country-flag-icons/react/3x2"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { useEngineState } from "@/hooks/useEngineState"
+import { getCountryCode, getFlagComponent } from "@/lib/country-flags"
 import { type } from "@/lib/typography"
 
 interface GeoIpInfo {
@@ -98,11 +98,23 @@ export function NetworkPanel() {
           <span className={type.kvLabel}>{t("country_region")}</span>
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="flex items-center shrink-0 w-5 h-3.5 overflow-hidden rounded-xs border border-border/20" role="img" aria-label={t("flag")}>
+              <span
+                className="relative flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/20 bg-background"
+                role="img"
+                aria-label={t("flag")}
+              >
                 {(() => {
-                  const Flag = (Flags as any)[networkInfo.countryCode.toUpperCase()]
+                  const code =
+                    getCountryCode(networkInfo.countryCode) ||
+                    getCountryCode(networkInfo.countryName)
+                  const Flag = getFlagComponent(code)
                   if (Flag) {
-                    return <Flag className="w-full h-full object-cover" />
+                    return (
+                      <Flag
+                        className="absolute inset-0 block size-full"
+                        aria-hidden="true"
+                      />
+                    )
                   }
                   return <span className="text-sm">🌐</span>
                 })()}

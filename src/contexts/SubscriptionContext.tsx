@@ -17,6 +17,14 @@ import { updateSubscription } from "@/action/db"
 import { getEngineState } from "@/utils/vpn-service"
 import { mergeConnectionConfig } from "@/lib/connection-config"
 import { ROUTING_MODE_KEY, normalizeRoutingMode } from "@/lib/routing-mode"
+
+const NON_PROXY_OUTBOUND_TYPES = new Set([
+  "selector",
+  "urltest",
+  "direct",
+  "block",
+  "dns",
+])
 export type SubscriptionContextValue = {
   subscriptions: Subscription[]
   activeIdentifier: string
@@ -38,13 +46,17 @@ function parseNodes(configContent: string): ProxyNode[] {
   try {
     const config = JSON.parse(configContent)
     const outbounds = config.outbounds ?? []
+    const seenTags = new Set<string>()
     return outbounds
       .filter(
-        (o: Record<string, unknown>) =>
-          o.type === "vless" ||
-          o.type === "vmess" ||
-          o.type === "trojan" ||
-          o.type === "shadowsocks"
+        (o: Record<string, unknown>) => {
+          const type = typeof o.type === "string" ? o.type : ""
+          const tag = typeof o.tag === "string" ? o.tag : ""
+          if (!tag || NON_PROXY_OUTBOUND_TYPES.has(type)) return false
+          if (seenTags.has(tag)) return false
+          seenTags.add(tag)
+          return true
+        }
       )
       .map((o: Record<string, unknown>, i: number) => ({
         id: String(i),
