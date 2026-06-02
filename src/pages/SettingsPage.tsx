@@ -329,7 +329,7 @@ export function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={badge.brand}>v0.1.0</span>
+                    <span className={badge.brand}>v0.2.0</span>
                     <span className={badge.success}>Stable</span>
                   </div>
                 </div>

@@ -27,7 +27,7 @@ export const CONTROLLER_SECRET_STORE_KEY = 'singbox_api_secret_key';
 export const LEGACY_CLASH_API_PORT_STORE_KEY = 'clash_api_port_key';
 export const LEGACY_CLASH_API_SECRET_STORE_KEY = 'clash_api_secret_key';
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
 
 export function buildSubscriptionUserAgent(): string {
     return `AureStream/${APP_VERSION} (sing-box/${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION})`;
