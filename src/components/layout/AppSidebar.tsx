@@ -6,6 +6,7 @@ import {
   SunIcon,
   MoonIcon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,19 +18,20 @@ import {
 } from "@/components/ui/tooltip"
 import { useTheme } from "@/contexts/ThemeContext"
 
-const navItems = [
-  { id: "home", icon: HomeIcon, label: "首页" },
-  { id: "subscription", icon: BoxIcon, label: "订阅管理" },
-  { id: "settings", icon: SettingsIcon, label: "设置" },
-] as const
-
 interface AppSidebarProps {
   activeId: string
   onActiveIdChange: (id: string) => void
 }
 
 export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
+  const { t } = useTranslation()
   const { theme, setTheme } = useTheme()
+
+  const navItems = [
+    { id: "home", icon: HomeIcon, label: t("home") },
+    { id: "subscription", icon: BoxIcon, label: t("subscription") },
+    { id: "settings", icon: SettingsIcon, label: t("settings") },
+  ] as const
 
   const toggleTheme = () => {
     if (theme === "light") {
@@ -86,14 +88,14 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
               size="icon"
               className="size-11 rounded-2xl text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all duration-200 dark:hover:bg-white/[0.08]"
               onClick={toggleTheme}
-              aria-label="切换主题"
+              aria-label={t("toggle_theme")}
             >
               <SunIcon className="size-5 rotate-0 scale-100 transition-transform duration-350 dark:-rotate-90 dark:scale-0" />
               <MoonIcon className="absolute size-5 rotate-90 scale-0 transition-transform duration-350 dark:rotate-0 dark:scale-100 text-blue-400" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
-            切换到 {theme === "light" ? "深色模式" : "浅色模式"}
+            {theme === "light" ? t("switch_to_dark") : t("switch_to_light")}
           </TooltipContent>
         </Tooltip>
       </div>

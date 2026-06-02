@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { ArrowDownUpIcon, ActivityIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
 import { badge, btn, type } from "@/lib/typography"
@@ -59,6 +60,7 @@ function getFlagEmoji(name: string): string {
 }
 
 export function NodeSelector() {
+  const { t } = useTranslation()
   const { nodes, loading: subLoading, activeIdentifier } = useSubscriptions()
   const { isRunning } = useEngineState()
 
@@ -184,15 +186,15 @@ export function NodeSelector() {
   const displayNodes = useMemo(() => {
     const mapped = nodes.map((node) => {
       const delay = latencies[node.name]
-      let latencyLabel = "未测速"
+      let latencyLabel = t("not_tested")
       if (delay !== undefined) {
         if (delay > 0) {
           latencyLabel = `${delay} ms`
         } else {
-          latencyLabel = "超时"
+          latencyLabel = t("timeout")
         }
       } else if (isTestingSpeed) {
-        latencyLabel = "测速中"
+        latencyLabel = t("testing")
       }
       return {
         ...node,
@@ -212,14 +214,14 @@ export function NodeSelector() {
       return [...mapped].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"))
     }
     return mapped
-  }, [nodes, latencies, sortMode, isTestingSpeed])
+  }, [nodes, latencies, sortMode, isTestingSpeed, t])
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden @container">
       <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
         <div className="flex items-center gap-1.5">
-          <CardTitle>选择代理节点</CardTitle>
-          <span className={badge.brand}>共 {displayNodes.length} 个节点</span>
+          <CardTitle>{t("select_proxy_node")}</CardTitle>
+          <span className={badge.brand}>{t("total_nodes", { count: displayNodes.length })}</span>
         </div>
         <div className="flex gap-1.5">
           <Button
@@ -230,7 +232,7 @@ export function NodeSelector() {
             className={cn(btn.accent, "h-8 px-2.5 sm:px-3")}
           >
             <ActivityIcon className={cn("size-3.5 mr-1", isTestingSpeed && "animate-spin")} />
-            {isTestingSpeed ? "测速中" : "一键测速"}
+            {isTestingSpeed ? t("testing") : t("one_click_speed_test")}
           </Button>
           <Button
             variant="ghost"
@@ -246,9 +248,9 @@ export function NodeSelector() {
             )}
           >
             <ArrowDownUpIcon className="size-3.5 mr-1" />
-            {sortMode === "default" && "默认排序"}
-            {sortMode === "latency" && "延迟排序"}
-            {sortMode === "name" && "名称排序"}
+            {sortMode === "default" && t("default_sort")}
+            {sortMode === "latency" && t("latency_sort")}
+            {sortMode === "name" && t("name_sort")}
           </Button>
         </div>
       </div>
@@ -257,11 +259,11 @@ export function NodeSelector() {
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
           {subLoading ? (
             <div className={cn("flex items-center justify-center py-8", type.description)}>
-              加载中...
+              {t("loading")}
             </div>
           ) : displayNodes.length === 0 ? (
             <div className={cn("flex items-center justify-center py-8", type.description)}>
-              暂无节点，请先添加订阅
+              {t("no_nodes_please_add_subscription")}
             </div>
           ) : (
             <div className="grid grid-cols-1 @[480px]:grid-cols-2 @[720px]:grid-cols-3 gap-2 p-0.5 pt-2 pb-2">
@@ -308,12 +310,12 @@ export function NodeSelector() {
                       <span
                         className={cn(
                           "type-caption font-semibold font-mono transition-opacity duration-200",
-                          node.latencyLabel === "未测速"
+                          node.latencyLabel === t("not_tested")
                             ? "opacity-0 select-none pointer-events-none"
                             : "opacity-100",
-                          node.latencyLabel === "超时"
+                          node.latencyLabel === t("timeout")
                             ? "text-rose-500"
-                            : node.latencyLabel === "测速中"
+                            : node.latencyLabel === t("testing")
                             ? "text-blue-500 dark:text-blue-400 animate-pulse"
                             : node.latency > 0
                             ? node.latency < 500

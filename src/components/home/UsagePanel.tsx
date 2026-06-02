@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { CartesianGrid, Area, AreaChart, XAxis } from "recharts"
 
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,11 +18,6 @@ import type { TrafficPoint } from "@/types/engine-state"
 import { useEngineState } from "@/hooks/useEngineState"
 import { subscribeTraffic } from "@/utils/singbox-api"
 
-const chartConfig = {
-  download: { label: "下载", color: "var(--primary)" },
-  upload: { label: "上传", color: "#10b981" },
-} satisfies ChartConfig
-
 function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond < 1024) return "0 KB/s"
   const kb = bytesPerSecond / 1024
@@ -31,14 +27,14 @@ function formatSpeed(bytesPerSecond: number): string {
   return `${(mb / 1024).toFixed(1)} GB/s`
 }
 
-function formatTotal(bytes: number): string {
-  if (bytes === 0) return "累计 0 B"
-  if (bytes < 1024) return `累计 ${bytes} B`
+function formatTotal(bytes: number, t: (key: string) => string): string {
+  if (bytes === 0) return `${t("total_traffic_label")} 0 B`
+  if (bytes < 1024) return `${t("total_traffic_label")} ${bytes} B`
   const kb = bytes / 1024
-  if (kb < 1024) return `累计 ${kb.toFixed(1)} KB`
+  if (kb < 1024) return `${t("total_traffic_label")} ${kb.toFixed(1)} KB`
   const mb = kb / 1024
-  if (mb < 1024) return `累计 ${mb.toFixed(1)} MB`
-  return `累计 ${(mb / 1024).toFixed(1)} GB`
+  if (mb < 1024) return `${t("total_traffic_label")} ${mb.toFixed(1)} MB`
+  return `${t("total_traffic_label")} ${(mb / 1024).toFixed(1)} GB`
 }
 
 function StatBox({
@@ -46,11 +42,13 @@ function StatBox({
   bytesPerSecond,
   totalBytes,
   type,
+  t,
 }: {
   label: string
   bytesPerSecond: number
   totalBytes: number
   type: "upload" | "download"
+  t: (key: string) => string
 }) {
   const isUpload = type === "upload"
   return (
@@ -74,7 +72,7 @@ function StatBox({
           {formatSpeed(bytesPerSecond)}
         </span>
         <span className={cn(text.caption, "truncate mt-0.5")}>
-          {label} · {formatTotal(totalBytes)}
+          {label} · {formatTotal(totalBytes, t)}
         </span>
       </div>
     </div>
@@ -82,6 +80,7 @@ function StatBox({
 }
 
 export function UsagePanel() {
+  const { t } = useTranslation()
   const { isRunning } = useEngineState()
   const [uploadSpeed, setUploadSpeed] = useState(0)
   const [downloadSpeed, setDownloadSpeed] = useState(0)
@@ -94,6 +93,11 @@ export function UsagePanel() {
       upload: 0,
     }))
   )
+
+  const chartConfig = {
+    download: { label: t("download"), color: "var(--primary)" },
+    upload: { label: t("upload"), color: "#10b981" },
+  } satisfies ChartConfig
   useEffect(() => {
     if (!isRunning) {
       setUploadSpeed(0)
@@ -144,15 +148,17 @@ export function UsagePanel() {
         <div className="flex shrink-0 gap-3">
           <StatBox
             type="upload"
-            label="上传"
+            label={t("upload")}
             bytesPerSecond={uploadSpeed}
             totalBytes={uploadTotal}
+            t={t}
           />
           <StatBox
             type="download"
-            label="下载"
+            label={t("download")}
             bytesPerSecond={downloadSpeed}
             totalBytes={downloadTotal}
+            t={t}
           />
         </div>
 

@@ -10,6 +10,7 @@ import {
   AlertCircleIcon,
   CheckCircle2Icon,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,7 +23,7 @@ import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { insertSubscription, deleteSubscription, updateSubscription } from "@/action/db"
 import { message } from "@tauri-apps/plugin-dialog"
 
-const getFriendlyNameFromUrl = (urlStr: string): string => {
+const getFriendlyNameFromUrl = (urlStr: string, t: (key: string) => string): string => {
   try {
     const parsed = new URL(urlStr)
     const pathname = parsed.pathname
@@ -39,12 +40,12 @@ const getFriendlyNameFromUrl = (urlStr: string): string => {
     if (hostParts.length > 1) {
       const domain = hostParts[hostParts.length - 2]
       if (domain && domain !== "com" && domain !== "net" && domain !== "org") {
-        return domain.toUpperCase() + " 订阅"
+        return domain.toUpperCase() + " " + t("subscription")
       }
     }
-    return parsed.hostname + " 订阅"
+    return parsed.hostname + " " + t("subscription")
   } catch (e) {
-    return "未命名订阅"
+    return t("unnamed_subscription")
   }
 }
 
@@ -55,8 +56,8 @@ function formatBytes(bytes: number): string {
   return `${gb.toFixed(1)} GB`
 }
 
-function formatExpiry(expireTimeMs: number): string {
-  if (!expireTimeMs || expireTimeMs <= 0) return "无限期"
+function formatExpiry(expireTimeMs: number, t: (key: string) => string): string {
+  if (!expireTimeMs || expireTimeMs <= 0) return t("unlimited")
   const date = new Date(expireTimeMs)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
@@ -70,6 +71,7 @@ function getStatus(expireTimeMs: number): "active" | "expired" | "expiring" {
 }
 
 export function SubscriptionPage() {
+  const { t } = useTranslation()
   const {
     subscriptions,
     activeIdentifier,
@@ -91,7 +93,7 @@ export function SubscriptionPage() {
     if (!url || isSubmitting) return
     setIsSubmitting(true)
     try {
-      const finalName = name.trim() || getFriendlyNameFromUrl(url)
+      const finalName = name.trim() || getFriendlyNameFromUrl(url, t)
       const id = await insertSubscription(url, finalName)
       if (id) {
         await selectSubscription(id)
@@ -99,15 +101,15 @@ export function SubscriptionPage() {
         setUrl("")
         await refresh()
       } else {
-        await message("无法解析订阅文件，请检查您的订阅链接是否有效", {
-          title: "导入失败",
+        await message(t("cannot_parse_subscription"), {
+          title: t("import_failed"),
           kind: "error",
         })
       }
     } catch (err: any) {
       console.error(err)
-      await message(`添加失败: ${err.message || err}`, {
-        title: "错误",
+      await message(`${t("add_failed")}: ${err.message || err}`, {
+        title: t("error"),
         kind: "error",
       })
     } finally {
@@ -132,8 +134,8 @@ export function SubscriptionPage() {
       if (ok) {
         await refresh()
       } else {
-        await message("更新订阅失败，请检查网络或订阅链接是否有效", {
-          title: "更新失败",
+        await message(t("update_subscription_failed"), {
+          title: t("update_failed"),
           kind: "error",
         })
       }
@@ -168,8 +170,8 @@ export function SubscriptionPage() {
               <div className={iconBadge.purple}>
                 <BoxIcon />
               </div>
-              <span className={type.sectionTitle}>已保存的订阅</span>
-              <span className={badge.brand}>共 {subscriptions.length} 个</span>
+              <span className={type.sectionTitle}>{t("subscriptions_saved")}</span>
+              <span className={badge.brand}>{t("total")} {subscriptions.length} {t("subscriptions_count")}</span>
             </div>
             <Button
               variant="ghost"
@@ -179,7 +181,7 @@ export function SubscriptionPage() {
               className={cn(btn.accent, "h-8 px-2")}
             >
               <RefreshCwIcon className={cn("size-3.5 mr-0.5", isUpdatingAll && "animate-spin")} />
-              {isUpdatingAll ? "更新中..." : "全部更新"}
+              {isUpdatingAll ? t("updating") : t("update_all")}
             </Button>
           </div>
 
@@ -187,12 +189,12 @@ export function SubscriptionPage() {
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin flex flex-col gap-3 pb-4">
               {loading ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
-                  <span className={type.description}>加载中...</span>
+                  <span className={type.description}>{t("loading")}</span>
                 </div>
               ) : subscriptions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
                   <AlertCircleIcon className="size-8 opacity-40" />
-                  <span className={type.description}>暂无可用订阅，请在右侧添加</span>
+                  <span className={type.description}>{t("no_subscription_yet")}</span>
                 </div>
               ) : (
                 subscriptions.map((sub) => {
@@ -227,9 +229,9 @@ export function SubscriptionPage() {
                                 status === "expired" && badge.danger
                               )}
                             >
-                              {status === "active" && "服务中"}
-                              {status === "expiring" && "即将过期"}
-                              {status === "expired" && "已过期"}
+                              {status === "active" && t("in_service")}
+                              {status === "expiring" && t("expiring_soon")}
+                              {status === "expired" && t("expired")}
                             </span>
                           </div>
                           <div className={cn("flex items-center gap-1 mt-1", type.caption)}>
@@ -241,7 +243,7 @@ export function SubscriptionPage() {
                           {isCurrent && (
                             <div className={cn(badge.success, "h-6 gap-1 px-2")}>
                               <CheckCircle2Icon className="size-3" />
-                              使用中
+                              {t("in_use")}
                             </div>
                           )}
                           <Button
@@ -252,7 +254,7 @@ export function SubscriptionPage() {
                               e.stopPropagation()
                               handleSingleUpdate(sub.identifier)
                             }}
-                            aria-label="更新订阅"
+                            aria-label={t("update_subscription")}
                           >
                             <RefreshCwIcon className="size-3.5" />
                           </Button>
@@ -264,7 +266,7 @@ export function SubscriptionPage() {
                               e.stopPropagation()
                               handleDelete(sub.identifier)
                             }}
-                            aria-label="删除订阅"
+                            aria-label={t("delete_subscription")}
                           >
                             <Trash2Icon className="size-3.5" />
                           </Button>
@@ -274,7 +276,7 @@ export function SubscriptionPage() {
                       {/* Traffic progress */}
                       <div className="flex flex-col gap-1.5 mt-1">
                         <div className={cn("flex items-center justify-between", type.caption)}>
-                          <span>已使用: {formatBytes(sub.used_traffic)} / {formatBytes(sub.total_traffic)}</span>
+                          <span>{t("used")}: {formatBytes(sub.used_traffic)} / {formatBytes(sub.total_traffic)}</span>
                           <span className={cn("font-semibold", percent > 85 ? "text-destructive" : percent > 60 ? "text-amber-600 dark:text-amber-400" : "text-primary")}>
                             {percent.toFixed(1)}%
                           </span>
@@ -298,11 +300,11 @@ export function SubscriptionPage() {
                       <div className={cn("flex items-center justify-between mt-1 pt-1.5 border-t border-border/60", type.caption)}>
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="size-3" />
-                          到期时间: {formatExpiry(sub.expire_time)}
+                          {t("expire_time")}: {formatExpiry(sub.expire_time, t)}
                         </span>
                         <span className="flex items-center gap-1">
                           <span className={cn("size-1.5 rounded-full", autoUpdate ? "bg-emerald-500" : "bg-slate-350 dark:bg-slate-600")} />
-                          自动更新: {autoUpdate ? updateInterval : "关闭"}
+                          {t("auto_update")}: {autoUpdate ? updateInterval : t("close")}
                         </span>
                       </div>
                     </div>
@@ -323,15 +325,15 @@ export function SubscriptionPage() {
               <div className={iconBadge.blue}>
                 <PlusIcon />
               </div>
-              <span className={type.sectionTitle}>添加订阅</span>
+              <span className={type.sectionTitle}>{t("add_subscription")}</span>
             </div>
 
             <form onSubmit={handleAdd} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className={type.label}>订阅名称 (可选)</label>
+                <label className={type.label}>{t("subscription_name_optional")}</label>
                 <input
                   type="text"
-                  placeholder="不填将依据链接自动识别"
+                  placeholder={t("auto_generate_name")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="ui-input"
@@ -339,9 +341,9 @@ export function SubscriptionPage() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className={type.label}>订阅链接 (URL)</label>
+                <label className={type.label}>{t("subscription_url")}</label>
                 <textarea
-                  placeholder="粘贴订阅链接（sing-box / 通用代理订阅）..."
+                  placeholder={t("paste_subscription_url")}
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   rows={3}
@@ -352,15 +354,15 @@ export function SubscriptionPage() {
 
               <div className={cn(surface.row, "flex items-center justify-between px-3 py-2 mt-0.5")}>
                 <div className="flex flex-col">
-                  <span className={type.label}>自动更新</span>
-                  <span className={type.caption}>开启后将定时同步节点</span>
+                  <span className={type.label}>{t("auto_update")}</span>
+                  <span className={type.caption}>{t("auto_update_enabled")}</span>
                 </div>
                 <Switch size="sm" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
               </div>
 
               {autoUpdate && (
                 <div className="flex flex-col gap-1">
-                  <label className={type.label}>更新周期</label>
+                  <label className={type.label}>{t("update_interval")}</label>
                   <div className="grid grid-cols-4 gap-1.5">
                     {(["6h", "12h", "24h", "7d"] as const).map((interval) => (
                       <button
@@ -373,10 +375,10 @@ export function SubscriptionPage() {
                           updateInterval === interval && btn.pillActive
                         )}
                       >
-                        {interval === "6h" && "6小时"}
-                        {interval === "12h" && "12小时"}
-                        {interval === "24h" && "每天"}
-                        {interval === "7d" && "每周"}
+                        {interval === "6h" && t("6hours")}
+                        {interval === "12h" && t("12hours")}
+                        {interval === "24h" && t("every_day")}
+                        {interval === "7d" && t("every_week")}
                       </button>
                     ))}
                   </div>
@@ -388,7 +390,7 @@ export function SubscriptionPage() {
                 disabled={isSubmitting}
                 className="w-full h-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-semibold text-xs shadow-sm mt-1 transition-all"
               >
-                {isSubmitting ? "正在拉取..." : "保存订阅"}
+                {isSubmitting ? t("fetching") : t("save_subscription")}
               </Button>
             </form>
           </CardContent>
@@ -401,14 +403,14 @@ export function SubscriptionPage() {
               <div className={iconBadge.emerald}>
                 <ShieldCheckIcon />
               </div>
-              <span className={type.sectionTitle}>订阅说明</span>
+              <span className={type.sectionTitle}>{t("subscription_instructions")}</span>
             </div>
 
             <div className={cn(type.description, "space-y-2.5")}>
-              <p>1. 支持常见代理订阅链接；节点由 sing-box 解析并写入配置。</p>
-              <p>2. 请务必保管好您的订阅地址链接，切勿随意分享给他人以免造成流量泄露。</p>
-              <p>3. 订阅更新时将自动同步最新的服务器节点，请保持网络连接通畅。</p>
-              <p>4. 当流量耗尽或接近过期时，订阅状态会自动变色提醒。</p>
+              <p>{t("instruction_1")}</p>
+              <p>{t("instruction_2")}</p>
+              <p>{t("instruction_3")}</p>
+              <p>{t("instruction_4")}</p>
             </div>
           </CardContent>
         </Card>
