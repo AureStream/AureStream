@@ -2,7 +2,6 @@ import {
   BoxIcon,
   HomeIcon,
   SettingsIcon,
-  ZapIcon,
   SunIcon,
   MoonIcon,
 } from "lucide-react"

@@ -15,7 +15,6 @@ import {
   ROUTING_MODE_KEY,
   normalizeRoutingMode,
   nextRoutingMode,
-  routingModeLabel,
   type RoutingMode,
 } from "@/lib/routing-mode"
 import { message } from "@tauri-apps/plugin-dialog"
