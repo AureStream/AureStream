@@ -43,6 +43,9 @@
     "process:allow-exit",
     "process:allow-restart",
     "dialog:default",
-    "log:default"
+    "log:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

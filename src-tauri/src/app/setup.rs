@@ -26,13 +26,31 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
 
     crate::commands::whitelist::spawn_whitelist_refresh_task(app.handle().clone());
 
-    // macOS：以无 Dock 图标的附件模式运行，启动时直接显示主窗口
+    use tauri_plugin_store::StoreExt;
+
+    let hide_on_launch = if let Ok(store) = app.handle().store("settings.json") {
+        store.get("hide_on_launch_key")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    // macOS：以无 Dock 图标的附件模式运行
     #[cfg(target_os = "macos")]
     {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+    }
+
+    if hide_on_launch {
+        log::info!("[setup] hide_on_launch is enabled, hiding main window on start");
         if let Some(w) = app.get_webview_window("main") {
-            w.show().unwrap();
-            w.set_focus().unwrap();
+            let _ = w.hide();
+        }
+    } else {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.set_focus();
         }
     }
 

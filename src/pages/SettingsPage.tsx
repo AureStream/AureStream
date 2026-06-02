@@ -26,8 +26,15 @@ import {
   getTunStack,
   setTunStack,
   type TunStack,
+  getAutoStart,
+  setAutoStartStore,
+  getHideOnLaunch,
+  setHideOnLaunchStore,
+  getMinimizeToTray,
+  setMinimizeToTrayStore,
 } from "@/single/store"
 import { invoke } from "@tauri-apps/api/core"
+import { enable, disable } from "@tauri-apps/plugin-autostart"
 import { message } from "@tauri-apps/plugin-dialog"
 import { DEFAULT_PROXY_BYPASS_UI, normalizeBypassInput } from "@/lib/proxy-bypass"
 import { getEngineState } from "@/utils/vpn-service"
@@ -128,9 +135,38 @@ export function SettingsPage() {
       const display = bypass || DEFAULT_PROXY_BYPASS_UI
       setBypassList(display)
       setSavedBypass(display)
+
+      // Load new settings
+      setAutoStart(await getAutoStart())
+      setHideOnLaunch(await getHideOnLaunch())
+      setMinimizeToTray(await getMinimizeToTray())
     }
     loadSettings()
   }, [])
+
+  const handleAutoStartChange = async (checked: boolean) => {
+    setAutoStart(checked)
+    await setAutoStartStore(checked)
+    try {
+      if (checked) {
+        await enable()
+      } else {
+        await disable()
+      }
+    } catch (e) {
+      console.error("Failed to toggle autostart:", e)
+    }
+  }
+
+  const handleHideOnLaunchChange = async (checked: boolean) => {
+    setHideOnLaunch(checked)
+    await setHideOnLaunchStore(checked)
+  }
+
+  const handleMinimizeToTrayChange = async (checked: boolean) => {
+    setMinimizeToTray(checked)
+    await setMinimizeToTrayStore(checked)
+  }
 
   const warnIfEngineRunningForNetworkChange = async () => {
     const state = await getEngineState()
@@ -242,7 +278,7 @@ export function SettingsPage() {
                     <span className={type.label}>启动时隐藏</span>
                     <span className={cn(type.caption, "mt-0.5 truncate")}>应用启动时静默隐藏到后台</span>
                   </div>
-                  <Switch checked={hideOnLaunch} onCheckedChange={setHideOnLaunch} size="sm" />
+                  <Switch checked={hideOnLaunch} onCheckedChange={handleHideOnLaunchChange} size="sm" />
                 </div>
 
                 <div className="h-px bg-border/40 my-0.5" />
@@ -252,7 +288,7 @@ export function SettingsPage() {
                     <span className={type.label}>最小化到托盘</span>
                     <span className={cn(type.caption, "mt-0.5 truncate")}>点击关闭窗口时不退出程序，仅收起至托盘</span>
                   </div>
-                  <Switch checked={minimizeToTray} onCheckedChange={setMinimizeToTray} size="sm" />
+                  <Switch checked={minimizeToTray} onCheckedChange={handleMinimizeToTrayChange} size="sm" />
                 </div>
               </div>
             </CardContent>
@@ -369,7 +405,7 @@ export function SettingsPage() {
                     <span className={type.label}>开机自启动</span>
                     <span className={cn(type.caption, "mt-0.5 truncate")}>在系统启动时自动运行客户端</span>
                   </div>
-                  <Switch checked={autoStart} onCheckedChange={setAutoStart} size="sm" />
+                  <Switch checked={autoStart} onCheckedChange={handleAutoStartChange} size="sm" />
                 </div>
 
                 <div className="h-px bg-border/40 my-0.5" />

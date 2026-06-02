@@ -15,6 +15,9 @@ export const USER_AGENT_STORE_KEY = 'user_agent_key';
 export const DEFAULT_PROXY_PORT = 2345;
 export const PROXY_PORT_STORE_KEY = 'proxy_port_key';
 export const PROXY_BYPASS_STORE_KEY = 'proxy_bypass_key';
+export const AUTO_START_STORE_KEY = 'auto_start_key';
+export const HIDE_ON_LAUNCH_STORE_KEY = 'hide_on_launch_key';
+export const MINIMIZE_TO_TRAY_STORE_KEY = 'minimize_to_tray_key';
 
 /** sing-box experimental.clash_api external_controller port */
 export const DEFAULT_CONTROLLER_PORT = 9191;
