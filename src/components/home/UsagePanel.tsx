@@ -38,13 +38,11 @@ function formatTotal(bytes: number, t: (key: string) => string): string {
 }
 
 function StatBox({
-  label,
   bytesPerSecond,
   totalBytes,
   type,
   t,
 }: {
-  label: string
   bytesPerSecond: number
   totalBytes: number
   type: "upload" | "download"
@@ -72,7 +70,7 @@ function StatBox({
           {formatSpeed(bytesPerSecond)}
         </span>
         <span className={cn(text.caption, "truncate mt-0.5")}>
-          {label} · {formatTotal(totalBytes, t)}
+          {formatTotal(totalBytes, t)}
         </span>
       </div>
     </div>
@@ -148,14 +146,12 @@ export function UsagePanel() {
         <div className="flex shrink-0 gap-3">
           <StatBox
             type="upload"
-            label={t("upload")}
             bytesPerSecond={uploadSpeed}
             totalBytes={uploadTotal}
             t={t}
           />
           <StatBox
             type="download"
-            label={t("download")}
             bytesPerSecond={downloadSpeed}
             totalBytes={downloadTotal}
             t={t}
