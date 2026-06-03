@@ -37,7 +37,7 @@ import {
 import { invoke } from "@tauri-apps/api/core"
 import { enable, disable } from "@tauri-apps/plugin-autostart"
 import { message } from "@tauri-apps/plugin-dialog"
-import { DEFAULT_PROXY_BYPASS_UI, normalizeBypassInput } from "@/lib/proxy-bypass"
+import { BYPASS_PLACEHOLDER, DEFAULT_PROXY_BYPASS_UI, normalizeBypassInput } from "@/lib/proxy-bypass"
 import { getEngineState } from "@/utils/vpn-service"
 import { isEngineBusy } from "@/lib/engine-guard"
 
@@ -550,7 +550,7 @@ export function SettingsPage() {
                     onChange={(e) => setBypassList(e.target.value)}
                     onBlur={() => void handleBypassBlur()}
                     className="ui-textarea font-mono w-full sm:flex-1 min-h-[130px] flex-1 text-xs resize-none"
-                    placeholder="localhost, 127.0.0.1..."
+                    placeholder={BYPASS_PLACEHOLDER}
                   />
                 </div>
               </div>
