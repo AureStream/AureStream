@@ -308,7 +308,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "aurestream"
-version = "0.1.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "cc",
@@ -5080,7 +5080,7 @@ dependencies = [
 
 [[package]]
 name = "sysproxy-rs"
-version = "0.0.1"
+version = "0.2.0"
 dependencies = [
  "clap",
  "env_logger",
@@ -6072,7 +6072,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tun-service"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "log",
  "sha2",
