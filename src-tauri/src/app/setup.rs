@@ -1,11 +1,32 @@
 use tauri::Emitter;
 use tauri::Manager;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 
 use crate::utils::show_dashboard;
+
+pub fn show_main_window(app_handle: &tauri::AppHandle) {
+    let Some(w) = app_handle.get_webview_window("main") else {
+        log::warn!("Main window not found while trying to show it");
+        return;
+    };
+
+    #[cfg(target_os = "linux")]
+    if let Err(e) = w.unminimize() {
+        log::warn!("Failed to unminimize main window: {}", e);
+    }
+
+    if let Err(e) = w.show() {
+        log::error!("Failed to show main window: {}", e);
+        return;
+    }
+
+    if let Err(e) = w.set_focus() {
+        log::warn!("Failed to focus main window: {}", e);
+    }
+}
 
 /// App 初始化逻辑，对应 Builder::setup 闭包
 pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -48,10 +69,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
             let _ = w.hide();
         }
     } else {
-        if let Some(w) = app.get_webview_window("main") {
-            let _ = w.show();
-            let _ = w.set_focus();
-        }
+        show_main_window(app.handle());
     }
 
     // On Linux/Windows debug builds, register deep links
@@ -90,18 +108,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         .on_menu_event(|app_handle, event| {
             match event.id.as_ref() {
                 "show" => {
-                    if let Some(w) = app_handle.get_webview_window("main") {
-                        #[cfg(target_os = "linux")]
-                        {
-                            let _ = w.unminimize();
-                            let _ = w.set_focus();
-                        }
-                        #[cfg(not(target_os = "linux"))]
-                        {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
+                    show_main_window(app_handle);
                 }
                 "quit" => {
                     let app_handle = app_handle.clone();
@@ -111,6 +118,18 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
                 }
                 _ => {}
             }
+        })
+        .on_tray_icon_event(|tray, event| match event {
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            }
+            | TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            } => show_main_window(tray.app_handle()),
+            _ => {}
         })
         .build(app)?;
 
