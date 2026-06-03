@@ -1,12 +1,32 @@
 use tauri::{AppHandle, Manager, RunEvent, Window, WindowEvent};
 
+fn move_window_to_tray(window: &Window) -> tauri::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        window.minimize()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        window.hide().or_else(|hide_error| {
+            log::warn!(
+                "Failed to hide main window, falling back to minimize: {}",
+                hide_error
+            );
+            window.minimize()
+        })
+    }
+}
+
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     match event {
         WindowEvent::CloseRequested { api, .. } => {
             if window.label() == "main" {
                 use tauri_plugin_store::StoreExt;
-                let minimize_to_tray = if let Ok(store) = window.app_handle().store("settings.json") {
-                    store.get("minimize_to_tray_key")
+                let minimize_to_tray = if let Ok(store) = window.app_handle().store("settings.json")
+                {
+                    store
+                        .get("minimize_to_tray_key")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(true)
                 } else {
@@ -14,13 +34,17 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 };
 
                 if minimize_to_tray {
-                    api.prevent_close();
-                    log::info!("Window close request redirected to minimize to tray");
-                    if let Some(w) = window.app_handle().get_webview_window("main") {
-                        #[cfg(target_os = "linux")]
-                        let _ = w.minimize();
-                        #[cfg(not(target_os = "linux"))]
-                        let _ = w.hide();
+                    match move_window_to_tray(window) {
+                        Ok(()) => {
+                            api.prevent_close();
+                            log::info!("Window close request redirected to tray");
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "Failed to redirect close request to tray; allowing close: {}",
+                                e
+                            );
+                        }
                     }
                 } else {
                     log::info!("Window close request accepted, exiting application");
