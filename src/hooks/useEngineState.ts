@@ -21,7 +21,7 @@ export function useEngineState() {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
 
-    listen<EngineState>("engine-state", (event) => {
+    const listenPromise = listen<EngineState>("engine-state", (event) => {
       if (!cancelled) setEngineState(event.payload);
     }).then((fn) => {
       unlisten = fn;
@@ -29,7 +29,8 @@ export function useEngineState() {
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      // If unlisten isn't ready yet, wait for the promise then clean up
+      listenPromise.then(() => unlisten?.());
     };
   }, []);
 

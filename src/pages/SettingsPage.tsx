@@ -168,8 +168,8 @@ export function SettingsPage() {
 
   const handleAutoStartChange = async (checked: boolean) => {
     setAutoStart(checked)
-    await setAutoStartStore(checked)
     try {
+      await setAutoStartStore(checked)
       if (checked) {
         await enable()
       } else {

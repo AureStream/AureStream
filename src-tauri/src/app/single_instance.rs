@@ -84,11 +84,25 @@ mod imp {
                             "[single_instance] stale lock file found (pid {} dead), removing",
                             old_pid
                         );
-                        // Clean up stale file and proceed — on next attempt create_new will succeed
-                        let _ = fs::remove_file(&path);
                     } else {
-                        // Corrupt lock file — remove and proceed
-                        let _ = fs::remove_file(&path);
+                        log::info!("[single_instance] corrupt lock file, removing");
+                    }
+                }
+                let _ = fs::remove_file(&path);
+                // Retry: the stale file is gone, try atomic create again
+                match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                {
+                    Ok(mut f) => {
+                        let _ = write!(f, "{}", pid);
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "[single_instance] failed to acquire lock on retry: {}",
+                            e
+                        );
                     }
                 }
             }
