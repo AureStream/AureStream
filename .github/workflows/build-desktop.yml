@@ -114,6 +114,25 @@ jobs:
         with:
           args: --target ${{ matrix.rust_target }}
 
+      - name: Collect updater manifest
+        shell: bash
+        run: |
+          LATEST=$(find src-tauri/target/${{ matrix.rust_target }}/release/bundle -name 'latest.json' -print -quit)
+          if [ -n "$LATEST" ]; then
+            mkdir -p updater-artifacts
+            cp "$LATEST" "updater-artifacts/latest-${{ matrix.name }}.json"
+            echo "Collected updater manifest for ${{ matrix.name }}"
+          else
+            echo "Warning: latest.json not found for ${{ matrix.name }}"
+          fi
+
+      - name: Upload updater manifest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: updater-json-${{ matrix.name }}
+          path: updater-artifacts/latest-${{ matrix.name }}.json
+          if-no-files-found: warn
+
       - name: Create Windows portable zip
         if: runner.os == 'Windows'
         shell: bash
@@ -208,5 +227,42 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  merge-updater-json:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download updater manifests
+        uses: actions/download-artifact@v7
+        with:
+          pattern: updater-json-*
+          merge-multiple: true
+          path: updater-fragments
+
+      - name: Merge and upload latest.json
+        shell: bash
+        run: |
+          python3 -c "
+import json, glob
+merged = None
+for f in sorted(glob.glob('updater-fragments/latest-*.json')):
+    with open(f) as fh:
+        data = json.load(fh)
+    if merged is None:
+        merged = data
+    else:
+        merged['platforms'].update(data.get('platforms', {}))
+with open('latest.json', 'w') as fh:
+    json.dump(merged, fh, indent=2)
+print(f'Merged platforms: {list(merged[\"platforms\"].keys())}')
+          "
+
+      - name: Upload latest.json to Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
