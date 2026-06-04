@@ -44,6 +44,11 @@
           "aurestream"
         ]
       }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/BadKid90s/AureStream/releases/latest/download/latest.json"
+      ]
     }
   }
 }

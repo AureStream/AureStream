@@ -62,7 +62,9 @@ export function SettingsPage() {
   const apiPortTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // States for About Card updates
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest">("idle")
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest" | "available" | "downloading" | "ready" | "error">("idle")
+  const updateRef = useRef<{ version: string; downloadAndInstall: (onProgress?: (p: any) => void) => Promise<void>; install: () => Promise<void> } | null>(null)
+  const [updateVersion, setUpdateVersion] = useState("")
 
   // States for TUN service management
   const [serviceStatus, setServiceStatus] = useState<"checking" | "installed" | "not_installed" | "failed">("checking")
@@ -270,11 +272,38 @@ export function SettingsPage() {
   }
 
 
-  const handleCheckUpdate = () => {
+  const handleCheckUpdate = async () => {
+    if (updateStatus === "ready") {
+      try { await invoke("restart"); } catch { try { await invoke("quit"); } catch {} }
+      return
+    }
+    if (updateStatus === "available") {
+      setUpdateStatus("downloading")
+      try {
+        const upd = updateRef.current!
+        await upd.downloadAndInstall()
+        setUpdateStatus("ready")
+      } catch (e) {
+        console.error("Download/install failed:", e)
+        setUpdateStatus("error")
+      }
+      return
+    }
     setUpdateStatus("checking")
-    setTimeout(() => {
-      setUpdateStatus("latest")
-    }, 1200)
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater")
+      const upd = await check()
+      if (upd) {
+        updateRef.current = upd as any
+        setUpdateVersion(upd.version)
+        setUpdateStatus("available")
+      } else {
+        setUpdateStatus("latest")
+      }
+    } catch (e) {
+      console.error("Update check failed:", e)
+      setUpdateStatus("error")
+    }
   }
 
   return (
@@ -404,14 +433,20 @@ export function SettingsPage() {
                 <Button
                   variant="default"
                   size="default"
-                  disabled={updateStatus === "checking"}
+                  disabled={updateStatus === "checking" || updateStatus === "downloading"}
                   onClick={handleCheckUpdate}
                   className={cn(
                     "w-full h-10 font-semibold transition-all duration-300 text-xs rounded-xl shadow-xs",
-                    updateStatus === "checking"
+                    updateStatus === "checking" || updateStatus === "downloading"
                       ? "bg-muted text-muted-foreground"
                       : updateStatus === "latest"
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15"
+                      : updateStatus === "available"
+                      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/15"
+                      : updateStatus === "ready"
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                      : updateStatus === "error"
+                      ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/15"
                       : "bg-primary text-primary-foreground hover:bg-primary/95"
                   )}
                 >
@@ -425,6 +460,30 @@ export function SettingsPage() {
                     <>
                       <ShieldCheckIcon className="size-4 mr-2 text-emerald-500" />
                       {t("current_latest")}
+                    </>
+                  )}
+                  {updateStatus === "available" && (
+                    <>
+                      <RefreshCwIcon className="size-4 mr-2" />
+                      {t("update_available", { version: updateVersion })}
+                    </>
+                  )}
+                  {updateStatus === "downloading" && (
+                    <>
+                      <RefreshCwIcon className="size-4 mr-2 animate-spin" />
+                      {t("downloading_update")}
+                    </>
+                  )}
+                  {updateStatus === "ready" && (
+                    <>
+                      <RefreshCwIcon className="size-4 mr-2 text-emerald-500" />
+                      {t("update_ready")}
+                    </>
+                  )}
+                  {updateStatus === "error" && (
+                    <>
+                      <RefreshCwIcon className="size-4 mr-2" />
+                      {t("update_check_error")}
                     </>
                   )}
                   {updateStatus === "idle" && t("check_update")}

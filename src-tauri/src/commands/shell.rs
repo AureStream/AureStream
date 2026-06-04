@@ -78,6 +78,15 @@ pub fn sync_quit(app: AppHandle) {
 }
 
 #[tauri::command]
+pub async fn restart(app: AppHandle) {
+    log::info!("Restarting application...");
+    if let Err(e) = stop(app.clone()).await {
+        log::error!("Failed to stop proxy before restart: {}", e);
+    }
+    app.restart();
+}
+
+#[tauri::command]
 pub fn read_logs(app_data: tauri::State<AppData>, is_error: bool) -> String {
     let log_type = if is_error {
         LogType::Error

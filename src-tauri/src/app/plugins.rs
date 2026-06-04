@@ -7,7 +7,7 @@ const APP_LOG_MAX_FILE_SIZE: u128 = 50 * 1024 * 1024;
 
 #[allow(unused_variables)]
 pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Builder<Wry> {
-    builder
+    let builder = builder
         .plugin({
             let targets = ["aurestream_lib"];
             tauri_plugin_log::Builder::new()
@@ -43,5 +43,13 @@ pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Bu
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--silently"]),
-        ))
+        ));
+
+    // Updater plugin — desktop only (Android/iOS use their native stores)
+    #[cfg(desktop)]
+    {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    }
+    #[cfg(not(desktop))]
+    builder
 }

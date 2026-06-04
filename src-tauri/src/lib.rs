@@ -49,6 +49,7 @@ pub fn run() {
             commands::shell::get_app_paths,
             commands::shell::open_directory,
             commands::shell::quit,
+            commands::shell::restart,
             commands::shell::get_pending_deep_link,
             // network commands
             commands::network::get_lan_ip,
