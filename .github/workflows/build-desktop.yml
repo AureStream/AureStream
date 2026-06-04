@@ -53,9 +53,9 @@ jobs:
             rpm \
             libfuse2
 
-      - name: Install NSIS (Windows)
+      - name: Install NSIS and 7-Zip (Windows)
         if: matrix.os == 'windows-2025'
-        run: choco install nsis -y
+        run: choco install nsis 7zip -y
 
       - name: Setup Node
         uses: actions/setup-node@v6
