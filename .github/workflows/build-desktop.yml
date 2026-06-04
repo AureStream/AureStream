@@ -114,17 +114,7 @@ jobs:
         with:
           args: --target ${{ matrix.rust_target }}
 
-      - name: Collect updater manifest
-        shell: bash
-        run: |
-          node scripts/generate-updater-manifest.js "${{ matrix.name }}" "${{ matrix.rust_target }}"
 
-      - name: Upload updater manifest artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: updater-json-${{ matrix.name }}
-          path: updater-artifacts/latest-${{ matrix.name }}.json
-          if-no-files-found: warn
 
       - name: Create Windows portable zip
         if: runner.os == 'Windows'
@@ -227,44 +217,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  merge-updater-json:
+  release-update:
     needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - name: Download updater manifests
-        uses: actions/download-artifact@v7
-        with:
-          pattern: updater-json-*
-          merge-multiple: true
-          path: updater-fragments
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Merge and upload latest.json
-        shell: bash
-        run: |
-          python3 -c "
-          import json, glob, sys
-          files = sorted(glob.glob('updater-fragments/latest-*.json'))
-          if not files:
-              print('No updater manifests found, skipping merge')
-              sys.exit(0)
-          merged = None
-          for f in files:
-              with open(f) as fh:
-                  data = json.load(fh)
-              if merged is None:
-                  merged = data
-              else:
-                  merged['platforms'].update(data.get('platforms', {}))
-          with open('latest.json', 'w') as fh:
-              json.dump(merged, fh, indent=2)
-          print(f'Merged platforms: {list(merged[\"platforms\"].keys())}')
-          "
-
-      - name: Upload latest.json to Release
-        if: hashFiles('latest.json') != ''
-        uses: softprops/action-gh-release@v3
+      - name: Install Node
+        uses: actions/setup-node@v6
         with:
-          files: latest.json
+          node-version: 24
+
+      - name: Release updater file
+        run: node scripts/updater.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
