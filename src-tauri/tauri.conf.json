@@ -48,6 +48,7 @@
     },
     "updater": {
       "endpoints": [
+        "https://gh-proxy.com/https://github.com/BadKid90s/AureStream/releases/latest/download/latest-proxy.json",
         "https://github.com/BadKid90s/AureStream/releases/latest/download/latest.json"
       ],
       "dangerouslyInsecure": false,
