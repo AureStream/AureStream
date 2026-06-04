@@ -24,7 +24,7 @@ function AppLayout() {
       <div className="absolute bottom-[-10%] left-[-10%] size-[380px] rounded-full bg-[#4f46e5]/6 blur-[100px] hidden dark:block" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.01)_0%,_transparent_75%)] hidden dark:block" />
 
-      <AppSidebar activeId={activeTab} onActiveIdChange={setActiveTab} />
+      <AppSidebar />
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/40 backdrop-blur-2xl border border-border/60 dark:bg-black/30 dark:border-white/10 rounded-[24px] shadow-sm p-4 sm:p-5">
         {activeTab === "home" && <HomePage />}

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react"
 import {
   BoxIcon,
   HomeIcon,
@@ -16,15 +17,28 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useTheme } from "@/contexts/ThemeContext"
+import { useNavigation } from "@/contexts/NavigationContext"
 
-interface AppSidebarProps {
-  activeId: string
-  onActiveIdChange: (id: string) => void
-}
-
-export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
+export function AppSidebar() {
   const { t } = useTranslation()
   const { theme, setTheme } = useTheme()
+  const { activeTab, setActiveTab } = useNavigation()
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater")
+        const upd = await check()
+        if (!cancelled && upd) setUpdateVersion(upd.version)
+      } catch {
+        // silent — update server may be unreachable
+      }
+    }
+    check()
+    return () => { cancelled = true }
+  }, [])
 
   const navItems = [
     { id: "home", icon: HomeIcon, label: t("home") },
@@ -46,13 +60,31 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
   return (
     <Card className="w-16 shrink-0 py-4.5 !gap-0 flex flex-col items-center justify-between">
       <div className="flex flex-col items-center gap-7 w-full flex-1">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden p-1.5">
-          <img src="/logo2.png" className="size-full object-contain" alt="AureStream Logo" />
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => updateVersion && setActiveTab("settings")}
+              className={cn(
+                "relative flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 overflow-hidden p-1.5 transition-opacity",
+                updateVersion ? "cursor-pointer hover:opacity-90" : "cursor-default"
+              )}
+            >
+              <img src="/logo2.png" className="size-full object-contain" alt="AureStream Logo" />
+              {updateVersion && (
+                <span className="absolute top-0 right-0 size-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black animate-pulse" />
+              )}
+            </button>
+          </TooltipTrigger>
+          {updateVersion && (
+            <TooltipContent side="right">
+              {t("update_available", { version: updateVersion })}
+            </TooltipContent>
+          )}
+        </Tooltip>
 
         <nav className="flex flex-col items-center gap-3.5 w-full px-2">
           {navItems.map((item) => {
-            const isActive = item.id === activeId
+            const isActive = item.id === activeTab
             return (
               <Tooltip key={item.id}>
                 <TooltipTrigger asChild>
@@ -65,7 +97,7 @@ export function AppSidebar({ activeId, onActiveIdChange }: AppSidebarProps) {
                         ? "bg-secondary text-secondary-foreground border border-primary/20 shadow-sm"
                         : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     )}
-                    onClick={() => onActiveIdChange(item.id)}
+                    onClick={() => setActiveTab(item.id)}
                     aria-label={item.label}
                     aria-current={isActive ? "page" : undefined}
                   >
