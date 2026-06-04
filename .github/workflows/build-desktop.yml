@@ -114,24 +114,7 @@ jobs:
         with:
           args: --target ${{ matrix.rust_target }}
 
-      - name: Collect updater manifest
-        shell: bash
-        run: |
-          LATEST=$(find src-tauri/target/${{ matrix.rust_target }}/release/bundle -name 'latest.json' -print -quit)
-          if [ -n "$LATEST" ]; then
-            mkdir -p updater-artifacts
-            cp "$LATEST" "updater-artifacts/latest-${{ matrix.name }}.json"
-            echo "Collected updater manifest for ${{ matrix.name }}"
-          else
-            echo "Warning: latest.json not found for ${{ matrix.name }}"
-          fi
 
-      - name: Upload updater manifest artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: updater-json-${{ matrix.name }}
-          path: updater-artifacts/latest-${{ matrix.name }}.json
-          if-no-files-found: warn
 
       - name: Create Windows portable zip
         if: runner.os == 'Windows'
@@ -193,7 +176,8 @@ jobs:
 
           find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
-            -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
+            -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' -o \
+            -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
           \) -print0 | while IFS= read -r -d '' f; do
             filename=$(basename "$f")
             case "$filename" in
@@ -215,6 +199,9 @@ jobs:
               *.dmg)
                 cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.dmg"
                 ;;
+              *.sig|*.tar.gz|*.zip)
+                cp "$f" "release-files/${filename}"
+                ;;
               *)
                 cp "$f" "release-files/${filename}"
                 ;;
@@ -230,44 +217,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  merge-updater-json:
+  release-update:
     needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - name: Download updater manifests
-        uses: actions/download-artifact@v7
-        with:
-          pattern: updater-json-*
-          merge-multiple: true
-          path: updater-fragments
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Merge and upload latest.json
-        shell: bash
-        run: |
-          python3 -c "
-          import json, glob, sys
-          files = sorted(glob.glob('updater-fragments/latest-*.json'))
-          if not files:
-              print('No updater manifests found, skipping merge')
-              sys.exit(0)
-          merged = None
-          for f in files:
-              with open(f) as fh:
-                  data = json.load(fh)
-              if merged is None:
-                  merged = data
-              else:
-                  merged['platforms'].update(data.get('platforms', {}))
-          with open('latest.json', 'w') as fh:
-              json.dump(merged, fh, indent=2)
-          print(f'Merged platforms: {list(merged[\"platforms\"].keys())}')
-          "
-
-      - name: Upload latest.json to Release
-        if: hashFiles('latest.json') != ''
-        uses: softprops/action-gh-release@v3
+      - name: Install Node
+        uses: actions/setup-node@v6
         with:
-          files: latest.json
+          node-version: 24
+
+      - name: Release updater file
+        run: node scripts/updater.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,131 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function run() {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    console.error('GITHUB_TOKEN environment variable is required');
+    process.exit(1);
+  }
+
+  // Read version from tauri.conf.json
+  const tauriConfPath = path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json');
+  const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
+  const version = tauriConf.version;
+  const tag = `v${version}`;
+
+  const repo = 'BadKid90s/AureStream';
+  const apiBase = `https://api.github.com/repos/${repo}`;
+  const headers = {
+    'Accept': 'application/vnd.github+json',
+    'User-Agent': 'AureStream-Updater',
+    'Authorization': `Bearer ${token}`
+  };
+
+  console.log(`Fetching release information for tag: ${tag}...`);
+  const releaseRes = await fetch(`${apiBase}/releases/tags/${tag}`, { headers });
+  if (!releaseRes.ok) {
+    console.error(`Failed to fetch release: ${releaseRes.statusText}`);
+    process.exit(1);
+  }
+
+  const release = await releaseRes.json();
+  const releaseId = release.id;
+  const uploadUrlTemplate = release.upload_url; // e.g. "https://uploads.github.com/repos/.../assets{?name,label}"
+  const uploadUrl = uploadUrlTemplate.split('{')[0];
+
+  const updateData = {
+    version: version,
+    notes: `Release v${version}`,
+    pub_date: new Date().toISOString(),
+    platforms: {}
+  };
+
+  // Find signatures and their corresponding asset URLs
+  const sigAssets = release.assets.filter(a => a.name.endsWith('.sig'));
+  const otherAssets = release.assets.filter(a => !a.name.endsWith('.sig'));
+
+  for (const sigAsset of sigAssets) {
+    const sigName = sigAsset.name;
+    const bundleName = sigName.slice(0, -4); // remove .sig
+
+    const bundleAsset = otherAssets.find(a => a.name === bundleName);
+    if (!bundleAsset) {
+      console.warn(`No matching bundle found for signature: ${sigName}`);
+      continue;
+    }
+
+    let platformKey = null;
+    if (bundleName.includes('aarch64.app.tar.gz')) {
+      platformKey = 'darwin-aarch64';
+    } else if (bundleName.includes('x64.app.tar.gz')) {
+      platformKey = 'darwin-x86_64';
+    } else if (bundleName.endsWith('.zip') && !bundleName.includes('portable')) {
+      platformKey = 'windows-x86_64';
+    } else if (bundleName.includes('AppImage.tar.gz')) {
+      platformKey = 'linux-x86_64';
+    }
+
+    if (!platformKey) {
+      console.warn(`Could not determine platform for bundle: ${bundleName}`);
+      continue;
+    }
+
+    console.log(`Downloading signature content for ${sigName}...`);
+    const sigRes = await fetch(sigAsset.browser_download_url);
+    if (!sigRes.ok) {
+      console.error(`Failed to download signature for ${sigName}`);
+      continue;
+    }
+    const signature = await sigRes.text();
+
+    updateData.platforms[platformKey] = {
+      signature: signature.trim(),
+      url: bundleAsset.browser_download_url
+    };
+  }
+
+  const manifestContent = JSON.stringify(updateData, null, 2);
+  console.log('Generated updater manifest data:', manifestContent);
+
+  // Check if latest.json already exists in release
+  const existingLatest = release.assets.find(a => a.name === 'latest.json');
+  if (existingLatest) {
+    console.log(`Deleting existing latest.json asset (ID: ${existingLatest.id})...`);
+    const deleteRes = await fetch(`${apiBase}/releases/assets/${existingLatest.id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!deleteRes.ok) {
+      console.error(`Failed to delete existing latest.json: ${deleteRes.statusText}`);
+    }
+  }
+
+  // Upload new latest.json
+  console.log(`Uploading new latest.json to release ${releaseId}...`);
+  const uploadRes = await fetch(`${uploadUrl}?name=latest.json`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json'
+    },
+    body: manifestContent
+  });
+
+  if (uploadRes.ok) {
+    console.log('Successfully uploaded latest.json to GitHub Release!');
+  } else {
+    const errorText = await uploadRes.text();
+    console.error(`Failed to upload latest.json: ${uploadRes.statusText}`, errorText);
+    process.exit(1);
+  }
+}
+
+run().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
