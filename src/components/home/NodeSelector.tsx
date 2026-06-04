@@ -16,6 +16,9 @@ import {
   selectedNodeTagStoreKey,
 } from "@/types/definition"
 
+/** Persist TCP-ping latencies across mounts so re-entering Home doesn't re-test. */
+const latencyCache = new Map<string, Record<string, number>>()
+
 async function getSavedNodeTag(
   subscriptionId: string,
   nodeNames: string[]
@@ -77,9 +80,10 @@ export function NodeSelector() {
 
   const nodeNames = useMemo(() => nodes.map((n) => n.name), [nodes])
 
-  // Clear stale latency data when active subscription or node list changes
+  // Restore cached latency data for this subscription on mount / switch
   useEffect(() => {
-    setLatencies({})
+    const cached = latencyCache.get(activeIdentifier)
+    setLatencies(cached ?? {})
     setSelectedTag("")
   }, [activeIdentifier])
 
@@ -182,16 +186,20 @@ export function NodeSelector() {
     setIsTestingSpeed(true)
 
     try {
+      const results: Record<string, number> = {}
       // Test delays in parallel and update state incrementally for real-time progress
       await Promise.all(
         nodes.map(async (node) => {
           const delay = await pingNodeTcp(node.host, Number(node.port))
+          results[node.name] = delay
           setLatencies((prev) => ({
             ...prev,
             [node.name]: delay,
           }))
         })
       )
+      // Persist results so re-entering Home does not re-trigger auto-test
+      latencyCache.set(activeIdentifier, results)
     } catch (e) {
       console.error(e)
     } finally {

@@ -123,7 +123,7 @@ export async function insertSubscription(url: string, name?: string): Promise<st
         );
         const usedTraffic = parseInt(upload) + parseInt(download);
         const totalTraffic = parseInt(total) || 1;
-        const expireTime = parseInt(expire) * 1000 || (Date.now() + 30 * 24 * 3600 * 1000);
+        const expireTime = parseInt(expire) * 1000 || (Date.now() + 100 * 365 * 24 * 3600 * 1000);
 
         const existing: { identifier: string }[] = await db.select(
             'SELECT identifier FROM subscriptions WHERE subscription_url = ? ORDER BY id DESC LIMIT 1',
@@ -180,7 +180,7 @@ export async function updateSubscription(identifier: string): Promise<boolean> {
         const officialWebsite = response.headers['official-website'] || 'https://sing-box.net';
         const used_traffic = parseInt(upload) + parseInt(download);
         const total_traffic = parseInt(total) || 1;
-        const expire_time = parseInt(expire) * 1000 || (Date.now() + 30 * 24 * 3600 * 1000);
+        const expire_time = parseInt(expire) * 1000 || (Date.now() + 100 * 365 * 24 * 3600 * 1000);
         const last_update_time = Math.floor(Date.now() / 1000);
 
         await db.execute(
