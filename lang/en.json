@@ -31,6 +31,7 @@
   "current_latest": "You're up to date",
   "check_update": "Check for Updates",
   "update_available": "Update to v{{version}}",
+  "update_available_hint": "Click to go to Settings and download",
   "downloading_update": "Downloading update...",
   "update_ready": "Restart to complete update",
   "update_check_error": "Update check failed",

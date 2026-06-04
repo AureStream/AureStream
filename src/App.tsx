@@ -1,16 +1,15 @@
-import { useState } from "react"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
+import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
 import { HomePage } from "@/pages/HomePage"
 import { SubscriptionPage } from "@/pages/SubscriptionPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import "@/lib/i18n"
 
-function App() {
-  const [activeTab, setActiveTab] = useState("home")
+function AppLayout() {
+  const { activeTab, setActiveTab } = useNavigation()
 
   return (
-    <SubscriptionProvider>
     <div className="relative flex h-screen w-screen overflow-hidden p-2.5 gap-2.5">
       {/* Light mode background */}
       <div className="absolute inset-0 bg-background dark:hidden" />
@@ -33,7 +32,16 @@ function App() {
         {activeTab === "settings" && <SettingsPage />}
       </main>
     </div>
-    </SubscriptionProvider>
+  )
+}
+
+function App() {
+  return (
+    <NavigationProvider>
+      <SubscriptionProvider>
+        <AppLayout />
+      </SubscriptionProvider>
+    </NavigationProvider>
   )
 }
 
