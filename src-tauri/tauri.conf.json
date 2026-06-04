@@ -48,7 +48,9 @@
     "updater": {
       "endpoints": [
         "https://github.com/BadKid90s/AureStream/releases/latest/download/latest.json"
-      ]
+      ],
+      "dangerouslyInsecure": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU1NjhGNzgxQTgyNkE4NzYKUldTY1B2b3dYSnFkWHd2T3hDaGJ2b0p3cDQrKzkyd3JrQnVYR3JZNGJ5QWY5VkV4Q2VzYmZtY2UK"
     }
   }
 }

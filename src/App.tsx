@@ -7,7 +7,7 @@ import { SettingsPage } from "@/pages/SettingsPage"
 import "@/lib/i18n"
 
 function AppLayout() {
-  const { activeTab, setActiveTab } = useNavigation()
+  const { activeTab } = useNavigation()
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden p-2.5 gap-2.5">

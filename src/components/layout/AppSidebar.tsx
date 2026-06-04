@@ -5,6 +5,7 @@ import {
   SettingsIcon,
   SunIcon,
   MoonIcon,
+  CircleArrowUpIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -26,6 +27,8 @@ export function AppSidebar() {
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
 
   useEffect(() => {
+    setUpdateVersion("0.3.0") // TODO: remove mock after preview
+    return
     let cancelled = false
     const check = async () => {
       try {
@@ -65,13 +68,16 @@ export function AppSidebar() {
             <button
               onClick={() => updateVersion && setActiveTab("settings")}
               className={cn(
-                "relative flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#4d73ff] to-[#254eff] text-white shadow-md shadow-blue-500/20 overflow-hidden p-1.5 transition-opacity",
-                updateVersion ? "cursor-pointer hover:opacity-90" : "cursor-default"
+                "relative flex size-11 items-center justify-center rounded-2xl text-white shadow-md overflow-hidden p-1.5 transition-all",
+                updateVersion
+                  ? "bg-gradient-to-br from-emerald-500 to-green-600 shadow-emerald-500/30 cursor-pointer hover:opacity-90 animate-pulse"
+                  : "bg-gradient-to-br from-[#4d73ff] to-[#254eff] shadow-blue-500/20 cursor-default"
               )}
             >
-              <img src="/logo2.png" className="size-full object-contain" alt="AureStream Logo" />
-              {updateVersion && (
-                <span className="absolute top-0 right-0 size-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-black animate-pulse" />
+              {updateVersion ? (
+                <CircleArrowUpIcon className="size-5" />
+              ) : (
+                <img src="/logo2.png" className="size-full object-contain" alt="AureStream Logo" />
               )}
             </button>
           </TooltipTrigger>
