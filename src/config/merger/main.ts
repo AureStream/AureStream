@@ -86,7 +86,7 @@ export async function setMixedConfig(identifier: string) {
         }
     }
 
-    updateExperimentalConfig(newConfig, dbCacheFilePath);
+    await updateExperimentalConfig(newConfig, dbCacheFilePath);
     const allowLan = await getAllowLan();
     const bypassRouter = await isBypassRouterEnabled();
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
@@ -135,7 +135,7 @@ export async function setTunConfig(identifier: string) {
     const bypassRouter = await isBypassRouterEnabled();
     await configureTunInbound(newConfig, bypassRouter);
 
-    updateExperimentalConfig(newConfig, dbCacheFilePath);
+    await updateExperimentalConfig(newConfig, dbCacheFilePath);
     const allowLan = await getAllowLan();
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
 
@@ -155,7 +155,7 @@ export async function setGlobalMixedConfig(identifier: string) {
     const appConfigPath = await path.appConfigDir();
     const dbCacheFilePath = await path.join(appConfigPath, 'mixed-cache-global-v2.db');
 
-    updateExperimentalConfig(newConfig, dbCacheFilePath);
+    await updateExperimentalConfig(newConfig, dbCacheFilePath);
     const allowLan = await getAllowLan();
     const bypassRouter = await isBypassRouterEnabled();
     await configureMixedInbound(newConfig, allowLan, bypassRouter);
@@ -179,7 +179,7 @@ export default async function setGlobalTunConfig(identifier: string) {
     const bypassRouter = await isBypassRouterEnabled();
     await configureTunInbound(newConfig, bypassRouter);
 
-    updateExperimentalConfig(newConfig, dbCacheFilePath);
+    await updateExperimentalConfig(newConfig, dbCacheFilePath);
 
     const allowLan = await getAllowLan();
     await configureMixedInbound(newConfig, allowLan, bypassRouter);

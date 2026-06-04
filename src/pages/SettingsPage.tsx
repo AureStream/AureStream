@@ -8,14 +8,20 @@ import {
   RefreshCwIcon,
   ExternalLinkIcon,
   ShieldCheckIcon,
+  ArrowUpCircleIcon,
+  CpuIcon,
+  TerminalIcon,
+  CheckIcon,
+  AlertCircleIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import { relaunch } from "@tauri-apps/plugin-process"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
-import { badge, btn, iconBadge, type } from "@/lib/typography"
+import { btn, iconBadge, type } from "@/lib/typography"
 import { useTheme } from "@/contexts/ThemeContext"
 import {
   getProxyPort,
@@ -40,6 +46,7 @@ import { message } from "@tauri-apps/plugin-dialog"
 import { BYPASS_PLACEHOLDER, DEFAULT_PROXY_BYPASS_UI, normalizeBypassInput } from "@/lib/proxy-bypass"
 import { getEngineState } from "@/utils/vpn-service"
 import { isEngineBusy } from "@/lib/engine-guard"
+import { SING_BOX_VERSION } from "@/types/definition"
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -50,14 +57,21 @@ export function SettingsPage() {
   const [savedBypass, setSavedBypass] = useState(DEFAULT_PROXY_BYPASS_UI)
   const initialPortsRef = useRef<{ mixed: number; controller: number } | null>(null)
   const [autoStart, setAutoStart] = useState(true)
+  const [appVersion, setAppVersion] = useState("0.2.1")
   const [tunStack, setTunStackState] = useState<TunStack>("system")
 
   // New states for Tray & Interaction card
   const [hideOnLaunch, setHideOnLaunch] = useState(false)
   const [minimizeToTray, setMinimizeToTray] = useState(true)
 
+  // Port input refs for debounce
+  const proxyPortTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const apiPortTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // States for About Card updates
-  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest">("idle")
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest" | "available" | "downloading" | "ready" | "error">("idle")
+  const updateRef = useRef<{ version: string; downloadAndInstall: (onProgress?: (p: any) => void) => Promise<void>; install: () => Promise<void> } | null>(null)
+  const [updateVersion, setUpdateVersion] = useState("")
 
   // States for TUN service management
   const [serviceStatus, setServiceStatus] = useState<"checking" | "installed" | "not_installed" | "failed">("checking")
@@ -76,6 +90,14 @@ export function SettingsPage() {
 
   useEffect(() => {
     checkServiceStatus()
+  }, [])
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      proxyPortTimer.current && clearTimeout(proxyPortTimer.current)
+      apiPortTimer.current && clearTimeout(apiPortTimer.current)
+    }
   }, [])
 
   const handleInstallService = async () => {
@@ -142,14 +164,37 @@ export function SettingsPage() {
       setAutoStart(await getAutoStart())
       setHideOnLaunch(await getHideOnLaunch())
       setMinimizeToTray(await getMinimizeToTray())
+
+      // Load version from backend
+      try {
+        setAppVersion(await invoke<string>("get_app_version"))
+      } catch {
+        setAppVersion("0.2.1")
+      }
+
+      // Auto-check for updates on mount
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater")
+        const upd = await check()
+        if (upd) {
+          updateRef.current = upd as any
+          setUpdateVersion(upd.version)
+          setUpdateStatus("available")
+        } else {
+          setUpdateStatus("latest")
+        }
+      } catch (e) {
+        console.error("Auto update check failed:", e)
+        setUpdateStatus("idle")
+      }
     }
     loadSettings()
   }, [])
 
   const handleAutoStartChange = async (checked: boolean) => {
     setAutoStart(checked)
-    await setAutoStartStore(checked)
     try {
+      await setAutoStartStore(checked)
       if (checked) {
         await enable()
       } else {
@@ -157,17 +202,28 @@ export function SettingsPage() {
       }
     } catch (e) {
       console.error("Failed to toggle autostart:", e)
+      setAutoStart(!checked)
     }
   }
 
   const handleHideOnLaunchChange = async (checked: boolean) => {
     setHideOnLaunch(checked)
-    await setHideOnLaunchStore(checked)
+    try {
+      await setHideOnLaunchStore(checked)
+    } catch (e) {
+      console.error("Failed to toggle hide on launch:", e)
+      setHideOnLaunch(!checked)
+    }
   }
 
   const handleMinimizeToTrayChange = async (checked: boolean) => {
     setMinimizeToTray(checked)
-    await setMinimizeToTrayStore(checked)
+    try {
+      await setMinimizeToTrayStore(checked)
+    } catch (e) {
+      console.error("Failed to toggle minimize to tray:", e)
+      setMinimizeToTray(!checked)
+    }
   }
 
   const warnIfEngineRunningForNetworkChange = async () => {
@@ -181,8 +237,14 @@ export function SettingsPage() {
   }
 
   const handleTunStackChange = async (stack: TunStack) => {
+    const prev = tunStack
     setTunStackState(stack)
-    await setTunStack(stack)
+    try {
+      await setTunStack(stack)
+    } catch (e) {
+      console.error("Failed to set tun stack:", e)
+      setTunStackState(prev)
+    }
   }
 
   const tunStackHint: Record<TunStack, string> = {
@@ -194,24 +256,32 @@ export function SettingsPage() {
   const handleProxyPortChange = async (val: number) => {
     setPort(String(val))
     if (val > 0 && val <= 65535) {
-      const prev = initialPortsRef.current?.mixed
-      await setProxyPort(val)
-      if (prev !== undefined && prev !== val) {
-        await warnIfEngineRunningForNetworkChange()
-      }
-      if (initialPortsRef.current) initialPortsRef.current.mixed = val
+      // Debounce writes — only persist after 500ms of no input
+      if (proxyPortTimer.current) clearTimeout(proxyPortTimer.current)
+      proxyPortTimer.current = setTimeout(async () => {
+        const prev = initialPortsRef.current?.mixed
+        await setProxyPort(val)
+        if (prev !== undefined && prev !== val) {
+          await warnIfEngineRunningForNetworkChange()
+        }
+        if (initialPortsRef.current) initialPortsRef.current.mixed = val
+      }, 500)
     }
   }
 
   const handleApiPortChange = async (val: number) => {
     setApiPort(String(val))
     if (val > 0 && val <= 65535) {
-      const prev = initialPortsRef.current?.controller
-      await setControllerPort(val)
-      if (prev !== undefined && prev !== val) {
-        await warnIfEngineRunningForNetworkChange()
-      }
-      if (initialPortsRef.current) initialPortsRef.current.controller = val
+      // Debounce writes — only persist after 500ms of no input
+      if (apiPortTimer.current) clearTimeout(apiPortTimer.current)
+      apiPortTimer.current = setTimeout(async () => {
+        const prev = initialPortsRef.current?.controller
+        await setControllerPort(val)
+        if (prev !== undefined && prev !== val) {
+          await warnIfEngineRunningForNetworkChange()
+        }
+        if (initialPortsRef.current) initialPortsRef.current.controller = val
+      }, 500)
     }
   }
 
@@ -225,11 +295,43 @@ export function SettingsPage() {
   }
 
 
-  const handleCheckUpdate = () => {
+  const handleCheckUpdate = async () => {
+    if (updateStatus === "ready") {
+      try {
+        await relaunch()
+      } catch (e) {
+        console.error("Relaunch via process plugin failed, falling back:", e)
+        try { await invoke("restart"); } catch { try { await invoke("quit"); } catch {} }
+      }
+      return
+    }
+    if (updateStatus === "available") {
+      setUpdateStatus("downloading")
+      try {
+        const upd = updateRef.current!
+        await upd.downloadAndInstall()
+        setUpdateStatus("ready")
+      } catch (e) {
+        console.error("Download/install failed:", e)
+        setUpdateStatus("error")
+      }
+      return
+    }
     setUpdateStatus("checking")
-    setTimeout(() => {
-      setUpdateStatus("latest")
-    }, 1200)
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater")
+      const upd = await check()
+      if (upd) {
+        updateRef.current = upd as any
+        setUpdateVersion(upd.version)
+        setUpdateStatus("available")
+      } else {
+        setUpdateStatus("latest")
+      }
+    } catch (e) {
+      console.error("Update check failed:", e)
+      setUpdateStatus("error")
+    }
   }
 
   return (
@@ -297,93 +399,183 @@ export function SettingsPage() {
           </Card>
 
           {/* 关于软件 */}
-          <Card className="rounded-[20px] shadow-xs flex-1 flex flex-col overflow-hidden min-h-[260px]">
-            <CardContent className="py-4 px-5 flex flex-col gap-4 flex-1 min-h-0">
+          <Card className="rounded-[20px] shadow-md border-border/60 hover:shadow-lg transition-all duration-300 flex-1 flex flex-col overflow-hidden min-h-[300px] bg-card/65 backdrop-blur-md">
+            <CardContent className="py-5 px-6 flex flex-col gap-4 flex-1 min-h-0">
               <div className="flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className={iconBadge.slate}>
-                    <InfoIcon className="size-4" />
+                <div className="flex items-center gap-2.5">
+                  <div className="size-8 rounded-lg bg-slate-500/10 text-slate-500 dark:text-slate-400 flex items-center justify-center border border-slate-500/20">
+                    <InfoIcon className="size-4.5" />
                   </div>
-                  <span className={type.sectionTitle}>{t("about_app")}</span>
+                  <span className={cn(type.sectionTitle, "font-bold tracking-wide")}>{t("about_app")}</span>
                 </div>
                 <a
                   href="https://github.com/BadKid90s/AureStream"
                   target="_blank"
                   rel="noreferrer"
-                  className={cn(type.link, "flex items-center gap-1 text-xs")}
+                  className={cn(type.link, "flex items-center gap-1.5 text-xs font-semibold hover:underline group")}
                 >
-                  {t("open_source_home")} <ExternalLinkIcon className="size-3.5" />
+                  {t("open_source_home")} 
+                  <ExternalLinkIcon className="size-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </a>
               </div>
 
               {/* Scrollable middle body */}
-              <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-0">
-                <div className="flex items-center justify-between py-1.5 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-xl bg-gradient-to-tr from-primary via-primary/95 to-indigo-500 flex items-center justify-center text-primary-foreground font-bold text-sm shadow-md ring-2 ring-background">
+              <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 min-h-0">
+                <div className="flex items-center justify-between py-1 shrink-0">
+                  <div className="flex items-center gap-4.5">
+                    <div className="relative size-12 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-base shadow-lg shadow-indigo-500/20 ring-2 ring-background hover:scale-105 hover:rotate-3 transition-all duration-300 select-none">
                       AS
                     </div>
                     <div className="flex flex-col leading-snug">
-                      <span className="font-semibold text-sm">AureStream Client</span>
-                      <span className={cn(type.caption, "mt-0.5")}>{t("simple_proxy_client")}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-base text-foreground tracking-tight">{`AureStream`}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/15">
+                          {`v${appVersion}`}
+                        </span>
+                      </div>
+                      <span className={cn(type.caption, "mt-1 font-medium")}>{t("simple_proxy_client")}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={badge.brand}>v0.2.0</span>
-                    <span className={badge.success}>Stable</span>
                   </div>
                 </div>
 
                 <div className="h-px bg-border/40 my-0.5 shrink-0" />
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-1.5 text-xs text-muted-foreground shrink-0">
-                  <div className="flex justify-between sm:flex-col sm:gap-1 border-b sm:border-b-0 sm:border-r border-border/40 pb-2 sm:pb-0 pr-4">
-                    <span>{t("software_kernel")}</span>
-                    <span className="font-semibold text-foreground">sing-box</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-1 shrink-0">
+                  <div className="group flex flex-col justify-between rounded-xl bg-muted/20 border border-border/30 p-3.5 hover:border-indigo-500/20 hover:bg-muted/40 transition-all duration-300">
+                    <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <TerminalIcon className="size-3.5 text-indigo-500" />
+                      {t("software_kernel")}
+                    </span>
+                    <span className="font-bold text-foreground text-xs mt-2 truncate">{`sing-box ${SING_BOX_VERSION}`}</span>
                   </div>
-                  <div className="flex justify-between sm:flex-col sm:gap-1 border-b sm:border-b-0 sm:border-r border-border/40 pb-2 sm:pb-0 sm:px-4">
-                    <span>{t("platform")}</span>
-                    <span className="font-semibold text-foreground">macOS (Tauri)</span>
+                  <div className="group flex flex-col justify-between rounded-xl bg-muted/20 border border-border/30 p-3.5 hover:border-sky-500/20 hover:bg-muted/40 transition-all duration-300">
+                    <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <CpuIcon className="size-3.5 text-sky-500" />
+                      {t("platform")}
+                    </span>
+                    <span className="font-bold text-foreground text-xs mt-2 truncate">
+                      {typeof window !== "undefined" && navigator.userAgent.includes("Windows") ? "Windows (Tauri)" : "macOS (Tauri)"}
+                    </span>
                   </div>
-                  <div className="flex justify-between sm:flex-col sm:gap-1 sm:pl-4">
-                    <span>{t("license")}</span>
-                    <span className="font-semibold text-foreground">MIT License</span>
+                  <div className="group flex flex-col justify-between rounded-xl bg-muted/20 border border-border/30 p-3.5 hover:border-emerald-500/20 hover:bg-muted/40 transition-all duration-300">
+                    <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <ShieldCheckIcon className="size-3.5 text-emerald-500" />
+                      {t("license")}
+                    </span>
+                    <span className="font-bold text-foreground text-xs mt-2 truncate">MIT License</span>
                   </div>
                 </div>
-              </div>
 
-              <div className="h-px bg-border/40 my-0.5 shrink-0" />
+                <div className="h-px bg-border/40 my-0.5 shrink-0" />
 
-              {/* Pinned action button */}
-              <div className="pt-1 shrink-0">
-                <Button
-                  variant="default"
-                  size="default"
-                  disabled={updateStatus === "checking"}
-                  onClick={handleCheckUpdate}
-                  className={cn(
-                    "w-full h-10 font-semibold transition-all duration-300 text-xs rounded-xl shadow-xs",
-                    updateStatus === "checking"
-                      ? "bg-muted text-muted-foreground"
-                      : updateStatus === "latest"
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15"
-                      : "bg-primary text-primary-foreground hover:bg-primary/95"
+                {/* Unified Interactive Update Checker Section */}
+                <div className="rounded-xl border border-border/40 bg-muted/15 p-3 shrink-0">
+                  {updateStatus === "idle" && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground font-medium">{t("current_latest")}</span>
+                      <button
+                        onClick={handleCheckUpdate}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs transition-colors cursor-pointer group"
+                      >
+                        <RefreshCwIcon className="size-3.5 group-hover:rotate-180 transition-transform duration-500" />
+                        {t("check_update")}
+                      </button>
+                    </div>
                   )}
-                >
+
                   {updateStatus === "checking" && (
-                    <>
-                      <RefreshCwIcon className="size-4 mr-2 animate-spin" />
-                      {t("checking_update")}
-                    </>
+                    <div className="flex items-center gap-3 py-0.5">
+                      <RefreshCwIcon className="size-4 text-primary animate-spin" />
+                      <span className="text-xs text-muted-foreground font-medium">{t("checking_update")}</span>
+                    </div>
                   )}
+
                   {updateStatus === "latest" && (
-                    <>
-                      <ShieldCheckIcon className="size-4 mr-2 text-emerald-500" />
-                      {t("current_latest")}
-                    </>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <CheckIcon className="size-4 text-emerald-500" />
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">{t("current_latest")}</span>
+                      </div>
+                      <button
+                        onClick={handleCheckUpdate}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted hover:bg-muted-foreground/10 text-muted-foreground font-medium text-xs transition-colors cursor-pointer"
+                      >
+                        <RefreshCwIcon className="size-3" />
+                        {t("check_update")}
+                      </button>
+                    </div>
                   )}
-                  {updateStatus === "idle" && t("check_update")}
-                </Button>
+
+                  {updateStatus === "available" && (
+                    <div className="flex items-center justify-between gap-3 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ArrowUpCircleIcon className="size-4.5 text-emerald-500 shrink-0" />
+                        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 truncate">
+                          {t("update_available", { version: updateVersion })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <a
+                          href={`https://github.com/BadKid90s/AureStream/releases/tag/v${updateVersion}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-semibold text-emerald-600/80 dark:text-emerald-400/70 hover:underline"
+                        >
+                          {t("go_to_release")}
+                        </a>
+                        <button
+                          onClick={handleCheckUpdate}
+                          className="rounded-md bg-emerald-600 dark:bg-emerald-500 text-white text-[11px] font-bold px-3 py-1.5 hover:bg-emerald-700 dark:hover:bg-emerald-600 shadow-sm shadow-emerald-500/10 transition-colors cursor-pointer"
+                        >
+                          {t("upgrade_now")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {updateStatus === "downloading" && (
+                    <div className="flex items-center gap-3 py-0.5">
+                      <div className="relative flex size-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full size-2 bg-indigo-500"></span>
+                      </div>
+                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold animate-pulse">{t("downloading_update")}</span>
+                    </div>
+                  )}
+
+                  {updateStatus === "ready" && (
+                    <div className="flex items-center justify-between gap-3 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ArrowUpCircleIcon className="size-4.5 text-indigo-500 shrink-0" />
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 truncate">
+                          {t("update_ready")}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleCheckUpdate}
+                        className="rounded-md bg-indigo-600 dark:bg-indigo-500 text-white text-[11px] font-bold px-3 py-1.5 hover:bg-indigo-700 dark:hover:bg-indigo-600 shadow-sm shadow-indigo-500/10 transition-colors cursor-pointer"
+                      >
+                        {t("upgrade_now")}
+                      </button>
+                    </div>
+                  )}
+
+                  {updateStatus === "error" && (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <AlertCircleIcon className="size-4 text-destructive" />
+                        <span className="text-xs text-destructive font-semibold">{t("update_check_error")}</span>
+                      </div>
+                      <button
+                        onClick={handleCheckUpdate}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-destructive/10 hover:bg-destructive/20 text-destructive font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        <RefreshCwIcon className="size-3" />
+                        {t("check_update")}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

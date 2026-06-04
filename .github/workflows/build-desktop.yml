@@ -6,7 +6,7 @@ on:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: build-desktop-${{ github.ref }}
@@ -162,34 +162,29 @@ jobs:
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
           if-no-files-found: warn
 
-  upload-release:
-    name: Upload assets to GitHub Release
-    needs: build
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v7
-        with:
-          path: artifacts
-          pattern: AureStream-*
-          merge-multiple: false
-
-      - name: Upload to Release
+      - name: Prepare Release Assets
+        if: github.event_name == 'release'
         shell: bash
         run: |
           mkdir -p release-files
-          find artifacts -type f \( \
+          find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
             -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
           \) -print0 | while IFS= read -r -d '' f; do
-            cp "$f" "release-files/"
+            filename=$(basename "$f")
+            target_name="${{ matrix.name }}"
+            if [[ "$filename" == *"$target_name"* ]]; then
+              cp "$f" "release-files/"
+            else
+              extension="${filename##*.}"
+              basename="${filename%.*}"
+              cp "$f" "release-files/${basename}_${target_name}.${extension}"
+            fi
           done
           ls -la release-files/
 
       - name: Upload to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
           files: release-files/*
