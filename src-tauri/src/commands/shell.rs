@@ -5,6 +5,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 
 use tauri_plugin_shell::ShellExt;
+use tokio::time::{timeout, Duration};
 
 #[tauri::command]
 pub fn open_directory(path: String) -> Result<(), String> {
@@ -64,12 +65,20 @@ pub fn open_devtools(app: AppHandle) {
 #[tauri::command]
 pub async fn quit(app: AppHandle) {
     log::info!("Quitting application...");
-    if let Err(e) = stop(app.clone()).await {
-        log::error!("Failed to stop proxy: {}", e);
-    } else {
-        log::info!("Proxy stopped successfully.");
-        log::info!("Application stopped successfully.");
-        app.exit(0);
+    match timeout(Duration::from_secs(5), stop(app.clone())).await {
+        Ok(Ok(())) => {
+            log::info!("Proxy stopped successfully.");
+            log::info!("Application stopped successfully.");
+            app.exit(0);
+        }
+        Ok(Err(e)) => {
+            log::error!("Failed to stop proxy: {}", e);
+            app.exit(0);
+        }
+        Err(_) => {
+            log::error!("Timed out waiting for proxy to stop, exiting anyway");
+            app.exit(0);
+        }
     }
 }
 
@@ -80,8 +89,16 @@ pub fn sync_quit(app: AppHandle) {
 #[tauri::command]
 pub async fn restart(app: AppHandle) {
     log::info!("Restarting application...");
-    if let Err(e) = stop(app.clone()).await {
-        log::error!("Failed to stop proxy before restart: {}", e);
+    match timeout(Duration::from_secs(5), stop(app.clone())).await {
+        Ok(Ok(())) => {
+            log::info!("Proxy stopped successfully, proceeding with restart.");
+        }
+        Ok(Err(e)) => {
+            log::error!("Failed to stop proxy before restart: {}", e);
+        }
+        Err(_) => {
+            log::error!("Timed out waiting for proxy to stop, restarting anyway");
+        }
     }
     app.restart();
 }

@@ -27,8 +27,6 @@ export function AppSidebar() {
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
 
   useEffect(() => {
-    setUpdateVersion("0.3.0") // TODO: remove mock after preview
-    return
     let cancelled = false
     const check = async () => {
       try {

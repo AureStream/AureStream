@@ -72,6 +72,7 @@ export function SettingsPage() {
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest" | "available" | "downloading" | "ready" | "error">("idle")
   const updateRef = useRef<{ version: string; downloadAndInstall: (onProgress?: (p: any) => void) => Promise<void>; install: () => Promise<void> } | null>(null)
   const [updateVersion, setUpdateVersion] = useState("")
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   // States for TUN service management
   const [serviceStatus, setServiceStatus] = useState<"checking" | "installed" | "not_installed" | "failed">("checking")
@@ -307,9 +308,12 @@ export function SettingsPage() {
     }
     if (updateStatus === "available") {
       setUpdateStatus("downloading")
+      setDownloadProgress(0)
       try {
         const upd = updateRef.current!
-        await upd.downloadAndInstall()
+        await upd.downloadAndInstall((p: any) => {
+          if (p?.total) setDownloadProgress(Math.round((p.downloaded / p.total) * 100))
+        })
         setUpdateStatus("ready")
       } catch (e) {
         console.error("Download/install failed:", e)
@@ -534,12 +538,21 @@ export function SettingsPage() {
                   )}
 
                   {updateStatus === "downloading" && (
-                    <div className="flex items-center gap-3 py-0.5">
-                      <div className="relative flex size-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full size-2 bg-indigo-500"></span>
+                    <div className="flex flex-col gap-2 py-0.5">
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex size-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full size-2 bg-indigo-500"></span>
+                        </div>
+                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold animate-pulse">
+                          {downloadProgress > 0 ? `${t("downloading_update")} ${downloadProgress}%` : t("downloading_update")}
+                        </span>
                       </div>
-                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold animate-pulse">{t("downloading_update")}</span>
+                      {downloadProgress > 0 && (
+                        <div className="w-full bg-indigo-500/10 rounded-full h-1.5">
+                          <div className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${downloadProgress}%` }}></div>
+                        </div>
+                      )}
                     </div>
                   )}
 
