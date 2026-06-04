@@ -92,6 +92,23 @@ async function run() {
   const manifestContent = JSON.stringify(updateData, null, 2);
   console.log('Generated updater manifest data:', manifestContent);
 
+  // Generate proxied update data
+  const updateDataProxy = {
+    version: version,
+    notes: `Release v${version}`,
+    pub_date: updateData.pub_date,
+    platforms: {}
+  };
+
+  for (const [key, value] of Object.entries(updateData.platforms)) {
+    updateDataProxy.platforms[key] = {
+      signature: value.signature,
+      url: `https://gh-proxy.com/${value.url}`
+    };
+  }
+  const manifestProxyContent = JSON.stringify(updateDataProxy, null, 2);
+  console.log('Generated proxied updater manifest data:', manifestProxyContent);
+
   // Check if latest.json already exists in release
   const existingLatest = release.assets.find(a => a.name === 'latest.json');
   if (existingLatest) {
@@ -121,6 +138,38 @@ async function run() {
   } else {
     const errorText = await uploadRes.text();
     console.error(`Failed to upload latest.json: ${uploadRes.statusText}`, errorText);
+    process.exit(1);
+  }
+
+  // Check if latest-proxy.json already exists in release
+  const existingProxy = release.assets.find(a => a.name === 'latest-proxy.json');
+  if (existingProxy) {
+    console.log(`Deleting existing latest-proxy.json asset (ID: ${existingProxy.id})...`);
+    const deleteRes = await fetch(`${apiBase}/releases/assets/${existingProxy.id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!deleteRes.ok) {
+      console.error(`Failed to delete existing latest-proxy.json: ${deleteRes.statusText}`);
+    }
+  }
+
+  // Upload new latest-proxy.json
+  console.log(`Uploading new latest-proxy.json to release ${releaseId}...`);
+  const uploadProxyRes = await fetch(`${uploadUrl}?name=latest-proxy.json`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json'
+    },
+    body: manifestProxyContent
+  });
+
+  if (uploadProxyRes.ok) {
+    console.log('Successfully uploaded latest-proxy.json to GitHub Release!');
+  } else {
+    const errorText = await uploadProxyRes.text();
+    console.error(`Failed to upload latest-proxy.json: ${uploadProxyRes.statusText}`, errorText);
     process.exit(1);
   }
 }
