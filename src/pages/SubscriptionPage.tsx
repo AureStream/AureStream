@@ -430,7 +430,7 @@ export function SubscriptionPage() {
                   <div className="flex flex-col gap-1">
                     <label className={type.label}>{t("update_interval")}</label>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {(["6h", "12h", "24h", "7d"] as const).map((interval) => (
+                      {(["30m", "1h", "2h", "3h", "6h", "12h", "24h", "7d"] as const).map((interval) => (
                         <button
                           key={interval}
                           type="button"
@@ -441,6 +441,10 @@ export function SubscriptionPage() {
                             updateInterval === interval && btn.pillActive
                           )}
                         >
+                          {interval === "30m" && t("30minutes")}
+                          {interval === "1h" && t("1hour")}
+                          {interval === "2h" && t("2hours")}
+                          {interval === "3h" && t("3hours")}
                           {interval === "6h" && t("6hours")}
                           {interval === "12h" && t("12hours")}
                           {interval === "24h" && t("every_day")}

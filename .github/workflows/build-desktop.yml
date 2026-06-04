@@ -144,7 +144,7 @@ jobs:
           touch "$PORTABLE_DIR/portable"
 
           VERSION=$(grep '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"([^"]+)".*/\1/')
-          ZIP_NAME="AureStream_${VERSION}_windows_x64_portable.zip"
+          ZIP_NAME="aurestream_${VERSION}_windows_x64_portable.zip"
           cd "$PORTABLE_DIR"
           7z a "$BUNDLE_DIR/$ZIP_NAME" *
           echo "Portable ZIP: $BUNDLE_DIR/$ZIP_NAME"
@@ -167,19 +167,39 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-files
+          VERSION=$(grep '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"([^"]+)".*/\1/')
+          TARGET_NAME="${{ matrix.name }}"
+          TARGET_OS="${TARGET_NAME%-*}"
+          TARGET_ARCH="${TARGET_NAME##*-}"
+
           find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
             -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
           \) -print0 | while IFS= read -r -d '' f; do
             filename=$(basename "$f")
-            target_name="${{ matrix.name }}"
-            if [[ "$filename" == *"$target_name"* ]]; then
-              cp "$f" "release-files/"
-            else
-              extension="${filename##*.}"
-              basename="${filename%.*}"
-              cp "$f" "release-files/${basename}_${target_name}.${extension}"
-            fi
+            case "$filename" in
+              *.deb|*.rpm)
+                cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.${filename##*.}"
+                ;;
+              *.AppImage)
+                cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.AppImage"
+                ;;
+              *portable*.zip)
+                cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}_portable.zip"
+                ;;
+              *-setup.exe|*.exe)
+                cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}_setup.exe"
+                ;;
+              *.msi)
+                cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.msi"
+                ;;
+              *.dmg)
+                cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.dmg"
+                ;;
+              *)
+                cp "$f" "release-files/${filename}"
+                ;;
+            esac
           done
           ls -la release-files/
 

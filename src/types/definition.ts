@@ -41,8 +41,12 @@ export const SELECTED_NODE_TAG_STORE_PREFIX = "selected_node_tag:";
 export const LEGACY_SELECTED_NODE_TAG_KEY = "selected_node_tag";
 export const AUTO_UPDATE_STORE_KEY = "auto_update_key";
 export const UPDATE_INTERVAL_STORE_KEY = "update_interval_key";
-export type UpdateInterval = "6h" | "12h" | "24h" | "7d";
+export type UpdateInterval = "30m" | "1h" | "2h" | "3h" | "6h" | "12h" | "24h" | "7d";
 export const INTERVAL_SECONDS: Record<UpdateInterval, number> = {
+  "30m": 30 * 60,
+  "1h": 3600,
+  "2h": 2 * 3600,
+  "3h": 3 * 3600,
   "6h": 6 * 3600,
   "12h": 12 * 3600,
   "24h": 24 * 3600,
