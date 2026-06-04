@@ -11,27 +11,27 @@ export function useEngineState() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
 
     getEngineState()
-      .then((state) => {
-        setEngineState(state)
-      })
+      .then((state) => { if (!cancelled) setEngineState(state); })
       .catch((err) => {
         console.error("Failed to get engine state:", err)
       })
-      .finally(() => setLoading(false))
+      .finally(() => { if (!cancelled) setLoading(false); });
 
     listen<EngineState>("engine-state", (event) => {
-      setEngineState(event.payload)
+      if (!cancelled) setEngineState(event.payload);
     }).then((fn) => {
-      unlisten = fn
-    })
+      unlisten = fn;
+    });
 
     return () => {
-      unlisten?.()
-    }
-  }, [])
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   const start = useCallback(
     async (configPath: string, mode: ProxyMode = "SystemProxy") => {

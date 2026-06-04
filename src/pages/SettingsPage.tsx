@@ -50,11 +50,16 @@ export function SettingsPage() {
   const [savedBypass, setSavedBypass] = useState(DEFAULT_PROXY_BYPASS_UI)
   const initialPortsRef = useRef<{ mixed: number; controller: number } | null>(null)
   const [autoStart, setAutoStart] = useState(true)
+  const [appVersion, setAppVersion] = useState("0.2.1")
   const [tunStack, setTunStackState] = useState<TunStack>("system")
 
   // New states for Tray & Interaction card
   const [hideOnLaunch, setHideOnLaunch] = useState(false)
   const [minimizeToTray, setMinimizeToTray] = useState(true)
+
+  // Port input refs for debounce
+  const proxyPortTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const apiPortTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // States for About Card updates
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "latest">("idle")
@@ -76,6 +81,14 @@ export function SettingsPage() {
 
   useEffect(() => {
     checkServiceStatus()
+  }, [])
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      proxyPortTimer.current && clearTimeout(proxyPortTimer.current)
+      apiPortTimer.current && clearTimeout(apiPortTimer.current)
+    }
   }, [])
 
   const handleInstallService = async () => {
@@ -142,6 +155,13 @@ export function SettingsPage() {
       setAutoStart(await getAutoStart())
       setHideOnLaunch(await getHideOnLaunch())
       setMinimizeToTray(await getMinimizeToTray())
+
+      // Load version from backend
+      try {
+        setAppVersion(await invoke<string>("get_app_version"))
+      } catch {
+        setAppVersion("0.2.1")
+      }
     }
     loadSettings()
   }, [])
@@ -157,17 +177,28 @@ export function SettingsPage() {
       }
     } catch (e) {
       console.error("Failed to toggle autostart:", e)
+      setAutoStart(!checked)
     }
   }
 
   const handleHideOnLaunchChange = async (checked: boolean) => {
     setHideOnLaunch(checked)
-    await setHideOnLaunchStore(checked)
+    try {
+      await setHideOnLaunchStore(checked)
+    } catch (e) {
+      console.error("Failed to toggle hide on launch:", e)
+      setHideOnLaunch(!checked)
+    }
   }
 
   const handleMinimizeToTrayChange = async (checked: boolean) => {
     setMinimizeToTray(checked)
-    await setMinimizeToTrayStore(checked)
+    try {
+      await setMinimizeToTrayStore(checked)
+    } catch (e) {
+      console.error("Failed to toggle minimize to tray:", e)
+      setMinimizeToTray(!checked)
+    }
   }
 
   const warnIfEngineRunningForNetworkChange = async () => {
@@ -181,8 +212,14 @@ export function SettingsPage() {
   }
 
   const handleTunStackChange = async (stack: TunStack) => {
+    const prev = tunStack
     setTunStackState(stack)
-    await setTunStack(stack)
+    try {
+      await setTunStack(stack)
+    } catch (e) {
+      console.error("Failed to set tun stack:", e)
+      setTunStackState(prev)
+    }
   }
 
   const tunStackHint: Record<TunStack, string> = {
@@ -194,24 +231,32 @@ export function SettingsPage() {
   const handleProxyPortChange = async (val: number) => {
     setPort(String(val))
     if (val > 0 && val <= 65535) {
-      const prev = initialPortsRef.current?.mixed
-      await setProxyPort(val)
-      if (prev !== undefined && prev !== val) {
-        await warnIfEngineRunningForNetworkChange()
-      }
-      if (initialPortsRef.current) initialPortsRef.current.mixed = val
+      // Debounce writes — only persist after 500ms of no input
+      if (proxyPortTimer.current) clearTimeout(proxyPortTimer.current)
+      proxyPortTimer.current = setTimeout(async () => {
+        const prev = initialPortsRef.current?.mixed
+        await setProxyPort(val)
+        if (prev !== undefined && prev !== val) {
+          await warnIfEngineRunningForNetworkChange()
+        }
+        if (initialPortsRef.current) initialPortsRef.current.mixed = val
+      }, 500)
     }
   }
 
   const handleApiPortChange = async (val: number) => {
     setApiPort(String(val))
     if (val > 0 && val <= 65535) {
-      const prev = initialPortsRef.current?.controller
-      await setControllerPort(val)
-      if (prev !== undefined && prev !== val) {
-        await warnIfEngineRunningForNetworkChange()
-      }
-      if (initialPortsRef.current) initialPortsRef.current.controller = val
+      // Debounce writes — only persist after 500ms of no input
+      if (apiPortTimer.current) clearTimeout(apiPortTimer.current)
+      apiPortTimer.current = setTimeout(async () => {
+        const prev = initialPortsRef.current?.controller
+        await setControllerPort(val)
+        if (prev !== undefined && prev !== val) {
+          await warnIfEngineRunningForNetworkChange()
+        }
+        if (initialPortsRef.current) initialPortsRef.current.controller = val
+      }, 500)
     }
   }
 
@@ -329,7 +374,7 @@ export function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={badge.brand}>v0.2.0</span>
+                    <span className={badge.brand}>{`v${appVersion}`}</span>
                     <span className={badge.success}>Stable</span>
                   </div>
                 </div>
