@@ -246,18 +246,18 @@ jobs:
         shell: bash
         run: |
           python3 -c "
-import json, glob
-merged = None
-for f in sorted(glob.glob('updater-fragments/latest-*.json')):
-    with open(f) as fh:
-        data = json.load(fh)
-    if merged is None:
-        merged = data
-    else:
-        merged['platforms'].update(data.get('platforms', {}))
-with open('latest.json', 'w') as fh:
-    json.dump(merged, fh, indent=2)
-print(f'Merged platforms: {list(merged[\"platforms\"].keys())}')
+          import json, glob
+          merged = None
+          for f in sorted(glob.glob('updater-fragments/latest-*.json')):
+              with open(f) as fh:
+                  data = json.load(fh)
+              if merged is None:
+                  merged = data
+              else:
+                  merged['platforms'].update(data.get('platforms', {}))
+          with open('latest.json', 'w') as fh:
+              json.dump(merged, fh, indent=2)
+          print(f'Merged platforms: {list(merged[\"platforms\"].keys())}')
           "
 
       - name: Upload latest.json to Release
