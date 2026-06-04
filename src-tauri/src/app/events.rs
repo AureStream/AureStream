@@ -34,14 +34,14 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 };
 
                 if minimize_to_tray {
+                    api.prevent_close();
                     match move_window_to_tray(window) {
                         Ok(()) => {
-                            api.prevent_close();
                             log::info!("Window close request redirected to tray");
                         }
                         Err(e) => {
                             log::error!(
-                                "Failed to redirect close request to tray; allowing close: {}",
+                                "Failed to redirect close request to tray: {}",
                                 e
                             );
                         }

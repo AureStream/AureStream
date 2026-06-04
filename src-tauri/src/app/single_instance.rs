@@ -58,28 +58,60 @@ mod imp {
     pub fn ensure_single_instance() {
         let path = lock_path();
 
-        if path.exists() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                if let Ok(pid) = content.trim().parse::<u32>() {
-                    if pid_alive(pid) {
+        // Use O_CREAT|O_EXCL via create_new(true) for atomic lock acquisition.
+        // This eliminates the TOCTOU race between checking existence and creating.
+        let pid = std::process::id();
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut f) => {
+                let _ = write!(f, "{}", pid);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Lock file exists — check if the owning process is alive
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(old_pid) = content.trim().parse::<u32>() {
+                        if pid_alive(old_pid) {
+                            log::info!(
+                                "[single_instance] another instance is running (pid {}), exiting",
+                                old_pid
+                            );
+                            std::process::exit(0);
+                        }
                         log::info!(
-                            "[single_instance] another instance is running (pid {}), exiting",
-                            pid
+                            "[single_instance] stale lock file found (pid {} dead), removing",
+                            old_pid
                         );
-                        std::process::exit(0);
+                    } else {
+                        log::info!("[single_instance] corrupt lock file, removing");
                     }
-                    log::info!(
-                        "[single_instance] stale lock file found (pid {} dead), removing",
-                        pid
-                    );
+                }
+                let _ = fs::remove_file(&path);
+                // Retry: the stale file is gone, try atomic create again
+                match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                {
+                    Ok(mut f) => {
+                        let _ = write!(f, "{}", pid);
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "[single_instance] failed to acquire lock on retry: {}",
+                            e
+                        );
+                    }
                 }
             }
-            let _ = fs::remove_file(&path);
-        }
-
-        let pid = std::process::id();
-        if let Ok(mut f) = fs::File::create(&path) {
-            let _ = write!(f, "{}", pid);
+            Err(e) => {
+                log::error!(
+                    "[single_instance] failed to create lock file: {}, falling through",
+                    e
+                );
+            }
         }
     }
 

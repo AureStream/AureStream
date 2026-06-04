@@ -1,16 +1,15 @@
-import { useState } from "react"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
+import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
 import { HomePage } from "@/pages/HomePage"
 import { SubscriptionPage } from "@/pages/SubscriptionPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import "@/lib/i18n"
 
-function App() {
-  const [activeTab, setActiveTab] = useState("home")
+function AppLayout() {
+  const { activeTab } = useNavigation()
 
   return (
-    <SubscriptionProvider>
     <div className="relative flex h-screen w-screen overflow-hidden p-2.5 gap-2.5">
       {/* Light mode background */}
       <div className="absolute inset-0 bg-background dark:hidden" />
@@ -25,7 +24,7 @@ function App() {
       <div className="absolute bottom-[-10%] left-[-10%] size-[380px] rounded-full bg-[#4f46e5]/6 blur-[100px] hidden dark:block" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.01)_0%,_transparent_75%)] hidden dark:block" />
 
-      <AppSidebar activeId={activeTab} onActiveIdChange={setActiveTab} />
+      <AppSidebar />
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/40 backdrop-blur-2xl border border-border/60 dark:bg-black/30 dark:border-white/10 rounded-[24px] shadow-sm p-4 sm:p-5">
         {activeTab === "home" && <HomePage />}
@@ -33,7 +32,16 @@ function App() {
         {activeTab === "settings" && <SettingsPage />}
       </main>
     </div>
-    </SubscriptionProvider>
+  )
+}
+
+function App() {
+  return (
+    <NavigationProvider>
+      <SubscriptionProvider>
+        <AppLayout />
+      </SubscriptionProvider>
+    </NavigationProvider>
   )
 }
 
