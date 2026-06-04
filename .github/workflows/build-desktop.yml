@@ -117,14 +117,7 @@ jobs:
       - name: Collect updater manifest
         shell: bash
         run: |
-          LATEST=$(find src-tauri/target/${{ matrix.rust_target }}/release/bundle -name 'latest.json' -print -quit)
-          if [ -n "$LATEST" ]; then
-            mkdir -p updater-artifacts
-            cp "$LATEST" "updater-artifacts/latest-${{ matrix.name }}.json"
-            echo "Collected updater manifest for ${{ matrix.name }}"
-          else
-            echo "Warning: latest.json not found for ${{ matrix.name }}"
-          fi
+          node scripts/generate-updater-manifest.js "${{ matrix.name }}" "${{ matrix.rust_target }}"
 
       - name: Upload updater manifest artifact
         uses: actions/upload-artifact@v7
@@ -193,7 +186,8 @@ jobs:
 
           find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
-            -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' \
+            -name '*.exe' -o -name '*.dmg' -o -name '*portable*.zip' -o \
+            -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
           \) -print0 | while IFS= read -r -d '' f; do
             filename=$(basename "$f")
             case "$filename" in
@@ -214,6 +208,9 @@ jobs:
                 ;;
               *.dmg)
                 cp "$f" "release-files/aurestream_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.dmg"
+                ;;
+              *.sig|*.tar.gz|*.zip)
+                cp "$f" "release-files/${filename}"
                 ;;
               *)
                 cp "$f" "release-files/${filename}"
