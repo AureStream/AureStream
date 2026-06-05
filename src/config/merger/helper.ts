@@ -153,12 +153,27 @@ export async function configureMixedInbound(newConfig: any, allowLan: boolean, b
 
 export function excludeFakeIpFromPrivateRules(newConfig: any) {
     if (newConfig?.route?.rules) {
-        for (const rule of newConfig.route.rules) {
+        for (let i = 0; i < newConfig.route.rules.length; i++) {
+            const rule = newConfig.route.rules[i];
             if (rule.ip_is_private) {
-                rule.ip_cidr = rule.ip_cidr || [];
-                if (!rule.ip_cidr.includes("!198.18.0.0/15")) {
-                    rule.ip_cidr.push("!198.18.0.0/15");
-                }
+                // Replace the simple ip_is_private rule with a logical AND rule
+                // that matches private IP but NOT the fake-IP range 198.18.0.0/15
+                newConfig.route.rules[i] = {
+                    type: "logical",
+                    mode: "and",
+                    rules: [
+                        {
+                            ip_is_private: true
+                        },
+                        {
+                            ip_cidr: [
+                                "198.18.0.0/15"
+                            ],
+                            invert: true
+                        }
+                    ],
+                    outbound: rule.outbound
+                };
             }
         }
     }
