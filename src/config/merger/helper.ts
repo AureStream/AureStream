@@ -150,3 +150,16 @@ export async function configureMixedInbound(newConfig: any, allowLan: boolean, b
         mixedInbound.listen_port = await getProxyPort();
     }
 }
+
+export function excludeFakeIpFromPrivateRules(newConfig: any) {
+    if (newConfig?.route?.rules) {
+        for (const rule of newConfig.route.rules) {
+            if (rule.ip_is_private) {
+                rule.ip_cidr = rule.ip_cidr || [];
+                if (!rule.ip_cidr.includes("!198.18.0.0/15")) {
+                    rule.ip_cidr.push("!198.18.0.0/15");
+                }
+            }
+        }
+    }
+}

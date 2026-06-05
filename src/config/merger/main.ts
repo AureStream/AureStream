@@ -3,7 +3,7 @@ import { getSubscriptionConfig } from '../../action/db';
 import { getAllowLan, getControllerSecret, getControllerPort, getCustomRuleSet, getStoreValue, isBypassRouterEnabled, setStoreValue } from '../../single/store';
 import { DIRECT_RULE_SLOT, LEGACY_DIRECT_RULE_SLOT, LEGACY_PROXY_RULE_SLOT, PROXY_RULE_SLOT, ruleSlotMatches } from '../rule-tags';
 import { STAGE_VERSION_STORE_KEY, selectedNodeTagStoreKey, LEGACY_SELECTED_NODE_TAG_KEY } from '../../types/definition';
-import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB, patchDnsProxyConfig } from './helper';
+import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB, patchDnsProxyConfig, excludeFakeIpFromPrivateRules } from './helper';
 
 import { configType, getConfigTemplateCacheKey } from '../common';
 import { getBuiltInTemplate } from '../templates';
@@ -53,6 +53,7 @@ export async function setMixedConfig(identifier: string) {
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
     await patchDnsProxyConfig(newConfig);
+    excludeFakeIpFromPrivateRules(newConfig);
 
     console.log("写入[规则]系统代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
@@ -101,6 +102,7 @@ export async function setTunConfig(identifier: string) {
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
     await patchDnsProxyConfig(newConfig);
+    excludeFakeIpFromPrivateRules(newConfig);
     console.log("写入[规则]TUN代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
     const appConfigPath = await path.appConfigDir();
@@ -149,6 +151,7 @@ export async function setGlobalMixedConfig(identifier: string) {
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
     await patchDnsProxyConfig(newConfig);
+    excludeFakeIpFromPrivateRules(newConfig);
 
     console.log("写入[全局]系统代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
@@ -170,6 +173,7 @@ export default async function setGlobalTunConfig(identifier: string) {
     let level = await getStoreValue(STAGE_VERSION_STORE_KEY) === "dev" ? "debug" : "info";
     newConfig.log.level = level;
     await patchDnsProxyConfig(newConfig);
+    excludeFakeIpFromPrivateRules(newConfig);
 
     console.log("写入[全局]TUN代理配置文件");
     let dbConfigData = await getSubscriptionConfig(identifier);
