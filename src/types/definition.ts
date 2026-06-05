@@ -1,6 +1,6 @@
 
 export const SING_BOX_MAJOR_VERSION = "1.13";
-export const SING_BOX_MINOR_VERSION = "12";
+export const SING_BOX_MINOR_VERSION = "13";
 export const SING_BOX_VERSION = `v${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION}`;
 
 export const GITHUB_URL = 'https://github.com/BadKid90s/AureStream';
@@ -27,7 +27,7 @@ export const CONTROLLER_SECRET_STORE_KEY = 'singbox_api_secret_key';
 export const LEGACY_CLASH_API_PORT_STORE_KEY = 'clash_api_port_key';
 export const LEGACY_CLASH_API_SECRET_STORE_KEY = 'clash_api_secret_key';
 
-export const APP_VERSION = '0.2.2';
+export const APP_VERSION = '0.2.3';
 
 export function buildSubscriptionUserAgent(): string {
     return `AureStream/${APP_VERSION} (sing-box/${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION})`;
