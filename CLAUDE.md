@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+📖 **Full Documentation**: See the [AureStream Wiki](file:///d:/wry/Projects/AureStream/docs/index.md) for comprehensive architecture, state management, and API references.
+
 AureStream is a cross-platform proxy/VPN client built with **Tauri v2** (Rust backend + WebView frontend). It uses **sing-box** as the core network routing engine, running as an external sidecar binary.
 
 ## Tech Stack
@@ -142,7 +144,6 @@ CSS custom properties (HSL-based) in `src/index.css` with light/dark variants. T
 - `scripts/download-binaries.ts`: Fetches sing-box binaries from GitHub releases
 - `scripts/build-tun-service.ts`: Compiles Windows TUN service
 - `scripts/prebundle.ts`: Builds and signs macOS privileged helper
-- `scripts/sync-templates.ts`: Fetches config templates from `OneOhCloud/conf-template`
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands

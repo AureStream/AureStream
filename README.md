@@ -1,77 +1,30 @@
-# AureStream（Tauri + React + TypeScript）
+# AureStream
 
-本项目使用 **pnpm** 管理前端依赖与脚本。配置模板直接采用本地 `src/config/templates/config-template.jsonc` 形式进行自维护。仓库根目录已有 `pnpm-lock.yaml`，请勿提交 `package-lock.json`。
+AureStream 是一款现代化、高性能的跨平台代理/VPN 客户端。基于强大的 [sing-box](https://sing-box.sagernet.org/) 核心构建，致力于为您提供轻量、安全、直观的网络代理体验。
 
-## 环境要求
+## ✨ 核心特性
 
-- [Node.js](https://nodejs.org/)（建议 LTS）
-- [pnpm](https://pnpm.io/installation)（建议启用 [Corepack](https://nodejs.org/api/corepack.html)，以自动使用 `package.json` 中的 `packageManager` 字段指定版本）
-- [Rust](https://rustup.rs/)（构建 Tauri）
+- 🚀 **强大的代理核心**: 完全基于 sing-box 内核，支持 VLESS, VMess, Trojan, Shadowsocks 等主流协议。
+- 💻 **跨平台支持**: 统一的现代化 UI，完美运行于 Windows、macOS 和 Linux。
+- 🛡️ **全局 TUN 虚拟网卡**: 原生支持 TUN 模式，轻松接管系统全局流量。
+- 🎨 **现代化设计**: 采用最新的前端技术构建，支持明暗主题自动切换，提供流畅的用户交互体验。
+- 📊 **实时统计**: 直观的节点延迟测速、实时流量监控与 GeoIP 网络状态显示。
+- ⚡ **智能路由**: 内置优化的路由规则与 DNS 防泄漏机制（完美解决 IPv6 网络不可达问题）。
+- 📦 **便携与安全**: 不依赖外部网络模板，完全在本地生成安全配置；在 Windows 上支持数据隔离的便携模式。
 
-## 常用命令
+## 📖 快速上手
 
-```bash
-pnpm install                 # 安装依赖
-pnpm dev                     # 启动 Vite 开发服务器
-pnpm build                   # 前端生产构建（tsc + vite build）
-pnpm tauri dev               # Tauri 桌面开发
-pnpm run download-binaries   # 下载 sing-box 内核及规则数据库到本地
-pnpm run build-tun --release # 编译并放置 Windows 专属服务组件 (Sidecar)
-pnpm run prebundle           # 编译并签名 macOS 特权 Helper 组件
-pnpm tauri build             # Tauri 桌面打包
-```
+1. **下载安装**: 
+   前往 Releases 页面下载对应您操作系统的最新安装包。
+2. **导入订阅**: 
+   打开应用，进入“订阅”页面，点击添加并粘贴您的服务商订阅链接。支持通过 Deep Link 一键导入。
+3. **选择节点并连接**: 
+   回到主页，点击左侧的电源按钮即可一键连接！您可以在右侧实时查看网络速度与流量消耗。
 
-## 桌面应用打包步骤
+## 👨‍💻 开发者与技术文档
 
-在本地首次打包或更新内核依赖后，请按照以下步骤进行完整打包：
+如果您是开发者，希望从源码编译、参与贡献，或了解 AureStream 的底层架构设计，请参阅我们详细的 Wiki 文档库：
 
-### 1. 准备依赖与数据（所有平台通用）
-```bash
-# 安装依赖
-pnpm install
-# 准备内核及规则数据
-pnpm run download-binaries
-```
+👉 **[查看 AureStream 完整 Wiki 文档](file:///d:/wry/Projects/AureStream/docs/index.md)**
 
-### 2. 平台专属准备工作
-* **Windows**（编译高权限服务）：
-  ```bash
-  pnpm run build-tun --release
-  ```
-* **macOS**（编译并签名特权 Helper）：
-  ```bash
-  pnpm run prebundle
-  ```
-* **Linux**：
-  无额外准备步骤，但请确保系统安装了打包所需的依赖开发包：
-  ```bash
-  sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-  ```
-
-### 3. 执行打包命令
-```bash
-pnpm tauri build
-```
-
-构建生成的安装包输出位置：
-* **Windows**:
-  * **NSIS 安装包 (`.exe`)**: `src-tauri/target/release/bundle/nsis/`
-  * **WiX 安装包 (`.msi`)**: `src-tauri/target/release/bundle/msi/`
-* **macOS**:
-  * **`.dmg` 安装包**: `src-tauri/target/release/bundle/dmg/`
-  * **`.app` 应用**: `src-tauri/target/release/bundle/macos/`
-* **Linux**:
-  * **`.deb` 安装包**: `src-tauri/target/release/bundle/deb/`
-  * **`.AppImage` 镜像**: `src-tauri/target/release/bundle/appimage/`
-
-### shadcn/ui 等 CLI
-
-与官方文档中的 `npx shadcn@latest` 等价，在本仓库请使用：
-
-```bash
-pnpm dlx shadcn@latest <子命令>
-```
-
-## 推荐 IDE
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+技术文档包含了系统架构、UI设计系统、构建与部署指南、以及常见故障排查等丰富内容。
