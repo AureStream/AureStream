@@ -29,7 +29,7 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
 
 export function NetworkPanel() {
   const { t } = useTranslation()
-  const { isRunning } = useEngineState()
+  const { isRunning, engineState } = useEngineState()
   const [networkInfo, setNetworkInfo] = useState<GeoIpInfo>({
     ip: t("loading"),
     countryName: t("loading"),
@@ -71,15 +71,19 @@ export function NetworkPanel() {
   }, [isRunning, t])
 
   useEffect(() => {
-    if (isRunning) {
+    if (engineState.kind === "running") {
       const timer = setTimeout(() => {
         refresh()
-      }, 800)
+      }, 500)
       return () => clearTimeout(timer)
-    } else {
-      refresh()
+    } else if (engineState.kind === "idle") {
+      // Delay fetch slightly to allow OS network routes/proxy settings to fully settle after disconnecting
+      const timer = setTimeout(() => {
+        refresh()
+      }, 500)
+      return () => clearTimeout(timer)
     }
-  }, [isRunning, refresh])
+  }, [engineState.kind, refresh])
 
   useEffect(() => {
     const handleNodeChange = () => {

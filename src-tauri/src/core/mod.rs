@@ -101,7 +101,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         return Err(e);
     }
 
-    tokio::time::sleep(PlatformEngine::start_settle_delay(&mode)).await;
+    // tokio::time::sleep(PlatformEngine::start_settle_delay(&mode)).await;
     let (post_pid, post_alive, _) = pm_snapshot();
     ::log::info!(
         "[start] action={action} spawn returned, handing off to readiness prober (pm_child_pid={:?} alive={:?})",

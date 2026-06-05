@@ -9,7 +9,7 @@ import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { useEngineState } from "@/hooks/useEngineState"
 import { getCountryCode, getFlagComponent } from "@/lib/country-flags"
-import { fetchSelectGroup, selectProxyNode, pingNodeTcp } from "@/utils/singbox-api"
+import { fetchSelectGroup, selectProxyNode, pingNodeTcp, testNodeDelay } from "@/utils/singbox-api"
 import { getStoreValue, setStoreValue } from "@/single/store"
 import {
   LEGACY_SELECTED_NODE_TAG_KEY,
@@ -190,7 +190,9 @@ export function NodeSelector() {
       // Test delays in parallel and update state incrementally for real-time progress
       await Promise.all(
         nodes.map(async (node) => {
-          const delay = await pingNodeTcp(node.host, Number(node.port))
+          const delay = isRunning 
+            ? await testNodeDelay(node.name)
+            : await pingNodeTcp(node.host, Number(node.port))
           results[node.name] = delay
           setLatencies((prev) => ({
             ...prev,
