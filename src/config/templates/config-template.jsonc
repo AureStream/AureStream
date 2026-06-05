@@ -1,0 +1,188 @@
+{
+    "$schema": "https://raw.githubusercontent.com/xmdhs/sing-box-generate-schema/refs/heads/master/schema.generated.json",
+    "log": {
+        "disabled": false,
+        "level": "info",
+        "timestamp": false
+    },
+    "dns": {
+        "servers": [
+            {
+                "tag": "remote",
+                "type": "https",
+                "server": "8.8.8.8",
+                "detour": "ExitGateway"
+            },
+            {
+                "tag": "system",
+                "type": "udp",
+                "server": "223.5.5.5",
+                "server_port": 53
+            },
+            {
+                "type": "fakeip",
+                "tag": "fakeip",
+                "inet4_range": "198.18.0.0/15",
+                "inet6_range": "fc00::/18"
+            }
+        ],
+        "rules": [
+            {
+                "rule_set": [
+                    "AdGuardSDNSFilter",
+                    "chrome-doh"
+                ],
+                "action": "predefined"
+            },
+            {
+                "query_type": "HTTPS",
+                "action": "predefined"
+            },
+            {
+                "query_type": [
+                    "A",
+                    "AAAA"
+                ],
+                "rewrite_ttl": 1,
+                "server": "fakeip"
+            },
+            {
+                "clash_mode": "global",
+                "server": "remote"
+            },
+            {
+                "clash_mode": "direct",
+                "server": "system"
+            },
+            {
+                "rule_set": "geosite-cn",
+                "server": "system"
+            },
+            {
+                "rule_set": "ext-cn-domain",
+                "server": "system"
+            }
+        ],
+        "strategy": "prefer_ipv4",
+        "independent_cache": true
+    },
+    "inbounds": [
+        {
+            "type": "tun",
+            "tag": "tun",
+            "address": [
+                "172.19.0.1/30",
+                "fdfe:dcba:9876::1/126"
+            ],
+            "strict_route": true,
+            "mtu": 9000,
+            "endpoint_independent_nat": true,
+            "auto_route": true
+        },
+        {
+            "type": "mixed",
+            "tag": "mixed",
+            "listen": "127.0.0.1",
+            "listen_port": 6789,
+            "set_system_proxy": false
+        }
+    ],
+    "outbounds": [
+        {
+            "tag": "direct",
+            "type": "direct",
+            "domain_resolver": "system",
+            "domain_strategy": "prefer_ipv4"
+        },
+        {
+            "tag": "ExitGateway",
+            "type": "selector",
+            "outbounds": [
+                "auto"
+            ]
+        },
+        {
+            "tag": "auto",
+            "type": "urltest",
+            "url": "https://www.google.com/generate_204",
+            "outbounds": []
+        }
+    ],
+    "route": {
+        "rules": [
+            {
+                "action": "sniff"
+            },
+            {
+                "protocol": "dns",
+                "action": "hijack-dns"
+            },
+            {
+                "clash_mode": "direct",
+                "outbound": "direct"
+            },
+            {
+                "clash_mode": "global",
+                "outbound": "ExitGateway"
+            },
+            // 放置在域名规则之后，ip规则之前，让域名直接发送到节点服务器解析，而非通过本地的 dns 模块解析，从而解析出更合适的 ip
+            {
+                "action": "resolve",
+                "strategy": "prefer_ipv4"
+            },
+            {
+                "ip_is_private": true,
+                "outbound": "direct"
+            },
+            {
+                "rule_set": "geoip-cn",
+                "outbound": "direct"
+            }
+        ],
+        "auto_detect_interface": true,
+        "default_domain_resolver": {
+            "server": "system"
+        },
+        "rule_set": [
+            {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+            },
+            {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs"
+            },
+            {
+                "tag": "AdGuardSDNSFilter",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/xmdhs/sing-box-ruleset/rule-set/AdGuardSDNSFilterSingBox.srs"
+            },
+            {
+                "tag": "chrome-doh",
+                "type": "remote",
+                "format": "source",
+                "url": "https://gist.githubusercontent.com/xmdhs/71fc5ff6ef29f5ecaf2c52b8de5c3172/raw/chrome-doh.json"
+            },
+            {
+                "tag": "ext-cn-domain",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/xmdhs/cn-domain-list/rule-set/ext-cn-list.srs"
+            }
+        ]
+    },
+    "experimental": {
+        "cache_file": {
+            "enabled": true
+        },
+        "clash_api": {
+            "external_controller": "127.0.0.1:9191",
+            "secret": ""
+        }
+    }
+}

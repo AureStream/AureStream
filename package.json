@@ -6,15 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "predev": "pnpm run sync-templates",
     "build": "tsc && vite build",
-    "prebuild": "pnpm run sync-templates",
     "preview": "vite preview",
     "tauri": "tauri",
     "download-binaries": "tsx scripts/download-binaries.ts",
     "build-tun": "tsx scripts/build-tun-service.ts",
     "pre-bundle": "tsx scripts/prebundle.ts",
-    "sync-templates": "tsx scripts/sync-templates.ts",
     "release": "pnpm download-binaries && pnpm build-tun --release && pnpm build && pnpm tauri build"
   },
   "dependencies": {

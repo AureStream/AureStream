@@ -1,6 +1,6 @@
 # AureStream（Tauri + React + TypeScript）
 
-本项目使用 **pnpm** 管理前端依赖与脚本。仓库根目录已有 `pnpm-lock.yaml`，请勿提交 `package-lock.json`。
+本项目使用 **pnpm** 管理前端依赖与脚本。配置模板直接采用本地 `src/config/templates/config-template.jsonc` 形式进行自维护。仓库根目录已有 `pnpm-lock.yaml`，请勿提交 `package-lock.json`。
 
 ## 环境要求
 

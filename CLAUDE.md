@@ -10,7 +10,7 @@ AureStream is a cross-platform proxy/VPN client built with **Tauri v2** (Rust ba
 
 - **Frontend**: React 19 + TypeScript + Vite 7 + Tailwind CSS v4 + shadcn/ui (new-york style)
 - **Backend**: Rust (Tauri v2) with Tokio async runtime
-- **VPN Engine**: sing-box v1.13.12 (sidecar binary)
+- **VPN Engine**: sing-box v1.13.13 (sidecar binary)
 - **Package Manager**: pnpm 11.4.0 (ESM modules)
 - **i18n**: i18next (Chinese default, English available)
 
@@ -32,7 +32,6 @@ pnpm release                # Download binaries + build TUN service + build + ta
 pnpm download-binaries      # Download sing-box sidecar binaries and rule databases
 pnpm build-tun              # Build Windows TUN service sidecar
 pnpm pre-bundle             # Build and sign macOS privileged helper
-pnpm sync-templates         # Fetch sing-box config templates from OneOhCloud/conf-template repo
 
 # Rust (in src-tauri/)
 cargo build                 # Build Rust backend
@@ -65,7 +64,7 @@ Rust backend implements `Idle → Starting → Running → Stopping → Idle` (w
 ### Config Generation Pipeline
 
 Template-based merger system in `src/config/merger/`:
-- Built-in templates in `src/config/templates/` (auto-generated from `OneOhCloud/conf-template`)
+- Built-in templates read from local `src/config/templates/config-template.jsonc` (no external network sync)
 - Merges templates + subscription nodes + user preferences → `config.json` for sing-box
 
 ### Data Persistence
