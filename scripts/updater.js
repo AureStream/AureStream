@@ -53,18 +53,12 @@ async function run() {
     const sigName = sigAsset.name;
     const bundleName = sigName.slice(0, -4); // remove .sig
 
-    const bundleAsset = otherAssets.find(a => a.name === bundleName);
-    if (!bundleAsset) {
-      console.warn(`No matching bundle found for signature: ${sigName}`);
-      continue;
-    }
-
     let platformKey = null;
     if (bundleName.includes('aarch64.app.tar.gz')) {
       platformKey = 'darwin-aarch64';
     } else if (bundleName.includes('x64.app.tar.gz')) {
       platformKey = 'darwin-x86_64';
-    } else if (bundleName.endsWith('.zip') && !bundleName.includes('portable')) {
+    } else if ((bundleName.endsWith('.zip') || bundleName.endsWith('.exe')) && !bundleName.includes('portable')) {
       platformKey = 'windows-x86_64';
     } else if (bundleName.includes('AppImage.tar.gz')) {
       platformKey = 'linux-x86_64';
@@ -72,6 +66,17 @@ async function run() {
 
     if (!platformKey) {
       console.warn(`Could not determine platform for bundle: ${bundleName}`);
+      continue;
+    }
+
+    let bundleAsset = otherAssets.find(a => a.name === bundleName);
+    if (!bundleAsset && platformKey === 'windows-x86_64') {
+      // Fallback for renamed windows installer (e.g. aurestream_0.2.2_windows_x64_setup.exe)
+      bundleAsset = otherAssets.find(a => a.name.includes('windows_x64_setup.exe') || a.name.endsWith('_setup.exe'));
+    }
+
+    if (!bundleAsset) {
+      console.warn(`No matching bundle found for signature: ${sigName}`);
       continue;
     }
 

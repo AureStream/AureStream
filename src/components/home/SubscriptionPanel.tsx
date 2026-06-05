@@ -19,10 +19,21 @@ function formatBytes(bytes: number): string {
   return `${gb.toFixed(1)} GB`
 }
 
-function formatExpiry(expireTimeMs: number, t: (key: string) => string): string {
-  if (!expireTimeMs || expireTimeMs <= 0) return t("unlimited")
-  const date = new Date(expireTimeMs)
+function formatExpiry(expireTimeMs: number | null | undefined): string {
+  let date: Date
+  if (!expireTimeMs || expireTimeMs <= 0) {
+    date = new Date()
+    date.setFullYear(date.getFullYear() + 100)
+  } else {
+    date = new Date(expireTimeMs)
+  }
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+}
+
+function formatRefreshTime(lastUpdateTimeSecs: number | null | undefined, t: (key: string) => string): string {
+  if (!lastUpdateTimeSecs || lastUpdateTimeSecs <= 0) return t("never")
+  const date = new Date(lastUpdateTimeSecs * 1000)
+  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
 }
 
 export function SubscriptionPanel() {
@@ -52,16 +63,20 @@ export function SubscriptionPanel() {
         />
       </CardContent>
 
-      <CardFooter className="flex items-center justify-between pb-3 pt-1 px-4 type-caption">
-        <span className="font-semibold text-primary">
-          {usedPercent.toFixed(1)}% {t("used_percent")}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className={type.mono}>{t("expire")} {active ? formatExpiry(active.expire_time, t) : t("unlimited")}</span>
-          <Button variant="ghost" size="xs" className={cn(btn.accent, "h-7 px-2")}>
-            {t("manage")}
-          </Button>
+      <CardFooter className="flex items-center justify-between pb-3 pt-1 px-4 type-caption gap-2">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="font-semibold text-primary">
+            {usedPercent.toFixed(1)}% {t("used_percent")}
+          </span>
+          <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground", type.mono)}>
+            <span>{t("expire")}: {formatExpiry(active?.expire_time)}</span>
+            <span className="text-border/60">|</span>
+            <span>{t("update_subscription") ? "更新" : "Update"}: {active ? formatRefreshTime(active.last_update_time, t) : t("never")}</span>
+          </div>
         </div>
+        <Button variant="ghost" size="xs" className={cn(btn.accent, "h-7 px-2 shrink-0")}>
+          {t("manage")}
+        </Button>
       </CardFooter>
     </Card>
   )
