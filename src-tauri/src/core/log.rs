@@ -40,7 +40,7 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
 
     let date = today_date_string();
     let log_path = log_dir.join(format!("aurestream-core-{}.log", date));
-    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 86400);
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 86400);
 
     if let Ok(entries) = std::fs::read_dir(log_dir) {
         for entry in entries.flatten() {
@@ -105,7 +105,7 @@ pub fn cleanup_old_app_logs(app: &AppHandle) {
     if !log_dir.exists() {
         return;
     }
-    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 86400);
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 86400);
 
     let entries = match std::fs::read_dir(&log_dir) {
         Ok(e) => e,
