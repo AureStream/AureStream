@@ -2,6 +2,14 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 type Theme = "system" | "light" | "dark"
 
+const VALID_THEMES: Theme[] = ["system", "light", "dark"]
+
+function readStoredTheme(): Theme {
+  if (typeof window === "undefined") return "system"
+  const stored = localStorage.getItem("theme")
+  return VALID_THEMES.includes(stored as Theme) ? (stored as Theme) : "system"
+}
+
 interface ThemeContextType {
   theme: Theme
   setTheme: (theme: Theme) => void
@@ -10,12 +18,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("theme") as Theme) || "system"
-    }
-    return "system"
-  })
+  const [theme, setTheme] = useState<Theme>(readStoredTheme)
 
   useEffect(() => {
     const root = document.documentElement

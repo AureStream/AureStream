@@ -5,6 +5,7 @@ import {
   SettingsIcon,
   SunIcon,
   MoonIcon,
+  MonitorIcon,
   CircleArrowUpIcon,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -51,16 +52,21 @@ export function AppSidebar() {
     { id: "settings", icon: SettingsIcon, label: t("settings") },
   ] as const
 
-  const toggleTheme = () => {
-    if (theme === "light") {
-      setTheme("dark")
-    } else if (theme === "dark") {
-      setTheme("light")
-    } else {
-      const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-      setTheme(isSystemDark ? "light" : "dark")
-    }
+  const cycleTheme = () => {
+    if (theme === "system") setTheme("light")
+    else if (theme === "light") setTheme("dark")
+    else setTheme("system")
   }
+
+  const ThemeIcon =
+    theme === "system" ? MonitorIcon : theme === "light" ? SunIcon : MoonIcon
+
+  const themeTooltip =
+    theme === "system"
+      ? t("switch_to_light")
+      : theme === "light"
+        ? t("switch_to_dark")
+        : t("switch_to_system")
 
   return (
     <Card className="w-16 shrink-0 py-4.5 !gap-0 flex flex-col items-center justify-between">
@@ -126,16 +132,18 @@ export function AppSidebar() {
               variant="ghost"
               size="icon"
               className="size-11 rounded-2xl text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-all duration-200 dark:hover:bg-white/[0.08]"
-              onClick={toggleTheme}
-              aria-label={t("toggle_theme")}
+              onClick={cycleTheme}
+              aria-label={themeTooltip}
             >
-              <SunIcon className="size-5 rotate-0 scale-100 transition-transform duration-350 dark:-rotate-90 dark:scale-0" />
-              <MoonIcon className="absolute size-5 rotate-90 scale-0 transition-transform duration-350 dark:rotate-0 dark:scale-100 text-blue-400" />
+              <ThemeIcon
+                className={cn(
+                  "size-5 transition-colors duration-200",
+                  theme === "dark" && "text-blue-400"
+                )}
+              />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">
-            {theme === "light" ? t("switch_to_dark") : t("switch_to_light")}
-          </TooltipContent>
+          <TooltipContent side="right">{themeTooltip}</TooltipContent>
         </Tooltip>
       </div>
     </Card>
