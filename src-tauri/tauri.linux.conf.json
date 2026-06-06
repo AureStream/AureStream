@@ -12,9 +12,9 @@
       "deb": {
         "desktopTemplate": "resources/main.desktop",
         "files": {
-          "usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
-          "usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
-          "etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
+          "/usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
         },
         "postInstallScript": "resources/linux/deb-postinst.sh",
         "postRemoveScript": "resources/linux/deb-postrm.sh"
@@ -22,9 +22,9 @@
       "rpm": {
         "desktopTemplate": "resources/main.desktop",
         "files": {
-          "usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
-          "usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
-          "etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
+          "/usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
         }
       }
     }
