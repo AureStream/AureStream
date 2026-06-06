@@ -3,7 +3,7 @@ use tauri::{Builder, Wry};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 use tauri_plugin_sql::Migration;
 
-const APP_LOG_MAX_FILE_SIZE: u128 = 50 * 1024 * 1024;
+const APP_LOG_MAX_FILE_SIZE: u128 = 10 * 1024 * 1024;
 
 #[allow(unused_variables)]
 pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Builder<Wry> {
@@ -18,6 +18,22 @@ pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Bu
                 })
                 .level(LevelFilter::Info)
                 .timezone_strategy(TimezoneStrategy::UseLocal)
+                .format(|out, message, record| {
+                    let now = chrono::Local::now();
+                    let time = format!(
+                        "{}.{:03}",
+                        now.format("%H:%M:%S"),
+                        now.timestamp_subsec_millis()
+                    );
+                    out.finish(format_args!(
+                        "[{}][{}][{}][{}] {}",
+                        now.format("%Y-%m-%d"),
+                        time,
+                        record.level(),
+                        record.target(),
+                        message
+                    ))
+                })
                 .max_file_size(APP_LOG_MAX_FILE_SIZE)
                 .rotation_strategy(RotationStrategy::KeepAll)
                 .targets([

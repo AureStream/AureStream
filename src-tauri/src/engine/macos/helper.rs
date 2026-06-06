@@ -16,6 +16,7 @@ mod ffi {
     extern "C" {
         pub fn aurestream_helper_ping(reply_out: *mut *mut c_char) -> c_int;
         pub fn aurestream_helper_install(error_out: *mut *mut c_char) -> c_int;
+        pub fn aurestream_helper_uninstall(error_out: *mut *mut c_char) -> c_int;
 
         pub fn aurestream_helper_start_sing_box(
             config_path: *const c_char,
@@ -162,6 +163,10 @@ pub mod api {
         call_error_only(|err_out| unsafe { ffi::aurestream_helper_install(err_out) })
     }
 
+    pub fn uninstall() -> Result<(), String> {
+        call_error_only(|err_out| unsafe { ffi::aurestream_helper_uninstall(err_out) })
+    }
+
     pub fn start_sing_box(config_path: &str, log_path: &str) -> Result<i32, String> {
         let c_path = to_cstring(config_path, "config_path")?;
         let c_log = to_cstring(log_path, "log_path")?;
@@ -224,6 +229,9 @@ pub mod api {
         Err(MSG.to_string())
     }
     pub fn install() -> Result<(), String> {
+        Err(MSG.to_string())
+    }
+    pub fn uninstall() -> Result<(), String> {
         Err(MSG.to_string())
     }
     pub fn start_sing_box(_config_path: &str, _log_path: &str) -> Result<i32, String> {

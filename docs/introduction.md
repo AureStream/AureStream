@@ -1,6 +1,6 @@
 # AureStream 项目介绍与开发指南
 
-欢迎来到 **AureStream** 开发者文档中心。本手册旨在帮助新加入的开发者快速了解 AureStream 的核心定位、目录结构、开发环境配置以及跨平台编译流程，配合系统的 [设计与架构文档](file:///d:/wry/Projects/AureStream/docs/architecture.md) 共同使用。
+欢迎来到 **AureStream** 开发者文档中心。本手册旨在帮助新加入的开发者快速了解 AureStream 的核心定位、目录结构、开发环境配置以及跨平台编译流程，配合系统的 [设计与架构文档](./architecture.md) 共同使用。
 
 ---
 
@@ -28,7 +28,10 @@ AureStream/
 │   ├── components/            # 可复用组件 (主页控制台、节点列表、设置页面等)
 │   ├── config/                # 配置文件生成
 │   │   ├── merger/            # 动态模板合并器 (将订阅节点与模板融合成 config.json)
-│   │   └── templates/         # 内置的 sing-box 基础配置模板 (JSON 形式)
+│   │   └── templates/         # 内置 sing-box 模板 (config-template.jsonc)
+│   ├── lib/                   # config-sync、connection-flow、hot-reload、perf 等
+│   ├── components/layout/     # LoadingScreen、CircularLoader 启动与加载 UI
+│   ├── components/ui/         # shadcn 原语 + CountryFlag 等
 │   ├── single/                # 单例管理（Store 全局设置、SQLite 数据库连接）
 │   ├── types/                 # 全局 TypeScript 类型与常量定义
 │   └── main.tsx               # 前端渲染入口
@@ -37,9 +40,10 @@ AureStream/
 │   ├── capabilities/          # Tauri v2 安全权限配置文件
 │   ├── src/                   # Rust 业务层
 │   │   ├── app/               # App 初始化、插件注册与 SQLite 数据库迁移
-│   │   ├── commands/          # Tauri API 指令分发层 (DNS 探测、系统检测)
-│   │   ├── core/              # 核心进程管理控制、日志轮转与监视器
-│   │   └── engine/            # 跨平台引擎 (Windows SCM控制, macOS XPC/resolved劫持)
+│   │   ├── commands/          # Tauri API（网络、配置抓取、Shell）
+│   │   ├── core/              # 进程管理、端口、配置校验、perf
+│   │   └── engine/            # 跨平台引擎 (shutdown/readiness/平台实现)
+│   ├── resources/linux/       # Linux deb/rpm 安装资源 (helper, polkit, udev)
 │   ├── sysproxy-rs/           # 本地子 Crate：跨平台系统代理设置库 (sysproxy_rs)
 │   ├── tun-service/           # 本地子 Crate：Windows TUN 后台特权服务 (AureStreamTunService)
 │   ├── Cargo.toml             # Rust 工作区主配置文件
@@ -65,7 +69,11 @@ AureStream 解决了一系列桌面客户端在各平台下的核心痛点：
 * **Windows 平台**：编译出独立的 `AureStreamTunService`（基于 Rust 写成的 Windows 服务），在打包时自动注册为系统服务。主程序只需低权限运行，并通过标准的系统服务控制接口向 `AureStreamTunService` 发送控制指令。
 * **macOS 平台**：在主 App 中打包了特权辅助工具（Privileged Helper Tool），通过 `SMJobBless` 提权安装，两者之间通过严格权限校验的 **XPC** 进行 IPC 进程通信。
 
-### 3.3 自动看门狗机制与 DNS 恢复
+### 3.3 配置预合并与热重载
+
+连接配置在用户修改订阅、路由模式、TUN 开关、节点或网络设置时即后台合并写入 `config.json`，点击连接仅校验缓存是否新鲜。引擎运行中可通过 `reload_config` 热重载而不断开。详见 [配置合并与模板](./wiki-config-merger.md)。
+
+### 3.4 自动看门狗机制与 DNS 恢复
 针对代理客户端异常崩溃导致网络“瘫痪”（即 DNS 被改写成 127.0.0.1 但服务已死）的问题：
 * 后端配置了常驻的看门狗线程。
 * 任何情况下（如内核退出、应用崩溃），退出钩子（`cleanup_on_shutdown` 或 macOS 信号恢复）均会自动触发清除系统代理，还原 DNS 为系统 DHCP 原生分配地址，实现灾难自我恢复。
@@ -107,6 +115,6 @@ pnpm tauri build
 
 ## 5. 后续设计规约
 在向本项目提交代码时，请遵循以下开发规约：
-* **状态持久化**：所有的基础设置必须首选保存在 `settings.json`（Store）中，Rust 后端在执行逻辑时直接从 Store 中读取相关变量（如代理端口号），避免从 `config.json` 等配置文件中硬编码反序列化。
+* **状态持久化**：基础设置保存在 `settings.json`（Store）；Rust 从 Store 读取端口等运行时参数。前端通过 `config-sync` 将 Store 偏好合并进 `config.json`，不要在 `connect` 路径重复 merge。
 * **Crate 命名规范**：当前所有的系统代理、TAP 配置抽象子依赖均由 `sysproxy_rs` Crate 承担，引入新 FFI 结构时请在 `sysproxy-rs` 仓库中扩展。
 * **多平台对齐**：修改平台引擎（如 `WindowsEngine`）功能时，需同步确认 macOS/Linux 引擎的对应钩子（如 `on_process_terminated`）是否受影响。

@@ -1,5 +1,5 @@
 import { type } from '@tauri-apps/plugin-os';
-import { getDirectDNS, getProxyDnsServer, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
+import { getConfiguredDirectDNS, getConfiguredProxyDNS, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
 import { TUN_INTERFACE_NAME } from "../../types/definition";
 import { writeConfigFile } from "../helper";
 
@@ -12,8 +12,22 @@ type Item = {
     route_exclude_address?: string[];
 }
 
-export async function updateDHCPSettings2Config(newConfig: any) {
-    const useDHCP = await getUseDHCP();
+type DnsSettings = {
+    useDHCP?: boolean;
+    configuredDirectDNS?: string;
+}
+
+type TunInboundSettings = {
+    proxyPort?: number;
+    tunStack?: string;
+    osType?: string;
+}
+
+export async function updateDHCPSettings2Config(newConfig: any, settings: DnsSettings = {}) {
+    const useDHCP = settings.useDHCP ?? (await getUseDHCP());
+    const configuredDirectDNS = useDHCP
+        ? undefined
+        : settings.configuredDirectDNS ?? (await getConfiguredDirectDNS());
     for (let i = 0; i < newConfig.dns.servers.length; i++) {
         const server = newConfig.dns.servers[i];
         if (server.tag === "system") {
@@ -22,11 +36,10 @@ export async function updateDHCPSettings2Config(newConfig: any) {
                 delete server.server;
                 delete server.server_port;
                 console.log("启用 DHCP DNS 模式");
-            } else {
-                let directDNS = await getDirectDNS();
-                console.log("当前使用直连 DNS 地址：", directDNS);
+            } else if (configuredDirectDNS) {
+                console.log("当前使用自定义直连 DNS 地址：", configuredDirectDNS);
                 server.type = "udp";
-                server.server = directDNS.trim();
+                server.server = configuredDirectDNS;
                 server.server_port = 53;
                 console.log("启用 UDP DNS 模式, 服务器地址：", server.server);
             }
@@ -34,24 +47,21 @@ export async function updateDHCPSettings2Config(newConfig: any) {
     }
 }
 
-/**
- * Patch the DNS proxy server using the benchmarked fastest global DNS.
- * Falls back to UDP 8.8.8.8 if the benchmark hasn't completed yet.
- * Adds a secondary DNS server for redundancy.
- */
+/** Patch the proxy DNS only when the user explicitly configured one. */
 export async function patchDnsProxyConfig(newConfig: any) {
     if (!newConfig?.dns?.servers) return;
 
-    const bestGlobalDns = await getProxyDnsServer();
-    console.log(`[CONFIG] Best global DNS from benchmark: ${bestGlobalDns}`);
+    const dnsProxy = newConfig.dns.servers.find((server: Item) =>
+        server.tag === "dns_proxy" || server.tag === "remote"
+    );
+    if (!dnsProxy) return;
 
-    for (const server of newConfig.dns.servers) {
-        if (server.tag === "dns_proxy") {
-            server.type = "udp";
-            server.server = bestGlobalDns;
-            console.log(`[CONFIG] dns_proxy configured: udp/${bestGlobalDns}`);
-        }
-    }
+    const configuredProxyDns = await getConfiguredProxyDNS();
+    if (!configuredProxyDns) return;
+
+    dnsProxy.type = "udp";
+    dnsProxy.server = configuredProxyDns;
+    console.log(`[CONFIG] dns_proxy configured by user: udp/${configuredProxyDns}`);
 }
 
 export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData: any, newConfig: any, defaultNodeTag?: string) {
@@ -100,20 +110,24 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
     await writeConfigFile(fileName, new TextEncoder().encode(JSON.stringify(newConfig)));
 }
 
-export async function configureTunInbound(newConfig: any, bypassRouter: boolean = false): Promise<void> {
+export async function configureTunInbound(
+    newConfig: any,
+    bypassRouter: boolean = false,
+    settings: TunInboundSettings = {}
+): Promise<void> {
     const tunInbound = newConfig.inbounds.find((ib: Item) => ib.type === "tun" && ib.tag === "tun");
     if (!tunInbound) return;
-    const proxyPort = await getProxyPort();
+    const proxyPort = settings.proxyPort ?? (await getProxyPort());
 
     if (tunInbound.platform?.http_proxy) {
         tunInbound.platform.http_proxy.server_port = proxyPort;
     }
 
-    const osType = type();
+    const osType = settings.osType ?? type();
     if (osType === "linux") {
         tunInbound.stack = "system";
     } else {
-        tunInbound.stack = await getTunStack();
+        tunInbound.stack = settings.tunStack ?? (await getTunStack());
     }
     if (osType === "macos") {
         tunInbound.interface_name = TUN_INTERFACE_NAME;
@@ -143,38 +157,15 @@ export async function configureTunInbound(newConfig: any, bypassRouter: boolean 
     console.log("当前 TUN Stack:", tunInbound.stack);
 }
 
-export async function configureMixedInbound(newConfig: any, allowLan: boolean, bypassRouter: boolean = false): Promise<void> {
+export async function configureMixedInbound(
+    newConfig: any,
+    allowLan: boolean,
+    bypassRouter: boolean = false,
+    proxyPort?: number
+): Promise<void> {
     const mixedInbound = newConfig.inbounds.find((ib: Item) => ib.type === "mixed" && ib.tag === "mixed");
     if (mixedInbound) {
         mixedInbound.listen = (allowLan || bypassRouter) ? "0.0.0.0" : "127.0.0.1";
-        mixedInbound.listen_port = await getProxyPort();
-    }
-}
-
-export function excludeFakeIpFromPrivateRules(newConfig: any) {
-    if (newConfig?.route?.rules) {
-        for (let i = 0; i < newConfig.route.rules.length; i++) {
-            const rule = newConfig.route.rules[i];
-            if (rule.ip_is_private) {
-                // Replace the simple ip_is_private rule with a logical AND rule
-                // that matches private IP but NOT the fake-IP range 198.18.0.0/15
-                newConfig.route.rules[i] = {
-                    type: "logical",
-                    mode: "and",
-                    rules: [
-                        {
-                            ip_is_private: true
-                        },
-                        {
-                            ip_cidr: [
-                                "198.18.0.0/15"
-                            ],
-                            invert: true
-                        }
-                    ],
-                    outbound: rule.outbound
-                };
-            }
-        }
+        mixedInbound.listen_port = proxyPort ?? (await getProxyPort());
     }
 }

@@ -40,6 +40,10 @@ export const iconBadge = {
 export const btn = {
   accent: "btn-accent",
   accentMuted: "btn-accent-muted",
+  toolbar: "btn-toolbar",
+  toolbarActive: "btn-toolbar-active",
+  toolbarLabel: "btn-toolbar-label",
+  toolbarLabelWide: "btn-toolbar-label-wide",
   pill: "btn-pill",
   pillActive: "btn-pill-active",
 } as const

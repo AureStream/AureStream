@@ -18,26 +18,6 @@ export async function getEngineState(): Promise<EngineState> {
   return invoke("get_engine_state")
 }
 
-export async function isEngineRunning(): Promise<boolean> {
-  return invoke("is_running")
-}
-
 export async function clearEngineError(): Promise<void> {
   return invoke("clear_engine_error")
-}
-
-export async function reloadConfig(): Promise<string> {
-  return invoke("reload_config")
-}
-
-export async function getAppVersion(): Promise<string> {
-  return invoke("get_app_version")
-}
-
-export async function getLanIp(): Promise<string> {
-  return invoke("get_lan_ip")
-}
-
-export async function pingGoogle(): Promise<boolean> {
-  return invoke("ping_google")
 }

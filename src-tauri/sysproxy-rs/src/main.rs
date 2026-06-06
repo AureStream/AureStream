@@ -79,7 +79,22 @@ enum Commands {
 }
 
 fn main() -> ExitCode {
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .format(|buf, record| {
+            use std::io::Write;
+            let now = chrono::Local::now();
+            writeln!(
+                buf,
+                "[{}][{}][{}][{}] {}",
+                now.format("%Y-%m-%d"),
+                now.format("%H:%M:%S"),
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        })
+        .init();
     let cli = Cli::parse();
 
     match run(cli.command) {

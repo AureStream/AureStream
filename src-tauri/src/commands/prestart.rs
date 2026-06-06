@@ -118,7 +118,6 @@ fn kill_pid(pid: u32) -> bool {
     }
 }
 
-#[tauri::command]
 pub fn prestart_check(app: tauri::AppHandle, port: Option<u16>) -> PrestartCheckResult {
     let port = port.unwrap_or_else(|| crate::core::mixed_proxy_port(&app));
     let port_occupied = crate::core::probe_port_listening(port);
@@ -139,7 +138,6 @@ pub fn prestart_check(app: tauri::AppHandle, port: Option<u16>) -> PrestartCheck
     }
 }
 
-#[tauri::command]
 pub fn kill_orphans(app: tauri::AppHandle, port: Option<u16>) -> KillOrphansResult {
     let port = port.unwrap_or_else(|| crate::core::mixed_proxy_port(&app));
     let check = prestart_check(app, Some(port));

@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+📖 **Full Documentation**: See the [AureStream Wiki](file:///d:/wry/Projects/AureStream/docs/index.md) for comprehensive architecture, state management, and API references.
+
 AureStream is a cross-platform proxy/VPN client built with **Tauri v2** (Rust backend + WebView frontend). It uses **sing-box** as the core network routing engine, running as an external sidecar binary.
 
 ## Tech Stack
 
 - **Frontend**: React 19 + TypeScript + Vite 7 + Tailwind CSS v4 + shadcn/ui (new-york style)
 - **Backend**: Rust (Tauri v2) with Tokio async runtime
-- **VPN Engine**: sing-box v1.13.12 (sidecar binary)
+- **VPN Engine**: sing-box v1.13.13 (sidecar binary)
 - **Package Manager**: pnpm 11.4.0 (ESM modules)
 - **i18n**: i18next (Chinese default, English available)
 
@@ -32,7 +34,7 @@ pnpm release                # Download binaries + build TUN service + build + ta
 pnpm download-binaries      # Download sing-box sidecar binaries and rule databases
 pnpm build-tun              # Build Windows TUN service sidecar
 pnpm pre-bundle             # Build and sign macOS privileged helper
-pnpm sync-templates         # Fetch sing-box config templates from OneOhCloud/conf-template repo
+pnpm sign-macos-bundle      # Re-sign macOS .app/.dmg bundle locally
 
 # Rust (in src-tauri/)
 cargo build                 # Build Rust backend
@@ -64,9 +66,13 @@ Rust backend implements `Idle → Starting → Running → Stopping → Idle` (w
 
 ### Config Generation Pipeline
 
-Template-based merger system in `src/config/merger/`:
-- Built-in templates in `src/config/templates/` (auto-generated from `OneOhCloud/conf-template`)
-- Merges templates + subscription nodes + user preferences → `config.json` for sing-box
+Template-based merger in `src/config/merger/` + pre-merge orchestration in `src/lib/`:
+- Built-in template: `src/config/templates/config-template.jsonc` (no external network sync)
+- **Pre-merge**: `config-sync.ts` debounces merge on subscription/settings/node changes (not on connect)
+- **Cache**: `merge-cache.ts` skips rewrite when inputs unchanged (`computeMergeCacheKey`)
+- **Connect**: `connection-flow.ts` → `ensureConnectionConfigReady` → `start`
+- **Hot reload**: `hot-reload-config.ts` → merge + `reload_config` while engine running
+- TUN stack (`tun_stack_key`: system/gvisor/mixed) applied in `configureTunInbound` when TUN mode enabled
 
 ### Data Persistence
 
@@ -97,14 +103,15 @@ src/                          # Frontend (React/TypeScript)
 ├── config/merger/            # sing-box config generation
 ├── contexts/                 # React contexts
 ├── hooks/                    # Custom hooks (useEngineState, useSubscriptions)
-├── lib/                      # Utilities (i18n, routing-mode, proxy-bypass)
+├── lib/                      # config-sync, connection-flow, hot-reload, perf, i18n, etc.
 ├── pages/                    # Page components
 ├── utils/singbox-api/        # sing-box Clash API client
 
 src-tauri/                    # Rust backend
 ├── src/commands/             # Tauri command handlers
-├── src/core/                 # Process manager, state machine, log rotation
-├── src/engine/               # Platform-specific engine implementations
+├── src/core/                 # Process manager, ports, config check, perf
+├── src/engine/               # Platform engines, shutdown, readiness
+├── resources/linux/          # Linux package resources (helper, polkit)
 ├── sysproxy-rs/              # Cross-platform system proxy library
 ├── tun-service/              # Windows TUN service
 ├── helper/                   # macOS privileged helper (XPC)
@@ -143,7 +150,6 @@ CSS custom properties (HSL-based) in `src/index.css` with light/dark variants. T
 - `scripts/download-binaries.ts`: Fetches sing-box binaries from GitHub releases
 - `scripts/build-tun-service.ts`: Compiles Windows TUN service
 - `scripts/prebundle.ts`: Builds and signs macOS privileged helper
-- `scripts/sync-templates.ts`: Fetches config templates from `OneOhCloud/conf-template`
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands

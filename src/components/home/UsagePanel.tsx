@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { CartesianGrid, Area, AreaChart, XAxis } from "recharts"
@@ -17,6 +17,16 @@ import {
 import type { TrafficPoint } from "@/types/engine-state"
 import { useEngineState } from "@/hooks/useEngineState"
 import { subscribeTraffic } from "@/utils/singbox-api"
+
+const HISTORY_LENGTH = 60
+
+function createEmptyHistory(): TrafficPoint[] {
+  return Array.from({ length: HISTORY_LENGTH }, () => ({
+    time: "",
+    download: 0,
+    upload: 0,
+  }))
+}
 
 function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond < 1024) return "0 KB/s"
@@ -84,31 +94,23 @@ export function UsagePanel() {
   const [downloadSpeed, setDownloadSpeed] = useState(0)
   const [uploadTotal, setUploadTotal] = useState(0)
   const [downloadTotal, setDownloadTotal] = useState(0)
-  const [history, setHistory] = useState<TrafficPoint[]>(
-    Array.from({ length: 60 }, (_, i) => ({
-      time: `${i}`,
-      download: 0,
-      upload: 0,
-    }))
-  )
+  const [history, setHistory] = useState<TrafficPoint[]>(createEmptyHistory)
 
-  const chartConfig = {
-    download: { label: t("download"), color: "var(--primary)" },
-    upload: { label: t("upload"), color: "#10b981" },
-  } satisfies ChartConfig
+  const chartConfig = useMemo(
+    () =>
+      ({
+        download: { label: t("download"), color: "var(--primary)" },
+        upload: { label: t("upload"), color: "#10b981" },
+      }) satisfies ChartConfig,
+    [t]
+  )
   useEffect(() => {
     if (!isRunning) {
       setUploadSpeed(0)
       setDownloadSpeed(0)
       setUploadTotal(0)
       setDownloadTotal(0)
-      setHistory(
-        Array.from({ length: 60 }, (_, i) => ({
-          time: `${i}`,
-          download: 0,
-          upload: 0,
-        }))
-      )
+      setHistory(createEmptyHistory)
       return
     }
 
@@ -123,8 +125,7 @@ export function UsagePanel() {
         setUploadTotal((prev) => prev + up)
         setDownloadTotal((prev) => prev + down)
         setHistory((prev) => {
-          const next = [...prev.slice(1), { time: "", download: down, upload: up }]
-          return next.map((p, i) => ({ ...p, time: `${i}` }))
+          return [...prev.slice(1), { time: "", download: down, upload: up }]
         })
       },
       abort.signal

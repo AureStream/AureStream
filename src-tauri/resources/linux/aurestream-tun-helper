@@ -1,0 +1,62 @@
+#!/bin/sh
+# AureStream TUN helper — runs privileged operations via pkexec.
+# Installed to /usr/lib/AureStream/aurestream-tun-helper by deb/rpm package.
+# Polkit policy com.root.aurestream.run-privileged authorizes this script.
+set -e
+
+HELPER_DIR="/usr/lib/AureStream"
+SELF="${HELPER_DIR}/aurestream-tun-helper"
+POLKIT_ACTION="/usr/share/polkit-1/actions/com.root.aurestream.policy"
+POLKIT_RULE="/etc/polkit-1/rules.d/49-aurestream.rules"
+
+case "$1" in
+    start-tun)
+        # $2 = sidecar path, $3 = config path
+        # Optional: $4 = iface, $5 = gateway, $6... = original DNS servers
+        sidecar="$2"
+        config="$3"
+        if [ -n "$4" ] && [ -n "$5" ]; then
+            iface="$4"
+            gateway="$5"
+            shift 5
+            resolvectl dns "$iface" "$gateway" "$@"
+        fi
+        exec "$sidecar" run -c "$config" --disable-color
+        ;;
+    stop-tun)
+        # $2 = iface (optional), $3... = original DNS servers (optional)
+        if [ -n "$2" ] && [ -n "$3" ]; then
+            iface="$2"
+            shift 2
+            resolvectl dns "$iface" "$@"
+        fi
+        pkill -x aurestream-core || true
+        ;;
+    dns-override)
+        # $2 = iface, $3 = gateway, $4... = original DNS servers
+        iface="$2"
+        gateway="$3"
+        shift 3
+        resolvectl dns "$iface" "$gateway" "$@"
+        ;;
+    dns-restore)
+        # $2 = iface, $3... = original DNS servers
+        iface="$2"
+        shift 2
+        resolvectl dns "$iface" "$@"
+        ;;
+    reload)
+        pkill -HUP aurestream-core || true
+        resolvectl flush-caches 2>/dev/null || true
+        ;;
+    uninstall)
+        "$0" stop-tun 2>/dev/null || true
+        rm -f "$SELF" "$POLKIT_ACTION" "$POLKIT_RULE"
+        rmdir "$HELPER_DIR" 2>/dev/null || true
+        exit 0
+        ;;
+    *)
+        echo "Usage: $0 {start-tun|stop-tun|dns-override|dns-restore|reload|uninstall}" >&2
+        exit 1
+        ;;
+esac

@@ -29,6 +29,7 @@ The sing-box binary path is derived from the caller's code signature (not client
 | `setDnsServersForService:spec:` | `networksetup -setdnsservers` |
 | `flushDnsCache` | Flush system DNS cache |
 | `removeTunRoutesForInterface:` | Clean TUN routes (`utun*` only) |
+| `uninstallSelf` | Unload launchd job and remove blessed helper files |
 
 ## Layout
 

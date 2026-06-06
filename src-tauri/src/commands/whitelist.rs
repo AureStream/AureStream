@@ -18,6 +18,7 @@ const WHITELIST_KEY_HASHES: &str = "hashes";
 const WHITELIST_KEY_UPDATED_AT: &str = "updated_at";
 const WHITELIST_TTL_SECS: u64 = 24 * 3600;
 const WHITELIST_CHECK_INTERVAL_SECS: u64 = 6 * 3600;
+const WHITELIST_INITIAL_DELAY_SECS: u64 = 60;
 
 fn now_unix_secs() -> u64 {
     std::time::SystemTime::now()
@@ -122,6 +123,7 @@ async fn refresh_whitelist_if_stale(app: &AppHandle<Wry>) {
 
 pub fn spawn_whitelist_refresh_task(app: AppHandle<Wry>) {
     tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(WHITELIST_INITIAL_DELAY_SECS)).await;
         loop {
             refresh_whitelist_if_stale(&app).await;
             tokio::time::sleep(std::time::Duration::from_secs(

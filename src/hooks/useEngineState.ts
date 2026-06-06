@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useCallback, useSyncExternalStore } from "react"
 import { listen } from "@tauri-apps/api/event"
 import type { EngineState } from "@/types/engine-state"
 import { getEngineState, startEngine, stopEngine, clearEngineError } from "@/utils/vpn-service"
@@ -6,33 +6,59 @@ import type { ProxyMode } from "@/utils/vpn-service"
 
 const INITIAL_STATE: EngineState = { kind: "idle", epoch: 0 }
 
+type EngineSnapshot = {
+  engineState: EngineState
+  loading: boolean
+}
+
+let snapshot: EngineSnapshot = {
+  engineState: INITIAL_STATE,
+  loading: true,
+}
+let subscriptionStarted = false
+const subscribers = new Set<() => void>()
+
+function publish(next: Partial<EngineSnapshot>) {
+  snapshot = { ...snapshot, ...next }
+  subscribers.forEach((notify) => notify())
+}
+
+function ensureEngineSubscription() {
+  if (subscriptionStarted) return
+  subscriptionStarted = true
+
+  getEngineState()
+    .then((state) => publish({ engineState: state }))
+    .catch((err) => {
+      console.error("Failed to get engine state:", err)
+    })
+    .finally(() => publish({ loading: false }))
+
+  listen<EngineState>("engine-state", (event) => {
+    publish({ engineState: event.payload, loading: false })
+  }).catch((err) => {
+    console.error("Failed to subscribe to engine state:", err)
+  })
+}
+
+function subscribeToEngineSnapshot(onStoreChange: () => void) {
+  subscribers.add(onStoreChange)
+  ensureEngineSubscription()
+  return () => {
+    subscribers.delete(onStoreChange)
+  }
+}
+
+function getEngineSnapshot() {
+  return snapshot
+}
+
 export function useEngineState() {
-  const [engineState, setEngineState] = useState<EngineState>(INITIAL_STATE)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    getEngineState()
-      .then((state) => { if (!cancelled) setEngineState(state); })
-      .catch((err) => {
-        console.error("Failed to get engine state:", err)
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    const listenPromise = listen<EngineState>("engine-state", (event) => {
-      if (!cancelled) setEngineState(event.payload);
-    }).then((fn) => {
-      unlisten = fn;
-    });
-
-    return () => {
-      cancelled = true;
-      // If unlisten isn't ready yet, wait for the promise then clean up
-      listenPromise.then(() => unlisten?.());
-    };
-  }, []);
+  const { engineState, loading } = useSyncExternalStore(
+    subscribeToEngineSnapshot,
+    getEngineSnapshot,
+    getEngineSnapshot
+  )
 
   const start = useCallback(
     async (configPath: string, mode: ProxyMode = "SystemProxy") => {
