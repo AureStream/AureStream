@@ -94,7 +94,7 @@ console.log("[prebundle] Verified embedded plist sections successfully");
 
 // 4. Code signing (read from command line arguments or default to ad-hoc "-")
 const signingIdentity =
-    process.argv[2] || process.env.APPLE_SIGNING_IDENTITY || "-";
+    process.argv[2] || process.env.APPLE_SIGNING_IDENTITY?.trim() || "-";
 console.log(`[prebundle] Signing helper with identity: "${signingIdentity}"...`);
 
 const codesignArgs = [

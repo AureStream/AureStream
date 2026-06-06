@@ -21,6 +21,9 @@ if [[ -z "$TARGET" || ! -d "$TARGET" ]]; then
 fi
 
 IDENTITY="${APPLE_SIGNING_IDENTITY:--}"
+if [[ -z "$IDENTITY" ]]; then
+  IDENTITY="-"
+fi
 HELPER="$TARGET/Contents/Library/LaunchServices/com.root.aurestream.helper"
 
 if [[ ! -f "$HELPER" ]]; then

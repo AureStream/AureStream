@@ -103,9 +103,12 @@ jobs:
 
       - name: Build macOS privileged helper
         if: runner.os == 'macOS'
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: pnpm pre-bundle
+        run: |
+          # Empty APPLE_SIGNING_IDENTITY overrides tauri.conf.json ad-hoc "-"; only export when set.
+          if [[ -n "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]]; then
+            export APPLE_SIGNING_IDENTITY='${{ secrets.APPLE_SIGNING_IDENTITY }}'
+          fi
+          pnpm pre-bundle
 
       - name: Build Tauri bundle
         uses: tauri-apps/tauri-action@v0
@@ -113,7 +116,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         with:
           args: >-
             --target ${{ matrix.rust_target }}
@@ -121,9 +123,10 @@ jobs:
 
       - name: Sign macOS app bundle for SMJobBless
         if: runner.os == 'macOS'
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
+          if [[ -n "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]]; then
+            export APPLE_SIGNING_IDENTITY='${{ secrets.APPLE_SIGNING_IDENTITY }}'
+          fi
           APP=$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
           if [[ -n "$APP" ]]; then
             bash scripts/post-sign-macos-bundle.sh "$APP"
