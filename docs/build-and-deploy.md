@@ -2,59 +2,82 @@
 
 ## 1. 环境要求
 - **Node.js**: v18+ (推荐 LTS)
-- **包管理器**: pnpm 11.4.0 (推荐通过 Corepack 启用)
-- **Rust**: Edition 2024 (通过 Rustup 管理)
-- **平台特定要求**:
+- **包管理器**: pnpm 11.4.0 (推荐 Corepack)
+- **Rust**: Edition 2024 (Rustup)
+- **平台特定**:
   - Windows: Visual Studio C++ Build Tools
-  - Linux: `webkit2gtk`, `libxdo`, `ssl`, `appindicator`, `rsvg` 的开发包 (dev packages)
+  - Linux: `webkit2gtk`、`libxdo`、`ssl`、`appindicator`、`rsvg` 等 dev 包
+  - macOS: Xcode Command Line Tools；发布需有效开发者证书
 
 ## 2. 开发环境搭建
 
 ```bash
-# 安装前端与 Tauri 依赖
 pnpm install
-
-# 下载目标平台的 sing-box 预编译内核
-pnpm download-binaries
-
-# 启动开发服务器与 Tauri 调试窗口
+pnpm download-binaries   # 下载 sing-box 与规则库
 pnpm tauri dev
 ```
 
 ## 3. 构建流程
 
-打包构建桌面端应用需要执行以下完整步骤：
+1. `pnpm install` → `pnpm download-binaries`
+2. 平台侧车/Helper：
+   - **Windows**: `pnpm build-tun --release`
+   - **macOS**: `pnpm pre-bundle`（编译并签名 Privileged Helper）
+3. 前端与打包：`pnpm build` → `pnpm tauri build`
+4. 一键流水线：`pnpm release`
 
-1. **基础依赖准备**: 
-   `pnpm install` → `pnpm download-binaries`
-2. **平台特异性构建**:
-   - Windows: 运行 `pnpm build-tun --release` 编译 TUN 服务二进制。
-   - macOS: 运行 `pnpm prebundle` 组装 Helper 工具。
-3. **整体打包**: 
-   `pnpm tauri build` (或使用 `pnpm release` 串联所有步骤)。
+### macOS 签名（可选）
 
-## 4. 输出产物矩阵
+本地对 `.app` / `.dmg` 重新签名：
 
-| 平台 | 格式 | 生成路径 |
-|---|---|---|
-| Windows | NSIS `.exe` | `src-tauri/target/release/bundle/nsis/` |
-| Windows | WiX `.msi` | `src-tauri/target/release/bundle/msi/` |
-| macOS | `.dmg` | `src-tauri/target/release/bundle/dmg/` |
-| macOS | `.app` | `src-tauri/target/release/bundle/macos/` |
-| Linux | `.deb` | `src-tauri/target/release/bundle/deb/` |
-| Linux | `.AppImage`| `src-tauri/target/release/bundle/appimage/` |
+```bash
+pnpm sign-macos-bundle
+```
 
-## 5. NPM 脚本参考
+脚本见 `scripts/sign-macos-bundle.sh`，需配置有效的 Developer ID 证书。
 
-- `dev` / `preview`: 纯前端的 Vite 构建生命周期。
-- `tauri`: Tauri CLI 透传。
-- `download-binaries`: 触发 `scripts/download-binaries.ts` 下载 sing-box。
-- `build-tun`: 触发 `scripts/build-tun-service.ts` 编译系统服务（仅 Windows）。
-- `release`: 一键完成产物拉取、周边服务编译、前端构建及 Tauri 打包的流水线。
+### Linux 打包资源
 
-## 6. 配置模板机制
-AureStream 的内核配置不再依赖外部网络请求，而是内置在代码仓库的 `src/config/templates/config-template.jsonc` 中。
-在打包时，通过 Vite 的 `?raw` 原生导入支持与 `jsonc-parser` 实现模板加载并组装。
+`src-tauri/tauri.linux.conf.json` 将以下文件打入 deb/rpm：
 
-## 7. 便携模式 (Portable Mode)
-- **Windows**: 在生成的 `.exe` 相同目录下创建一个名为 `aurestream.portable` 的空文件，应用启动时检测到此文件，会将 `settings.json`、`data.db` 等所有用户数据重定向到可执行文件所在目录下的 `.aurestream_data` 文件夹内，不再使用系统的 AppData 目录。
+| 安装路径 | 源文件 |
+|----------|--------|
+| `/usr/lib/AureStream/aurestream-tun-helper` | `resources/linux/aurestream-tun-helper` |
+| polkit / udev 规则 | `resources/linux/*.policy`, `49-aurestream.rules` |
+| postinst/postrm | `resources/linux/deb-*.sh` |
+
+## 4. CI 构建
+
+`.github/workflows/build-desktop.yml` 在 `workflow_dispatch` 或 Release 发布时构建：
+
+- linux-x64 (ubuntu-24.04)
+- windows-x64
+- macos-aarch64 / macos-x64
+
+## 5. 输出产物
+
+| 平台 | 格式 | 路径 |
+|------|------|------|
+| Windows | NSIS `.exe` / WiX `.msi` | `src-tauri/target/release/bundle/nsis|msi/` |
+| macOS | `.dmg` / `.app` | `src-tauri/target/release/bundle/dmg|macos/` |
+| Linux | `.deb` / `.AppImage` | `src-tauri/target/release/bundle/deb|appimage/` |
+
+## 6. NPM 脚本
+
+| 脚本 | 说明 |
+|------|------|
+| `dev` / `build` | Vite 开发与生产构建 |
+| `tauri` | Tauri CLI 透传 |
+| `download-binaries` | 下载 sing-box 侧车与规则库 |
+| `build-tun` | 编译 Windows TUN 服务 |
+| `pre-bundle` | macOS Helper 预构建 |
+| `sign-macos-bundle` | macOS 应用包签名 |
+| `release` | 完整发布流水线 |
+
+## 7. 配置模板
+
+内置 `src/config/templates/config-template.jsonc`，Vite `?raw` + `jsonc-parser` 加载，**不依赖外部网络同步**。
+
+## 8. 便携模式 (Portable Mode)
+
+Windows：在 `.exe` 同目录放置 `aurestream.portable` 或 `portable` 空文件，用户数据重定向到 `portable-data/`。

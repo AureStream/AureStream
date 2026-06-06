@@ -34,6 +34,7 @@ pnpm release                # Download binaries + build TUN service + build + ta
 pnpm download-binaries      # Download sing-box sidecar binaries and rule databases
 pnpm build-tun              # Build Windows TUN service sidecar
 pnpm pre-bundle             # Build and sign macOS privileged helper
+pnpm sign-macos-bundle      # Re-sign macOS .app/.dmg bundle locally
 
 # Rust (in src-tauri/)
 cargo build                 # Build Rust backend
@@ -65,9 +66,13 @@ Rust backend implements `Idle → Starting → Running → Stopping → Idle` (w
 
 ### Config Generation Pipeline
 
-Template-based merger system in `src/config/merger/`:
-- Built-in templates read from local `src/config/templates/config-template.jsonc` (no external network sync)
-- Merges templates + subscription nodes + user preferences → `config.json` for sing-box
+Template-based merger in `src/config/merger/` + pre-merge orchestration in `src/lib/`:
+- Built-in template: `src/config/templates/config-template.jsonc` (no external network sync)
+- **Pre-merge**: `config-sync.ts` debounces merge on subscription/settings/node changes (not on connect)
+- **Cache**: `merge-cache.ts` skips rewrite when inputs unchanged (`computeMergeCacheKey`)
+- **Connect**: `connection-flow.ts` → `ensureConnectionConfigReady` → `start`
+- **Hot reload**: `hot-reload-config.ts` → merge + `reload_config` while engine running
+- TUN stack (`tun_stack_key`: system/gvisor/mixed) applied in `configureTunInbound` when TUN mode enabled
 
 ### Data Persistence
 
@@ -98,14 +103,15 @@ src/                          # Frontend (React/TypeScript)
 ├── config/merger/            # sing-box config generation
 ├── contexts/                 # React contexts
 ├── hooks/                    # Custom hooks (useEngineState, useSubscriptions)
-├── lib/                      # Utilities (i18n, routing-mode, proxy-bypass)
+├── lib/                      # config-sync, connection-flow, hot-reload, perf, i18n, etc.
 ├── pages/                    # Page components
 ├── utils/singbox-api/        # sing-box Clash API client
 
 src-tauri/                    # Rust backend
 ├── src/commands/             # Tauri command handlers
-├── src/core/                 # Process manager, state machine, log rotation
-├── src/engine/               # Platform-specific engine implementations
+├── src/core/                 # Process manager, ports, config check, perf
+├── src/engine/               # Platform engines, shutdown, readiness
+├── resources/linux/          # Linux package resources (helper, polkit)
 ├── sysproxy-rs/              # Cross-platform system proxy library
 ├── tun-service/              # Windows TUN service
 ├── helper/                   # macOS privileged helper (XPC)

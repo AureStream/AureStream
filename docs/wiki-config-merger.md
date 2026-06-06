@@ -4,7 +4,7 @@
 
 ## 1. 核心设计：单一 JSONC 模板
 AureStream 摒弃了对外部模板仓库（如 `OneOhCloud/conf-template`）的实时网络拉取，转为完全自主维护的本地配置模板文件：
-* **文件路径**：[`src/config/templates/config-template.jsonc`](file:///d:/wry/Projects/AureStream/src/config/templates/config-template.jsonc)
+* **文件路径**：`src/config/templates/config-template.jsonc`
 * **模板来源**：基于 `clash2sfa` 高性能路由配置模板进行精简和深度定制。
 
 ### 为什么使用单个 JSONC？
@@ -39,7 +39,7 @@ AureStream 摒弃了对外部模板仓库（如 `OneOhCloud/conf-template`）的
 
 ## 3. 合并转换流水线 (Merger Pipeline)
 
-配置文件生成在 [`src/config/merger/main.ts`](file:///d:/wry/Projects/AureStream/src/config/merger/main.ts) 中完成：
+配置文件生成在 `src/config/merger/main.ts` 中完成：
 
 ```mermaid
 graph TD
@@ -53,6 +53,59 @@ graph TD
 ```
 
 ### 3.1 Mode 转换规则
-在 [`src/config/templates/index.ts`](file:///d:/wry/Projects/AureStream/src/config/templates/index.ts) 中，通过逻辑在运行时动态调整基础 `.jsonc` 内容：
+在 `src/config/templates/index.ts` 中，通过逻辑在运行时动态调整基础 `.jsonc` 内容：
 * **`mixed` / `mixed-global`**：过滤掉 `inbounds` 中的 `tun` 类型节点，防止启动虚拟网卡。
 * **`mixed-global` / `tun-global`**：擦除具体分流路由规则，路由规则列表重写为全局仅使用 `ExitGateway` 出口。
+
+---
+
+## 4. 预合并与缓存机制
+
+自 v0.2.3 起，配置合并不再绑定「点击连接」动作，而是由 `src/lib/config-sync.ts` 在输入变化时后台执行。
+
+### 4.1 触发时机
+
+| 事件 | 说明 |
+|------|------|
+| 订阅加载/切换 | `SubscriptionContext` 完成后调度 sync |
+| 路由模式或 TUN 开关变更 | `ConnectionPanel` 写入 store 后失效缓存 |
+| 节点选择（未连接时） | `NodeSelector` 调用 `scheduleConfigSync` |
+| 网络设置变更 | 端口、TUN 栈、DNS、Bypass 等修改后 `syncActiveConnectionConfig` |
+| Store 任意网络键写入 | `invalidateConnectionConfigCache` 触发 `inputs-changed` 防抖合并 |
+
+### 4.2 缓存键组成
+
+`computeMergeCacheKey`（`src/config/merger/main.ts`）序列化以下输入：
+
+- 订阅 `identifier` 与合并修订号
+- 合并配置档（`mixed` / `tun` / `*-global`）
+- 模板缓存键、开发/生产 stage 版本
+- 局域网共享、旁路由、代理端口
+- TUN 栈（`tun_stack_key`）、DHCP/自定义 DNS
+- 控制器端口与 secret、默认节点、自定义规则集
+
+当 `cacheKey === getLastMergeCacheKey()` 时跳过磁盘写入。
+
+### 4.3 连接与热重载
+
+- **连接**：`connectEngine` → `ensureConnectionConfigReady` → `start`（仅在校验失败时 force merge）。
+- **运行中变更**：`hotReloadConnectionConfig` force merge 后 `invoke("reload_config")`。
+- **校验标记**：合并成功后前端调用 `mark_config_verified`，Rust `start` 可跳过重复 `sing-box check`。
+
+---
+
+## 5. TUN 网络栈 (`stack`)
+
+设置页「TUN 网络栈」对应 sing-box TUN inbound 的 `stack` 字段，由 `configureTunInbound`（`src/config/merger/helper.ts`）写入：
+
+| 设置值 | sing-box `stack` | 说明 |
+|--------|------------------|------|
+| System | `system` | TCP/UDP 均使用操作系统网络栈（默认） |
+| gVisor | `gvisor` | TCP/UDP 均使用 gVisor 用户态栈 |
+| Mixed | `mixed` | TCP 用 system，UDP 用 gVisor |
+
+**注意**：
+
+- 仅在 **TUN 模式**（`enableTun = true`）下生效；系统代理模式忽略此设置。
+- **Linux** 平台合并时强制 `system`，设置项不生效。
+- 修改后通过 config-sync 重新生成 `config.json`；引擎运行中会热重载。
