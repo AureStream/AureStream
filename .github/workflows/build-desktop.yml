@@ -103,6 +103,8 @@ jobs:
 
       - name: Build macOS privileged helper
         if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: pnpm pre-bundle
 
       - name: Build Tauri bundle
@@ -111,10 +113,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         with:
           args: >-
             --target ${{ matrix.rust_target }}
             ${{ startsWith(matrix.os, 'ubuntu') && '--config src-tauri/tauri.linux.conf.json' || '' }}
+
+      - name: Sign macOS app bundle for SMJobBless
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          APP=$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
+          if [[ -n "$APP" ]]; then
+            bash scripts/post-sign-macos-bundle.sh "$APP"
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

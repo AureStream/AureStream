@@ -65,6 +65,21 @@ pub fn uninstall_privileged_helper() -> Result<(), String> {
     Ok(())
 }
 
+fn format_helper_install_error(err: String) -> String {
+    if err.contains("CFErrorDomainLaunchd error 4") {
+        return format!(
+            "{err}\n\n\
+             常见原因：主程序与特权 Helper 的代码签名要求不一致（SMJobBless error 4）。\n\
+             请尝试：\n\
+             1. 对完整 .app 执行：pnpm sign-macos-bundle /path/to/aurestream.app\n\
+             2. 设置页卸载辅助服务后重新安装\n\
+             3. 勿使用 tauri dev 测试 TUN；请用 release 安装包\n\
+             4. Developer ID 发布需运行 sync-smjobbless-reqs 并重新 pre-bundle/build"
+        );
+    }
+    err
+}
+
 pub fn ensure_helper_installed() -> Result<(), String> {
     let bundled_path = bundled_helper_path().ok_or_else(|| {
         "应用包内未找到特权辅助工具（Contents/Library/LaunchServices/com.root.aurestream.helper）。请使用完整安装包重新安装。".to_string()
@@ -74,7 +89,7 @@ pub fn ensure_helper_installed() -> Result<(), String> {
     let ping_result = macos_helper::api::ping();
     if ping_result.is_err() {
         log::info!("[helper] not responding, triggering SMJobBless install...");
-        return macos_helper::api::install();
+        return macos_helper::api::install().map_err(format_helper_install_error);
     }
 
     let bundled = bundled_helper_path().and_then(|p| read_helper_cfbundle_version(&p));
@@ -89,7 +104,7 @@ pub fn ensure_helper_installed() -> Result<(), String> {
                 b,
                 i
             );
-            macos_helper::api::install()
+            macos_helper::api::install().map_err(format_helper_install_error)
         }
         _ => Ok(()),
     }

@@ -15,7 +15,12 @@
 
 ## 3. TUN 模式报错
 - **Windows**: 需要验证 `AureStreamTunService` (SCM 服务) 是否已正常安装。可在 设置 → 系统与服务 页面手动触发布署。
-- **macOS**: 确认 Privileged Helper 已通过 `pre-bundle` 正确签名安装；可在设置页卸载/重装服务。
+- **macOS Helper / SMJobBless**:
+  - 错误 `CFErrorDomainLaunchd error 4` 表示**主程序与 Helper 代码签名不匹配**（非用户取消授权）。
+  - **本地 release 包**：构建后执行 `pnpm sign-macos-bundle path/to/aurestream.app`（或 `scripts/post-sign-macos-bundle.sh`），再在设置页安装辅助服务。
+  - **勿用 `pnpm tauri dev` 测 TUN**：开发模式 .app 结构/签名不完整，SMJobBless 会失败。
+  - **CI/未签名构建**：workflow 会在打包后对 `.app` 做 ad-hoc 深度签名；拉取新产物后若仍失败，先在设置页**卸载辅助服务**再重装（清除旧版 blessed helper）。
+  - **Developer ID 发布**：Helper 与 App 须同一证书；用 `scripts/sync-smjobbless-reqs.ts` 同步 `SMPrivilegedExecutables` / `SMAuthorizedClients` 后重新 `pnpm pre-bundle && pnpm tauri build`。
 - **Linux**: 确认 deb/rpm 已安装 `aurestream-tun-helper` 与 polkit 策略；卸载服务使用设置页或 `pkexec /usr/lib/AureStream/aurestream-tun-helper uninstall`。
 - **Stack 选项**（仅 TUN 模式，Linux 强制 system）:
   - 默认 `system`：性能最佳。

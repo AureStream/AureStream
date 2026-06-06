@@ -13,6 +13,7 @@
     "build-tun": "tsx scripts/build-tun-service.ts",
     "pre-bundle": "tsx scripts/prebundle.ts",
     "sign-macos-bundle": "bash scripts/sign-macos-bundle.sh",
+    "post-sign-macos": "bash scripts/post-sign-macos-bundle.sh",
     "release": "pnpm download-binaries && pnpm build-tun --release && pnpm build && pnpm tauri build"
   },
   "dependencies": {
