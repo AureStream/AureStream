@@ -13,7 +13,10 @@ export default defineConfig(async () => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Tauri 自定义协议下使用相对路径，避免 /assets/* 在生产包中 404 导致白屏
+  base: "./",
   clearScreen: false,
+  envPrefix: ["VITE_", "TAURI_ENV_*"],
   server: {
     port: 1420,
     strictPort: true,
@@ -30,6 +33,12 @@ export default defineConfig(async () => ({
     },
   },
   build: {
+    target:
+      process.env.TAURI_ENV_PLATFORM === "windows"
+        ? "chrome105"
+        : "safari13",
+    minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
+    sourcemap: !!process.env.TAURI_ENV_DEBUG,
     chunkSizeWarningLimit: 1500,
   },
 }));

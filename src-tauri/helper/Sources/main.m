@@ -69,7 +69,15 @@
 
 - (void)removeTunRoutesForInterface:(NSString *)interfaceName
                                reply:(void (^)(NSString *error))reply;
+
+- (void)uninstallSelfWithReply:(void (^)(NSString *error))reply;
 @end
+
+static NSString *const kBlessedHelperLabel = @"com.root.aurestream.helper";
+static NSString *const kBlessedHelperPath =
+    @"/Library/PrivilegedHelperTools/com.root.aurestream.helper";
+static NSString *const kBlessedPlistPath =
+    @"/Library/LaunchDaemons/com.root.aurestream.helper.plist";
 
 // Helper → Client direction. The main app exports an object conforming to
 // this protocol so the helper can push process-exit events without polling.
@@ -658,16 +666,102 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
     }
 }
 
+// ------------------------------------------------------------------
+// uninstallSelf
+// ------------------------------------------------------------------
+- (void)uninstallSelfWithReply:(void (^)(NSString *))reply {
+    __block pid_t target = 0;
+    dispatch_sync(_stateQueue, ^{
+        target = self->_activePid;
+    });
+    if (target != 0) {
+        kill(target, SIGTERM);
+        NSLog(@"[helper] sent SIGTERM to sing-box pid=%d before uninstall", target);
+    }
+
+    char pidStr[16];
+    snprintf(pidStr, sizeof(pidStr), "%d", getpid());
+    char *const spawnArgv[] = {
+        (char *)kBlessedHelperPath.UTF8String,
+        (char *)"uninstall",
+        pidStr,
+        NULL
+    };
+
+    pid_t child = 0;
+    int rc = posix_spawn(&child, kBlessedHelperPath.UTF8String, NULL, NULL, spawnArgv, NULL);
+    if (rc != 0) {
+        reply([NSString stringWithFormat:@"posix_spawn uninstall failed: %s", strerror(rc)]);
+        return;
+    }
+
+    NSLog(@"[helper] spawned uninstall child pid=%d", child);
+    reply(nil);
+    exit(0);
+}
+
 @end
+
+// ============================================================================
+// Command-line uninstall (spawned by uninstallSelfWithReply)
+// ============================================================================
+
+static int runHelperUninstallFromCommandLine(pid_t waitPid) {
+    if (waitPid > 0) {
+        while (kill(waitPid, 0) == 0) {
+            usleep(50 * 1000);
+        }
+        NSLog(@"[helper] uninstall: prior helper pid=%d exited", waitPid);
+    }
+
+    NSString *current = [[NSBundle mainBundle] executablePath];
+    if (![current isEqualToString:kBlessedHelperPath]) {
+        NSLog(@"[helper] uninstall refused: running from %@, expected %@",
+              current, kBlessedHelperPath);
+        return 1;
+    }
+
+    NSString *bootoutErr = runTool(@"/bin/launchctl",
+        @[@"bootout", @"system", kBlessedHelperLabel]);
+    if (bootoutErr) {
+        NSLog(@"[helper] launchctl bootout: %@", bootoutErr);
+        NSString *unloadErr = runTool(@"/bin/launchctl", @[@"unload", @"-w", kBlessedPlistPath]);
+        if (unloadErr) {
+            NSLog(@"[helper] launchctl unload: %@", unloadErr);
+        }
+    }
+
+    NSError *fsErr = nil;
+    [[NSFileManager defaultManager] removeItemAtPath:kBlessedPlistPath error:&fsErr];
+    if (fsErr) {
+        NSLog(@"[helper] failed to delete plist: %@", fsErr);
+    }
+
+    fsErr = nil;
+    [[NSFileManager defaultManager] removeItemAtPath:kBlessedHelperPath error:&fsErr];
+    if (fsErr) {
+        NSLog(@"[helper] failed to delete helper binary: %@", fsErr);
+        return 1;
+    }
+
+    NSLog(@"[helper] uninstall completed");
+    return 0;
+}
 
 // ============================================================================
 // Entry point
 // ============================================================================
 
 int main(int argc, const char *argv[]) {
-    (void)argc;
-    (void)argv;
     @autoreleasepool {
+        if (argc >= 2 && strcmp(argv[1], "uninstall") == 0) {
+            pid_t waitPid = 0;
+            if (argc >= 3) {
+                waitPid = (pid_t)atoi(argv[2]);
+            }
+            return runHelperUninstallFromCommandLine(waitPid);
+        }
+
         HelperService *delegate = [[HelperService alloc] init];
         NSXPCListener *listener =
             [[NSXPCListener alloc] initWithMachServiceName:@"com.root.aurestream.helper"];

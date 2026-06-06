@@ -1,5 +1,7 @@
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
+import { invalidateConnectionConfigCache } from '@/lib/merge-cache';
+import { invalidateControllerClientCache } from '@/utils/singbox-api/controller-cache';
 import {
     ALLOWLAN_STORE_KEY,
     CONTROLLER_PORT_STORE_KEY,
@@ -29,8 +31,73 @@ const DEFAULT_PROXY_DNS = '8.8.8.8';
 
 export const store = new LazyStore('settings.json', {
     defaults: {},
-    autoSave: true
+    autoSave: false,
 });
+
+const STORE_SAVE_DEBOUNCE_MS = 300;
+const memoryCache = new Map<string, unknown>();
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let saveInFlight: Promise<void> | null = null;
+
+async function readStoreKey<T>(key: string): Promise<T | undefined> {
+    if (memoryCache.has(key)) {
+        return memoryCache.get(key) as T | undefined;
+    }
+    const value = await store.get(key);
+    if (value !== undefined && value !== null) {
+        memoryCache.set(key, value);
+    }
+    return value as T | undefined;
+}
+
+function writeStoreKey(key: string, value: unknown) {
+    memoryCache.set(key, value);
+}
+
+export async function flushStore(): Promise<void> {
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+    }
+    if (!saveInFlight) {
+        saveInFlight = store.save().finally(() => {
+            saveInFlight = null;
+        });
+    }
+    await saveInFlight;
+}
+
+function scheduleStoreSave() {
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+    }
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        void flushStore();
+    }, STORE_SAVE_DEBOUNCE_MS);
+}
+
+async function persistStoreKey(
+    key: string,
+    value: unknown,
+    options?: { immediate?: boolean },
+) {
+    writeStoreKey(key, value);
+    await store.set(key, value);
+    if (options?.immediate) {
+        await flushStore();
+    } else {
+        scheduleStoreSave();
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            void flushStore();
+        }
+    });
+}
 
 export const getLanguage = async () => {
     const language = await getStoreValue(LANGUAGE_STORE_KEY) as string | undefined;
@@ -53,36 +120,37 @@ export const setLanguage = async (language: string) => {
 };
 
 export async function getStoreValue(key: string, defaultValue?: any): Promise<any> {
-    let value = await store.get(key);
+    const value = await readStoreKey(key);
     if (defaultValue !== undefined && (value === undefined || value === null || value === '')) {
         return defaultValue;
     }
     return value;
 }
 
-export async function setStoreValue(key: string, value: any) {
-    await store.set(key, value);
-    await store.save();
+export async function setStoreValue(
+    key: string,
+    value: any,
+    options?: { immediate?: boolean },
+) {
+    await persistStoreKey(key, value, options);
 }
 
 export async function getEnableTun(): Promise<boolean> {
-    let b = await store.get(ENABLE_TUN_STORE_KEY);
-    return Boolean(b);
+    return Boolean(await readStoreKey(ENABLE_TUN_STORE_KEY));
 }
 
 export async function setEnableTun(value: boolean) {
-    await store.set(ENABLE_TUN_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(ENABLE_TUN_STORE_KEY, value);
+    invalidateConnectionConfigCache();
 }
 
 export async function getAllowLan(): Promise<boolean> {
-    let b = await store.get(ALLOWLAN_STORE_KEY);
-    return Boolean(b);
+    return Boolean(await readStoreKey(ALLOWLAN_STORE_KEY));
 }
 
 export async function setAllowLan(value: boolean) {
-    await store.set(ALLOWLAN_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(ALLOWLAN_STORE_KEY, value);
+    invalidateConnectionConfigCache();
 }
 
 async function readPortWithLegacy(
@@ -90,12 +158,11 @@ async function readPortWithLegacy(
     legacyKey: string,
     defaultPort: number
 ): Promise<number> {
-    const raw = (await store.get(primaryKey)) ?? (await store.get(legacyKey));
+    const raw = (await readStoreKey(primaryKey)) ?? (await readStoreKey(legacyKey));
     const port = typeof raw === 'number' ? raw : Number(raw);
     if (Number.isInteger(port) && port > 0 && port <= 65535) {
-        if (!(await store.get(primaryKey)) && (await store.get(legacyKey))) {
-            await store.set(primaryKey, port);
-            await store.save();
+        if (!(await readStoreKey(primaryKey)) && (await readStoreKey(legacyKey))) {
+            await persistStoreKey(primaryKey, port, { immediate: true });
         }
         return port;
     }
@@ -105,22 +172,22 @@ async function readPortWithLegacy(
 /** Bearer secret for sing-box experimental.clash_api. */
 export async function getControllerSecret(): Promise<string> {
     let secret =
-        (await store.get(CONTROLLER_SECRET_STORE_KEY)) ??
-        (await store.get(LEGACY_CLASH_API_SECRET_STORE_KEY));
+        (await readStoreKey<string>(CONTROLLER_SECRET_STORE_KEY)) ??
+        (await readStoreKey<string>(LEGACY_CLASH_API_SECRET_STORE_KEY));
     if (secret) {
-        if (!(await store.get(CONTROLLER_SECRET_STORE_KEY))) {
-            await store.set(CONTROLLER_SECRET_STORE_KEY, secret);
-            await store.save();
+        if (!(await readStoreKey(CONTROLLER_SECRET_STORE_KEY))) {
+            await persistStoreKey(CONTROLLER_SECRET_STORE_KEY, secret, { immediate: true });
+            invalidateControllerClientCache();
         }
-        return secret as string;
+        return secret;
     }
     const array = new Uint8Array(12);
     crypto.getRandomValues(array);
     const randomSecret = Array.from(array)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
-    await store.set(CONTROLLER_SECRET_STORE_KEY, randomSecret);
-    await store.save();
+    await persistStoreKey(CONTROLLER_SECRET_STORE_KEY, randomSecret, { immediate: true });
+    invalidateControllerClientCache();
     return randomSecret;
 }
 
@@ -128,17 +195,16 @@ export async function getControllerSecret(): Promise<string> {
 export const getClashApiSecret = getControllerSecret;
 
 export async function isBypassRouterEnabled(): Promise<boolean> {
-    let b = await store.get(ENABLE_BYPASS_ROUTER_STORE_KEY);
-    return Boolean(b);
+    return Boolean(await readStoreKey(ENABLE_BYPASS_ROUTER_STORE_KEY));
 }
 
 export async function setBypassRouterEnabled(value: boolean) {
-    await store.set(ENABLE_BYPASS_ROUTER_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(ENABLE_BYPASS_ROUTER_STORE_KEY, value);
+    invalidateConnectionConfigCache();
 }
 
 export async function getUseDHCP(): Promise<boolean> {
-    let b = await store.get(USE_DHCP_STORE_KEY);
+    const b = await readStoreKey(USE_DHCP_STORE_KEY);
     if (b === undefined) {
         return false;
     }
@@ -146,27 +212,25 @@ export async function getUseDHCP(): Promise<boolean> {
 }
 
 export async function setUseDHCP(value: boolean) {
-    await store.set(USE_DHCP_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(USE_DHCP_STORE_KEY, value);
+    invalidateConnectionConfigCache();
 }
 
 export async function getSkipSystemProxy(): Promise<boolean> {
-    let b = await store.get(SKIP_SYSTEM_PROXY_STORE_KEY);
-    return Boolean(b);
+    return Boolean(await readStoreKey(SKIP_SYSTEM_PROXY_STORE_KEY));
 }
 
 export async function setSkipSystemProxy(value: boolean) {
-    await store.set(SKIP_SYSTEM_PROXY_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(SKIP_SYSTEM_PROXY_STORE_KEY, value);
 }
 
 export async function setCustomRuleSet(key: 'direct' | 'proxy', config: { domain: string[]; domain_suffix: string[]; ip_cidr: string[] }) {
-    await store.set(`custom_ruleset_${key}`, JSON.stringify(config));
-    await store.save();
+    await persistStoreKey(`custom_ruleset_${key}`, JSON.stringify(config), { immediate: true });
+    invalidateConnectionConfigCache();
 }
 
 export async function getCustomRuleSet(key: 'direct' | 'proxy'): Promise<{ domain: string[]; domain_suffix: string[]; ip_cidr: string[] }> {
-    let s = await store.get(`custom_ruleset_${key}`) as string | undefined;
+    let s = await readStoreKey<string>(`custom_ruleset_${key}`);
     if (s) {
         try {
             const config = JSON.parse(s);
@@ -184,12 +248,12 @@ export async function getCustomRuleSet(key: 'direct' | 'proxy'): Promise<{ domai
 }
 
 export async function setDirectDNS(dnsServers: string) {
-    await store.set(DIRECT_DNS_STORE_KEY, dnsServers);
-    await store.save();
+    await persistStoreKey(DIRECT_DNS_STORE_KEY, dnsServers);
+    invalidateConnectionConfigCache();
 }
 
 export async function getConfiguredDirectDNS(): Promise<string | undefined> {
-    const s = await store.get(DIRECT_DNS_STORE_KEY) as string | undefined;
+    const s = await readStoreKey<string>(DIRECT_DNS_STORE_KEY);
     const trimmed = s?.trim();
     return trimmed || undefined;
 }
@@ -200,29 +264,28 @@ export async function getDirectDNS(): Promise<string> {
 
 /** Get the configured proxy DNS, falling back to the template default. */
 export async function getProxyDnsServer(): Promise<string> {
-    const s = await store.get(PROXY_DNS_STORE_KEY) as string | undefined;
+    const s = await readStoreKey<string>(PROXY_DNS_STORE_KEY);
     const trimmed = s?.trim();
     return trimmed || DEFAULT_PROXY_DNS;
 }
 
 export async function getConfiguredProxyDNS(): Promise<string | undefined> {
-    const s = await store.get(PROXY_DNS_STORE_KEY) as string | undefined;
+    const s = await readStoreKey<string>(PROXY_DNS_STORE_KEY);
     const trimmed = s?.trim();
     return trimmed || undefined;
 }
 
 export async function getUserAgent(): Promise<string> {
-    const ua = await store.get(USER_AGENT_STORE_KEY) as string | undefined;
+    const ua = await readStoreKey<string>(USER_AGENT_STORE_KEY);
     return ua || 'default';
 }
 
 export async function setUserAgent(ua: string) {
-    await store.set(USER_AGENT_STORE_KEY, ua);
-    await store.save();
+    await persistStoreKey(USER_AGENT_STORE_KEY, ua);
 }
 
 export async function getProxyPort(): Promise<number> {
-    const raw = await store.get(PROXY_PORT_STORE_KEY);
+    const raw = await readStoreKey(PROXY_PORT_STORE_KEY);
     const port = typeof raw === 'number' ? raw : Number(raw);
     if (Number.isInteger(port) && port > 0 && port <= 65535) {
         return port;
@@ -234,18 +297,17 @@ export async function setProxyPort(port: number): Promise<void> {
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
         throw new Error('invalid_proxy_port');
     }
-    await store.set(PROXY_PORT_STORE_KEY, port);
-    await store.save();
+    await persistStoreKey(PROXY_PORT_STORE_KEY, port, { immediate: true });
+    invalidateConnectionConfigCache();
 }
 
 export async function getProxyBypass(): Promise<string> {
-    const raw = await store.get(PROXY_BYPASS_STORE_KEY) as string | undefined;
+    const raw = await readStoreKey<string>(PROXY_BYPASS_STORE_KEY);
     return raw?.trim() ? raw : '';
 }
 
 export async function setProxyBypass(value: string): Promise<void> {
-    await store.set(PROXY_BYPASS_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(PROXY_BYPASS_STORE_KEY, value);
 }
 
 /** sing-box experimental.clash_api external_controller port */
@@ -261,8 +323,9 @@ export async function setControllerPort(port: number): Promise<void> {
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
         throw new Error('invalid_controller_port');
     }
-    await store.set(CONTROLLER_PORT_STORE_KEY, port);
-    await store.save();
+    await persistStoreKey(CONTROLLER_PORT_STORE_KEY, port, { immediate: true });
+    invalidateConnectionConfigCache();
+    invalidateControllerClientCache();
 }
 
 /** @deprecated Use getControllerPort */
@@ -277,7 +340,7 @@ export const DEFAULT_TUN_STACK: TunStack = 'system';
 const TUN_STACK_VALUES: TunStack[] = ['system', 'gvisor', 'mixed'];
 
 export async function getTunStack(): Promise<TunStack> {
-    const raw = await store.get(TUN_STACK_STORE_KEY) as string | undefined;
+    const raw = await readStoreKey<string>(TUN_STACK_STORE_KEY);
     if (raw && TUN_STACK_VALUES.includes(raw as TunStack)) {
         return raw as TunStack;
     }
@@ -288,36 +351,33 @@ export async function setTunStack(value: TunStack): Promise<void> {
     if (!TUN_STACK_VALUES.includes(value)) {
         throw new Error('invalid_tun_stack');
     }
-    await store.set(TUN_STACK_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(TUN_STACK_STORE_KEY, value);
+    invalidateConnectionConfigCache();
 }
 
 export async function getAutoStart(): Promise<boolean> {
-    const raw = await store.get(AUTO_START_STORE_KEY);
+    const raw = await readStoreKey(AUTO_START_STORE_KEY);
     return raw === undefined ? true : Boolean(raw);
 }
 
 export async function setAutoStartStore(value: boolean): Promise<void> {
-    await store.set(AUTO_START_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(AUTO_START_STORE_KEY, value);
 }
 
 export async function getHideOnLaunch(): Promise<boolean> {
-    const raw = await store.get(HIDE_ON_LAUNCH_STORE_KEY);
+    const raw = await readStoreKey(HIDE_ON_LAUNCH_STORE_KEY);
     return raw === undefined ? false : Boolean(raw);
 }
 
 export async function setHideOnLaunchStore(value: boolean): Promise<void> {
-    await store.set(HIDE_ON_LAUNCH_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(HIDE_ON_LAUNCH_STORE_KEY, value);
 }
 
 export async function getMinimizeToTray(): Promise<boolean> {
-    const raw = await store.get(MINIMIZE_TO_TRAY_STORE_KEY);
+    const raw = await readStoreKey(MINIMIZE_TO_TRAY_STORE_KEY);
     return raw === undefined ? true : Boolean(raw);
 }
 
 export async function setMinimizeToTrayStore(value: boolean): Promise<void> {
-    await store.set(MINIMIZE_TO_TRAY_STORE_KEY, value);
-    await store.save();
+    await persistStoreKey(MINIMIZE_TO_TRAY_STORE_KEY, value);
 }

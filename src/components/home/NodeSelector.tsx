@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getCountryCode, getFlagEmoji } from "@/lib/country-flags"
+import { CountryFlag } from "@/components/ui/country-flag"
+import { getCountryCode } from "@/lib/country-flags"
 import { fetchSelectGroup, selectProxyNode, pingNodeTcp, testNodeDelay } from "@/utils/singbox-api"
+import { scheduleConfigSync } from "@/lib/config-sync"
 import { getStoreValue, setStoreValue } from "@/single/store"
 import {
   LEGACY_SELECTED_NODE_TAG_KEY,
@@ -97,6 +99,7 @@ export function NodeSelector() {
     let cancelled = false
     const syncActiveNode = async () => {
       if (cancelled) return
+      if (document.visibilityState === "hidden") return
       // Never overwrite a manual switch that's still in progress
       if (manualSwitchRef.current) return
       if (isRunning) {
@@ -120,26 +123,11 @@ export function NodeSelector() {
       }
     }
 
-    const initNodeOnStartup = async () => {
-      if (!isRunning) return
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      if (cancelled) return
-      const saved = await getSavedNodeTag(activeIdentifier, nodeNames)
-      const target = saved || (nodeNames.length > 0 ? nodeNames[0] : "")
-      if (target) {
-        beginManualSwitch()
-        await selectProxyNode(target)
-        endManualSwitchAfter(3000)
-      }
-    }
-
-    initNodeOnStartup().then(() => {
-      syncActiveNode()
-    })
+    void syncActiveNode()
 
     let interval: ReturnType<typeof setInterval> | undefined
     if (isRunning) {
-      interval = setInterval(syncActiveNode, 3000)
+      interval = setInterval(syncActiveNode, 10_000)
     }
 
     return () => {
@@ -156,6 +144,9 @@ export function NodeSelector() {
     setSelectedTag(nodeTag)
     beginManualSwitch()
     await setSavedNodeTag(activeIdentifier, nodeTag)
+    if (!isRunning) {
+      scheduleConfigSync("node-changed")
+    }
 
     if (isRunning) {
       const ok = await selectProxyNode(nodeTag)
@@ -244,46 +235,69 @@ export function NodeSelector() {
   }, [nodes, latencies, sortMode, isTestingSpeed, t])
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col rounded-[20px] overflow-hidden @container">
-      <div className="flex items-center justify-between px-3 sm:px-4 pt-3.5 pb-2.5">
-        <div className="flex items-center gap-1.5">
-          <CardTitle>{t("select_proxy_node")}</CardTitle>
-          <span className={badge.brand}>{t("total_nodes", { count: displayNodes.length })}</span>
+    <Card className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-[20px] py-0 @container">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 sm:px-5 pt-2.5 pb-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+          <CardTitle className="truncate">{t("select_proxy_node")}</CardTitle>
+          <span className={cn(badge.brand, "shrink-0")}>
+            {t("total_nodes", { count: displayNodes.length })}
+          </span>
         </div>
-        <div className="flex gap-1.5">
+        <div className="ml-auto flex shrink-0 gap-1">
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={handleSpeedTest}
             disabled={isTestingSpeed}
-            className={cn(btn.accent, "h-8 px-2.5 sm:px-3")}
+            aria-busy={isTestingSpeed}
+            aria-label={t("one_click_speed_test")}
+            className={cn(
+              btn.toolbar,
+              btn.toolbarActive,
+              "active:scale-100",
+              isTestingSpeed && "opacity-75"
+            )}
           >
-            <ActivityIcon className={cn("size-3.5 mr-1", isTestingSpeed && "animate-spin")} />
-            {isTestingSpeed ? t("testing") : t("one_click_speed_test")}
+            <ActivityIcon
+              className={cn("size-3 shrink-0", isTestingSpeed && "animate-spin")}
+            />
+            <span className={cn(btn.toolbarLabelWide, "hidden @[34rem]:inline-block")}>
+              {t("one_click_speed_test")}
+            </span>
           </Button>
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={() => {
               if (sortMode === "default") setSortMode("latency")
               else if (sortMode === "latency") setSortMode("name")
               else setSortMode("default")
             }}
+            aria-label={
+              sortMode === "default"
+                ? t("default_sort")
+                : sortMode === "latency"
+                  ? t("latency_sort")
+                  : t("name_sort")
+            }
             className={cn(
-              "h-8 px-2.5 sm:px-3",
-              sortMode !== "default" ? btn.accent : btn.accentMuted
+              btn.toolbar,
+              "active:scale-100",
+              sortMode !== "default" && btn.toolbarActive
             )}
           >
-            <ArrowDownUpIcon className="size-3.5 mr-1" />
-            {sortMode === "default" && t("default_sort")}
-            {sortMode === "latency" && t("latency_sort")}
-            {sortMode === "name" && t("name_sort")}
+            <ArrowDownUpIcon className="size-3 shrink-0" />
+            <span className={cn(btn.toolbarLabel, "hidden @[34rem]:inline-block")}>
+              {sortMode === "default" && t("default_sort")}
+              {sortMode === "latency" && t("latency_sort")}
+              {sortMode === "name" && t("name_sort")}
+            </span>
           </Button>
         </div>
       </div>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col pt-2 overflow-hidden">
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
+      <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col p-0 pb-4 sm:pb-5">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip px-4 pt-1 sm:px-5 no-scrollbar">
           {subLoading ? (
             <div className={cn("flex items-center justify-center py-8", type.description)}>
               {t("loading")}
@@ -293,7 +307,7 @@ export function NodeSelector() {
               {t("no_nodes_please_add_subscription")}
             </div>
           ) : (
-            <div className="grid grid-cols-1 @[480px]:grid-cols-2 @[720px]:grid-cols-3 gap-2 p-0.5 pt-2 pb-2">
+            <div className="grid w-full min-w-0 grid-cols-1 @[32rem]:grid-cols-2 gap-2 pt-0.5 pb-2 [&>button]:min-w-0">
               {displayNodes.map((node) => {
                 const isSelected = selectedTag === node.name
                 return (
@@ -301,31 +315,27 @@ export function NodeSelector() {
                     key={node.name}
                     onClick={() => handleSelectNode(node.name)}
                     className={cn(
-                      "flex items-center justify-between rounded-[14px] p-2 sm:p-2.5 transition-all border duration-200 min-w-0 text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                      "grid w-full max-w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 rounded-[14px] p-2 transition-all border duration-200 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500",
                       isSelected
                         ? "bg-secondary border-primary/30 shadow-sm"
                         : "bg-muted/20 border-border/70 hover:bg-muted/40 dark:bg-white/[0.02] dark:hover:bg-white/[0.05]"
                     )}
                   >
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2 overflow-hidden sm:gap-2.5">
                       <div
                         className={cn(
-                          "relative flex size-7 sm:size-8 shrink-0 items-center justify-center rounded-full transition-colors text-base sm:text-lg overflow-hidden border border-border/40",
+                          "relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors overflow-hidden border border-border/40 sm:size-8",
                           isSelected
                             ? "bg-secondary text-primary"
                             : "bg-background text-muted-foreground border border-border"
                         )}
                       >
-                        {(() => {
-                          const code = getCountryCode(node.name)
-                          return (
-                            <span aria-label={t("flag")} className="text-base">
-                              {getFlagEmoji(code) || "🌐"}
-                            </span>
-                          )
-                        })()}
+                        <CountryFlag
+                          code={getCountryCode(node.name)}
+                          title={t("flag")}
+                        />
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 overflow-hidden">
                         <p
                           className={cn(
                             "truncate type-label font-semibold",
@@ -340,13 +350,10 @@ export function NodeSelector() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                    <div className="min-w-[4rem] shrink-0 justify-self-end text-right tabular-nums">
                       <span
                         className={cn(
-                          "type-caption font-semibold font-mono transition-opacity duration-200",
-                          node.latencyLabel === t("not_tested")
-                            ? "opacity-0 select-none pointer-events-none"
-                            : "opacity-100",
+                          "type-caption inline-block font-semibold font-mono whitespace-nowrap",
                           node.latencyLabel === t("timeout")
                             ? "text-rose-500"
                             : node.latencyLabel === t("testing")
@@ -358,7 +365,7 @@ export function NodeSelector() {
                             : "text-rose-500"
                         )}
                       >
-                        {node.latencyLabel}
+                        {node.latencyLabel === t("not_tested") ? "\u00a0" : node.latencyLabel}
                       </span>
                     </div>
                   </button>

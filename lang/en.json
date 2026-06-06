@@ -69,6 +69,7 @@
   "updating": "Updating...",
   "update_all": "Update All",
   "loading": "Loading...",
+  "app_booting": "Starting AureStream...",
   "no_subscription_yet": "No subscriptions available, please add one on the right",
   "in_service": "Active",
   "expiring_soon": "Expiring Soon",

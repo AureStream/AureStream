@@ -46,6 +46,7 @@ static const int64_t kAureStreamHelperStartTimeoutSeconds = 30;
 - (void)flushDnsCacheWithReply:(void (^)(NSString *error))reply;
 - (void)removeTunRoutesForInterface:(NSString *)interfaceName
                                reply:(void (^)(NSString *error))reply;
+- (void)uninstallSelfWithReply:(void (^)(NSString *error))reply;
 @end
 
 @protocol AureStreamHelperClientProtocol
@@ -508,4 +509,12 @@ int aurestream_helper_install(char **error_out) {
 
         return 0;
     }
+}
+
+int aurestream_helper_uninstall(char **error_out) {
+    int rc = invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+        [proxy uninstallSelfWithReply:replyHandler];
+    }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
+    [[AureStreamHelperClient sharedClient] invalidate];
+    return rc;
 }

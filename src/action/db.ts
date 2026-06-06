@@ -205,6 +205,32 @@ export async function deleteSubscription(identifier: string): Promise<void> {
     }
 }
 
+/** Lightweight revision for config-merge cache invalidation. */
+export async function getSubscriptionMergeRevision(
+  identifier: string
+): Promise<string> {
+  try {
+    const db = await getDataBaseInstance();
+    const rows = await db.select<
+      { last_update_time: number; content_len: number }[]
+    >(
+      `SELECT s.last_update_time, LENGTH(sc.config_content) AS content_len
+       FROM subscriptions s
+       JOIN subscription_configs sc ON s.identifier = sc.identifier
+       WHERE s.identifier = ?`,
+      [identifier]
+    );
+    if (rows.length === 0) {
+      return "missing";
+    }
+    const { last_update_time, content_len } = rows[0];
+    return `${last_update_time}:${content_len}`;
+  } catch (error) {
+    console.error("Error reading subscription merge revision:", error);
+    return `error:${Date.now()}`;
+  }
+}
+
 export async function getSubscriptionConfig(identifier: string): Promise<any> {
     try {
         const db = await getDataBaseInstance();

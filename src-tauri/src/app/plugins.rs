@@ -17,18 +17,23 @@ pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Bu
                         .any(|&target| metadata.target().starts_with(target))
                 })
                 .level(LevelFilter::Info)
+                .timezone_strategy(TimezoneStrategy::UseLocal)
                 .format(|out, message, record| {
                     let now = chrono::Local::now();
+                    let time = format!(
+                        "{}.{:03}",
+                        now.format("%H:%M:%S"),
+                        now.timestamp_subsec_millis()
+                    );
                     out.finish(format_args!(
                         "[{}][{}][{}][{}] {}",
                         now.format("%Y-%m-%d"),
-                        now.format("%H:%M:%S"),
+                        time,
                         record.level(),
                         record.target(),
                         message
                     ))
                 })
-                .timezone_strategy(TimezoneStrategy::UseLocal)
                 .max_file_size(APP_LOG_MAX_FILE_SIZE)
                 .rotation_strategy(RotationStrategy::KeepAll)
                 .targets([

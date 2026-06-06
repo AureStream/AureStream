@@ -4,6 +4,8 @@ mod core;
 pub mod engine;
 mod utils;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Enforce single instance — second instance exits after focusing existing window
@@ -36,6 +38,7 @@ pub fn run() {
             core::get_engine_state,
             core::clear_engine_error,
             core::reload_config,
+            core::config_check::mark_config_verified,
             // engine probe commands
             engine::engine_ensure_installed,
             engine::engine_uninstall_service,
@@ -46,6 +49,7 @@ pub fn run() {
             commands::shell::open_devtools,
             commands::shell::get_app_version,
             commands::shell::get_app_paths,
+            commands::shell::get_config_json_path,
             commands::shell::open_directory,
             commands::shell::quit,
             commands::shell::restart,
@@ -60,6 +64,16 @@ pub fn run() {
             commands::theme::set_native_window_theme,
         ])
         .setup(app::setup::app_setup)
+        .on_page_load(|webview, payload| {
+            use tauri::webview::PageLoadEvent;
+            if webview.label() != "main" {
+                return;
+            }
+            if payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+            app::setup::show_main_window_after_page_load(webview.app_handle());
+        })
         .on_window_event(app::events::on_window_event)
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

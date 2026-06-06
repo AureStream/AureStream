@@ -7,6 +7,7 @@
     "beforeDevCommand": "pnpm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm run build",
+    "beforeBundleCommand": "pnpm run pre-bundle",
     "frontendDist": "../dist"
   },
   "app": {
@@ -16,7 +17,9 @@
         "width": 1050,
         "height": 780,
         "minWidth": 960,
-        "minHeight": 750
+        "minHeight": 750,
+        "visible": false,
+        "backgroundColor": "#ECEEF2"
       }
     ],
     "security": {
@@ -36,7 +39,13 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "infoPlist": "Info.privileged-helper.plist",
+      "files": {
+        "Library/LaunchServices/com.root.aurestream.helper": "target/helper/com.root.aurestream.helper"
+      }
+    }
   },
   "plugins": {
     "deep-link": {

@@ -69,6 +69,7 @@
   "updating": "更新中...",
   "update_all": "全部更新",
   "loading": "加载中...",
+  "app_booting": "正在启动 AureStream...",
   "no_subscription_yet": "暂无可用订阅，请在右侧添加",
   "in_service": "服务中",
   "expiring_soon": "即将过期",

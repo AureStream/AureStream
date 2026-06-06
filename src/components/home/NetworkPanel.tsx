@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getCountryCode, getFlagEmoji } from "@/lib/country-flags"
+import { CountryFlag } from "@/components/ui/country-flag"
+import { getCountryCode } from "@/lib/country-flags"
 import { type } from "@/lib/typography"
 
 interface GeoIpInfo {
@@ -41,6 +42,9 @@ export function NetworkPanel() {
   const refreshSeq = useRef(0)
 
   const refresh = useCallback(async () => {
+    if (document.visibilityState === "hidden") {
+      return
+    }
     const seq = refreshSeq.current + 1
     refreshSeq.current = seq
     setRefreshing(true)
@@ -117,16 +121,13 @@ export function NetworkPanel() {
                 role="img"
                 aria-label={t("flag")}
               >
-                {(() => {
-                  const code =
+                <CountryFlag
+                  code={
                     getCountryCode(networkInfo.countryCode) ||
                     getCountryCode(networkInfo.countryName)
-                  return (
-                    <span className="text-sm" aria-hidden="true">
-                      {getFlagEmoji(code) || "🌐"}
-                    </span>
-                  )
-                })()}
+                  }
+                  title={t("flag")}
+                />
               </span>
               <span className={type.kvValue}>{networkInfo.countryName}</span>
             </div>

@@ -45,6 +45,12 @@ pub fn get_app_version(app: AppHandle) -> String {
 }
 
 #[tauri::command]
+pub fn get_config_json_path(app: AppHandle) -> Result<String, String> {
+    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(config_dir.join("config.json").to_string_lossy().into_owned())
+}
+
+#[tauri::command]
 pub fn get_app_paths(app: AppHandle) -> Result<serde_json::Value, String> {
     let paths = serde_json::json!({
         "log_dir": app.path().app_log_dir().map_err(|e| e.to_string())?,

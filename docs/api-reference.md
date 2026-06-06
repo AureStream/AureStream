@@ -15,7 +15,7 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 
 ### 引擎探测与服务
 - `engine_ensure_installed()`: 安装 Windows TUN 驱动服务。
-- `engine_uninstall_service()`: 卸载 TUN 驱动服务。
+- `engine_uninstall_service()`: 卸载特权服务。Windows 调用 `tun-service uninstall`；macOS 通过 XPC 让 Helper 自卸载（`launchctl bootout` + 删除 blessed 文件，对齐 OneBox 测试脚本流程）；Linux 通过 `pkexec /usr/lib/AureStream/aurestream-tun-helper uninstall`（helper 脚本见 `src-tauri/resources/linux/aurestream-tun-helper`，随 deb/rpm 安装）。
 - `engine_probe()`: 探测内核状态。
 
 ### Shell 与生命周期

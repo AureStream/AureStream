@@ -23,6 +23,43 @@ fn take_dns_override() -> Option<(String, String)> {
 
 pub const HELPER_PATH: &str = "/usr/lib/AureStream/aurestream-tun-helper";
 
+fn uninstall_helper_sync() -> Result<(), String> {
+    if !std::path::Path::new(HELPER_PATH).exists() {
+        log::info!("[linux] helper not present, nothing to uninstall");
+        return Ok(());
+    }
+
+    let _ = stop_tun_and_restore_dns(None);
+
+    log::info!("[linux] uninstalling helper via pkexec");
+    let output = Command::new("pkexec")
+        .args([HELPER_PATH, "uninstall"])
+        .output()
+        .map_err(|e| format!("pkexec uninstall failed: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "helper uninstall failed (exit {}): {} {}",
+            output.status,
+            stdout.trim(),
+            stderr.trim()
+        )
+        .trim()
+        .to_string());
+    }
+
+    if std::path::Path::new(HELPER_PATH).exists() {
+        return Err(format!(
+            "{HELPER_PATH} still exists after uninstall — reinstall the AureStream Linux package or update the helper script"
+        ));
+    }
+
+    log::info!("[linux] helper uninstall completed");
+    Ok(())
+}
+
 pub fn create_privileged_command(
     app: &AppHandle,
     sidecar_path: String,
@@ -312,7 +349,7 @@ impl EngineManager for LinuxEngine {
                         );
                     }
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                crate::engine::common::shutdown::wait_for_sidecar_ports_release(app).await;
             }
             crate::engine::ProxyMode::IntoProxy => {
                 let dns_info = take_dns_override();
@@ -371,9 +408,18 @@ impl EngineManager for LinuxEngine {
         }
     }
 
-    async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
-        log::info!("[linux] uninstall_service requested (no-op on Linux)");
-        Ok(())
+    async fn uninstall_service(app: &AppHandle) -> Result<(), String> {
+        let running = {
+            let mgr = crate::core::ProcessManager::acquire();
+            mgr.child.is_some()
+        };
+        if running {
+            Self::stop(app).await?;
+        }
+
+        tokio::task::spawn_blocking(uninstall_helper_sync)
+            .await
+            .map_err(|e| format!("uninstall join error: {}", e))?
     }
 
     async fn probe(_app: &AppHandle) -> Result<String, String> {

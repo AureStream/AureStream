@@ -24,23 +24,23 @@ import { cn } from "@/lib/utils"
 import { btn, iconBadge, type } from "@/lib/typography"
 import { useTheme } from "@/contexts/ThemeContext"
 import {
-  getProxyPort,
   setProxyPort,
-  getControllerPort,
   setControllerPort,
-  getProxyBypass,
   setProxyBypass,
-  getTunStack,
   setTunStack,
   type TunStack,
-  getAutoStart,
   setAutoStartStore,
-  getHideOnLaunch,
   setHideOnLaunchStore,
-  getMinimizeToTray,
   setMinimizeToTrayStore,
 } from "@/single/store"
+import { loadNetworkSettingsSnapshot } from "@/lib/settings-load"
 import { invoke } from "@tauri-apps/api/core"
+import {
+  ensureEngineServiceInstalled,
+  invalidateEngineProbeCache,
+  probeEngineService,
+} from "@/lib/engine-probe"
+import { syncActiveConnectionConfig } from "@/lib/config-sync"
 import { enable, disable } from "@tauri-apps/plugin-autostart"
 import { message } from "@tauri-apps/plugin-dialog"
 import { BYPASS_PLACEHOLDER, DEFAULT_PROXY_BYPASS_UI, normalizeBypassInput } from "@/lib/proxy-bypass"
@@ -79,14 +79,10 @@ export function SettingsPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [activeAction, setActiveAction] = useState<"install" | "uninstall" | null>(null)
 
-  const checkServiceStatus = async () => {
+  const checkServiceStatus = async (force = false) => {
     setServiceStatus("checking")
-    try {
-      await invoke("engine_probe")
-      setServiceStatus("installed")
-    } catch {
-      setServiceStatus("not_installed")
-    }
+    const installed = await probeEngineService(force)
+    setServiceStatus(installed ? "installed" : "not_installed")
   }
 
   useEffect(() => {
@@ -105,7 +101,7 @@ export function SettingsPage() {
     setActionLoading(true)
     setActiveAction("install")
     try {
-      await invoke("engine_ensure_installed")
+      await ensureEngineServiceInstalled()
       setServiceStatus("installed")
       await message(t("service_install_success"), {
         title: t("success"),
@@ -117,7 +113,8 @@ export function SettingsPage() {
         title: t("error"),
         kind: "error",
       })
-      await checkServiceStatus()
+      invalidateEngineProbeCache()
+      await checkServiceStatus(true)
     } finally {
       setActionLoading(false)
       setActiveAction(null)
@@ -129,7 +126,8 @@ export function SettingsPage() {
     setActiveAction("uninstall")
     try {
       await invoke("engine_uninstall_service")
-      setServiceStatus("not_installed")
+      invalidateEngineProbeCache()
+      await checkServiceStatus(true)
       await message(t("service_uninstall_success"), {
         title: t("success"),
         kind: "info",
@@ -140,7 +138,8 @@ export function SettingsPage() {
         title: t("error"),
         kind: "error",
       })
-      await checkServiceStatus()
+      invalidateEngineProbeCache()
+      await checkServiceStatus(true)
     } finally {
       setActionLoading(false)
       setActiveAction(null)
@@ -149,36 +148,24 @@ export function SettingsPage() {
 
   useEffect(() => {
     async function loadSettings() {
-      const [
-        p,
-        ap,
-        stack,
-        bypass,
-        autoStartValue,
-        hideOnLaunchValue,
-        minimizeToTrayValue,
-        version,
-      ] = await Promise.all([
-        getProxyPort(),
-        getControllerPort(),
-        getTunStack(),
-        getProxyBypass(),
-        getAutoStart(),
-        getHideOnLaunch(),
-        getMinimizeToTray(),
+      const [network, version] = await Promise.all([
+        loadNetworkSettingsSnapshot(),
         invoke<string>("get_app_version").catch(() => "0.2.1"),
       ])
 
-      setPort(String(p))
-      setApiPort(String(ap))
-      initialPortsRef.current = { mixed: p, controller: ap }
-      setTunStackState(stack)
-      const display = bypass || DEFAULT_PROXY_BYPASS_UI
+      setPort(String(network.proxyPort))
+      setApiPort(String(network.controllerPort))
+      initialPortsRef.current = {
+        mixed: network.proxyPort,
+        controller: network.controllerPort,
+      }
+      setTunStackState(network.tunStack)
+      const display = network.proxyBypass || DEFAULT_PROXY_BYPASS_UI
       setBypassList(display)
       setSavedBypass(display)
-      setAutoStart(autoStartValue)
-      setHideOnLaunch(hideOnLaunchValue)
-      setMinimizeToTray(minimizeToTrayValue)
+      setAutoStart(network.autoStart)
+      setHideOnLaunch(network.hideOnLaunch)
+      setMinimizeToTray(network.minimizeToTray)
       setAppVersion(version)
 
       // Auto-check for updates on mount
@@ -235,14 +222,20 @@ export function SettingsPage() {
     }
   }
 
-  const warnIfEngineRunningForNetworkChange = async () => {
+  const applyNetworkSettingsChange = async () => {
+    try {
+      await syncActiveConnectionConfig("settings-changed")
+    } catch (e) {
+      console.error("[settings] config sync failed:", e)
+    }
     const state = await getEngineState()
     if (isEngineBusy(state)) {
-      await message(t("settings_saved"), {
-        title: t("hint"),
-        kind: "info",
-      })
+      return
     }
+    await message(t("settings_saved"), {
+      title: t("hint"),
+      kind: "info",
+    })
   }
 
   const handleTunStackChange = async (stack: TunStack) => {
@@ -250,6 +243,7 @@ export function SettingsPage() {
     setTunStackState(stack)
     try {
       await setTunStack(stack)
+      await applyNetworkSettingsChange()
     } catch (e) {
       console.error("Failed to set tun stack:", e)
       setTunStackState(prev)
@@ -271,7 +265,7 @@ export function SettingsPage() {
         const prev = initialPortsRef.current?.mixed
         await setProxyPort(val)
         if (prev !== undefined && prev !== val) {
-          await warnIfEngineRunningForNetworkChange()
+          await applyNetworkSettingsChange()
         }
         if (initialPortsRef.current) initialPortsRef.current.mixed = val
       }, 500)
@@ -287,7 +281,7 @@ export function SettingsPage() {
         const prev = initialPortsRef.current?.controller
         await setControllerPort(val)
         if (prev !== undefined && prev !== val) {
-          await warnIfEngineRunningForNetworkChange()
+          await applyNetworkSettingsChange()
         }
         if (initialPortsRef.current) initialPortsRef.current.controller = val
       }, 500)
@@ -300,7 +294,7 @@ export function SettingsPage() {
     if (normalized === savedBypass) return
     await setProxyBypass(normalized)
     setSavedBypass(normalized)
-    await warnIfEngineRunningForNetworkChange()
+    await applyNetworkSettingsChange()
   }
 
 

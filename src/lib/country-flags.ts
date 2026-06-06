@@ -37,34 +37,52 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
   VN: ["VNM", "越南"],
 }
 
-const supportedValuesOf = (Intl as typeof Intl & {
-  supportedValuesOf?: (key: "region") => string[]
-}).supportedValuesOf
-const flagCodes = supportedValuesOf
-  ? supportedValuesOf("region").filter((code) => COUNTRY_CODE_PATTERN.test(code))
-  : Object.keys(COUNTRY_ALIASES)
 const DisplayNames = (Intl as typeof Intl & {
   DisplayNames?: RegionDisplayNamesConstructor
 }).DisplayNames
-const regionDisplayNames = DisplayNames
-  ? [
+const supportedValuesOf = (Intl as typeof Intl & {
+  supportedValuesOf?: (key: "region") => string[]
+}).supportedValuesOf
+
+function loadFlagCodes(): string[] {
+  if (!supportedValuesOf) return Object.keys(COUNTRY_ALIASES)
+  try {
+    return supportedValuesOf("region").filter((code) =>
+      COUNTRY_CODE_PATTERN.test(code)
+    )
+  } catch {
+    return Object.keys(COUNTRY_ALIASES)
+  }
+}
+
+function loadRegionDisplayNames(): RegionDisplayNames[] {
+  if (!DisplayNames) return []
+  try {
+    return [
       new DisplayNames("zh", { type: "region" }),
       new DisplayNames("en", { type: "region" }),
     ]
-  : []
-const regionNameMatches: Array<[string, string]> = DisplayNames
-  ? flagCodes.flatMap((code) => {
-      const names = regionDisplayNames.map((displayNames) =>
-        displayNames.of(code)
-      )
-      return names
-        .filter((name): name is string => Boolean(name))
-        .map(
-          (name) =>
-            [code, name.normalize("NFKC").toUpperCase()] as [string, string]
+  } catch {
+    return []
+  }
+}
+
+const flagCodes = loadFlagCodes()
+const regionDisplayNames = loadRegionDisplayNames()
+const regionNameMatches: Array<[string, string]> =
+  regionDisplayNames.length > 0
+    ? flagCodes.flatMap((code) => {
+        const names = regionDisplayNames.map((displayNames) =>
+          displayNames.of(code)
         )
-    })
-  : []
+        return names
+          .filter((name): name is string => Boolean(name))
+          .map(
+            (name) =>
+              [code, name.normalize("NFKC").toUpperCase()] as [string, string]
+          )
+      })
+    : []
 
 function hasLatinToken(text: string, token: string): boolean {
   return new RegExp(`(^|[^A-Z])${token}(?=$|[^A-Z]|\\d)`).test(text)
@@ -121,12 +139,3 @@ export function getCountryCode(name: string): string {
   return ""
 }
 
-export function getFlagEmoji(code: string): string {
-  const normalized = code.normalize("NFKC").toUpperCase()
-  if (!COUNTRY_CODE_PATTERN.test(normalized)) return ""
-  return Array.from(normalized)
-    .map((char) =>
-      String.fromCodePoint(REGION_INDICATOR_BASE + char.charCodeAt(0) - 65)
-    )
-    .join("")
-}

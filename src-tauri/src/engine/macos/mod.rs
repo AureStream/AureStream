@@ -51,7 +51,26 @@ fn take_active_override() -> Option<ActiveOverride> {
 // Helper-backed TUN lifecycle
 // ============================================================================
 
+const BLESSED_HELPER_PATH: &str = "/Library/PrivilegedHelperTools/com.root.aurestream.helper";
+
+pub fn uninstall_privileged_helper() -> Result<(), String> {
+    if !std::path::Path::new(BLESSED_HELPER_PATH).exists() {
+        log::info!("[mac] privileged helper not installed, nothing to uninstall");
+        return Ok(());
+    }
+
+    log::info!("[mac] uninstalling privileged helper via XPC");
+    macos_helper::api::uninstall()?;
+    log::info!("[mac] privileged helper uninstall completed");
+    Ok(())
+}
+
 pub fn ensure_helper_installed() -> Result<(), String> {
+    let bundled_path = bundled_helper_path().ok_or_else(|| {
+        "应用包内未找到特权辅助工具（Contents/Library/LaunchServices/com.root.aurestream.helper）。请使用完整安装包重新安装。".to_string()
+    })?;
+    log::debug!("[helper] bundled helper path: {:?}", bundled_path);
+
     let ping_result = macos_helper::api::ping();
     if ping_result.is_err() {
         log::info!("[helper] not responding, triggering SMJobBless install...");
@@ -610,7 +629,7 @@ impl EngineManager for MacOSEngine {
                         );
                     }
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                crate::engine::common::shutdown::wait_for_sidecar_ports_release(app).await;
             }
             crate::engine::ProxyMode::IntoProxy => {
                 stop_tun_process().await.map_err(|e| {
@@ -659,9 +678,18 @@ impl EngineManager for MacOSEngine {
             .map_err(|e| format!("ensure_installed join error: {}", e))?
     }
 
-    async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
-        log::info!("[mac] uninstall_service requested (no-op on macOS)");
-        Ok(())
+    async fn uninstall_service(app: &AppHandle) -> Result<(), String> {
+        let running = {
+            let mgr = crate::core::ProcessManager::acquire();
+            mgr.child.is_some()
+        };
+        if running {
+            Self::stop(app).await?;
+        }
+
+        tokio::task::spawn_blocking(uninstall_privileged_helper)
+            .await
+            .map_err(|e| format!("uninstall join error: {}", e))?
     }
 
     async fn probe(_app: &AppHandle) -> Result<String, String> {

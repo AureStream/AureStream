@@ -1,4 +1,5 @@
 export { getControllerBaseUrl, controllerFetch } from "./client"
+export { invalidateControllerClientCache } from "./controller-cache"
 export { fetchSelectGroup, selectProxyNode, testNodeDelay } from "./proxies"
 export { subscribeTraffic } from "./traffic"
 

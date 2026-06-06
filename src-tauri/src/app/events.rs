@@ -1,21 +1,7 @@
 use tauri::{AppHandle, Manager, RunEvent, Window, WindowEvent};
 
 fn move_window_to_tray(window: &Window) -> tauri::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        window.minimize()
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        window.hide().or_else(|hide_error| {
-            log::warn!(
-                "Failed to hide main window, falling back to minimize: {}",
-                hide_error
-            );
-            window.minimize()
-        })
-    }
+    crate::utils::hide_main_window_to_tray(window)
 }
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
@@ -70,14 +56,7 @@ pub fn on_run_event(app_handle: &AppHandle, event: RunEvent) {
             ..
         } => {
             if !has_visible_windows {
-                if let Some(w) = app_handle.get_webview_window("main") {
-                    w.show().unwrap_or_else(|e| {
-                        log::error!("Failed to show main window on reopen: {}", e);
-                    });
-                    w.set_focus().unwrap_or_else(|e| {
-                        log::error!("Failed to focus main window on reopen: {}", e);
-                    });
-                }
+                crate::utils::show_main_window(app_handle);
             }
         }
         RunEvent::Exit => {

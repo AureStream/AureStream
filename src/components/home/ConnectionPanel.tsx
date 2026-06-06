@@ -5,11 +5,15 @@ import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { surface, type } from "@/lib/typography"
 import { Card, CardContent } from "@/components/ui/card"
-import { invoke } from "@tauri-apps/api/core"
+import {
+  ensureEngineServiceInstalled,
+  probeEngineService,
+} from "@/lib/engine-probe"
+import { syncActiveConnectionConfig } from "@/lib/config-sync"
+import { connectEngine } from "@/lib/connection-flow"
 import { useEngineState } from "@/hooks/useEngineState"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue } from "@/single/store"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
-import { mergeConnectionConfig } from "@/lib/connection-config"
 import { requireEngineIdle } from "@/lib/require-engine-idle"
 import {
   ROUTING_MODE_KEY,
@@ -28,7 +32,7 @@ function formatUptime(seconds: number): string {
 
 export function ConnectionPanel({ className }: { className?: string }) {
   const { t } = useTranslation()
-  const { engineState, isConnected, isRunning, isStarting, isStopping, isFailed, start, stop, clearError } =
+  const { engineState, isConnected, isRunning, isStarting, isStopping, isFailed, stop, clearError } =
     useEngineState()
   const { activeIdentifier } = useSubscriptions()
   const [routingMode, setRoutingMode] = useState<RoutingMode>("rule")
@@ -42,18 +46,13 @@ export function ConnectionPanel({ className }: { className?: string }) {
   const engineBusy = isConnected || isStarting || isStopping
 
   const checkTunService = useCallback(async () => {
-    try {
-      await invoke("engine_probe")
-      setIsTunServiceInstalled(true)
-    } catch {
-      setIsTunServiceInstalled(false)
-    }
+    setIsTunServiceInstalled(await probeEngineService())
   }, [])
 
   const handleInstallTunService = async () => {
     setIsInstallingService(true)
     try {
-      await invoke("engine_ensure_installed")
+      await ensureEngineServiceInstalled()
       setIsTunServiceInstalled(true)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -99,11 +98,18 @@ export function ConnectionPanel({ className }: { className?: string }) {
   }, [enableTun, checkTunService])
 
   const handleRoutingModeChange = async (mode: RoutingMode) => {
-    if (engineBusy) {
-      if (!(await requireEngineIdle())) return
-    }
     setRoutingMode(mode)
     await setStoreValue(ROUTING_MODE_KEY, mode)
+    try {
+      await syncActiveConnectionConfig("routing-mode")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("Routing mode config sync failed:", err)
+      await message(`${t("config_parse_merge_failed")}: ${msg}`, {
+        title: t("error"),
+        kind: "error",
+      })
+    }
   }
 
   const handleEnableTunChange = async (useTun: boolean) => {
@@ -112,6 +118,14 @@ export function ConnectionPanel({ className }: { className?: string }) {
     }
     setEnableTunState(useTun)
     await setEnableTun(useTun)
+    void syncActiveConnectionConfig("tun-mode").catch((err) => {
+      console.error("TUN mode config sync failed:", err)
+    })
+    if (useTun) {
+      void ensureEngineServiceInstalled()
+        .then(() => setIsTunServiceInstalled(true))
+        .catch((err) => console.warn("[tun] pre-install helper failed:", err))
+    }
   }
 
   const cycleRoutingMode = () => {
@@ -156,23 +170,16 @@ export function ConnectionPanel({ className }: { className?: string }) {
       const useTun = enableTun
 
       try {
-        await mergeConnectionConfig(activeIdentifier, routingMode, useTun)
+        await connectEngine(activeIdentifier, routingMode, useTun)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
-        console.error("Config merge failed:", err)
+        console.error("Connect failed:", err)
         await message(`${t("config_parse_merge_failed")}: ${msg}`, {
           title: t("error"),
           kind: "error",
         })
         return
       }
-
-      const configDir = await invoke<Record<string, string>>("get_app_paths").then(
-        (p) => p.config_dir
-      ).catch(() => "")
-      const configPath = `${configDir}/config.json`
-      const mode = useTun ? "IntoProxy" : "SystemProxy"
-      await start(configPath, mode)
     }
   }
 

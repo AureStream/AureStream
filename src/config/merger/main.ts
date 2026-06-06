@@ -1,9 +1,10 @@
 import * as path from '@tauri-apps/api/path';
 import { type as getOsType } from '@tauri-apps/plugin-os';
-import { getSubscriptionConfig } from '../../action/db';
+import { getSubscriptionConfig, getSubscriptionMergeRevision } from '../../action/db';
 import {
     getAllowLan,
     getConfiguredDirectDNS,
+    getConfiguredProxyDNS,
     getControllerSecret,
     getControllerPort,
     getCustomRuleSet,
@@ -22,22 +23,29 @@ import { configType, getConfigTemplateCacheKey } from '../common';
 import { getBuiltInTemplate } from '../templates';
 
 const templateStringCache = new Map<string, string>();
+const templateObjectCache = new Map<string, object>();
 
 async function getConfigTemplate(mode: configType): Promise<any> {
     const cacheKey = await getConfigTemplateCacheKey(mode);
-    let config = templateStringCache.get(cacheKey);
-    if (config) {
-        return JSON.parse(config);
+    const cachedObject = templateObjectCache.get(cacheKey);
+    if (cachedObject) {
+        return structuredClone(cachedObject);
     }
 
-    config = await getStoreValue(cacheKey, '');
+    let config = templateStringCache.get(cacheKey);
     if (!config) {
-        config = getBuiltInTemplate(mode);
-        await setStoreValue(cacheKey, config);
-        console.info(`[template] cache empty for mode=${mode}, seeded built-in snapshot`);
+        config = await getStoreValue(cacheKey, '');
+        if (!config) {
+            config = getBuiltInTemplate(mode);
+            await setStoreValue(cacheKey, config);
+            console.info(`[template] cache empty for mode=${mode}, seeded built-in snapshot`);
+        }
+        templateStringCache.set(cacheKey, config);
     }
-    templateStringCache.set(cacheKey, config);
-    return JSON.parse(config);
+
+    const parsed = JSON.parse(config);
+    templateObjectCache.set(cacheKey, parsed);
+    return structuredClone(parsed);
 }
 
 async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
@@ -75,12 +83,79 @@ type CustomRuleSet = {
     ip_cidr: string[];
 }
 
-type MergeConfigOptions = {
+export type MergeProfile = {
     mode: configType;
     cacheFileName: string;
-    label: string;
     tun: boolean;
     customRules: boolean;
+}
+
+type MergeConfigOptions = MergeProfile & {
+    label: string;
+}
+
+/** Fingerprint of all inputs that affect generated config.json (for merge skip cache). */
+export async function computeMergeCacheKey(
+    identifier: string,
+    profile: MergeProfile,
+): Promise<string> {
+    const customRulePromises = profile.customRules
+        ? [getCustomRuleSet('direct'), getCustomRuleSet('proxy')] as const
+        : [Promise.resolve(null), Promise.resolve(null)] as const;
+
+    const [
+        subRev,
+        templateKey,
+        stageVersion,
+        allowLan,
+        bypassRouter,
+        proxyPort,
+        tunStack,
+        useDHCP,
+        directDNS,
+        proxyDNS,
+        controllerPort,
+        controllerSecret,
+        defaultNode,
+        directRules,
+        proxyRules,
+    ] = await Promise.all([
+        getSubscriptionMergeRevision(identifier),
+        getConfigTemplateCacheKey(profile.mode),
+        getStoreValue(STAGE_VERSION_STORE_KEY),
+        getAllowLan(),
+        isBypassRouterEnabled(),
+        getProxyPort(),
+        profile.tun ? getTunStack() : Promise.resolve(null),
+        getUseDHCP(),
+        getConfiguredDirectDNS(),
+        getConfiguredProxyDNS(),
+        getControllerPort(),
+        getControllerSecret(),
+        getSavedDefaultNode(identifier),
+        customRulePromises[0],
+        customRulePromises[1],
+    ]);
+
+    return JSON.stringify({
+        identifier,
+        profile,
+        subRev,
+        templateKey,
+        stageVersion,
+        allowLan,
+        bypassRouter,
+        proxyPort,
+        tunStack,
+        useDHCP,
+        directDNS,
+        proxyDNS,
+        controllerPort,
+        controllerSecret,
+        defaultNode,
+        directRules,
+        proxyRules,
+    });
 }
 
 function applyCustomRuleSet(

@@ -40,3 +40,35 @@ pub(crate) fn probe_port_listening(port: u16) -> bool {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
 }
+
+/// Poll until mixed proxy port accepts connections or timeout (all platforms).
+pub(crate) async fn wait_for_port_listening(port: u16, timeout: Duration) -> bool {
+    poll_port(port, timeout, true).await
+}
+
+/// Poll until a localhost port stops accepting connections or timeout.
+pub(crate) async fn wait_for_port_release(port: u16, timeout: Duration) -> bool {
+    poll_port(port, timeout, false).await
+}
+
+async fn poll_port(port: u16, timeout: Duration, wait_listening: bool) -> bool {
+    use tokio::time::{sleep, Instant};
+
+    let satisfied = || probe_port_listening(port) == wait_listening;
+    if satisfied() {
+        return true;
+    }
+
+    let deadline = Instant::now() + timeout;
+    let mut interval = Duration::from_millis(20);
+
+    while Instant::now() < deadline {
+        if satisfied() {
+            return true;
+        }
+        sleep(interval).await;
+        interval = std::cmp::min(interval.saturating_mul(2), Duration::from_millis(100));
+    }
+
+    satisfied()
+}

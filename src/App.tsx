@@ -1,8 +1,16 @@
-import { lazy, Suspense } from "react"
+import { lazy, Suspense, useEffect, useRef, useState } from "react"
+import { getAppConfigDir } from "@/lib/app-paths"
+import "@/lib/config-sync"
+import { dismissBootSplash } from "@/lib/boot-splash"
 import { AppSidebar } from "@/components/layout/AppSidebar"
-import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
+import { LoadingScreen } from "@/components/layout/LoadingScreen"
+import {
+  SubscriptionProvider,
+  useSubscriptionContext,
+} from "@/contexts/SubscriptionContext"
 import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
 import { HomePage } from "@/pages/HomePage"
+import { cn } from "@/lib/utils"
 import "@/lib/i18n"
 
 const SubscriptionPage = lazy(() =>
@@ -16,13 +24,7 @@ const SettingsPage = lazy(() =>
   }))
 )
 
-function PageLoading() {
-  return (
-    <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-      Loading...
-    </div>
-  )
-}
+const BOOT_MIN_VISIBLE_MS = 650
 
 function AppLayout() {
   const { activeTab } = useNavigation()
@@ -45,7 +47,7 @@ function AppLayout() {
       <AppSidebar />
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/40 backdrop-blur-2xl border border-border/60 dark:bg-black/30 dark:border-white/10 rounded-[24px] shadow-sm p-4 sm:p-5">
-        <Suspense fallback={<PageLoading />}>
+        <Suspense fallback={<LoadingScreen />}>
           {activeTab === "home" && <HomePage />}
           {activeTab === "subscription" && <SubscriptionPage />}
           {activeTab === "settings" && <SettingsPage />}
@@ -55,11 +57,50 @@ function AppLayout() {
   )
 }
 
+function AppBootstrap() {
+  const { loading } = useSubscriptionContext()
+  const bootStartedAt = useRef(Date.now())
+  const [shellReady, setShellReady] = useState(false)
+
+  useEffect(() => {
+    void getAppConfigDir()
+  }, [])
+
+  useEffect(() => {
+    if (loading) {
+      return
+    }
+
+    const elapsed = Date.now() - bootStartedAt.current
+    const delay = Math.max(0, BOOT_MIN_VISIBLE_MS - elapsed)
+    const timer = window.setTimeout(() => {
+      void dismissBootSplash().then(() => {
+        setShellReady(true)
+      })
+    }, delay)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [loading])
+
+  return (
+    <div
+      className={cn(
+        "h-screen w-screen transition-opacity duration-500 ease-out",
+        shellReady ? "opacity-100" : "opacity-0"
+      )}
+    >
+      <AppLayout />
+    </div>
+  )
+}
+
 function App() {
   return (
     <NavigationProvider>
       <SubscriptionProvider>
-        <AppLayout />
+        <AppBootstrap />
       </SubscriptionProvider>
     </NavigationProvider>
   )
