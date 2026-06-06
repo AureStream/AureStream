@@ -52,16 +52,81 @@ fn take_active_override() -> Option<ActiveOverride> {
 // ============================================================================
 
 const BLESSED_HELPER_PATH: &str = "/Library/PrivilegedHelperTools/com.root.aurestream.helper";
+const BLESSED_PLIST_PATH: &str = "/Library/LaunchDaemons/com.root.aurestream.helper.plist";
+const BLESSED_HELPER_LABEL: &str = "com.root.aurestream.helper";
+
+fn is_blessed_helper_on_disk() -> bool {
+    std::path::Path::new(BLESSED_HELPER_PATH).exists()
+        || std::path::Path::new(BLESSED_PLIST_PATH).exists()
+}
+
+/// Probe helper health. Ping success means XPC works; if files exist on disk but ping
+/// fails (common after a resign/rebuild), still report installed so UI offers uninstall.
+pub fn probe_helper() -> Result<String, String> {
+    match macos_helper::api::ping() {
+        Ok(msg) => Ok(msg),
+        Err(e) => {
+            if is_blessed_helper_on_disk() {
+                log::warn!(
+                    "[helper] blessed files present but XPC ping failed: {}",
+                    e
+                );
+                Ok(format!("installed_unreachable: {e}"))
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+fn force_remove_blessed_helper_via_admin() -> Result<(), String> {
+    use std::process::Command;
+
+    let shell = format!(
+        "launchctl bootout system/{BLESSED_HELPER_LABEL} 2>/dev/null; \
+         launchctl unload -w {BLESSED_PLIST_PATH} 2>/dev/null; \
+         rm -f {BLESSED_PLIST_PATH} {BLESSED_HELPER_PATH}"
+    );
+    let script = format!(
+        "do shell script \"{shell}\" with administrator privileges"
+    );
+
+    log::info!("[mac] removing blessed helper via admin shell (XPC unavailable)");
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("osascript spawn failed: {e}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Err(format!(
+        "admin uninstall failed (exit {}): {}{}",
+        output.status.code().unwrap_or(-1),
+        stderr,
+        stdout
+    ))
+}
 
 pub fn uninstall_privileged_helper() -> Result<(), String> {
-    if !std::path::Path::new(BLESSED_HELPER_PATH).exists() {
+    if !is_blessed_helper_on_disk() {
         log::info!("[mac] privileged helper not installed, nothing to uninstall");
         return Ok(());
     }
 
     log::info!("[mac] uninstalling privileged helper via XPC");
-    macos_helper::api::uninstall()?;
-    log::info!("[mac] privileged helper uninstall completed");
+    if macos_helper::api::uninstall().is_ok() {
+        log::info!("[mac] privileged helper uninstall completed (XPC)");
+        return Ok(());
+    }
+
+    log::warn!("[mac] XPC uninstall failed; falling back to admin shell removal");
+    force_remove_blessed_helper_via_admin()?;
+    log::info!("[mac] privileged helper uninstall completed (admin shell)");
     Ok(())
 }
 
@@ -708,9 +773,9 @@ impl EngineManager for MacOSEngine {
     }
 
     async fn probe(_app: &AppHandle) -> Result<String, String> {
-        tokio::task::spawn_blocking(macos_helper::api::ping)
+        tokio::task::spawn_blocking(probe_helper)
             .await
-            .map_err(|e| format!("helper_ping join error: {}", e))?
+            .map_err(|e| format!("helper_probe join error: {}", e))?
     }
 
     async fn restart(_app: &AppHandle) -> Result<(), String> {

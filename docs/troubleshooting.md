@@ -19,6 +19,7 @@
   - 错误 `CFErrorDomainLaunchd error 4` 表示**主程序与 Helper 代码签名不匹配**（非用户取消授权）。
   - **本地 release 包**：构建后执行 `pnpm sign-macos-bundle path/to/aurestream.app`（或 `scripts/post-sign-macos-bundle.sh`），再在设置页安装辅助服务。
   - **勿用 `pnpm tauri dev` 测 TUN**：开发模式 .app 结构/签名不完整，SMJobBless 会失败。
+  - **设置页显示「未安装」但系统里仍有 Helper**：旧版检测仅依赖 XPC `ping`；签名不一致时 ping 失败会被误判。新版会检测 `/Library/PrivilegedHelperTools/` 下文件并显示「已安装但通信异常」，可在设置页卸载（XPC 失败时走管理员密码清理）。
   - **CI/未签名构建**：workflow 会在打包后对 `.app` 做 ad-hoc 深度签名；拉取新产物后若仍失败，先在设置页**卸载辅助服务**再重装（清除旧版 blessed helper）。
   - **Developer ID 发布**：Helper 与 App 须同一证书；用 `scripts/sync-smjobbless-reqs.ts` 同步 `SMPrivilegedExecutables` / `SMAuthorizedClients` 后重新 `pnpm pre-bundle && pnpm tauri build`。
 - **Linux**: 确认 deb/rpm 已安装 `aurestream-tun-helper` 与 polkit 策略；卸载服务使用设置页或 `pkexec /usr/lib/AureStream/aurestream-tun-helper uninstall`。

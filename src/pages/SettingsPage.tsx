@@ -38,7 +38,7 @@ import { invoke } from "@tauri-apps/api/core"
 import {
   ensureEngineServiceInstalled,
   invalidateEngineProbeCache,
-  probeEngineService,
+  probeEngineServiceState,
 } from "@/lib/engine-probe"
 import { syncActiveConnectionConfig } from "@/lib/config-sync"
 import { enable, disable } from "@tauri-apps/plugin-autostart"
@@ -75,14 +75,22 @@ export function SettingsPage() {
   const [downloadProgress, setDownloadProgress] = useState(0)
 
   // States for TUN service management
-  const [serviceStatus, setServiceStatus] = useState<"checking" | "installed" | "not_installed" | "failed">("checking")
+  const [serviceStatus, setServiceStatus] = useState<
+    "checking" | "installed" | "unreachable" | "not_installed" | "failed"
+  >("checking")
   const [actionLoading, setActionLoading] = useState(false)
   const [activeAction, setActiveAction] = useState<"install" | "uninstall" | null>(null)
 
   const checkServiceStatus = async (force = false) => {
     setServiceStatus("checking")
-    const installed = await probeEngineService(force)
-    setServiceStatus(installed ? "installed" : "not_installed")
+    const state = await probeEngineServiceState(force)
+    setServiceStatus(
+      state === "ready"
+        ? "installed"
+        : state === "unreachable"
+          ? "unreachable"
+          : "not_installed"
+    )
   }
 
   useEffect(() => {
@@ -625,6 +633,7 @@ export function SettingsPage() {
                     <span className={cn(type.caption, "mt-0.5 truncate")}>
                       {serviceStatus === "checking" && t("checking_service")}
                       {serviceStatus === "installed" && t("service_ready")}
+                      {serviceStatus === "unreachable" && t("service_unreachable")}
                       {serviceStatus === "not_installed" && t("service_not_installed")}
                       {serviceStatus === "failed" && t("service_check_failed")}
                     </span>
@@ -635,12 +644,14 @@ export function SettingsPage() {
                         "size-2 rounded-full",
                         serviceStatus === "installed"
                           ? "bg-green-500"
+                          : serviceStatus === "unreachable"
+                            ? "bg-amber-500"
                           : serviceStatus === "checking"
                             ? "bg-blue-400 animate-pulse"
                             : "bg-slate-400"
                       )}
                     />
-                    {serviceStatus === "installed" ? (
+                    {serviceStatus === "installed" || serviceStatus === "unreachable" ? (
                       <Button
                         variant="outline"
                         size="sm"

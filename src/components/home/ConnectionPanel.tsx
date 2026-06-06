@@ -7,7 +7,8 @@ import { surface, type } from "@/lib/typography"
 import { Card, CardContent } from "@/components/ui/card"
 import {
   ensureEngineServiceInstalled,
-  probeEngineService,
+  probeEngineServiceState,
+  type EngineServiceState,
 } from "@/lib/engine-probe"
 import { syncActiveConnectionConfig } from "@/lib/config-sync"
 import { connectEngine } from "@/lib/connection-flow"
@@ -40,20 +41,22 @@ export function ConnectionPanel({ className }: { className?: string }) {
   const [uptime, setUptime] = useState(0)
   const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const [isTunServiceInstalled, setIsTunServiceInstalled] = useState<boolean | null>(null)
+  const [tunServiceState, setTunServiceState] = useState<
+    EngineServiceState | "checking"
+  >("checking")
   const [isInstallingService, setIsInstallingService] = useState(false)
 
   const engineBusy = isConnected || isStarting || isStopping
 
   const checkTunService = useCallback(async () => {
-    setIsTunServiceInstalled(await probeEngineService())
+    setTunServiceState(await probeEngineServiceState())
   }, [])
 
   const handleInstallTunService = async () => {
     setIsInstallingService(true)
     try {
       await ensureEngineServiceInstalled()
-      setIsTunServiceInstalled(true)
+      setTunServiceState("ready")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error("Install helper service failed:", err)
@@ -93,7 +96,7 @@ export function ConnectionPanel({ className }: { className?: string }) {
     if (enableTun) {
       checkTunService()
     } else {
-      setIsTunServiceInstalled(null)
+      setTunServiceState("checking")
     }
   }, [enableTun, checkTunService])
 
@@ -123,7 +126,7 @@ export function ConnectionPanel({ className }: { className?: string }) {
     })
     if (useTun) {
       void ensureEngineServiceInstalled()
-        .then(() => setIsTunServiceInstalled(true))
+        .then(() => setTunServiceState("ready"))
         .catch((err) => console.warn("[tun] pre-install helper failed:", err))
     }
   }
@@ -344,7 +347,7 @@ export function ConnectionPanel({ className }: { className?: string }) {
                 </div>
               ) : (
                 <div className="w-full">
-                  {isTunServiceInstalled === false && (
+                  {tunServiceState === "missing" && (
                     <div className="flex items-center justify-between rounded-lg border border-rose-200/50 bg-rose-50/50 px-2.5 py-1 dark:border-rose-500/20 dark:bg-rose-950/20 animate-in fade-in duration-200 w-full">
                       <span className="type-caption font-semibold text-destructive">{t("tun_service_not_installed")}</span>
                       <button
@@ -356,13 +359,20 @@ export function ConnectionPanel({ className }: { className?: string }) {
                       </button>
                     </div>
                   )}
-                  {isTunServiceInstalled === true && (
+                  {tunServiceState === "ready" && (
                     <div className="flex items-center gap-1.5 px-1 py-0.5 type-caption font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
                       <span className="size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                       <span>{t("tun_service_ready")}</span>
                     </div>
                   )}
-                  {isTunServiceInstalled === null && (
+                  {tunServiceState === "unreachable" && (
+                    <div className="flex items-center gap-1.5 rounded-lg border border-amber-200/50 bg-amber-50/50 px-2.5 py-1 dark:border-amber-500/20 dark:bg-amber-950/20 animate-in fade-in duration-200 w-full">
+                      <span className="type-caption font-semibold text-amber-700 dark:text-amber-400">
+                        {t("tun_service_unreachable")}
+                      </span>
+                    </div>
+                  )}
+                  {tunServiceState === "checking" && (
                     <span className={cn(type.caption, "animate-in fade-in duration-200")}>
                       {t("checking_service_status")}
                     </span>
