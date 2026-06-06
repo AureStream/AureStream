@@ -28,6 +28,7 @@ export function AppSidebar() {
 
   useEffect(() => {
     let cancelled = false
+    const UPDATE_CHECK_DELAY_MS = 30 * 1000
     const check = async () => {
       try {
         const { check } = await import("@tauri-apps/plugin-updater")
@@ -37,8 +38,11 @@ export function AppSidebar() {
         // silent — update server may be unreachable
       }
     }
-    check()
-    return () => { cancelled = true }
+    const timer = setTimeout(check, UPDATE_CHECK_DELAY_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [])
 
   const navItems = [

@@ -34,7 +34,15 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     app.manage(crate::engine::state_machine::EngineStateCell::new());
     stop_orphan_tun_service_on_startup();
 
-    crate::core::cleanup_old_app_logs(app.handle());
+    let log_cleanup_handle = app.handle().clone();
+    if let Err(e) = std::thread::Builder::new()
+        .name("aurestream-log-cleanup".into())
+        .spawn(move || {
+            crate::core::cleanup_old_app_logs(&log_cleanup_handle);
+        })
+    {
+        log::warn!("[setup] failed to spawn log cleanup thread: {}", e);
+    }
 
     if let Err(e) = crate::utils::copy_database_files(app.handle()) {
         log::error!("Failed to copy database files: {}", e);

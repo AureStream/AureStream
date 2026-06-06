@@ -45,7 +45,7 @@ export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
             data: unknown;
             headers: Record<string, string>;
             status: number;
-        }>('fetch_config_with_optimal_dns', {
+        }>('fetch_config', {
             url,
             userAgent,
         });

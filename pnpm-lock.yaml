@@ -59,9 +59,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      country-flag-icons:
-        specifier: ^1.6.17
-        version: 1.6.17
       i18next:
         specifier: ^26.3.0
         version: 26.3.0(typescript@5.8.3)
@@ -1821,9 +1818,6 @@ packages:
 
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
-
-  country-flag-icons@1.6.17:
-    resolution: {integrity: sha512-Nmik0289ZVZSI3c7mJR/amg6DyY7Z59b0sTFSKayeX72mHfPzCPJygwJs2pYgQULzuAyWeCUgwAJ+Dq8OR+JFw==}
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
@@ -3891,8 +3885,6 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   core-util-is@1.0.3: {}
-
-  country-flag-icons@1.6.17: {}
 
   csstype@3.2.3: {}
 

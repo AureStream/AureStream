@@ -68,18 +68,35 @@ export function ConnectionPanel({ className }: { className?: string }) {
   }
 
   useEffect(() => {
-    getStoreValue(ROUTING_MODE_KEY, "rule").then(async (val) => {
+    let cancelled = false
+
+    Promise.all([
+      getStoreValue(ROUTING_MODE_KEY, "rule"),
+      getEnableTun(),
+    ]).then(async ([val, tunEnabled]) => {
       const mode = normalizeRoutingMode(val)
       if (val === "direct") {
         await setStoreValue(ROUTING_MODE_KEY, mode)
       }
+      if (cancelled) return
       setRoutingMode(mode)
+      setEnableTunState(tunEnabled)
+    }).catch((err) => {
+      console.error("Failed to load connection settings:", err)
     })
-    getEnableTun().then((val) => {
-      setEnableTunState(val)
-    })
-    checkTunService()
-  }, [checkTunService])
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (enableTun) {
+      checkTunService()
+    } else {
+      setIsTunServiceInstalled(null)
+    }
+  }, [enableTun, checkTunService])
 
   const handleRoutingModeChange = async (mode: RoutingMode) => {
     if (engineBusy) {

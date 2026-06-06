@@ -1,8 +1,22 @@
+import { lazy, Suspense } from "react"
 import { ConnectionPanel } from "@/components/home/ConnectionPanel"
 import { NodeSelector } from "@/components/home/NodeSelector"
 import { NetworkPanel } from "@/components/home/NetworkPanel"
 import { SubscriptionPanel } from "@/components/home/SubscriptionPanel"
-import { UsagePanel } from "@/components/home/UsagePanel"
+
+const UsagePanel = lazy(() =>
+  import("@/components/home/UsagePanel").then((module) => ({
+    default: module.UsagePanel,
+  }))
+)
+
+function UsagePanelFallback() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center rounded-[20px] border border-border/70 bg-card text-sm text-muted-foreground shadow-sm">
+      Loading...
+    </div>
+  )
+}
 
 export function HomePage() {
   return (
@@ -16,7 +30,9 @@ export function HomePage() {
         <div className="flex min-h-0 flex-col gap-2.5 sm:gap-4 lg:h-full lg:overflow-hidden">
           <SubscriptionPanel />
           <NetworkPanel />
-          <UsagePanel />
+          <Suspense fallback={<UsagePanelFallback />}>
+            <UsagePanel />
+          </Suspense>
         </div>
       </div>
     </div>

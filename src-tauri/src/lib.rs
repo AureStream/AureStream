@@ -33,7 +33,6 @@ pub fn run() {
             // core engine commands
             core::start,
             core::stop,
-            core::is_running,
             core::get_engine_state,
             core::clear_engine_error,
             core::reload_config,
@@ -52,20 +51,10 @@ pub fn run() {
             commands::shell::restart,
             commands::shell::get_pending_deep_link,
             // network commands
-            commands::network::get_lan_ip,
-            commands::network::ping_google,
-            commands::network::open_browser,
-            commands::network::check_captive_portal_status,
-            commands::network::get_captive_redirect_url,
             commands::network::ping_tcp,
             commands::network::get_geoip_info,
-            // prestart commands
-            commands::prestart::prestart_check,
-            commands::prestart::kill_orphans,
-            // dns and config fetch commands
-            commands::dns::get_optimal_local_dns_server,
-            commands::dns::get_optimal_global_dns_server,
-            commands::config_fetch::fetch_config_with_optimal_dns,
+            // config fetch commands
+            commands::config_fetch::fetch_config,
             commands::config_fetch::verify_deep_link_url,
             // native theme commands
             commands::theme::set_native_window_theme,

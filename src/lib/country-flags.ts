@@ -1,8 +1,3 @@
-import type { ComponentType, SVGProps } from "react"
-import * as Flags from "country-flag-icons/react/1x1"
-
-export type FlagComponent = ComponentType<SVGProps<SVGSVGElement>>
-
 type RegionDisplayNames = {
   of(code: string): string | undefined
 }
@@ -12,6 +7,7 @@ type RegionDisplayNamesConstructor = new (
 ) => RegionDisplayNames
 
 const REGION_INDICATOR_BASE = 0x1f1e6
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/
 const COUNTRY_ALIASES: Record<string, string[]> = {
   AE: ["UAE", "阿联酋"],
   AU: ["AUS", "澳大利亚", "澳洲"],
@@ -41,10 +37,12 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
   VN: ["VNM", "越南"],
 }
 
-const flagComponents = Flags as Record<string, FlagComponent | undefined>
-const flagCodes = Object.keys(flagComponents).filter((code) =>
-  /^[A-Z]{2}$/.test(code)
-)
+const supportedValuesOf = (Intl as typeof Intl & {
+  supportedValuesOf?: (key: "region") => string[]
+}).supportedValuesOf
+const flagCodes = supportedValuesOf
+  ? supportedValuesOf("region").filter((code) => COUNTRY_CODE_PATTERN.test(code))
+  : Object.keys(COUNTRY_ALIASES)
 const DisplayNames = (Intl as typeof Intl & {
   DisplayNames?: RegionDisplayNamesConstructor
 }).DisplayNames
@@ -86,13 +84,14 @@ function getFlagCodeFromEmoji(name: string): string {
       const code =
         String.fromCharCode(65 + first - REGION_INDICATOR_BASE) +
         String.fromCharCode(65 + second - REGION_INDICATOR_BASE)
-      if (flagComponents[code]) return code
+      return code
     }
   }
   return ""
 }
 
 export function getCountryCode(name: string): string {
+  if (!name) return ""
   const emojiCode = getFlagCodeFromEmoji(name)
   if (emojiCode) return emojiCode
 
@@ -122,6 +121,12 @@ export function getCountryCode(name: string): string {
   return ""
 }
 
-export function getFlagComponent(code: string): FlagComponent | null {
-  return code ? flagComponents[code] ?? null : null
+export function getFlagEmoji(code: string): string {
+  const normalized = code.normalize("NFKC").toUpperCase()
+  if (!COUNTRY_CODE_PATTERN.test(normalized)) return ""
+  return Array.from(normalized)
+    .map((char) =>
+      String.fromCodePoint(REGION_INDICATOR_BASE + char.charCodeAt(0) - 65)
+    )
+    .join("")
 }

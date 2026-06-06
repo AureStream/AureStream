@@ -1,15 +1,13 @@
-//! Subscription config fetcher with optimal-DNS pinning + CDN accelerator
-//! fallback. Used by the frontend when importing a subscription URL.
+//! Subscription config fetcher with optional CDN accelerator fallback.
+//! Used by the frontend when importing a subscription URL.
 
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
 use std::time::Instant;
 
 use tauri::AppHandle;
 use tauri_plugin_http::reqwest;
 use url::Url;
 
-use super::dns::{is_ip_address, resolve_a_record, get_optimal_local_dns_server};
 use super::whitelist::{load_whitelist_hashes, KNOWN_HOST_SHA256_LIST};
 
 const ACCELERATE_URL: &str = match option_env!("ACCELERATE_URL") {
@@ -117,7 +115,7 @@ pub struct FetchConfigResponse {
 }
 
 #[tauri::command]
-pub async fn fetch_config_with_optimal_dns(
+pub async fn fetch_config(
     app: AppHandle,
     url: String,
     user_agent: String,
@@ -148,51 +146,11 @@ pub async fn fetch_config_with_optimal_dns(
         );
     }
 
-    let t_dns_probe = Instant::now();
-    let dns_server = match get_optimal_local_dns_server(app.clone()).await {
-        Some(d) => d,
-        None => "223.5.5.5".to_string(),
-    };
-    log::info!(
-        "[CONFIG_LOAD] DNS服务器选择 server={} elapsed={}ms",
-        dns_server,
-        t_dns_probe.elapsed().as_millis()
-    );
-
-    let client_builder = reqwest::ClientBuilder::new()
+    let primary_client = reqwest::ClientBuilder::new()
         .timeout(std::time::Duration::from_secs(30))
-        .no_proxy();
-
-    let t_resolve = Instant::now();
-    let primary_client = if !is_ip_address(&hostname) {
-        match resolve_a_record(&hostname, &dns_server).await {
-            Some(ip) => {
-                let addr = SocketAddr::new(IpAddr::V4(ip), port);
-                log::info!(
-                    "[CONFIG_LOAD] A记录解析成功 {} -> {} via DNS {} elapsed={}ms",
-                    hostname,
-                    ip,
-                    dns_server,
-                    t_resolve.elapsed().as_millis()
-                );
-                client_builder
-                    .resolve(&hostname, addr)
-                    .build()
-                    .map_err(|e| e.to_string())?
-            }
-            None => {
-                log::warn!(
-                    "[CONFIG_LOAD] A记录解析失败 {} via {} elapsed={}ms, 回退系统DNS",
-                    hostname,
-                    dns_server,
-                    t_resolve.elapsed().as_millis()
-                );
-                client_builder.build().map_err(|e| e.to_string())?
-            }
-        }
-    } else {
-        client_builder.build().map_err(|e| e.to_string())?
-    };
+        .no_proxy()
+        .build()
+        .map_err(|e| e.to_string())?;
 
     let t_primary = Instant::now();
     match primary_client

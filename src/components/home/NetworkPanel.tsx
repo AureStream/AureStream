@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { RefreshCwIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { invoke } from "@tauri-apps/api/core"
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getCountryCode, getFlagComponent } from "@/lib/country-flags"
+import { getCountryCode, getFlagEmoji } from "@/lib/country-flags"
 import { type } from "@/lib/typography"
 
 interface GeoIpInfo {
@@ -38,8 +38,11 @@ export function NetworkPanel() {
     isp: t("loading"),
   })
   const [refreshing, setRefreshing] = useState(false)
+  const refreshSeq = useRef(0)
 
   const refresh = useCallback(async () => {
+    const seq = refreshSeq.current + 1
+    refreshSeq.current = seq
     setRefreshing(true)
     try {
       const info = await invoke<{
@@ -49,6 +52,7 @@ export function NetworkPanel() {
         region: string
         isp: string
       }>("get_geoip_info", { useProxy: isRunning })
+      if (seq !== refreshSeq.current) return
       setNetworkInfo({
         ip: info.ip || t("unknown"),
         countryName: info.countryName || t("unknown"),
@@ -57,6 +61,7 @@ export function NetworkPanel() {
         isp: info.isp || t("unknown"),
       })
     } catch (e) {
+      if (seq !== refreshSeq.current) return
       console.warn("get_geoip_info via Rust failed:", e)
       setNetworkInfo({
         ip: t("unknown_or_fetch_failed"),
@@ -66,7 +71,9 @@ export function NetworkPanel() {
         isp: t("unknown"),
       })
     } finally {
-      setRefreshing(false)
+      if (seq === refreshSeq.current) {
+        setRefreshing(false)
+      }
     }
   }, [isRunning, t])
 
@@ -86,11 +93,14 @@ export function NetworkPanel() {
   }, [engineState.kind, refresh])
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
     const handleNodeChange = () => {
-      refresh()
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(refresh, 600)
     }
     window.addEventListener("node-changed", handleNodeChange)
     return () => {
+      if (timer) clearTimeout(timer)
       window.removeEventListener("node-changed", handleNodeChange)
     }
   }, [refresh])
@@ -111,16 +121,11 @@ export function NetworkPanel() {
                   const code =
                     getCountryCode(networkInfo.countryCode) ||
                     getCountryCode(networkInfo.countryName)
-                  const Flag = getFlagComponent(code)
-                  if (Flag) {
-                    return (
-                      <Flag
-                        className="absolute inset-0 block size-full"
-                        aria-hidden="true"
-                      />
-                    )
-                  }
-                  return <span className="text-sm">🌐</span>
+                  return (
+                    <span className="text-sm" aria-hidden="true">
+                      {getFlagEmoji(code) || "🌐"}
+                    </span>
+                  )
                 })()}
               </span>
               <span className={type.kvValue}>{networkInfo.countryName}</span>

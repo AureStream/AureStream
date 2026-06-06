@@ -149,29 +149,37 @@ export function SettingsPage() {
 
   useEffect(() => {
     async function loadSettings() {
-      const p = await getProxyPort()
+      const [
+        p,
+        ap,
+        stack,
+        bypass,
+        autoStartValue,
+        hideOnLaunchValue,
+        minimizeToTrayValue,
+        version,
+      ] = await Promise.all([
+        getProxyPort(),
+        getControllerPort(),
+        getTunStack(),
+        getProxyBypass(),
+        getAutoStart(),
+        getHideOnLaunch(),
+        getMinimizeToTray(),
+        invoke<string>("get_app_version").catch(() => "0.2.1"),
+      ])
+
       setPort(String(p))
-      const ap = await getControllerPort()
       setApiPort(String(ap))
       initialPortsRef.current = { mixed: p, controller: ap }
-      const stack = await getTunStack()
       setTunStackState(stack)
-      const bypass = await getProxyBypass()
       const display = bypass || DEFAULT_PROXY_BYPASS_UI
       setBypassList(display)
       setSavedBypass(display)
-
-      // Load new settings
-      setAutoStart(await getAutoStart())
-      setHideOnLaunch(await getHideOnLaunch())
-      setMinimizeToTray(await getMinimizeToTray())
-
-      // Load version from backend
-      try {
-        setAppVersion(await invoke<string>("get_app_version"))
-      } catch {
-        setAppVersion("0.2.1")
-      }
+      setAutoStart(autoStartValue)
+      setHideOnLaunch(hideOnLaunchValue)
+      setMinimizeToTray(minimizeToTrayValue)
+      setAppVersion(version)
 
       // Auto-check for updates on mount
       try {

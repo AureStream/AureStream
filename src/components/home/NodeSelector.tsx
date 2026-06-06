@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { useEngineState } from "@/hooks/useEngineState"
-import { getCountryCode, getFlagComponent } from "@/lib/country-flags"
+import { getCountryCode, getFlagEmoji } from "@/lib/country-flags"
 import { fetchSelectGroup, selectProxyNode, pingNodeTcp, testNodeDelay } from "@/utils/singbox-api"
 import { getStoreValue, setStoreValue } from "@/single/store"
 import {
@@ -209,18 +209,6 @@ export function NodeSelector() {
     }
   }
 
-  // Auto speed test when nodes list is loaded or updated and no latencies are tested yet
-  useEffect(() => {
-    if (nodes.length > 0 && !isTestingSpeed) {
-      const cached = latencyCache.get(activeIdentifier)
-      const currentLatencies = cached ?? latencies
-      const hasNoLatency = nodes.every((node) => currentLatencies[node.name] === undefined)
-      if (hasNoLatency) {
-        handleSpeedTest()
-      }
-    }
-  }, [nodes, activeIdentifier, latencies, isTestingSpeed])
-
   // Map nodes to include latency details and sort if chosen
   const displayNodes = useMemo(() => {
     const mapped = nodes.map((node) => {
@@ -330,16 +318,11 @@ export function NodeSelector() {
                       >
                         {(() => {
                           const code = getCountryCode(node.name)
-                          const Flag = getFlagComponent(code)
-                          if (Flag) {
-                            return (
-                              <Flag
-                                className="absolute inset-0 block size-full"
-                                aria-label={t("flag")}
-                              />
-                            )
-                          }
-                          return <span className="text-base">🌐</span>
+                          return (
+                            <span aria-label={t("flag")} className="text-base">
+                              {getFlagEmoji(code) || "🌐"}
+                            </span>
+                          )
                         })()}
                       </div>
                       <div className="min-w-0 flex-1">

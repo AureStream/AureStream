@@ -9,7 +9,6 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 ### 核心引擎
 - `start(path, mode)`: 启动代理内核。
 - `stop()`: 停止代理内核。
-- `is_running()`: 查询状态机是否处于运行状态。
 - `get_engine_state()`: 返回序列化的状态机信息。
 - `clear_engine_error()`: 清除错误状态并重置为 Idle。
 - `reload_config()`: 热重载当前配置。
@@ -22,15 +21,14 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 ### Shell 与生命周期
 - `version()`, `get_app_version()`: 获取内核与 UI 版本。
 - `read_logs()`: 读取应用运行日志。
-- `open_devtools()`, `open_directory()`, `open_browser()`: 操作系统关联工具调用。
+- `open_devtools()`, `open_directory()`: 操作系统关联工具调用。
 - `quit()`, `restart()`: 控制 Tauri 宿主程序进程。
 - `get_pending_deep_link()`: 获取唤醒时附加的 URI 参数。
 
-### 网络与 DNS
-- `get_lan_ip()`, `ping_google()`, `ping_tcp()`: 连接性检测工具。
+### 网络
+- `ping_tcp()`: 节点 TCP 连通性/延迟检测。
 - `get_geoip_info()`: 获取当前公网 IP 及地理位置信息。
-- `get_optimal_local_dns_server()`, `get_optimal_global_dns_server()`: 并发测试优选 DNS。
-- `fetch_config_with_optimal_dns()`: 带 DNS 防火墙穿透机制的订阅内容抓取。
+- `fetch_config()`: 使用系统解析发起订阅内容抓取；连接配置中的 DNS 使用模板默认值，只有用户显式配置时才覆盖。
 
 ## 2. sing-box Clash API (REST)
 

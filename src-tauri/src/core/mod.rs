@@ -171,14 +171,6 @@ pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn is_running(app: AppHandle) -> bool {
-    matches!(
-        app.state::<EngineStateCell>().snapshot(),
-        EngineState::Running { .. }
-    )
-}
-
-#[tauri::command]
 pub fn get_engine_state(app: AppHandle) -> EngineState {
     app.state::<EngineStateCell>().snapshot()
 }

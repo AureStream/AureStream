@@ -1,10 +1,28 @@
+import { lazy, Suspense } from "react"
 import { AppSidebar } from "@/components/layout/AppSidebar"
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext"
 import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
 import { HomePage } from "@/pages/HomePage"
-import { SubscriptionPage } from "@/pages/SubscriptionPage"
-import { SettingsPage } from "@/pages/SettingsPage"
 import "@/lib/i18n"
+
+const SubscriptionPage = lazy(() =>
+  import("@/pages/SubscriptionPage").then((module) => ({
+    default: module.SubscriptionPage,
+  }))
+)
+const SettingsPage = lazy(() =>
+  import("@/pages/SettingsPage").then((module) => ({
+    default: module.SettingsPage,
+  }))
+)
+
+function PageLoading() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+      Loading...
+    </div>
+  )
+}
 
 function AppLayout() {
   const { activeTab } = useNavigation()
@@ -27,9 +45,11 @@ function AppLayout() {
       <AppSidebar />
 
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/40 backdrop-blur-2xl border border-border/60 dark:bg-black/30 dark:border-white/10 rounded-[24px] shadow-sm p-4 sm:p-5">
-        {activeTab === "home" && <HomePage />}
-        {activeTab === "subscription" && <SubscriptionPage />}
-        {activeTab === "settings" && <SettingsPage />}
+        <Suspense fallback={<PageLoading />}>
+          {activeTab === "home" && <HomePage />}
+          {activeTab === "subscription" && <SubscriptionPage />}
+          {activeTab === "settings" && <SettingsPage />}
+        </Suspense>
       </main>
     </div>
   )

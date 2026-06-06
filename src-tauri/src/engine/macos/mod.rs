@@ -433,7 +433,7 @@ async fn verify_and_fallback(applied: Option<&(String, String)>) {
         return;
     };
     log::info!(
-        "[dns] phase 2 (post-kill verify): probing [{}] '{}'",
+        "[dns] phase 2 (post-kill verify): keeping restored DNS [{}] '{}'",
         service,
         original
     );
@@ -441,40 +441,8 @@ async fn verify_and_fallback(applied: Option<&(String, String)>) {
         log::info!("[dns] phase 2 [{}] kept DHCP default (no probe)", service);
         return;
     }
-    let mut alive_ip: Option<String> = None;
-    for ip in original.split_whitespace() {
-        log::info!("[dns] phase 2 probe [{}] → {} ...", service, ip);
-        if crate::commands::dns::probe_dns_reachable(ip).await {
-            alive_ip = Some(ip.to_string());
-            break;
-        }
-    }
-    if let Some(ip) = alive_ip {
-        log::info!(
-            "[dns] phase 2 [{}] {} alive, keeping original '{}'",
-            service,
-            ip,
-            original
-        );
-        macos_helper::api::flush_dns_cache().ok();
-        return;
-    }
-    log::warn!(
-        "[dns] phase 2 [{}] all of '{}' unreachable — releasing to DHCP (writing empty)",
-        service,
-        original
-    );
-    if let Err(e) = macos_helper::api::set_dns_servers(service, "empty") {
-        log::warn!(
-            "[dns] phase 2 fallback write [{}] → empty failed: {}",
-            service,
-            e
-        );
-    } else {
-        log::info!("[dns] phase 2 [{}] fell back to empty (DHCP)", service);
-    }
     macos_helper::api::flush_dns_cache().ok();
-    log::info!("[dns] phase 2 done, cache flushed");
+    log::info!("[dns] phase 2 done without DNS reachability probe");
 }
 
 pub fn release_dns_on_network_down() -> Result<(), String> {

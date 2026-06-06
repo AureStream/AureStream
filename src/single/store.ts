@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
 import {
@@ -23,6 +22,10 @@ import {
 } from '../types/definition';
 
 export const LANGUAGE_STORE_KEY = 'language';
+const DIRECT_DNS_STORE_KEY = 'direct_dns';
+const PROXY_DNS_STORE_KEY = 'proxy_dns';
+const DEFAULT_DIRECT_DNS = '223.5.5.5';
+const DEFAULT_PROXY_DNS = '8.8.8.8';
 
 export const store = new LazyStore('settings.json', {
     defaults: {},
@@ -51,7 +54,7 @@ export const setLanguage = async (language: string) => {
 
 export async function getStoreValue(key: string, defaultValue?: any): Promise<any> {
     let value = await store.get(key);
-    if (defaultValue && (value === undefined || value === null || value === '')) {
+    if (defaultValue !== undefined && (value === undefined || value === null || value === '')) {
         return defaultValue;
     }
     return value;
@@ -181,35 +184,31 @@ export async function getCustomRuleSet(key: 'direct' | 'proxy'): Promise<{ domai
 }
 
 export async function setDirectDNS(dnsServers: string) {
-    await store.set('direct_dns', dnsServers);
+    await store.set(DIRECT_DNS_STORE_KEY, dnsServers);
     await store.save();
 }
 
-export async function getDirectDNS(): Promise<string> {
-    let s = await store.get('direct_dns') as string | undefined;
-    if (s) {
-        return s;
-    }
-    try {
-        let defaultValue = await invoke('get_optimal_local_dns_server') as string;
-        return defaultValue || '223.5.5.5';
-    } catch {
-        return '223.5.5.5';
-    }
+export async function getConfiguredDirectDNS(): Promise<string | undefined> {
+    const s = await store.get(DIRECT_DNS_STORE_KEY) as string | undefined;
+    const trimmed = s?.trim();
+    return trimmed || undefined;
 }
 
-/** Get the fastest global DNS server (benchmarked at startup). */
+export async function getDirectDNS(): Promise<string> {
+    return (await getConfiguredDirectDNS()) ?? DEFAULT_DIRECT_DNS;
+}
+
+/** Get the configured proxy DNS, falling back to the template default. */
 export async function getProxyDnsServer(): Promise<string> {
-    let s = await store.get('proxy_dns') as string | undefined;
-    if (s) {
-        return s;
-    }
-    try {
-        let defaultValue = await invoke('get_optimal_global_dns_server') as string;
-        return defaultValue || '8.8.8.8';
-    } catch {
-        return '8.8.8.8';
-    }
+    const s = await store.get(PROXY_DNS_STORE_KEY) as string | undefined;
+    const trimmed = s?.trim();
+    return trimmed || DEFAULT_PROXY_DNS;
+}
+
+export async function getConfiguredProxyDNS(): Promise<string | undefined> {
+    const s = await store.get(PROXY_DNS_STORE_KEY) as string | undefined;
+    const trimmed = s?.trim();
+    return trimmed || undefined;
 }
 
 export async function getUserAgent(): Promise<string> {

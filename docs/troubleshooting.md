@@ -23,8 +23,8 @@
 - 在 Windows 环境，AureStream 已经集成了对 UWP 应用的自动环回免除 (Loopback Exemption)。
 
 ## 5. 订阅更新失败
-- 更新逻辑底层使用 `fetch_config_with_optimal_dns`。
-- 如果订阅域名被 DNS 污染，程序会自动向并发测试中延迟最低的安全 DNS 发起解析重试。
+- 更新逻辑底层使用 `fetch_config`，订阅抓取走系统解析，不再做公共 DNS 测速或手写 A 记录解析。
+- 连接配置中的 DNS 默认使用 `config-template.jsonc` 里的模板值；只有用户显式配置 DNS 时才覆盖模板。
 - 也可以通过在订阅地址栏填入本地协议如 `file:///D:/my-config.yaml` 导入本地配置。
 
 ## 6. 配置生成问题

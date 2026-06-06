@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import type Database from "@tauri-apps/plugin-sql"
 import { getDataBaseInstance } from "@/single/db"
 import { getStoreValue, setStoreValue, getEnableTun } from "@/single/store"
 import { requireEngineIdle } from "@/lib/require-engine-idle"
@@ -71,13 +72,14 @@ function parseNodes(configContent: string): ProxyNode[] {
 }
 
 async function loadActiveSubscription(
-  activeId: string
+  activeId: string,
+  db?: Database
 ): Promise<{
   activeConfig: SubscriptionConfig | null
   nodes: ProxyNode[]
 }> {
-  const db = await getDataBaseInstance()
-  const configs = await db.select<SubscriptionConfig[]>(
+  const database = db ?? (await getDataBaseInstance())
+  const configs = await database.select<SubscriptionConfig[]>(
     "SELECT * FROM subscription_configs WHERE identifier = $1",
     [activeId]
   )
@@ -99,18 +101,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [nodes, setNodes] = useState<ProxyNode[]>([])
   const [loading, setLoading] = useState(true)
 
+  const applyActiveState = useCallback(
+    (
+      activeId: string,
+      cfg: SubscriptionConfig | null,
+      parsedNodes: ProxyNode[]
+    ) => {
+      setActiveIdentifier(activeId)
+      setActiveConfig(cfg)
+      setNodes(parsedNodes)
+      window.dispatchEvent(
+        new CustomEvent("active-subscription-changed", {
+          detail: { identifier: activeId },
+        })
+      )
+    },
+    []
+  )
+
   const applyActiveId = useCallback(async (activeId: string) => {
     const { activeConfig: cfg, nodes: parsed } =
       await loadActiveSubscription(activeId)
-    setActiveIdentifier(activeId)
-    setActiveConfig(cfg)
-    setNodes(parsed)
-    window.dispatchEvent(
-      new CustomEvent("active-subscription-changed", {
-        detail: { identifier: activeId },
-      })
-    )
-  }, [])
+    applyActiveState(activeId, cfg, parsed)
+  }, [applyActiveState])
 
   const selectSubscription = useCallback(
     async (identifier: string): Promise<boolean> => {
@@ -131,21 +144,26 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const db = await getDataBaseInstance()
+      const [db, storedActiveId] = await Promise.all([
+        getDataBaseInstance(),
+        getStoreValue(SSI_STORE_KEY) as Promise<string | undefined>,
+      ])
       const rows = await db.select<Subscription[]>(
         "SELECT * FROM subscriptions ORDER BY id DESC"
       )
       setSubscriptions(rows)
 
       if (rows.length > 0) {
-        let activeId = (await getStoreValue(SSI_STORE_KEY)) as string | undefined
+        let activeId = storedActiveId
         let activeSub = rows.find((r) => r.identifier === activeId)
         if (!activeSub) {
           activeSub = rows[0]
           activeId = activeSub.identifier
           await setStoreValue(SSI_STORE_KEY, activeId)
         }
-        await applyActiveId(activeSub.identifier)
+        const { activeConfig: cfg, nodes: parsed } =
+          await loadActiveSubscription(activeSub.identifier, db)
+        applyActiveState(activeSub.identifier, cfg, parsed)
       } else {
         setActiveIdentifier("")
         setActiveConfig(null)
@@ -156,7 +174,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [applyActiveId])
+  }, [applyActiveState])
 
   useEffect(() => {
     refresh()
@@ -168,6 +186,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const CHECK_INTERVAL_MS = 10 * 60 * 1000 // every 10 minutes
+    const INITIAL_AUTO_UPDATE_DELAY_MS = 60 * 1000
 
     const runAutoUpdateCycle = async () => {
       try {
@@ -227,11 +246,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Run once on mount
-    runAutoUpdateCycle()
-
+    const initialTimer = setTimeout(runAutoUpdateCycle, INITIAL_AUTO_UPDATE_DELAY_MS)
     const timer = setInterval(runAutoUpdateCycle, CHECK_INTERVAL_MS)
-    return () => clearInterval(timer)
+    return () => {
+      clearTimeout(initialTimer)
+      clearInterval(timer)
+    }
   }, [applyActiveId])
 
   return (
