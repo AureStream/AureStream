@@ -22,7 +22,7 @@ pub fn register_plugins(builder: Builder<Wry>, migrations: Vec<Migration>) -> Bu
                     out.finish(format_args!(
                         "[{}][{}][{}][{}] {}",
                         now.format("%Y-%m-%d"),
-                        now.format("%H:%M:%S"),
+                        now.format("%H:%M:%S%.3f"),
                         record.level(),
                         record.target(),
                         message

@@ -88,7 +88,7 @@ fn main() -> ExitCode {
                 buf,
                 "[{}][{}][{}][{}] {}",
                 now.format("%Y-%m-%d"),
-                now.format("%H:%M:%S"),
+                now.format("%H:%M:%S%.3f"),
                 record.level(),
                 record.target(),
                 record.args()
