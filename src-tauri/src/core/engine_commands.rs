@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 
-use crate::{EngineManager, PlatformEngine};
+use crate::core::{EngineManager, PlatformEngine};
 
 #[tauri::command]
 pub async fn engine_ensure_installed(app: AppHandle) -> Result<(), String> {

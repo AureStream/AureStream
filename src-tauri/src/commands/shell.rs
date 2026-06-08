@@ -1,5 +1,5 @@
 use crate::state::{AppData, LogType};
-use aurestream_plugin_lifecycle::commands::stop;
+use crate::core::commands::stop;
 
 use tauri::AppHandle;
 use tauri::Manager;

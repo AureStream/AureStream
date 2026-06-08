@@ -1,10 +1,10 @@
-use crate::ports::{
+use crate::core::ports::{
     controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_listening,
 };
-use crate::process::{pm_snapshot, ProcessManager};
-use crate::state_machine::{transition, EngineState, EngineStateCell, Intent};
-use crate::{config_check, perf, process, readiness, EngineManager, PlatformEngine, ProxyMode};
-use crate::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
+use crate::core::process::{pm_snapshot, ProcessManager};
+use crate::core::state_machine::{transition, EngineState, EngineStateCell, Intent};
+use crate::core::{config_check, perf, process, readiness, EngineManager, PlatformEngine, ProxyMode};
+use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -262,7 +262,7 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
                     "[reload] action={action} mixed :{mixed_port} not ready after restart, applying system proxy anyway"
                 );
             }
-            if let Err(e) = aurestream_plugin_proxy::sysproxy::set_system_proxy(&app, crate::ports::mixed_proxy_port(&app)).await {
+            if let Err(e) = aurestream_plugin_proxy::sysproxy::set_system_proxy(&app, crate::core::ports::mixed_proxy_port(&app)).await {
                 ::log::error!(
                     "[reload] action={action} re-apply system proxy failed: {}",
                     e

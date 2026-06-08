@@ -320,7 +320,6 @@ name = "aurestream"
 version = "0.2.4"
 dependencies = [
  "anyhow",
- "aurestream-plugin-lifecycle",
  "aurestream-plugin-privilege",
  "aurestream-plugin-proxy",
  "aurestream-plugin-tun",
@@ -358,27 +357,6 @@ dependencies = [
  "webbrowser",
  "winapi",
  "windows 0.62.2",
-]
-
-[[package]]
-name = "aurestream-plugin-lifecycle"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aurestream-plugin-privilege",
- "aurestream-plugin-proxy",
- "aurestream-plugin-tun",
- "chrono",
- "flate2",
- "lazy_static",
- "libc",
- "log",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin-shell",
- "tauri-plugin-store",
- "tokio",
 ]
 
 [[package]]

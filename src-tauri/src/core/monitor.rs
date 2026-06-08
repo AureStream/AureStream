@@ -2,10 +2,10 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tauri::Manager;
 
-use crate::log::{create_singbox_log_writer, write_singbox_log};
-use crate::process::ProcessManager;
-use crate::state_machine::{transition, EngineState, EngineStateCell, Intent};
-use crate::{EngineManager, PlatformEngine, ProxyMode, EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
+use crate::core::log::{create_singbox_log_writer, write_singbox_log};
+use crate::core::process::ProcessManager;
+use crate::core::state_machine::{transition, EngineState, EngineStateCell, Intent};
+use crate::core::{EngineManager, PlatformEngine, ProxyMode, EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 
 pub(crate) fn spawn_process_monitor(
     app: tauri::AppHandle,
@@ -122,7 +122,7 @@ pub(crate) async fn handle_process_termination(
     }
 
     #[cfg(target_os = "macos")]
-    let is_watchdog_restart = crate::macos_watchdog::is_restart_in_progress();
+    let is_watchdog_restart = crate::core::macos_watchdog::is_restart_in_progress();
     #[cfg(not(target_os = "macos"))]
     let is_watchdog_restart = false;
 
