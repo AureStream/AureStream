@@ -4,8 +4,8 @@ use tauri::{AppHandle, Manager};
 use tokio::net::TcpStream;
 use tokio::time::{sleep, timeout, Instant};
 
-use crate::core::ports::{controller_port, mixed_proxy_port};
-use crate::core::state_machine::{transition, EngineState, EngineStateCell, Intent};
+use crate::engine::ports::{controller_port, mixed_proxy_port};
+use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);

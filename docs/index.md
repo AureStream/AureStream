@@ -43,7 +43,7 @@ AureStream/
 ├── src-tauri/               # Rust 后端
 │   ├── src/core/            # 进程管理、端口、配置校验
 │   ├── src/engine/          # 平台引擎与 shutdown/readiness
-│   ├── resources/linux/     # Linux 打包资源
+│   ├── resources/linux/     # Linux deb/rpm 安装/卸载脚本
 │   ├── helper/              # macOS XPC Helper
 │   └── tun-service/         # Windows TUN 服务
 ├── scripts/                 # 二进制下载、签名、预构建

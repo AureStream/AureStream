@@ -95,19 +95,19 @@ graph TD
   * `Idle`（空闲）➔ `Starting`（启动中）➔ `Running`（运行中）
   * `Running`（运行中）➔ `Stopping`（停止中）➔ `Idle`（空闲）
   * `Starting/Running` ➔ `Failed(reason)`（失败）➔ `Idle`（空闲）
-* **配置校验**（`src-tauri/src/core/config_check.rs`）：`start` 前执行 `aurestream-core check -c config.json`，失败则进入 `Failed` 并返回 stderr。
+* **配置校验**（`src-tauri/src/engine/config_check.rs`）：`start` 前执行 `aurestream-core check -c config.json`，失败则进入 `Failed` 并返回 stderr。
 * **就绪探测器 (`src-tauri/src/engine/common/readiness.rs`)**：
   在侧车拉起后，异步轮询 `experimental.clash_api.external_controller` 端口（默认 `9191`，与 `settings.json` 中 `singbox_api_port_key` 一致）；探测成功后方才将状态转移至 `Running`。
 * **优雅停止 (`src-tauri/src/engine/common/shutdown.rs`)**：
   侧车进程终止后，通过 `wait_for_port_release` 轮询 mixed 代理端口（默认 `2345`）与控制端口是否释放，替代固定 sleep，缩短 SystemProxy 模式断开等待时间。
-* **性能埋点 (`src-tauri/src/core/perf.rs`)**：
+* **性能埋点 (`src-tauri/src/engine/perf.rs`)**：
   可选的 Rust 侧耗时统计，配合前端 `src/lib/perf.ts` 用于连接与热重载链路分析。
 
 ### 3.2 平台引擎特定实现 (`src-tauri/src/engine/`)
 为了在不同操作系统上管理网络代理和路由行为，AureStream 定义了统一的 `EngineManager` 接口特征（Trait）：
 * **Windows (`engine/windows/mod.rs`)**：利用 Tauri Sidecar 机制拉起 `sing-box` 进程，并通过 `sysproxy_rs` 调用 WinINet API 覆写 Windows 系统代理设置。
 * **macOS (`engine/macos/`)**：使用 `dns_watcher.rs` 监听 macOS 的 `SCDynamicStore` 网络变化事件，并通过 XPC 架构与特权辅助程序（Privileged Helper）交互实现高级路由配置。
-* **Linux (`engine/linux/mod.rs`)**：借由 `pkexec` 调用随 deb/rpm 安装的 `aurestream-tun-helper`（`src-tauri/resources/linux/`），动态修改 `systemd-resolved` 的 DNS 配置，并支持特权服务卸载。
+* **Linux (`engine/linux/mod.rs`)**：借由 `pkexec` 调用随 deb/rpm 安装的 `aurestream-tun-helper`（源文件位于 `crates/aurestream-plugin-privilege/linux-helper/`），动态修改 `systemd-resolved` 的 DNS 配置，并支持特权服务卸载。
 
 ### 3.3 系统代理配置库 `sysproxy_rs` (`src-tauri/sysproxy-rs/`)
 一个为项目量身定制的 Rust 跨平台代理开关及配置控制库：

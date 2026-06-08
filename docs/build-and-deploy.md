@@ -42,8 +42,8 @@ pnpm sign-macos-bundle
 
 | 安装路径 | 源文件 |
 |----------|--------|
-| `/usr/lib/AureStream/aurestream-tun-helper` | `resources/linux/aurestream-tun-helper` |
-| polkit / udev 规则 | `resources/linux/*.policy`, `49-aurestream.rules` |
+| `/usr/lib/AureStream/aurestream-tun-helper` | `../crates/aurestream-plugin-privilege/linux-helper/aurestream-tun-helper` |
+| polkit / udev 规则 | `../crates/aurestream-plugin-privilege/linux-helper/*.policy`, `49-aurestream.rules` |
 | postinst/postrm | `resources/linux/deb-*.sh` |
 
 ## 4. CI 构建

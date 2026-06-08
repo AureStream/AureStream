@@ -1,7 +1,8 @@
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
-use crate::core::{EngineManager, ProxyMode, EVENT_TAURI_LOG};
-use crate::core::process::ProcessManager;
+use crate::engine::{EngineManager, ProxyMode};
+use crate::core::EVENT_TAURI_LOG;
+use crate::engine::process::ProcessManager;
 use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
 use tauri_plugin_store::StoreExt;
 use std::sync::Arc;
@@ -23,10 +24,10 @@ impl EngineManager for WindowsEngine {
             Self::ensure_installed(app).await?;
 
             // Resolve the paths using the standard Tauri v2 sidecar layout
-            let gateway = crate::core::helper::extract_tun_gateway_from_config(&config_path)
+            let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
                 .unwrap_or_else(|| "-".to_string());
 
-            let core_path_str = crate::core::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
+            let core_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
                 .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
 
             let config_path_str = config_path.as_str();
@@ -54,7 +55,7 @@ impl EngineManager for WindowsEngine {
             let child_pid = child.pid();
             log::info!("[aurestream-core] spawned pid={} mode={:?}", child_pid, mode);
 
-            crate::core::monitor::spawn_process_monitor(
+            crate::engine::monitor::spawn_process_monitor(
                 app.clone(),
                 rx,
                 Arc::new(mode.clone()),
@@ -71,7 +72,7 @@ impl EngineManager for WindowsEngine {
             }
 
             if should_set_system_proxy {
-                if let Err(e) = set_system_proxy(app, crate::core::ports::mixed_proxy_port(app)).await {
+                if let Err(e) = set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app)).await {
                     let _ =
                         app.emit(EVENT_TAURI_LOG, (2, format!("Failed to set proxy: {}", e)));
                     return Err(e.to_string());
@@ -126,7 +127,7 @@ impl EngineManager for WindowsEngine {
         }
 
         if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
-            crate::core::shutdown::wait_for_sidecar_ports_release(app).await;
+            crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
         } else if child_pid_for_log.is_none() {
             log::info!("[win-stop] post_kill_alive_check skipped reason=no_child_pid");
         }
@@ -151,16 +152,16 @@ impl EngineManager for WindowsEngine {
         };
 
         let start_epoch = app
-            .state::<crate::core::state_machine::EngineStateCell>()
+            .state::<crate::engine::state_machine::EngineStateCell>()
             .snapshot()
             .epoch();
-        let mixed_port = crate::core::ports::mixed_proxy_port(app);
+        let mixed_port = crate::engine::ports::mixed_proxy_port(app);
         Self::stop(app).await?;
 
         let release_deadline =
             std::time::Instant::now() + std::time::Duration::from_secs(5);
         while std::time::Instant::now() < release_deadline
-            && crate::core::ports::probe_port_listening(mixed_port)
+            && crate::engine::ports::probe_port_listening(mixed_port)
         {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
@@ -179,7 +180,7 @@ impl EngineManager for WindowsEngine {
     }
 
     async fn ensure_installed(_app: &AppHandle) -> Result<(), String> {
-        let tun_service_path_str = crate::core::helper::get_sidecar_path(std::path::Path::new("tun-service"))
+        let tun_service_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
             .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
         let tun_service_path = std::path::PathBuf::from(&tun_service_path_str);
 
@@ -191,7 +192,7 @@ impl EngineManager for WindowsEngine {
                     "[win] tun-service is missing or needs upgrade ({:?}), attempting elevated installation via UAC",
                     freshness
                 );
-                aurestream_plugin_privilege::run_elevated_install(&tun_service_path)?;
+                aurestream_plugin_privilege::windows::run_elevated_install(&tun_service_path)?;
             }
             Freshness::UpToDate => {
                 log::info!("[win] tun-service is up to date");
@@ -204,10 +205,10 @@ impl EngineManager for WindowsEngine {
     }
 
     async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
-        let tun_service_path_str = crate::core::helper::get_sidecar_path(std::path::Path::new("tun-service"))
+        let tun_service_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
             .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
         let tun_service_path = std::path::PathBuf::from(&tun_service_path_str);
-        aurestream_plugin_privilege::run_elevated_uninstall(&tun_service_path)
+        aurestream_plugin_privilege::windows::run_elevated_uninstall(&tun_service_path)
     }
 
     async fn probe(_app: &AppHandle) -> Result<String, String> {

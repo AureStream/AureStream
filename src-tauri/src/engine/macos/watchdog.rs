@@ -7,7 +7,7 @@
 //!
 //! All state lives in this module; `core` does not see the watchdog.
 //! The only cross-module concession is the `is_restart_in_progress` flag
-//! read by `core::monitor` to skip the normal cleanup path during a
+//! read by `engine::monitor` to skip the normal cleanup path during a
 //! watchdog-triggered restart.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,12 +17,12 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
-use crate::core::monitor::handle_process_termination;
-use crate::core::process::ProcessManager;
-use crate::core::ProxyMode;
-use crate::core::state_machine::{transition, EngineStateCell, Intent};
+use crate::engine::monitor::handle_process_termination;
+use crate::engine::process::ProcessManager;
+use crate::engine::ProxyMode;
+use crate::engine::state_machine::{transition, EngineStateCell, Intent};
 use crate::core::EVENT_STATUS_CHANGED;
-use crate::core::readiness;
+use crate::engine::readiness;
 
 use aurestream_plugin_privilege::macos::helper as macos_helper;
 
@@ -61,7 +61,7 @@ fn interval_hours(interval: Duration) -> u64 {
 }
 
 // Flag set while a watchdog restart is mid-flight (between stop and start).
-// `core::monitor::handle_process_termination` reads this to skip the
+// `engine::monitor::handle_process_termination` reads this to skip the
 // normal cleanup path so the impending restart isn't mistaken for a crash.
 static RESTART_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
@@ -71,7 +71,7 @@ static RESTART_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static ABORT_HANDLE: Mutex<Option<tokio::task::AbortHandle>> = Mutex::new(None);
 
 /// True iff the watchdog is currently between stop and start of a restart
-/// cycle — `core::monitor` uses this to suppress its normal cleanup path.
+/// cycle — `engine::monitor` uses this to suppress its normal cleanup path.
 pub fn is_restart_in_progress() -> bool {
     RESTART_IN_PROGRESS.load(Ordering::SeqCst)
 }
@@ -177,7 +177,7 @@ async fn run(app: AppHandle, path: Arc<String>) {
 async fn restart_tun_send_safe(app: AppHandle, path: Arc<String>) -> Result<(), String> {
     let app_c = app.clone();
     let path_c = path.as_ref().clone();
-    let _pid = tokio::task::spawn_blocking(move || aurestream_plugin_tun::macos::start_tun_via_helper(&path_c, &crate::core::log::resolve_singbox_log_path(&app_c).map(|p| p.to_string_lossy().to_string()).unwrap_or_default(), false, &crate::core::helper::extract_tun_gateway_from_config(&path_c).unwrap_or_default()))
+    let _pid = tokio::task::spawn_blocking(move || aurestream_plugin_tun::macos::start_tun_via_helper(&path_c, &crate::engine::log::resolve_singbox_log_path(&app_c).map(|p| p.to_string_lossy().to_string()).unwrap_or_default(), false, &crate::engine::helper::extract_tun_gateway_from_config(&path_c).unwrap_or_default()))
         .await
         .map_err(|e| format!("restart join error: {}", e))?
         .map_err(|e| format!("restart start_tun_via_helper failed: {}", e))?;

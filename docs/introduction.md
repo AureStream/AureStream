@@ -43,7 +43,7 @@ AureStream/
 │   │   ├── commands/          # Tauri API（网络、配置抓取、Shell）
 │   │   ├── core/              # 进程管理、端口、配置校验、perf
 │   │   └── engine/            # 跨平台引擎 (shutdown/readiness/平台实现)
-│   ├── resources/linux/       # Linux deb/rpm 安装资源 (helper, polkit, udev)
+│   ├── resources/linux/       # Linux deb/rpm 安装/卸载脚本
 │   ├── sysproxy-rs/           # 本地子 Crate：跨平台系统代理设置库 (sysproxy_rs)
 │   ├── tun-service/           # 本地子 Crate：Windows TUN 后台特权服务 (AureStreamTunService)
 │   ├── Cargo.toml             # Rust 工作区主配置文件

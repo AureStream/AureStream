@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use tauri_plugin_shell::process::CommandChild;
 
-use crate::core::ProxyMode;
+use crate::engine::ProxyMode;
 
 #[cfg(unix)]
 pub(crate) fn pid_is_alive(pid: u32) -> bool {

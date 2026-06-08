@@ -1,7 +1,7 @@
 use tauri::AppHandle;
-use crate::core::ProxyMode;
-use crate::core::EngineManager;
-use crate::core::process::ProcessManager;
+use crate::engine::EngineManager;
+use crate::engine::ProxyMode;
+use crate::engine::process::ProcessManager;
 use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
 use tauri_plugin_store::StoreExt;
 use std::sync::Arc;
@@ -33,7 +33,7 @@ impl EngineManager for LinuxEngine {
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
                 log::info!("[aurestream-core] spawned pid={} mode=SystemProxy", child_pid);
-                crate::core::monitor::spawn_process_monitor(
+                crate::engine::monitor::spawn_process_monitor(
                     app.clone(),
                     rx,
                     Arc::new(mode.clone()),
@@ -48,7 +48,7 @@ impl EngineManager for LinuxEngine {
                     mgr.is_stopping = false;
                 }
                 if should_set_system_proxy {
-                    set_system_proxy(app, crate::core::ports::mixed_proxy_port(app)).await.map_err(|e| e.to_string())?;
+                    set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app)).await.map_err(|e| e.to_string())?;
                 }
             }
             ProxyMode::IntoProxy => { // AureStream uses IntoProxy for TUN
@@ -64,10 +64,10 @@ impl EngineManager for LinuxEngine {
                 };
 
                 let sidecar_path =
-                    crate::core::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
+                    crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
                         .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
                 let dns_override_args = dns_info.as_ref().and_then(|(iface, original)| {
-                    let gateway = crate::core::helper::extract_tun_gateway_from_config(&config_path)
+                    let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
                         .unwrap_or_default();
                     if gateway.is_empty() {
                         None
@@ -94,7 +94,7 @@ impl EngineManager for LinuxEngine {
                     "[sing-box] spawned pid={} (pkexec) mode=IntoProxy",
                     child_pid
                 );
-                crate::core::monitor::spawn_process_monitor(
+                crate::engine::monitor::spawn_process_monitor(
                     app.clone(),
                     rx,
                     Arc::new(mode.clone()),
@@ -139,7 +139,7 @@ impl EngineManager for LinuxEngine {
                         );
                     }
                 }
-                crate::core::shutdown::wait_for_sidecar_ports_release(app).await;
+                crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
             }
             ProxyMode::IntoProxy => {
                 let dns_info = take_dns_override();

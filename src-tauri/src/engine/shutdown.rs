@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use tauri::AppHandle;
 
-use crate::core::ports::{controller_port, mixed_proxy_port, wait_for_port_release};
+use crate::engine::ports::{controller_port, mixed_proxy_port, wait_for_port_release};
 
 const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(3);
 

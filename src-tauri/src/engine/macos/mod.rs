@@ -1,16 +1,17 @@
 use tauri::AppHandle;
 use std::process::Command;
-use crate::core::ProxyMode;
-use crate::core::EngineManager;
-use crate::core::process::ProcessManager;
+use crate::engine::EngineManager;
+use crate::engine::ProxyMode;
+use crate::engine::process::ProcessManager;
 use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
 use aurestream_plugin_privilege::macos::helper as macos_helper;
-use crate::core::macos_watchdog as watchdog;
 use aurestream_plugin_tun::macos::{
     start_tun_via_helper, stop_tun_process, apply_system_dns_override, release_dns_on_network_down,
     restore_system_dns,
 };
 use tauri_plugin_store::StoreExt;
+
+pub(crate) mod watchdog;
 
 pub struct MacOSEngine;
 
@@ -35,7 +36,7 @@ impl EngineManager for MacOSEngine {
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
                 log::info!("[aurestream-core] spawned pid={} mode=SystemProxy", child_pid);
-                crate::core::monitor::spawn_process_monitor(
+                crate::engine::monitor::spawn_process_monitor(
                     app.clone(),
                     rx,
                     Arc::new(mode.clone()),
@@ -50,7 +51,7 @@ impl EngineManager for MacOSEngine {
                     mgr.is_stopping = false;
                 }
                 if should_set_system_proxy {
-                    let port = crate::core::ports::mixed_proxy_port(app);
+                    let port = crate::engine::ports::mixed_proxy_port(app);
                     set_system_proxy(app, port).await.map_err(|e| e.to_string())?;
                 }
             }
@@ -61,8 +62,8 @@ impl EngineManager for MacOSEngine {
                     .and_then(|store| store.get("enable_bypass_router_key"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let log_path_str = crate::core::log::resolve_singbox_log_path(app).map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-                let gateway = crate::core::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default();
+                let log_path_str = crate::engine::log::resolve_singbox_log_path(app).map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+                let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default();
 
                 let path_c = config_path.clone();
                 tokio::task::spawn_blocking(move || start_tun_via_helper(&path_c, &log_path_str, bypass_router_enabled, &gateway))
@@ -86,7 +87,7 @@ impl EngineManager for MacOSEngine {
                             code: Some(exit.exit_code),
                             signal: None,
                         };
-                        crate::core::monitor::handle_process_termination(
+                        crate::engine::monitor::handle_process_termination(
                             &exit_app,
                             &exit_mode,
                             payload,
@@ -145,7 +146,7 @@ impl EngineManager for MacOSEngine {
                         );
                     }
                 }
-                crate::core::shutdown::wait_for_sidecar_ports_release(app).await;
+                crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
             }
             ProxyMode::IntoProxy => {
                 stop_tun_process().await.map_err(|e| {
@@ -167,7 +168,7 @@ impl EngineManager for MacOSEngine {
                 _ => return,
             }
         };
-        if let Err(e) = apply_system_dns_override(&crate::core::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default()) {
+        if let Err(e) = apply_system_dns_override(&crate::engine::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default()) {
             log::warn!("[dns] NetworkUp re-apply failed: {}", e);
         }
     }

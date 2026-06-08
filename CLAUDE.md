@@ -109,12 +109,10 @@ src/                          # Frontend (React/TypeScript)
 
 src-tauri/                    # Rust backend
 ├── src/commands/             # Tauri command handlers
-├── src/core/                 # Process manager, ports, config check, perf
-├── src/engine/               # Platform engines, shutdown, readiness
-├── resources/linux/          # Linux package resources (helper, polkit)
-├── sysproxy-rs/              # Cross-platform system proxy library
-├── tun-service/              # Windows TUN service
-├── helper/                   # macOS privileged helper (XPC)
+├── src/core/                 # Tauri command entrypoints
+├── src/engine/               # Platform engines, process manager, readiness
+├── resources/linux/          # Linux deb/rpm package scripts
+├── ../crates/aurestream-plugin-privilege/ # Privilege helpers and platform elevation
 ```
 
 ## Path Aliases

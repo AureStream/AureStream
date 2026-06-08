@@ -17,7 +17,7 @@ if (process.platform !== "darwin") {
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(scriptDir, "..");
 const srcTauri = join(repoRoot, "src-tauri");
-const helperDir = join(srcTauri, "helper");
+const helperDir = join(repoRoot, "crates", "aurestream-plugin-privilege", "macos-helper");
 const buildDir = join(srcTauri, "target", "helper");
 const label = "com.root.aurestream.helper";
 

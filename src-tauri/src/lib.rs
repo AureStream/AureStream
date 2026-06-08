@@ -1,6 +1,7 @@
 mod app;
 mod commands;
 mod core;
+mod engine;
 pub mod state;
 mod utils;
 
@@ -38,7 +39,7 @@ pub fn run() {
             crate::core::commands::get_engine_state,
             crate::core::commands::clear_engine_error,
             crate::core::commands::reload_config,
-            crate::core::config_check::mark_config_verified,
+            crate::engine::config_check::mark_config_verified,
             // engine probe commands
             crate::core::engine_commands::engine_ensure_installed,
             crate::core::engine_commands::engine_uninstall_service,
