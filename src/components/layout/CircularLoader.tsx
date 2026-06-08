@@ -56,7 +56,7 @@ export function CircularLoader({
           style={{ inset: size * 0.24 }}
         >
           <img
-            src="/logo2.png"
+            src="/tray.png"
             alt=""
             className="object-contain"
             style={{ width: "58%", height: "58%" }}
