@@ -29,7 +29,10 @@ fn compress_singbox_log(log_path: &Path) -> std::io::Result<()> {
 
             encoder.finish()?;
             std::fs::remove_file(log_path)?;
-            log::info!("Compressed aurestream-core log to: {}", compressed_path.display());
+            log::info!(
+                "Compressed aurestream-core log to: {}",
+                compressed_path.display()
+            );
         }
     }
     Ok(())

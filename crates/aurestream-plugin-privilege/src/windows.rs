@@ -4,10 +4,8 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
     use std::os::windows::ffi::OsStrExt;
 
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
-    use windows::Win32::System::Threading::{
-        GetExitCodeProcess, WaitForSingleObject, INFINITE,
-    };
-    use windows::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW, SEE_MASK_NOCLOSEPROCESS};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
 
     if !bundled_exe.exists() {
         return Err(format!(
@@ -17,9 +15,16 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
     }
 
     let verb: Vec<u16> = OsStr::new("runas\0").encode_wide().collect();
-    let file: Vec<u16> = bundled_exe.as_os_str().encode_wide().chain(Some(0)).collect();
+    let file: Vec<u16> = bundled_exe
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
     let params_str = format!("install \"{}\"", bundled_exe.display());
-    let params: Vec<u16> = OsStr::new(&params_str).encode_wide().chain(Some(0)).collect();
+    let params: Vec<u16> = OsStr::new(&params_str)
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
 
     let mut sei = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
@@ -79,10 +84,8 @@ pub fn run_elevated_uninstall(bundled_exe: &std::path::Path) -> Result<(), Strin
     use std::os::windows::ffi::OsStrExt;
 
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
-    use windows::Win32::System::Threading::{
-        GetExitCodeProcess, WaitForSingleObject, INFINITE,
-    };
-    use windows::Win32::UI::Shell::{ShellExecuteExW, SHELLEXECUTEINFOW, SEE_MASK_NOCLOSEPROCESS};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
 
     if !bundled_exe.exists() {
         return Err(format!(
@@ -92,8 +95,15 @@ pub fn run_elevated_uninstall(bundled_exe: &std::path::Path) -> Result<(), Strin
     }
 
     let verb: Vec<u16> = OsStr::new("runas\0").encode_wide().collect();
-    let file: Vec<u16> = bundled_exe.as_os_str().encode_wide().chain(Some(0)).collect();
-    let params: Vec<u16> = OsStr::new("uninstall").encode_wide().chain(Some(0)).collect();
+    let file: Vec<u16> = bundled_exe
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    let params: Vec<u16> = OsStr::new("uninstall")
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
 
     let mut sei = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,

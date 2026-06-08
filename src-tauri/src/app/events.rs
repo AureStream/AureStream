@@ -26,10 +26,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                             log::info!("Window close request redirected to tray");
                         }
                         Err(e) => {
-                            log::error!(
-                                "Failed to redirect close request to tray: {}",
-                                e
-                            );
+                            log::error!("Failed to redirect close request to tray: {}", e);
                         }
                     }
                 } else {

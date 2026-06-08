@@ -9,12 +9,12 @@ pub mod readiness;
 pub mod shutdown;
 pub mod state_machine;
 
+#[cfg(target_os = "linux")]
+pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(target_os = "windows")]
 pub mod windows;
-#[cfg(target_os = "linux")]
-pub mod linux;
 
 #[cfg(target_os = "macos")]
 pub type PlatformEngine = macos::MacOSEngine;
@@ -52,13 +52,6 @@ pub trait EngineManager {
     async fn ensure_installed(app: &tauri::AppHandle) -> Result<(), String>;
     async fn uninstall_service(app: &tauri::AppHandle) -> Result<(), String>;
     async fn probe(app: &tauri::AppHandle) -> Result<String, String>;
-
-    fn start_settle_delay(mode: &ProxyMode) -> std::time::Duration {
-        match mode {
-            ProxyMode::IntoProxy => std::time::Duration::from_millis(1500),
-            ProxyMode::SystemProxy => std::time::Duration::from_millis(1000),
-        }
-    }
 }
 
 pub fn cleanup_on_shutdown() {

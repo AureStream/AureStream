@@ -17,12 +17,12 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
+use crate::core::EVENT_STATUS_CHANGED;
 use crate::engine::monitor::handle_process_termination;
 use crate::engine::process::ProcessManager;
-use crate::engine::ProxyMode;
-use crate::engine::state_machine::{transition, EngineStateCell, Intent};
-use crate::core::EVENT_STATUS_CHANGED;
 use crate::engine::readiness;
+use crate::engine::state_machine::{transition, EngineStateCell, Intent};
+use crate::engine::ProxyMode;
 
 use aurestream_plugin_privilege::macos::helper as macos_helper;
 
@@ -177,10 +177,19 @@ async fn run(app: AppHandle, path: Arc<String>) {
 async fn restart_tun_send_safe(app: AppHandle, path: Arc<String>) -> Result<(), String> {
     let app_c = app.clone();
     let path_c = path.as_ref().clone();
-    let _pid = tokio::task::spawn_blocking(move || aurestream_plugin_tun::macos::start_tun_via_helper(&path_c, &crate::engine::log::resolve_singbox_log_path(&app_c).map(|p| p.to_string_lossy().to_string()).unwrap_or_default(), false, &crate::engine::helper::extract_tun_gateway_from_config(&path_c).unwrap_or_default()))
-        .await
-        .map_err(|e| format!("restart join error: {}", e))?
-        .map_err(|e| format!("restart start_tun_via_helper failed: {}", e))?;
+    let _pid = tokio::task::spawn_blocking(move || {
+        aurestream_plugin_tun::macos::start_tun_via_helper(
+            &path_c,
+            &crate::engine::log::resolve_singbox_log_path(&app_c)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            false,
+            &crate::engine::helper::extract_tun_gateway_from_config(&path_c).unwrap_or_default(),
+        )
+    })
+    .await
+    .map_err(|e| format!("restart join error: {}", e))?
+    .map_err(|e| format!("restart start_tun_via_helper failed: {}", e))?;
 
     {
         let mut manager = ProcessManager::acquire();

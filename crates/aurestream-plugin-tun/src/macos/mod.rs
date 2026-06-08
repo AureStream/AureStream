@@ -40,7 +40,12 @@ fn take_active_override() -> Option<ActiveOverride> {
     taken
 }
 
-pub fn start_tun_via_helper(config_path: &str, log_path_str: &str, enable_bypass_router: bool, gateway: &str) -> Result<i32, String> {
+pub fn start_tun_via_helper(
+    config_path: &str,
+    log_path_str: &str,
+    enable_bypass_router: bool,
+    gateway: &str,
+) -> Result<i32, String> {
     if enable_bypass_router {
         if let Err(e) = macos_helper::api::set_ip_forwarding(true) {
             log::warn!("[helper] set_ip_forwarding(true) failed: {}", e);
@@ -52,8 +57,6 @@ pub fn start_tun_via_helper(config_path: &str, log_path_str: &str, enable_bypass
     }
 
     dns_watcher::ensure_started();
-
-    
 
     let pid = macos_helper::api::start_sing_box(config_path, &log_path_str)?;
     log::info!(

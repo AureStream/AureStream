@@ -1,3 +1,4 @@
+use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::ports::{
     controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_listening,
 };
@@ -6,7 +7,6 @@ use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Int
 use crate::engine::{
     config_check, perf, process, readiness, EngineManager, PlatformEngine, ProxyMode,
 };
-use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -59,7 +59,10 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         ProxyMode::IntoProxy => "TUN虚拟网卡 (IntoProxy)",
     };
     ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
-    let _ = app.emit(EVENT_TAURI_LOG, (0, format!("启动代理服务，模式: {}", mode_name)));
+    let _ = app.emit(
+        EVENT_TAURI_LOG,
+        (0, format!("启动代理服务，模式: {}", mode_name)),
+    );
 
     {
         let _step = perf::StepTimer::new("start.clear_orphans");
@@ -115,7 +118,6 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     }
     drop(engine_start);
 
-    // tokio::time::sleep(PlatformEngine::start_settle_delay(&mode)).await;
     let (post_pid, post_alive, _) = pm_snapshot();
     ::log::info!(
         "[start] action={action} spawn returned, handing off to readiness prober (pm_child_pid={:?} alive={:?})",
@@ -221,10 +223,7 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
     {
         let (needs_proxy_reset, config_path) = {
             let manager = ProcessManager::acquire();
-            let path = manager
-                .config_path
-                .as_ref()
-                .map(|p| p.as_str().to_string());
+            let path = manager.config_path.as_ref().map(|p| p.as_str().to_string());
             let needs_proxy_reset = match manager.mode.as_ref().map(|m| m.as_ref()) {
                 Some(ProxyMode::IntoProxy) => false,
                 Some(ProxyMode::SystemProxy) => true,
@@ -264,7 +263,12 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
                     "[reload] action={action} mixed :{mixed_port} not ready after restart, applying system proxy anyway"
                 );
             }
-            if let Err(e) = aurestream_plugin_proxy::sysproxy::set_system_proxy(&app, crate::engine::ports::mixed_proxy_port(&app)).await {
+            if let Err(e) = aurestream_plugin_proxy::sysproxy::set_system_proxy(
+                &app,
+                crate::engine::ports::mixed_proxy_port(&app),
+            )
+            .await
+            {
                 ::log::error!(
                     "[reload] action={action} re-apply system proxy failed: {}",
                     e

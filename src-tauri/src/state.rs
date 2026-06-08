@@ -55,5 +55,4 @@ impl AppData {
             String::new()
         }
     }
-
 }

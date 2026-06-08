@@ -1,7 +1,7 @@
-use tauri::Emitter;
-use tauri::Manager;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::Emitter;
+use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 
@@ -68,7 +68,8 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     use tauri_plugin_store::StoreExt;
 
     let hide_on_launch = if let Ok(store) = app.handle().store("settings.json") {
-        store.get("hide_on_launch_key")
+        store
+            .get("hide_on_launch_key")
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
     } else {
@@ -95,7 +96,9 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     // ── System Tray ──────────────────────────────────────────────────
     let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "退出应用").build(app)?;
-    let tray_menu = MenuBuilder::new(app).items(&[&show_item, &quit_item]).build()?;
+    let tray_menu = MenuBuilder::new(app)
+        .items(&[&show_item, &quit_item])
+        .build()?;
 
     #[cfg(target_os = "macos")]
     let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png"))?;
@@ -108,19 +111,17 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         .menu(&tray_menu);
 
     let _tray = tray_builder
-        .on_menu_event(|app_handle, event| {
-            match event.id.as_ref() {
-                "show" => {
-                    crate::utils::show_main_window(app_handle);
-                }
-                "quit" => {
-                    let app_handle = app_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        crate::commands::shell::quit(app_handle).await;
-                    });
-                }
-                _ => {}
+        .on_menu_event(|app_handle, event| match event.id.as_ref() {
+            "show" => {
+                crate::utils::show_main_window(app_handle);
             }
+            "quit" => {
+                let app_handle = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::commands::shell::quit(app_handle).await;
+                });
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::Click {
@@ -149,7 +150,10 @@ fn stop_orphan_tun_service_on_startup() {
                 "[service] AureStreamTunService was running before engine-state ownership; stopping orphan"
             );
             if let Err(e) = scm::stop_service() {
-                log::warn!("[service] failed to stop orphan AureStreamTunService: {}", e);
+                log::warn!(
+                    "[service] failed to stop orphan AureStreamTunService: {}",
+                    e
+                );
             }
         }
         _ => {}
@@ -304,7 +308,7 @@ pub(crate) fn spawn_lifecycle_listener(app_handle: &tauri::AppHandle) {
                         log::info!("[network] NetworkDown — cancelling any pending engine restart");
                         network_restart_epoch.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         network_down_at = Some(std::time::SystemTime::now());
-                        
+
                         use crate::engine::{EngineManager, PlatformEngine};
                         PlatformEngine::on_network_down(&handle);
                     }

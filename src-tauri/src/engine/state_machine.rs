@@ -53,15 +53,6 @@ impl EngineState {
             | EngineState::Failed { epoch, .. } => *epoch,
         }
     }
-
-    pub fn mode(&self) -> Option<&str> {
-        match self {
-            EngineState::Starting { mode, .. } | EngineState::Running { mode, .. } => {
-                Some(mode.as_str())
-            }
-            _ => None,
-        }
-    }
 }
 
 pub struct EngineStateCell {
@@ -80,10 +71,6 @@ impl EngineStateCell {
     pub fn snapshot(&self) -> EngineState {
         self.inner.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
-
-    pub fn current_epoch(&self) -> u64 {
-        self.counter.load(Ordering::SeqCst)
-    }
 }
 
 impl Default for EngineStateCell {
@@ -99,7 +86,6 @@ pub enum Intent {
     Stop,
     MarkIdle,
     Fail { reason: String },
-    RollbackToRunning { mode: String },
     ClearFailure,
 }
 
@@ -153,14 +139,6 @@ pub fn transition(app: &AppHandle, intent: Intent) -> Result<EngineState, String
         (EngineState::Failed { .. }, Intent::ClearFailure) => {
             let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;
             EngineState::Idle { epoch }
-        }
-        (EngineState::Stopping { .. }, Intent::RollbackToRunning { mode }) => {
-            let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;
-            EngineState::Running {
-                since: now_secs(),
-                epoch,
-                mode,
-            }
         }
         (cur, Intent::Fail { reason }) if !matches!(cur, EngineState::Idle { .. }) => {
             let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;

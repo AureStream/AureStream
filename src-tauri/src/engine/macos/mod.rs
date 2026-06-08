@@ -1,14 +1,14 @@
-use tauri::AppHandle;
-use std::process::Command;
+use crate::engine::process::ProcessManager;
 use crate::engine::EngineManager;
 use crate::engine::ProxyMode;
-use crate::engine::process::ProcessManager;
-use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
 use aurestream_plugin_privilege::macos::helper as macos_helper;
+use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
 use aurestream_plugin_tun::macos::{
-    start_tun_via_helper, stop_tun_process, apply_system_dns_override, release_dns_on_network_down,
-    restore_system_dns,
+    apply_system_dns_override, release_dns_on_network_down, restore_system_dns,
+    start_tun_via_helper, stop_tun_process,
 };
+use std::process::Command;
+use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 pub(crate) mod watchdog;
@@ -35,7 +35,10 @@ impl EngineManager for MacOSEngine {
                     .args(["run", "-c", &config_path, "--disable-color"]);
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
-                log::info!("[aurestream-core] spawned pid={} mode=SystemProxy", child_pid);
+                log::info!(
+                    "[aurestream-core] spawned pid={} mode=SystemProxy",
+                    child_pid
+                );
                 crate::engine::monitor::spawn_process_monitor(
                     app.clone(),
                     rx,
@@ -52,24 +55,32 @@ impl EngineManager for MacOSEngine {
                 }
                 if should_set_system_proxy {
                     let port = crate::engine::ports::mixed_proxy_port(app);
-                    set_system_proxy(app, port).await.map_err(|e| e.to_string())?;
+                    set_system_proxy(app, port)
+                        .await
+                        .map_err(|e| e.to_string())?;
                 }
             }
-            ProxyMode::IntoProxy => { // AureStream uses IntoProxy for TUN mode
+            ProxyMode::IntoProxy => {
+                // AureStream uses IntoProxy for TUN mode
                 Self::ensure_installed(app).await?;
                 let bypass_router_enabled = app
                     .get_store("settings.json")
                     .and_then(|store| store.get("enable_bypass_router_key"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let log_path_str = crate::engine::log::resolve_singbox_log_path(app).map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-                let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default();
+                let log_path_str = crate::engine::log::resolve_singbox_log_path(app)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
+                    .unwrap_or_default();
 
                 let path_c = config_path.clone();
-                tokio::task::spawn_blocking(move || start_tun_via_helper(&path_c, &log_path_str, bypass_router_enabled, &gateway))
-                    .await
-                    .map_err(|e| format!("start_tun join error: {}", e))?
-                    .map_err(|e| format!("start_tun_via_helper failed: {}", e))?;
+                tokio::task::spawn_blocking(move || {
+                    start_tun_via_helper(&path_c, &log_path_str, bypass_router_enabled, &gateway)
+                })
+                .await
+                .map_err(|e| format!("start_tun join error: {}", e))?
+                .map_err(|e| format!("start_tun_via_helper failed: {}", e))?;
 
                 let mut exit_rx = macos_helper::subscribe_sing_box_exits();
                 let exit_app = app.clone();
@@ -162,13 +173,14 @@ impl EngineManager for MacOSEngine {
         let config_path = {
             let manager = ProcessManager::acquire();
             match (manager.mode.as_ref(), manager.config_path.as_ref()) {
-                (Some(m), Some(p)) if matches!(**m, ProxyMode::IntoProxy) => {
-                    p.as_str().to_string()
-                }
+                (Some(m), Some(p)) if matches!(**m, ProxyMode::IntoProxy) => p.as_str().to_string(),
                 _ => return,
             }
         };
-        if let Err(e) = apply_system_dns_override(&crate::engine::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default()) {
+        if let Err(e) = apply_system_dns_override(
+            &crate::engine::helper::extract_tun_gateway_from_config(&config_path)
+                .unwrap_or_default(),
+        ) {
             log::warn!("[dns] NetworkUp re-apply failed: {}", e);
         }
     }
@@ -236,7 +248,10 @@ impl EngineManager for MacOSEngine {
                 Err(e) => log::warn!("[reload] flush_dns_cache join error: {}", e),
             }
         } else {
-            match Command::new("pgrep").args(["-lf", "aurestream-core"]).output() {
+            match Command::new("pgrep")
+                .args(["-lf", "aurestream-core"])
+                .output()
+            {
                 Ok(out) => {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let lines: Vec<&str> = stdout.lines().collect();

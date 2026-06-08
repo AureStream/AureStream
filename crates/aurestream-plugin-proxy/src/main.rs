@@ -1,5 +1,5 @@
-use clap::{Parser, Subcommand};
 use aurestream_plugin_proxy::{Autoproxy, Sysproxy};
+use clap::{Parser, Subcommand};
 use std::process::ExitCode;
 
 /// Fixed filename for UWP exemption import/export.
@@ -248,8 +248,9 @@ fn run(cmd: Commands) -> aurestream_plugin_proxy::Result<()> {
         #[cfg(target_os = "windows")]
         Commands::UwpSet => {
             let content = std::fs::read_to_string(UWP_EXEMPTION_FILE)?;
-            let entries: Vec<aurestream_plugin_proxy::AppContainer> = serde_json::from_str(&content)
-                .map_err(|e| aurestream_plugin_proxy::Error::ParseStr(e.to_string()))?;
+            let entries: Vec<aurestream_plugin_proxy::AppContainer> =
+                serde_json::from_str(&content)
+                    .map_err(|e| aurestream_plugin_proxy::Error::ParseStr(e.to_string()))?;
             let sids: Vec<String> = entries
                 .into_iter()
                 .filter(|c| c.exempted)

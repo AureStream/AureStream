@@ -27,7 +27,10 @@ mod ffi {
         pub fn aurestream_helper_stop_sing_box(error_out: *mut *mut c_char) -> c_int;
         pub fn aurestream_helper_reload_sing_box(error_out: *mut *mut c_char) -> c_int;
 
-        pub fn aurestream_helper_set_ip_forwarding(enable: bool, error_out: *mut *mut c_char) -> c_int;
+        pub fn aurestream_helper_set_ip_forwarding(
+            enable: bool,
+            error_out: *mut *mut c_char,
+        ) -> c_int;
         pub fn aurestream_helper_set_dns_servers(
             service_name: *const c_char,
             dns_spec: *const c_char,
@@ -173,7 +176,12 @@ pub mod api {
         let mut pid: std::os::raw::c_int = 0;
         let mut err: *mut std::os::raw::c_char = ptr::null_mut();
         let rc = unsafe {
-            ffi::aurestream_helper_start_sing_box(c_path.as_ptr(), c_log.as_ptr(), &mut pid, &mut err)
+            ffi::aurestream_helper_start_sing_box(
+                c_path.as_ptr(),
+                c_log.as_ptr(),
+                &mut pid,
+                &mut err,
+            )
         };
         let message = consume_cstring(err);
         if rc == 0 && pid > 0 {
@@ -194,7 +202,9 @@ pub mod api {
     }
 
     pub fn set_ip_forwarding(enable: bool) -> Result<(), String> {
-        call_error_only(|err_out| unsafe { ffi::aurestream_helper_set_ip_forwarding(enable, err_out) })
+        call_error_only(|err_out| unsafe {
+            ffi::aurestream_helper_set_ip_forwarding(enable, err_out)
+        })
     }
 
     pub fn set_dns_servers(service_name: &str, dns_spec: &str) -> Result<(), String> {

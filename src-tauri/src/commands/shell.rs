@@ -1,5 +1,5 @@
-use crate::state::{AppData, LogType};
 use crate::core::commands::stop;
+use crate::state::{AppData, LogType};
 
 use tauri::AppHandle;
 use tauri::Manager;
@@ -47,7 +47,10 @@ pub fn get_app_version(app: AppHandle) -> String {
 #[tauri::command]
 pub fn get_config_json_path(app: AppHandle) -> Result<String, String> {
     let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    Ok(config_dir.join("config.json").to_string_lossy().into_owned())
+    Ok(config_dir
+        .join("config.json")
+        .to_string_lossy()
+        .into_owned())
 }
 
 #[tauri::command]
@@ -132,7 +135,10 @@ pub fn get_pending_deep_link(
 
 #[tauri::command]
 pub async fn version(app: tauri::AppHandle) -> Result<String, String> {
-    let sidecar_command = app.shell().sidecar("aurestream-core").map_err(|e| e.to_string())?;
+    let sidecar_command = app
+        .shell()
+        .sidecar("aurestream-core")
+        .map_err(|e| e.to_string())?;
     let output = sidecar_command
         .arg("version")
         .output()

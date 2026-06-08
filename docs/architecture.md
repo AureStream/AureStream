@@ -19,8 +19,8 @@ AureStream 采用混合桌面应用架构：
 | **前端 UI** | React, Vite, TSX, HSL Styling | 精美的界面、状态路由与交互 |
 | **应用外壳** | Tauri v2, 各种插件（Shell, OS, Store, SQL, Process） | 核心 FFI 桥接及系统权限获取 |
 | **后端核心** | Rust (Tauri Commands, Tokio 异步运行时) | 状态机控制、进程监控、DNS 异步探测 |
-| **系统代理** | `sysproxy_rs` (Windows WinINet API, macOS SystemConfiguration, Linux gsettings) | 动态系统级代理开关与配置修改 |
-| **TUN 辅助服务**| `tun-service` (Windows 服务的服务控制管理器 SCM) | 底层 TAP/TUN 虚拟网卡驱动及路由配置管理 |
+| **系统代理** | `crates/aurestream-plugin-proxy` (Windows WinINet API, macOS SystemConfiguration, Linux gsettings) | 动态系统级代理开关与配置修改 |
+| **TUN 辅助服务**| `crates/aurestream-plugin-tun` + `crates/aurestream-plugin-privilege` | TUN 业务逻辑、平台提权入口与 helper 资产 |
 | **核心内核** | `sing-box` (Tauri 侧车二进制) | 核心 VPN 路由分流与协议处理引擎 |
 
 ---
@@ -52,7 +52,7 @@ graph TD
     end
 
     subgraph OSHelpers [系统特权辅助层]
-        SysProxyRs[sysproxy_rs 依赖库]
+        SysProxyRs[aurestream-plugin-proxy]
         TunSvc[AureStreamTunService Windows 服务]
         XPCSvc[macOS XPC 辅助程序]
         PkExec[Linux pkexec 提权脚本]
@@ -79,7 +79,7 @@ graph TD
 
 ## 3. 核心后端组件设计 (Rust)
 
-### 3.1 进程管理器与状态机 (`src-tauri/src/core/mod.rs`)
+### 3.1 进程管理器与状态机 (`src-tauri/src/engine/`)
 `sing-box` 侧车子进程的生命周期管理被封装在全局 `PROCESS_MANAGER` 单例中。
 * **ProcessManager 结构体**：
   ```rust
@@ -96,27 +96,29 @@ graph TD
   * `Running`（运行中）➔ `Stopping`（停止中）➔ `Idle`（空闲）
   * `Starting/Running` ➔ `Failed(reason)`（失败）➔ `Idle`（空闲）
 * **配置校验**（`src-tauri/src/engine/config_check.rs`）：`start` 前执行 `aurestream-core check -c config.json`，失败则进入 `Failed` 并返回 stderr。
-* **就绪探测器 (`src-tauri/src/engine/common/readiness.rs`)**：
+* **就绪探测器 (`src-tauri/src/engine/readiness.rs`)**：
   在侧车拉起后，异步轮询 `experimental.clash_api.external_controller` 端口（默认 `9191`，与 `settings.json` 中 `singbox_api_port_key` 一致）；探测成功后方才将状态转移至 `Running`。
-* **优雅停止 (`src-tauri/src/engine/common/shutdown.rs`)**：
+* **优雅停止 (`src-tauri/src/engine/shutdown.rs`)**：
   侧车进程终止后，通过 `wait_for_port_release` 轮询 mixed 代理端口（默认 `2345`）与控制端口是否释放，替代固定 sleep，缩短 SystemProxy 模式断开等待时间。
 * **性能埋点 (`src-tauri/src/engine/perf.rs`)**：
   可选的 Rust 侧耗时统计，配合前端 `src/lib/perf.ts` 用于连接与热重载链路分析。
 
 ### 3.2 平台引擎特定实现 (`src-tauri/src/engine/`)
 为了在不同操作系统上管理网络代理和路由行为，AureStream 定义了统一的 `EngineManager` 接口特征（Trait）：
-* **Windows (`engine/windows/mod.rs`)**：利用 Tauri Sidecar 机制拉起 `sing-box` 进程，并通过 `sysproxy_rs` 调用 WinINet API 覆写 Windows 系统代理设置。
-* **macOS (`engine/macos/`)**：使用 `dns_watcher.rs` 监听 macOS 的 `SCDynamicStore` 网络变化事件，并通过 XPC 架构与特权辅助程序（Privileged Helper）交互实现高级路由配置。
+* **Windows (`engine/windows/mod.rs`)**：SystemProxy 模式使用 Tauri Sidecar 拉起 `sing-box`；TUN 模式通过 `AureStreamTunService` 运行特权操作，安装/卸载由 `aurestream-plugin-privilege::windows` 触发 UAC。
+* **macOS (`engine/macos/`)**：通过 XPC 架构与特权辅助程序（Privileged Helper）交互实现 TUN、DNS 和路由操作；watchdog 位于 `engine/macos/watchdog.rs`。
 * **Linux (`engine/linux/mod.rs`)**：借由 `pkexec` 调用随 deb/rpm 安装的 `aurestream-tun-helper`（源文件位于 `crates/aurestream-plugin-privilege/linux-helper/`），动态修改 `systemd-resolved` 的 DNS 配置，并支持特权服务卸载。
 
-### 3.3 系统代理配置库 `sysproxy_rs` (`src-tauri/sysproxy-rs/`)
+### 3.3 系统代理配置库 (`crates/aurestream-plugin-proxy/`)
 一个为项目量身定制的 Rust 跨平台代理开关及配置控制库：
 * **Windows**：修改 `Software\Microsoft\Windows\CurrentVersion\Internet Settings` 注册表项，并使用 WinINet 的 `InternetSetOptionW` FFI 函数通知 Windows 系统刷新代理缓存。
 * **macOS**：通过 macOS 官方的 `SystemConfiguration` 框架 API 修改网络代理服务配置。
 * **Linux**：与 GNOME 桌面环境设置或全局环境变量 (`gsettings`) 进行通信交互。
 
-### 3.4 Windows TUN 驱动服务 `tun-service` (`src-tauri/tun-service/`)
+### 3.4 TUN 与提权插件 (`crates/aurestream-plugin-tun/`, `crates/aurestream-plugin-privilege/`)
 一个专门运行于 Windows 服务控制管理器（SCM）下的后台系统服务，服务名为 `AureStreamTunService`，运行在 `LocalSystem` 特权账户下。当用户开启高性能 **TUN 模式 (IntoProxy)** 时，该服务负责在底层拉起虚拟网卡、配置路由表项目并注入 DHCP DNS 地址。
+
+`aurestream-plugin-privilege` 负责跨平台提权入口和 helper 资产：Windows UAC `runas`、macOS SMJobBless/XPC helper、Linux pkexec helper/polkit。
 
 ---
 
@@ -187,7 +189,7 @@ sequence_chart
     Rust -> Kernel: sing-box check 校验 config.json
     Rust -> PM: 进程管理器拉起子进程命令
     PM -> Kernel: 携带 -c 参数运行 sing-box
-    Rust -> OS: 驱动系统代理 sysproxy_rs::set_system_proxy(127.0.0.1:2345)
+    Rust -> OS: 驱动系统代理 aurestream-plugin-proxy::set_system_proxy(127.0.0.1:2345)
     OS -> OS: 修改注册表，系统网络流量导向 2345 端口
     Rust -> Rust: readiness 探测控制台 API 端口（默认 9191）
     Kernel -> Rust: 控制台端口可连接
@@ -210,7 +212,7 @@ sequence_chart
     用户 -> UI: 点击“关闭连接”
     UI -> Rust: 调用 tauri 命令 invoke("stop")
     Rust -> Rust: 引擎状态转移为 Stopping（停止中）
-    Rust -> OS: 驱动系统代理 sysproxy_rs::clear_system_proxy()
+    Rust -> OS: 驱动系统代理 aurestream-plugin-proxy::clear_system_proxy()
     OS -> OS: 还原注册表，清空系统代理开关（直接连接）
     Rust -> PM: 终止子进程
     PM -> Kernel: 发送 kill 信号
@@ -228,4 +230,4 @@ sequence_chart
 
 * **提权操作安全分离**：路由网卡配置等高权限操作在 Windows 下被隔置在 SCM 后台服务 `AureStreamTunService` 中；macOS 下通过安全的系统 XPC 验证机制；Linux 下通过系统的 `pkexec` 安全认证弹窗，从架构上规避了主程序以高权限运行的越权风险。
 * **侧车执行防注入**：所有侧车进程的执行参数、文件名均在 Tauri 编译配置文件 `tauri.conf.json` 中静态定义。用户订阅节点数据仅在内存和 JSON 配置文件中解析，不会作为 Shell 指令执行，有效拦截了命令行注入攻击。
-* **UWP 环回代理豁免**：由于 Windows 系统的安全隔离沙盒设计，UWP（应用商店应用）默认无法连接到 127.0.0.1 本地回环代理。AureStream 在 `sysproxy_rs` 二进制程序中内置了 UWP 免代理名单的枚举与持久化写入逻辑，确保 Modern 架构应用也能够通过代理接入网络。
+* **UWP 环回代理豁免**：由于 Windows 系统的安全隔离沙盒设计，UWP（应用商店应用）默认无法连接到 127.0.0.1 本地回环代理。AureStream 在 `aurestream-plugin-proxy` 中内置了 UWP 免代理名单的枚举与持久化写入逻辑，确保 Modern 架构应用也能够通过代理接入网络。

@@ -30,7 +30,9 @@ pub fn create_privileged_command(
     app.shell().command("pkexec").args(args_ref)
 }
 
-pub fn uninstall_helper_sync(stop_first: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+pub fn uninstall_helper_sync(
+    stop_first: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
     if !std::path::Path::new(HELPER_PATH).exists() {
         log::info!("[linux] helper not present, nothing to uninstall");
         return Ok(());

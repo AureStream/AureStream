@@ -6,8 +6,8 @@
 //! Run with: `cargo test -- --ignored --test-threads=1`
 //! Or via Makefile: `make test-integration`
 
-use sysproxy_rs::{Autoproxy, Sysproxy};
 use serial_test::serial;
+use sysproxy_rs::{Autoproxy, Sysproxy};
 
 /// Helper: save current proxy state, run test body, then restore on drop.
 struct ProxyGuard {

@@ -41,13 +41,15 @@ AureStream/
 │   ├── src/                   # Rust 业务层
 │   │   ├── app/               # App 初始化、插件注册与 SQLite 数据库迁移
 │   │   ├── commands/          # Tauri API（网络、配置抓取、Shell）
-│   │   ├── core/              # 进程管理、端口、配置校验、perf
-│   │   └── engine/            # 跨平台引擎 (shutdown/readiness/平台实现)
+│   │   ├── core/              # Tauri command 入口
+│   │   └── engine/            # 引擎编排、状态机、平台实现
 │   ├── resources/linux/       # Linux deb/rpm 安装/卸载脚本
-│   ├── sysproxy-rs/           # 本地子 Crate：跨平台系统代理设置库 (sysproxy_rs)
-│   ├── tun-service/           # 本地子 Crate：Windows TUN 后台特权服务 (AureStreamTunService)
 │   ├── Cargo.toml             # Rust 工作区主配置文件
 │   └── tauri.conf.json        # Tauri 应用打包及能力配置文件
+├── crates/
+│   ├── aurestream-plugin-proxy/      # 跨平台系统代理设置
+│   ├── aurestream-plugin-tun/        # TUN 服务和 TUN 业务逻辑
+│   └── aurestream-plugin-privilege/  # Windows/macOS/Linux 提权入口与 helper 资产
 ├── package.json               # 统一构建与运行脚本
 └── tsconfig.json              # TypeScript 配置
 ```
@@ -58,16 +60,17 @@ AureStream/
 
 AureStream 解决了一系列桌面客户端在各平台下的核心痛点：
 
-### 3.1 跨平台系统代理设置 (`sysproxy_rs`)
-项目没有使用笨重的外部脚本，而是通过纯 Rust 实现了 `sysproxy_rs`：
+### 3.1 跨平台系统代理设置 (`aurestream-plugin-proxy`)
+项目没有使用笨重的外部脚本，而是通过 Rust 插件实现系统代理：
 * **Windows**：直接通过 FFI 绑定 WinINet API 中的 `InternetSetOptionW`，并写入 Internet Settings 注册表，在无感知的情况下完成代理全局刷新。
 * **macOS**：利用 `SystemConfiguration` 动态框架直接修改活动网卡的 System Proxy 属性。
 * **Linux**：适配了 GNOME 的 `gsettings` 配置，与系统环境平滑对接。
 
-### 3.2 特权分离与安全运行 (SCM 服务 & XPC)
+### 3.2 特权分离与安全运行
 由于 TUN 网卡驱动安装、虚拟网卡 IP 绑定和系统全局 DNS 接管需要管理员特权，AureStream 采用特权分离架构以提升安全性：
-* **Windows 平台**：编译出独立的 `AureStreamTunService`（基于 Rust 写成的 Windows 服务），在打包时自动注册为系统服务。主程序只需低权限运行，并通过标准的系统服务控制接口向 `AureStreamTunService` 发送控制指令。
-* **macOS 平台**：在主 App 中打包了特权辅助工具（Privileged Helper Tool），通过 `SMJobBless` 提权安装，两者之间通过严格权限校验的 **XPC** 进行 IPC 进程通信。
+* **Windows 平台**：`aurestream-plugin-privilege::windows` 通过 UAC 安装/卸载 `AureStreamTunService`，服务实现位于 `aurestream-plugin-tun`。
+* **macOS 平台**：主 App 内嵌 `crates/aurestream-plugin-privilege/macos-helper/` 构建出的 Privileged Helper，通过 `SMJobBless` 安装，并通过 XPC 通信。
+* **Linux 平台**：deb/rpm 安装 `aurestream-plugin-privilege/linux-helper/` 中的 pkexec helper 与 polkit 策略，运行时由 `pkexec` 发起特权操作。
 
 ### 3.3 配置预合并与热重载
 
@@ -116,5 +119,5 @@ pnpm tauri build
 ## 5. 后续设计规约
 在向本项目提交代码时，请遵循以下开发规约：
 * **状态持久化**：基础设置保存在 `settings.json`（Store）；Rust 从 Store 读取端口等运行时参数。前端通过 `config-sync` 将 Store 偏好合并进 `config.json`，不要在 `connect` 路径重复 merge。
-* **Crate 命名规范**：当前所有的系统代理、TAP 配置抽象子依赖均由 `sysproxy_rs` Crate 承担，引入新 FFI 结构时请在 `sysproxy-rs` 仓库中扩展。
+* **Crate 边界**：系统代理放在 `aurestream-plugin-proxy`，TUN 业务/服务放在 `aurestream-plugin-tun`，提权入口和 helper 资产放在 `aurestream-plugin-privilege`。
 * **多平台对齐**：修改平台引擎（如 `WindowsEngine`）功能时，需同步确认 macOS/Linux 引擎的对应钩子（如 `on_process_terminated`）是否受影响。

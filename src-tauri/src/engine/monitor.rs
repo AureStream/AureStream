@@ -2,11 +2,11 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tauri::Manager;
 
+use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::log::{create_singbox_log_writer, write_singbox_log};
 use crate::engine::process::ProcessManager;
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 use crate::engine::{EngineManager, PlatformEngine, ProxyMode};
-use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 
 pub(crate) fn spawn_process_monitor(
     app: tauri::AppHandle,
@@ -122,7 +122,7 @@ pub(crate) async fn handle_process_termination(
         );
     }
 
-#[cfg(target_os = "macos")]
+    #[cfg(target_os = "macos")]
     let is_watchdog_restart = crate::engine::macos::watchdog::is_restart_in_progress();
     #[cfg(not(target_os = "macos"))]
     let is_watchdog_restart = false;
@@ -161,7 +161,8 @@ pub(crate) async fn handle_process_termination(
 
     if should_cleanup && !is_stale && !is_watchdog_restart {
         if matches!(**process_mode, ProxyMode::SystemProxy) {
-            if let Err(e) = aurestream_plugin_proxy::sysproxy::clear_system_proxy(app_handle).await {
+            if let Err(e) = aurestream_plugin_proxy::sysproxy::clear_system_proxy(app_handle).await
+            {
                 log::error!("Failed to unset proxy after process termination: {}", e);
             }
         }
@@ -172,7 +173,6 @@ pub(crate) async fn handle_process_termination(
 
         ProcessManager::acquire().reset();
     }
-
 
     if let Err(e) = app_handle.emit(EVENT_STATUS_CHANGED, payload.clone()) {
         log::error!("Failed to emit status-changed event: {}", e);

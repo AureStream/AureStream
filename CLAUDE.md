@@ -59,7 +59,7 @@ cargo check                 # Quick type check without full compilation
 
 ### Engine State Machine
 
-Rust backend implements `Idle → Starting → Running → Stopping → Idle` (with `Failed` error state). Defined in `src-tauri/src/engine/common/state_machine.rs`. Platform-specific implementations:
+Rust backend implements `Idle → Starting → Running → Stopping → Idle` (with `Failed` error state). Defined in `src-tauri/src/engine/state_machine.rs`. Platform-specific implementations:
 - `WindowsEngine`: Sidecar + WinINet proxy
 - `MacOSEngine`: XPC helper, DNS watcher, watchdog
 - `LinuxEngine`: pkexec, systemd-resolved
@@ -89,9 +89,9 @@ React Context API (no Redux/Zustand):
 ### Privilege Separation
 
 High-privilege operations (TUN, DNS) delegated to platform services:
-- Windows: SCM background service (`tun-service/`)
-- macOS: XPC privileged helper (`helper/`)
-- Linux: pkexec
+- Windows: UAC elevation in `crates/aurestream-plugin-privilege/src/windows.rs` installs/updates the SCM TUN service from `crates/aurestream-plugin-tun`.
+- macOS: XPC privileged helper source in `crates/aurestream-plugin-privilege/macos-helper/`, bundled into `Contents/Library/LaunchServices/`.
+- Linux: pkexec helper and polkit assets in `crates/aurestream-plugin-privilege/linux-helper/`.
 
 ## Key Directories
 
@@ -110,9 +110,13 @@ src/                          # Frontend (React/TypeScript)
 src-tauri/                    # Rust backend
 ├── src/commands/             # Tauri command handlers
 ├── src/core/                 # Tauri command entrypoints
-├── src/engine/               # Platform engines, process manager, readiness
+├── src/engine/               # Engine orchestration, state, platform engines
 ├── resources/linux/          # Linux deb/rpm package scripts
-├── ../crates/aurestream-plugin-privilege/ # Privilege helpers and platform elevation
+
+crates/                       # Rust workspace crates
+├── aurestream-plugin-proxy/   # Cross-platform system proxy
+├── aurestream-plugin-tun/     # TUN service/business logic
+├── aurestream-plugin-privilege/ # Platform elevation and helper assets
 ```
 
 ## Path Aliases

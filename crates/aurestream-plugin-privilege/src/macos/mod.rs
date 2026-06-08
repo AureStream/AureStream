@@ -14,10 +14,7 @@ pub fn probe_helper() -> Result<String, String> {
         Ok(msg) => Ok(msg),
         Err(e) => {
             if is_blessed_helper_on_disk() {
-                log::warn!(
-                    "[helper] blessed files present but XPC ping failed: {}",
-                    e
-                );
+                log::warn!("[helper] blessed files present but XPC ping failed: {}", e);
                 Ok(format!("installed_unreachable: {e}"))
             } else {
                 Err(e)

@@ -1,12 +1,12 @@
-use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::ShellExt;
-use crate::engine::{EngineManager, ProxyMode};
 use crate::core::EVENT_TAURI_LOG;
 use crate::engine::process::ProcessManager;
+use crate::engine::{EngineManager, ProxyMode};
 use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
-use tauri_plugin_store::StoreExt;
-use std::sync::Arc;
 use aurestream_plugin_tun::scm;
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter};
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_store::StoreExt;
 
 pub struct WindowsEngine;
 
@@ -27,16 +27,16 @@ impl EngineManager for WindowsEngine {
             let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
                 .unwrap_or_else(|| "-".to_string());
 
-            let core_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
-                .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
+            let core_path_str =
+                crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))
+                    .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
 
             let config_path_str = config_path.as_str();
             let args = [config_path_str, &gateway, &core_path_str];
 
             log::info!("[win] starting AureStreamTunService with args: {:?}", args);
-            aurestream_plugin_tun::scm::start_service_with_args(&args).map_err(|e| {
-                format!("Failed to start AureStream TUN Service: {}", e)
-            })?;
+            aurestream_plugin_tun::scm::start_service_with_args(&args)
+                .map_err(|e| format!("Failed to start AureStream TUN Service: {}", e))?;
 
             {
                 let mut mgr = ProcessManager::acquire();
@@ -53,7 +53,11 @@ impl EngineManager for WindowsEngine {
                 .args(["run", "-c", &config_path, "--disable-color"]);
             let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
             let child_pid = child.pid();
-            log::info!("[aurestream-core] spawned pid={} mode={:?}", child_pid, mode);
+            log::info!(
+                "[aurestream-core] spawned pid={} mode={:?}",
+                child_pid,
+                mode
+            );
 
             crate::engine::monitor::spawn_process_monitor(
                 app.clone(),
@@ -72,9 +76,10 @@ impl EngineManager for WindowsEngine {
             }
 
             if should_set_system_proxy {
-                if let Err(e) = set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app)).await {
-                    let _ =
-                        app.emit(EVENT_TAURI_LOG, (2, format!("Failed to set proxy: {}", e)));
+                if let Err(e) =
+                    set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app)).await
+                {
+                    let _ = app.emit(EVENT_TAURI_LOG, (2, format!("Failed to set proxy: {}", e)));
                     return Err(e.to_string());
                 }
             }
@@ -158,8 +163,7 @@ impl EngineManager for WindowsEngine {
         let mixed_port = crate::engine::ports::mixed_proxy_port(app);
         Self::stop(app).await?;
 
-        let release_deadline =
-            std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while std::time::Instant::now() < release_deadline
             && crate::engine::ports::probe_port_listening(mixed_port)
         {
@@ -180,8 +184,9 @@ impl EngineManager for WindowsEngine {
     }
 
     async fn ensure_installed(_app: &AppHandle) -> Result<(), String> {
-        let tun_service_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
-            .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
+        let tun_service_path_str =
+            crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
+                .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
         let tun_service_path = std::path::PathBuf::from(&tun_service_path_str);
 
         use aurestream_plugin_tun::scm::{self, Freshness};
@@ -198,15 +203,19 @@ impl EngineManager for WindowsEngine {
                 log::info!("[win] tun-service is up to date");
             }
             Freshness::MissingBinary => {
-                return Err(format!("Bundled tun-service binary not found at {}", tun_service_path.display()));
+                return Err(format!(
+                    "Bundled tun-service binary not found at {}",
+                    tun_service_path.display()
+                ));
             }
         }
         Ok(())
     }
 
     async fn uninstall_service(_app: &AppHandle) -> Result<(), String> {
-        let tun_service_path_str = crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
-            .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
+        let tun_service_path_str =
+            crate::engine::helper::get_sidecar_path(std::path::Path::new("tun-service"))
+                .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
         let tun_service_path = std::path::PathBuf::from(&tun_service_path_str);
         aurestream_plugin_privilege::windows::run_elevated_uninstall(&tun_service_path)
     }

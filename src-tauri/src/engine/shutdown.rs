@@ -10,8 +10,7 @@ const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(3);
 pub(crate) async fn wait_for_sidecar_ports_release(app: &AppHandle) {
     let started = Instant::now();
     let mixed = mixed_proxy_port(app);
-    let mixed_ok =
-        wait_for_port_release(mixed, SIDECAR_PORT_RELEASE_TIMEOUT).await;
+    let mixed_ok = wait_for_port_release(mixed, SIDECAR_PORT_RELEASE_TIMEOUT).await;
     let mixed_ms = started.elapsed().as_millis();
 
     let ctrl = controller_port(app);
@@ -26,9 +25,7 @@ pub(crate) async fn wait_for_sidecar_ports_release(app: &AppHandle) {
 
     if mixed_ok && ctrl_ok {
         if ctrl == mixed {
-            log::info!(
-                "[stop] proxy port :{mixed} released in {mixed_ms}ms"
-            );
+            log::info!("[stop] proxy port :{mixed} released in {mixed_ms}ms");
         } else {
             log::info!(
                 "[stop] proxy ports released in {mixed_ms}ms (mixed :{mixed}) + {ctrl_ms}ms (controller :{ctrl})"

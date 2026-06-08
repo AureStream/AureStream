@@ -1,7 +1,6 @@
 use std::process::Command;
 use std::sync::Mutex;
 
-
 static DNS_OVERRIDE: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 pub fn set_dns_override(info: Option<(String, String)>) {
@@ -74,7 +73,6 @@ fn capture_original_dns(iface: &str) -> Result<String, String> {
 }
 
 pub fn prepare_dns_override(gateway: &str) -> Result<(String, String), String> {
-    
     let iface = detect_active_iface()?;
     let original_dns = capture_original_dns(&iface)?;
     log::info!(
@@ -86,7 +84,6 @@ pub fn prepare_dns_override(gateway: &str) -> Result<(String, String), String> {
 }
 
 pub fn apply_system_dns_override(gateway: &str) -> Result<(String, String), String> {
-    
     let iface = detect_active_iface()?;
     let original_dns = capture_original_dns(&iface)?;
 

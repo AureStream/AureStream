@@ -1,7 +1,10 @@
 use std::fs;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::path::Path;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use tauri::utils::platform;
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub fn get_sidecar_path(program: &Path) -> Result<String, anyhow::Error> {
     match platform::current_exe()?.parent() {
         #[cfg(windows)]

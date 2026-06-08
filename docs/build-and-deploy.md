@@ -38,7 +38,7 @@ pnpm sign-macos-bundle
 
 ### Linux 打包资源
 
-`src-tauri/tauri.linux.conf.json` 将以下文件打入 deb/rpm：
+`src-tauri/tauri.conf.json` 将以下文件打入 deb/rpm：
 
 | 安装路径 | 源文件 |
 |----------|--------|
