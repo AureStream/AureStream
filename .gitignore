@@ -39,3 +39,5 @@ src/config/templates/generated.ts
 # External binaries (downloaded at build time)
 src-tauri/binaries/
 src-tauri/resources/*.db
+src-tauri/resources/rules/
+scripts/tmp/

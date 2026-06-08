@@ -223,6 +223,15 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         updateExperimentalConfig(newConfig, dbCacheFilePath),
     ]);
 
+    // Resolve local rule_set paths to absolute paths using Tauri's resource resolver
+    if (newConfig.route?.rule_set) {
+        for (const ruleSet of newConfig.route.rule_set) {
+            if (ruleSet.type === "local" && ruleSet.path) {
+                ruleSet.path = await path.resolveResource(ruleSet.path);
+            }
+        }
+    }
+
     if (options.tun) {
         await configureTunInbound(newConfig, bypassRouter, {
             proxyPort,
