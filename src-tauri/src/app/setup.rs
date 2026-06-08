@@ -32,15 +32,15 @@ pub fn show_main_window_after_page_load(app_handle: &tauri::AppHandle) {
 
 /// App 初始化逻辑，对应 Builder::setup 闭包
 pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    app.manage(crate::app::state::AppData::new());
-    app.manage(crate::engine::state_machine::EngineStateCell::new());
+    app.manage(crate::state::AppData::new());
+    app.manage(aurestream_plugin_lifecycle::state_machine::EngineStateCell::new());
     stop_orphan_tun_service_on_startup();
 
     let log_cleanup_handle = app.handle().clone();
     if let Err(e) = std::thread::Builder::new()
         .name("aurestream-log-cleanup".into())
         .spawn(move || {
-            crate::core::cleanup_old_app_logs(&log_cleanup_handle);
+            aurestream_plugin_lifecycle::log::cleanup_old_app_logs(&log_cleanup_handle);
         })
     {
         log::warn!("[setup] failed to spawn log cleanup thread: {}", e);
@@ -98,7 +98,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     let tray_menu = MenuBuilder::new(app).items(&[&show_item, &quit_item]).build()?;
 
     #[cfg(target_os = "macos")]
-    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../images/logo2.png"))?;
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png"))?;
     #[cfg(not(target_os = "macos"))]
     let tray_icon = app.default_window_icon().cloned().unwrap();
 
@@ -141,7 +141,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
 
 #[cfg(target_os = "windows")]
 fn stop_orphan_tun_service_on_startup() {
-    use tun_service::scm::{self, QueriedState};
+    use aurestream_plugin_tun::scm::{self, QueriedState};
 
     match scm::query_state() {
         QueriedState::Running | QueriedState::StartPending => {
@@ -162,20 +162,20 @@ fn stop_orphan_tun_service_on_startup() {}
 // ── Deep Link ──────────────────────────────────────────────────────
 
 /// 从 `aurestream://config?data=...&apply=1` 中提取参数
-fn extract_deep_link_data(url: &Url) -> Option<crate::app::state::DeepLinkPayload> {
+fn extract_deep_link_data(url: &Url) -> Option<crate::state::DeepLinkPayload> {
     if url.scheme() != "aurestream" || url.host_str() != Some("config") {
         return None;
     }
     let params: std::collections::HashMap<_, _> = url.query_pairs().collect();
     let data = params.get("data")?.to_string();
     let apply = params.get("apply").map(|v| v == "1").unwrap_or(false);
-    Some(crate::app::state::DeepLinkPayload { data, apply })
+    Some(crate::state::DeepLinkPayload { data, apply })
 }
 
 /// 将 deep link payload 写入 pending state
 fn store_pending_deep_link(
-    app_data: &crate::app::state::AppData,
-    payload: crate::app::state::DeepLinkPayload,
+    app_data: &crate::state::AppData,
+    payload: crate::state::DeepLinkPayload,
 ) {
     if let Ok(mut pending) = app_data.pending_deep_link.lock() {
         *pending = Some(payload);
@@ -196,7 +196,7 @@ fn register_deep_link(app: &tauri::App) {
                 payload.data,
                 payload.apply
             );
-            store_pending_deep_link(&handle.state::<crate::app::state::AppData>(), payload);
+            store_pending_deep_link(&handle.state::<crate::state::AppData>(), payload);
             handle.emit("deep_link_pending", ()).unwrap_or_else(|e| {
                 log::error!("Failed to emit deep_link_pending signal: {}", e);
             });
@@ -227,13 +227,13 @@ fn schedule_engine_restart(
             log::info!("[{ctx}] epoch changed, aborting engine restart");
             return;
         }
-        let Some((mode, path)) = crate::core::get_running_config() else {
+        let Some((mode, path)) = aurestream_plugin_lifecycle::commands::get_running_config() else {
             return;
         };
         log::info!("[{ctx}] restarting engine (mode: {:?})", mode);
-        if let Err(e) = crate::core::stop(handle.clone()).await {
+        if let Err(e) = aurestream_plugin_lifecycle::commands::stop(handle.clone()).await {
             log::error!("[{ctx}] stop engine failed: {}", e);
-        } else if let Err(e) = crate::core::start(handle, path, mode).await {
+        } else if let Err(e) = aurestream_plugin_lifecycle::commands::start(handle, path, mode).await {
             log::error!("[{ctx}] restart engine failed: {}", e);
         } else {
             log::info!("[{ctx}] engine restarted");
@@ -259,12 +259,12 @@ pub(crate) fn spawn_lifecycle_listener(app_handle: &tauri::AppHandle) {
                 match event {
                     SystemEvent::ShuttingDown(shutdown_handle) => {
                         log::info!("[lifecycle] received ShuttingDown event");
-                        crate::engine::cleanup_on_shutdown();
+                        aurestream_plugin_lifecycle::cleanup_on_shutdown();
                         shutdown_handle.allow();
                     }
                     SystemEvent::WillPowerOff => {
                         log::info!("[lifecycle] received WillPowerOff event");
-                        crate::engine::cleanup_on_shutdown();
+                        aurestream_plugin_lifecycle::cleanup_on_shutdown();
                     }
                     SystemEvent::WillSleep => {
                         log::info!("[wake] WillSleep");
@@ -277,7 +277,7 @@ pub(crate) fn spawn_lifecycle_listener(app_handle: &tauri::AppHandle) {
                             .unwrap_or_default();
                         log::info!("[wake] DidWake — slept {:.1}s", sleep_dur.as_secs_f32());
 
-                        use crate::engine::{EngineManager, PlatformEngine};
+                        use aurestream_plugin_lifecycle::{EngineManager, PlatformEngine};
                         PlatformEngine::on_network_up(&handle);
 
                         if sleep_dur < WAKE_RESTART_THRESHOLD {
@@ -305,12 +305,12 @@ pub(crate) fn spawn_lifecycle_listener(app_handle: &tauri::AppHandle) {
                         network_restart_epoch.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         network_down_at = Some(std::time::SystemTime::now());
                         
-                        use crate::engine::{EngineManager, PlatformEngine};
+                        use aurestream_plugin_lifecycle::{EngineManager, PlatformEngine};
                         PlatformEngine::on_network_down(&handle);
                     }
                     SystemEvent::NetworkUp => {
                         log::info!("[network] NetworkUp");
-                        use crate::engine::{EngineManager, PlatformEngine};
+                        use aurestream_plugin_lifecycle::{EngineManager, PlatformEngine};
                         PlatformEngine::on_network_up(&handle);
                         let handle_for_retry = handle.clone();
                         tauri::async_runtime::spawn(async move {

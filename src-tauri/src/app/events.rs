@@ -60,7 +60,7 @@ pub fn on_run_event(app_handle: &AppHandle, event: RunEvent) {
             }
         }
         RunEvent::Exit => {
-            use crate::engine::cleanup_on_shutdown;
+            use aurestream_plugin_lifecycle::cleanup_on_shutdown;
             log::info!("[exit] RunEvent::Exit fired, performing final proxy cleanup");
             cleanup_on_shutdown();
             crate::app::single_instance::cleanup();

@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "src-tauri",
+    "crates/aurestream-plugin-proxy",
+    "crates/aurestream-plugin-tun",
+    "crates/aurestream-plugin-privilege",
+    "crates/aurestream-plugin-lifecycle"
+]
+resolver = "2"

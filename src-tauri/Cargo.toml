@@ -38,14 +38,16 @@ libc = "0.2"
 webbrowser = "1.0.4"
 url = "2"
 sha2 = "0.10"
-sysproxy-rs = { path = "sysproxy-rs" }
+aurestream-plugin-proxy = { path = "../crates/aurestream-plugin-proxy" }
+aurestream-plugin-lifecycle = { path = "../crates/aurestream-plugin-lifecycle" }
+aurestream-plugin-privilege = { path = "../crates/aurestream-plugin-privilege" }
 tauri-plugin-deep-link = "2"
 onebox_lifecycle = { git = "https://github.com/OneOhCloud/onebox-lifecycle", tag = "v0.1.1" }
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-updater = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-tun-service = { path = "tun-service" }
+aurestream-plugin-tun = { path = "../crates/aurestream-plugin-tun" }
 winapi = { version = "0.3", features = ["winbase"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",
@@ -63,6 +65,3 @@ core-foundation = "0.9"
 gtk = "0.18"
 gdk = "0.18"
 
-[workspace]
-members = ["tun-service", "sysproxy-rs"]
-resolver = "2"

@@ -5,7 +5,7 @@
 # SMJobBless requires both plists to live inside the binary itself; the copies
 # on disk are only the source of truth for the embed step.
 #
-# Output: src-tauri/target/helper/cloud.oneoh.onebox.helper
+# Output: src-tauri/target/helper/com.root.aurestream.helper
 #
 # Verification:
 #   otool -s __TEXT __info_plist    <binary>
@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HELPER_DIR="$REPO_ROOT/src-tauri/helper"
+HELPER_DIR="$REPO_ROOT/crates/aurestream-plugin-privilege/macos-helper"
 BUILD_DIR="$REPO_ROOT/src-tauri/target/helper"
 LABEL="com.root.aurestream.helper"
 

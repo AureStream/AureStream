@@ -25,6 +25,7 @@ dist-ssr/
 .DS_Store
 
 # Tauri build outputs
+/target/
 src-tauri/target/
 src-tauri/gen/
 

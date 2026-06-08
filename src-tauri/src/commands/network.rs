@@ -36,7 +36,7 @@ pub async fn get_geoip_info(app: tauri::AppHandle, use_proxy: bool) -> Result<Ge
     if use_proxy {
         let proxy_url = format!(
             "http://127.0.0.1:{}",
-            crate::core::mixed_proxy_port(&app)
+            aurestream_plugin_lifecycle::ports::mixed_proxy_port(&app)
         );
         if let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
             builder = builder.proxy(proxy);
@@ -87,7 +87,7 @@ pub async fn get_geoip_info(app: tauri::AppHandle, use_proxy: bool) -> Result<Ge
     if use_proxy {
         let proxy_url = format!(
             "http://127.0.0.1:{}",
-            crate::core::mixed_proxy_port(&app)
+            aurestream_plugin_lifecycle::ports::mixed_proxy_port(&app)
         );
         if let Ok(proxy) = reqwest::Proxy::all(&proxy_url) {
             builder = builder.proxy(proxy);

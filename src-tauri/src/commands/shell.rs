@@ -1,5 +1,5 @@
-use crate::app::state::{AppData, LogType};
-use crate::core::stop;
+use crate::state::{AppData, LogType};
+use aurestream_plugin_lifecycle::commands::stop;
 
 use tauri::AppHandle;
 use tauri::Manager;
@@ -122,7 +122,7 @@ pub fn read_logs(app_data: tauri::State<AppData>, is_error: bool) -> String {
 #[tauri::command]
 pub fn get_pending_deep_link(
     app_data: tauri::State<AppData>,
-) -> Option<crate::app::state::DeepLinkPayload> {
+) -> Option<crate::state::DeepLinkPayload> {
     if let Ok(mut pending) = app_data.pending_deep_link.lock() {
         pending.take()
     } else {

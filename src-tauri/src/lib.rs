@@ -1,7 +1,6 @@
 mod app;
 mod commands;
-mod core;
-pub mod engine;
+pub mod state;
 mod utils;
 
 use tauri::Manager;
@@ -33,16 +32,16 @@ pub fn run() {
     app::plugins::register_plugins(builder, migrations)
         .invoke_handler(tauri::generate_handler![
             // core engine commands
-            core::start,
-            core::stop,
-            core::get_engine_state,
-            core::clear_engine_error,
-            core::reload_config,
-            core::config_check::mark_config_verified,
+            aurestream_plugin_lifecycle::commands::start,
+            aurestream_plugin_lifecycle::commands::stop,
+            aurestream_plugin_lifecycle::commands::get_engine_state,
+            aurestream_plugin_lifecycle::commands::clear_engine_error,
+            aurestream_plugin_lifecycle::commands::reload_config,
+            aurestream_plugin_lifecycle::config_check::mark_config_verified,
             // engine probe commands
-            engine::engine_ensure_installed,
-            engine::engine_uninstall_service,
-            engine::engine_probe,
+            aurestream_plugin_lifecycle::engine_commands::engine_ensure_installed,
+            aurestream_plugin_lifecycle::engine_commands::engine_uninstall_service,
+            aurestream_plugin_lifecycle::engine_commands::engine_probe,
             // shell commands
             commands::shell::version,
             commands::shell::read_logs,
