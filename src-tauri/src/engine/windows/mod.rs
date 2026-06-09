@@ -130,11 +130,7 @@ impl EngineManager for WindowsEngine {
             kill_result.map_err(|e| e.to_string())?;
         }
 
-        if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
-            crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
-        } else if child_pid_for_log.is_none() {
-            log::info!("[win-stop] post_kill_alive_check skipped reason=no_child_pid");
-        }
+        crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
 
         Ok(())
     }

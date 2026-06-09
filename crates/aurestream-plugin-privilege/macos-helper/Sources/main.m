@@ -574,7 +574,6 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
 // stopSingBox
 // ------------------------------------------------------------------
 - (void)stopSingBoxWithReply:(void (^)(NSString *))reply {
-    __block NSString *err = nil;
     __block pid_t target = 0;
     dispatch_sync(_stateQueue, ^{
         target = self->_activePid;
@@ -584,6 +583,7 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
         return;
     }
 
+    NSString *err = nil;
     if (kill(target, SIGTERM) != 0 && errno != ESRCH) {
         err = [NSString stringWithFormat:@"kill(%d, SIGTERM) failed: %s",
                target, strerror(errno)];

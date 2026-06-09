@@ -3,6 +3,7 @@ pub mod dns_watcher;
 use aurestream_plugin_privilege::macos::helper as macos_helper;
 use std::process::Command;
 use std::sync::Mutex;
+use tokio::sync::broadcast;
 pub const TUN_INTERFACE_NAME: &str = "utun233";
 
 // ----------------------------------------------------------------------------
@@ -72,10 +73,13 @@ pub async fn stop_tun_process() -> Result<(), String> {
     let taken = take_active_override();
     let applied = apply_captured_originals_sync(taken.as_ref());
 
+    // Subscribe to exit events BEFORE sending SIGTERM so we don't miss it.
+    let mut exit_rx = macos_helper::subscribe_sing_box_exits();
+
     log::info!("[helper] sending SIGTERM to sing-box");
     let stop_error = match macos_helper::api::stop_sing_box() {
         Ok(()) => {
-            log::info!("[helper] SIGTERM sent to sing-box, waiting 500ms for TUN teardown");
+            log::info!("[helper] SIGTERM sent, waiting for sing-box to exit");
             None
         }
         Err(e) => {
@@ -87,7 +91,32 @@ pub async fn stop_tun_process() -> Result<(), String> {
         }
     };
 
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Wait for the helper to confirm sing-box is dead (broadcast exit event).
+    // This avoids the TOCTOU race where ports appear free but the process
+    // hasn't fully exited.
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        exit_rx.recv(),
+    )
+    .await
+    {
+        Ok(Ok(exit)) => {
+            log::info!(
+                "[helper] sing-box confirmed dead pid={} code={}",
+                exit.pid,
+                exit.exit_code
+            );
+        }
+        Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
+            log::warn!("[helper] exit broadcast lagged by {} messages", n);
+        }
+        Ok(Err(broadcast::error::RecvError::Closed)) => {
+            log::warn!("[helper] exit broadcast channel closed unexpectedly");
+        }
+        Err(_timeout) => {
+            log::warn!("[helper] timed out waiting for sing-box exit event");
+        }
+    }
 
     if let Err(e) = macos_helper::api::set_ip_forwarding(false) {
         log::warn!("[helper] set_ip_forwarding(false) failed: {}", e);

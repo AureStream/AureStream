@@ -89,23 +89,28 @@ impl EngineManager for MacOSEngine {
                 let exit_mode = Arc::clone(&mode_arc);
                 let exit_spawn_epoch = start_epoch;
                 tokio::spawn(async move {
-                    if let Some(exit) = exit_rx.recv().await {
-                        log::info!(
-                            "[helper-bridge] sing-box exit event pid={} code={}",
-                            exit.pid,
-                            exit.exit_code
-                        );
-                        let payload = tauri_plugin_shell::process::TerminatedPayload {
-                            code: Some(exit.exit_code),
-                            signal: None,
-                        };
-                        crate::engine::monitor::handle_process_termination(
-                            &exit_app,
-                            &exit_mode,
-                            payload,
-                            exit_spawn_epoch,
-                        )
-                        .await;
+                    match exit_rx.recv().await {
+                        Ok(exit) => {
+                            log::info!(
+                                "[helper-bridge] sing-box exit event pid={} code={}",
+                                exit.pid,
+                                exit.exit_code
+                            );
+                            let payload = tauri_plugin_shell::process::TerminatedPayload {
+                                code: Some(exit.exit_code),
+                                signal: None,
+                            };
+                            crate::engine::monitor::handle_process_termination(
+                                &exit_app,
+                                &exit_mode,
+                                payload,
+                                exit_spawn_epoch,
+                            )
+                            .await;
+                        }
+                        Err(_) => {
+                            log::warn!("[helper-bridge] exit broadcast channel closed");
+                        }
                     }
                 });
 
