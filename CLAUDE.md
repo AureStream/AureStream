@@ -59,7 +59,7 @@ cargo check                 # Quick type check without full compilation
 
 ### Engine State Machine
 
-Rust backend implements `Idle → Starting → Running → Stopping → Idle` (with `Failed` error state). Defined in `src-tauri/src/engine/common/state_machine.rs`. Platform-specific implementations:
+Rust backend implements `Idle → Starting → Running → Stopping → Idle` (with `Failed` error state). Defined in `src-tauri/src/engine/state_machine.rs`. Platform-specific implementations:
 - `WindowsEngine`: Sidecar + WinINet proxy
 - `MacOSEngine`: XPC helper, DNS watcher, watchdog
 - `LinuxEngine`: pkexec, systemd-resolved
@@ -89,9 +89,9 @@ React Context API (no Redux/Zustand):
 ### Privilege Separation
 
 High-privilege operations (TUN, DNS) delegated to platform services:
-- Windows: SCM background service (`tun-service/`)
-- macOS: XPC privileged helper (`helper/`)
-- Linux: pkexec
+- Windows: UAC elevation in `crates/aurestream-plugin-privilege/src/windows.rs` installs/updates the SCM TUN service from `crates/aurestream-plugin-tun`.
+- macOS: XPC privileged helper source in `crates/aurestream-plugin-privilege/macos-helper/`, bundled into `Contents/Library/LaunchServices/`.
+- Linux: pkexec helper and polkit assets in `crates/aurestream-plugin-privilege/linux-helper/`.
 
 ## Key Directories
 
@@ -109,12 +109,14 @@ src/                          # Frontend (React/TypeScript)
 
 src-tauri/                    # Rust backend
 ├── src/commands/             # Tauri command handlers
-├── src/core/                 # Process manager, ports, config check, perf
-├── src/engine/               # Platform engines, shutdown, readiness
-├── resources/linux/          # Linux package resources (helper, polkit)
-├── sysproxy-rs/              # Cross-platform system proxy library
-├── tun-service/              # Windows TUN service
-├── helper/                   # macOS privileged helper (XPC)
+├── src/core/                 # Tauri command entrypoints
+├── src/engine/               # Engine orchestration, state, platform engines
+├── resources/linux/          # Linux deb/rpm package scripts
+
+crates/                       # Rust workspace crates
+├── aurestream-plugin-proxy/   # Cross-platform system proxy
+├── aurestream-plugin-tun/     # TUN service/business logic
+├── aurestream-plugin-privilege/ # Platform elevation and helper assets
 ```
 
 ## Path Aliases

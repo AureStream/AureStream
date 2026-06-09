@@ -38,12 +38,12 @@ pnpm sign-macos-bundle
 
 ### Linux 打包资源
 
-`src-tauri/tauri.linux.conf.json` 将以下文件打入 deb/rpm：
+`src-tauri/tauri.conf.json` 将以下文件打入 deb/rpm：
 
 | 安装路径 | 源文件 |
 |----------|--------|
-| `/usr/lib/AureStream/aurestream-tun-helper` | `resources/linux/aurestream-tun-helper` |
-| polkit / udev 规则 | `resources/linux/*.policy`, `49-aurestream.rules` |
+| `/usr/lib/AureStream/aurestream-tun-helper` | `../crates/aurestream-plugin-privilege/linux-helper/aurestream-tun-helper` |
+| polkit / udev 规则 | `../crates/aurestream-plugin-privilege/linux-helper/*.policy`, `49-aurestream.rules` |
 | postinst/postrm | `resources/linux/deb-*.sh` |
 
 ## 4. CI 构建
