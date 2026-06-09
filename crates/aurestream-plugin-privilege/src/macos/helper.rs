@@ -89,7 +89,7 @@ where
 mod exit_bridge {
     use super::ffi;
     use std::sync::{Mutex, OnceLock};
-    use tokio::sync::mpsc;
+    use tokio::sync::broadcast;
 
     #[derive(Debug, Clone, Copy)]
     pub struct SingBoxExit {
@@ -97,7 +97,7 @@ mod exit_bridge {
         pub exit_code: i32,
     }
 
-    static EXIT_SENDER: OnceLock<Mutex<Option<mpsc::UnboundedSender<SingBoxExit>>>> =
+    static EXIT_SENDER: OnceLock<Mutex<broadcast::Sender<SingBoxExit>>> =
         OnceLock::new();
 
     extern "C" fn on_exit_trampoline(pid: std::os::raw::c_int, exit_code: std::os::raw::c_int) {
@@ -107,27 +107,23 @@ mod exit_bridge {
             exit_code
         );
         if let Some(lock) = EXIT_SENDER.get() {
-            if let Ok(guard) = lock.lock() {
-                if let Some(sender) = guard.as_ref() {
-                    let _ = sender.send(SingBoxExit {
-                        pid: pid as i32,
-                        exit_code: exit_code as i32,
-                    });
-                }
+            if let Ok(sender) = lock.lock() {
+                let _ = sender.send(SingBoxExit {
+                    pid: pid as i32,
+                    exit_code: exit_code as i32,
+                });
             }
         }
     }
 
-    /// Install the FFI callback once and return a receiver for exit events.
-    pub fn subscribe() -> mpsc::UnboundedReceiver<SingBoxExit> {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let slot = EXIT_SENDER.get_or_init(|| Mutex::new(None));
-        {
-            let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
-            *guard = Some(tx);
-        }
+    /// Subscribe to sing-box exit events. Multiple subscribers supported.
+    pub fn subscribe() -> broadcast::Receiver<SingBoxExit> {
+        let slot = EXIT_SENDER.get_or_init(|| {
+            Mutex::new(broadcast::channel(4).0)
+        });
+        let sender = slot.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { ffi::aurestream_helper_set_exit_callback(on_exit_trampoline) };
-        rx
+        sender.subscribe()
     }
 }
 
