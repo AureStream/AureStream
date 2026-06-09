@@ -4,6 +4,8 @@
 <dict>
     <key>Label</key>
     <string>com.root.aurestream.helper</string>
+    <key>KeepAlive</key>
+    <true/>
     <key>MachServices</key>
     <dict>
         <key>com.root.aurestream.helper</key>

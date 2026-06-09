@@ -185,12 +185,15 @@ pub fn ensure_helper_installed() -> Result<(), String> {
                 "[helper] initial ping failed ({}), retrying after XPC reconnect",
                 first
             );
+            std::thread::sleep(std::time::Duration::from_secs(1));
             ping_result = helper::api::ping();
         }
     }
     if ping_result.is_err() && is_blessed_helper_on_disk() && is_helper_disabled_in_launchd() {
         log::warn!("[helper] installed helper is disabled in launchd; attempting repair");
         repair_disabled_helper_via_admin()?;
+        // Give launchd a moment to bootstrap + kickstart the helper
+        std::thread::sleep(std::time::Duration::from_secs(2));
         ping_result = helper::api::ping();
     }
     if ping_result.is_err() {
