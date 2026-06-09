@@ -16,11 +16,11 @@ tauri = { version = "2", features = [] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 anyhow = "1"
+log = "0.4"
 aurestream-plugin-privilege = { path = "../aurestream-plugin-privilege" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 sha2 = "0.10"
-log = "0.4"
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -35,7 +35,6 @@ windows = { version = "0.62.2", features = [
 [target.'cfg(target_os = "macos")'.dependencies]
 system-configuration = "0.7"
 core-foundation = "0.9"
-log = "0.4"
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 tempfile = "3"
