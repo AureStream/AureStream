@@ -178,6 +178,23 @@ pub fn ensure_helper_installed() -> Result<(), String> {
     })?;
     log::debug!("[helper] bundled helper path: {:?}", bundled_path);
 
+    // Check version first — if an upgrade is needed, SMJobBless handles both
+    // install and upgrade in one authorization, avoiding a double password prompt.
+    let bundled_ver = read_helper_cfbundle_version(&bundled_path);
+    let installed_ver = read_helper_cfbundle_version(std::path::Path::new(BLESSED_HELPER_PATH));
+    let needs_upgrade = match (&bundled_ver, &installed_ver) {
+        (Some(b), Some(i)) => b != i,
+        _ => false,
+    };
+    if needs_upgrade {
+        log::info!(
+            "[helper] CFBundleVersion bundled={:?} installed={:?}; upgrading via SMJobBless",
+            bundled_ver,
+            installed_ver
+        );
+        return install_helper_and_repair_disabled_state();
+    }
+
     let mut ping_result = helper::api::ping();
     if let Err(first) = ping_result.as_ref() {
         if first.contains("xpc error:") || first.contains("timeout waiting for helper reply") {
@@ -192,7 +209,6 @@ pub fn ensure_helper_installed() -> Result<(), String> {
     if ping_result.is_err() && is_blessed_helper_on_disk() && is_helper_disabled_in_launchd() {
         log::warn!("[helper] installed helper is disabled in launchd; attempting repair");
         repair_disabled_helper_via_admin()?;
-        // Give launchd a moment to bootstrap + kickstart the helper
         std::thread::sleep(std::time::Duration::from_secs(2));
         ping_result = helper::api::ping();
     }
@@ -201,20 +217,7 @@ pub fn ensure_helper_installed() -> Result<(), String> {
         return install_helper_and_repair_disabled_state();
     }
 
-    let bundled = bundled_helper_path().and_then(|p| read_helper_cfbundle_version(&p));
-    let installed = read_helper_cfbundle_version(std::path::Path::new(BLESSED_HELPER_PATH));
-
-    match (bundled, installed) {
-        (Some(b), Some(i)) if b != i => {
-            log::info!(
-                "[helper] CFBundleVersion bundled={} installed={}; upgrading via SMJobBless",
-                b,
-                i
-            );
-            install_helper_and_repair_disabled_state()
-        }
-        _ => Ok(()),
-    }
+    Ok(())
 }
 
 fn bundled_helper_path() -> Option<std::path::PathBuf> {
