@@ -112,6 +112,7 @@ pub struct FetchConfigResponse {
     data: Option<serde_json::Value>,
     headers: HashMap<String, String>,
     status: u16,
+    raw_body: Option<String>,
 }
 
 #[tauri::command]
@@ -164,15 +165,13 @@ pub async fn fetch_config(
             let status = response.status().as_u16();
             let headers = collect_headers(response.headers());
             let t_body = Instant::now();
-            let data = if status == 200 {
-                response
-                    .bytes()
-                    .await
-                    .ok()
-                    .and_then(|b| serde_json::from_slice(&b).ok())
-            } else {
-                None
-            };
+            let body_bytes = response.bytes().await.ok();
+            let data = body_bytes
+                .as_ref()
+                .and_then(|b| serde_json::from_slice(b).ok());
+            let raw_body = body_bytes
+                .as_ref()
+                .and_then(|b| String::from_utf8(b.to_vec()).ok());
             log::info!(
                 "[CONFIG_LOAD] 方式=PRIMARY status={} headers_elapsed={}ms body_elapsed={}ms total_elapsed={}ms URL={}",
                 status,
@@ -185,6 +184,7 @@ pub async fn fetch_config(
                 data,
                 headers,
                 status,
+                raw_body,
             })
         }
         Err(primary_err) if primary_err.is_connect() || primary_err.is_timeout() => {
@@ -254,12 +254,14 @@ pub async fn fetch_config(
                     let status = response.status().as_u16();
                     let headers = collect_headers(response.headers());
                     let t_body = Instant::now();
+                    let body_bytes = response.bytes().await.ok();
+                    let data = body_bytes
+                        .as_ref()
+                        .and_then(|b| serde_json::from_slice(b).ok());
+                    let raw_body = body_bytes
+                        .as_ref()
+                        .and_then(|b| String::from_utf8(b.to_vec()).ok());
                     if status == 200 {
-                        let data = response
-                            .bytes()
-                            .await
-                            .ok()
-                            .and_then(|b| serde_json::from_slice(&b).ok());
                         log::info!(
                             "[CONFIG_LOAD] 方式=FALLBACK_ACCELERATOR status={} primary_reason={} headers_elapsed={}ms body_elapsed={}ms total_elapsed={}ms 加速URL={}",
                             status,
@@ -273,6 +275,7 @@ pub async fn fetch_config(
                             data,
                             headers,
                             status,
+                            raw_body,
                         })
                     } else {
                         log::warn!(
@@ -286,6 +289,7 @@ pub async fn fetch_config(
                             data: None,
                             headers,
                             status,
+                            raw_body: None,
                         })
                     }
                 }

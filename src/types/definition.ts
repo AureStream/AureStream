@@ -30,7 +30,7 @@ export const LEGACY_CLASH_API_SECRET_STORE_KEY = 'clash_api_secret_key';
 export const APP_VERSION = '0.2.5';
 
 export function buildSubscriptionUserAgent(): string {
-    return `AureStream/${APP_VERSION} (sing-box/${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION})`;
+    return `sing-box`;
 }
 export const ALLOWLAN_STORE_KEY = 'allow_lan_key';
 export const ENABLE_TUN_STORE_KEY = 'enable_tun_key';
