@@ -4,7 +4,7 @@ use crate::engine::{EngineManager, ProxyMode};
 use aurestream_plugin_proxy::sysproxy::{clear_system_proxy, set_system_proxy};
 use aurestream_plugin_tun::scm;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_store::StoreExt;
 
