@@ -75,7 +75,7 @@ pub async fn stop_tun_process() -> Result<(), String> {
     log::info!("[helper] sending SIGTERM to sing-box");
     let stop_error = match macos_helper::api::stop_sing_box() {
         Ok(()) => {
-            log::info!("[helper] SIGTERM sent to sing-box, waiting 500ms for TUN teardown");
+            log::info!("[helper] sing-box confirmed stopped");
             None
         }
         Err(e) => {
@@ -86,8 +86,6 @@ pub async fn stop_tun_process() -> Result<(), String> {
             Some(e)
         }
     };
-
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     if let Err(e) = macos_helper::api::set_ip_forwarding(false) {
         log::warn!("[helper] set_ip_forwarding(false) failed: {}", e);
