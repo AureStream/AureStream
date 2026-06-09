@@ -1,7 +1,7 @@
 {
   "name": "aurestream",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "packageManager": "pnpm@11.4.0",
   "type": "module",
   "scripts": {
@@ -12,6 +12,8 @@
     "download-binaries": "tsx scripts/download-binaries.ts",
     "build-tun": "tsx scripts/build-tun-service.ts",
     "pre-bundle": "tsx scripts/prebundle.ts",
+    "sign-macos-bundle": "bash scripts/sign-macos-bundle.sh",
+    "post-sign-macos": "bash scripts/post-sign-macos-bundle.sh",
     "release": "pnpm download-binaries && pnpm build-tun --release && pnpm build && pnpm tauri build"
   },
   "dependencies": {

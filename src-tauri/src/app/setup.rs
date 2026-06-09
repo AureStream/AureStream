@@ -7,25 +7,27 @@ use url::Url;
 
 use crate::utils::show_dashboard;
 
-pub fn show_main_window(app_handle: &tauri::AppHandle) {
-    let Some(w) = app_handle.get_webview_window("main") else {
-        log::warn!("Main window not found while trying to show it");
+fn hide_on_launch_enabled(app_handle: &tauri::AppHandle) -> bool {
+    use tauri_plugin_store::StoreExt;
+    app_handle
+        .store("settings.json")
+        .ok()
+        .and_then(|store| store.get("hide_on_launch_key").and_then(|v| v.as_bool()))
+        .unwrap_or(false)
+}
+
+/// 首屏 HTML 加载完成后再显示窗口，避免 WebView 空白闪烁。
+pub fn show_main_window_after_page_load(app_handle: &tauri::AppHandle) {
+    if hide_on_launch_enabled(app_handle) {
+        return;
+    }
+    let Some(window) = app_handle.get_webview_window("main") else {
         return;
     };
-
-    #[cfg(target_os = "linux")]
-    if let Err(e) = w.unminimize() {
-        log::warn!("Failed to unminimize main window: {}", e);
-    }
-
-    if let Err(e) = w.show() {
-        log::error!("Failed to show main window: {}", e);
+    if window.is_visible().unwrap_or(false) {
         return;
     }
-
-    if let Err(e) = w.set_focus() {
-        log::warn!("Failed to focus main window: {}", e);
-    }
+    crate::utils::show_main_window(app_handle);
 }
 
 /// App 初始化逻辑，对应 Builder::setup 闭包
@@ -34,10 +36,26 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     app.manage(crate::engine::state_machine::EngineStateCell::new());
     stop_orphan_tun_service_on_startup();
 
-    crate::core::cleanup_old_app_logs(app.handle());
+    let log_cleanup_handle = app.handle().clone();
+    if let Err(e) = std::thread::Builder::new()
+        .name("aurestream-log-cleanup".into())
+        .spawn(move || {
+            crate::core::cleanup_old_app_logs(&log_cleanup_handle);
+        })
+    {
+        log::warn!("[setup] failed to spawn log cleanup thread: {}", e);
+    }
 
-    if let Err(e) = crate::utils::copy_database_files(app.handle()) {
-        log::error!("Failed to copy database files: {}", e);
+    let db_copy_handle = app.handle().clone();
+    if let Err(e) = std::thread::Builder::new()
+        .name("aurestream-db-copy".into())
+        .spawn(move || {
+            if let Err(e) = crate::utils::copy_database_files(&db_copy_handle) {
+                log::error!("Failed to copy database files: {}", e);
+            }
+        })
+    {
+        log::warn!("[setup] failed to spawn database copy thread: {}", e);
     }
 
     match crate::utils::copy_config_to_app_dir(app.handle()) {
@@ -57,19 +75,9 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         false
     };
 
-    // macOS：以无 Dock 图标的附件模式运行
-    #[cfg(target_os = "macos")]
-    {
-        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-    }
-
     if hide_on_launch {
         log::info!("[setup] hide_on_launch is enabled, hiding main window on start");
-        if let Some(w) = app.get_webview_window("main") {
-            let _ = w.hide();
-        }
-    } else {
-        show_main_window(app.handle());
+        let _ = crate::utils::enter_tray_mode(app.handle());
     }
 
     // On Linux/Windows debug builds, register deep links
@@ -99,16 +107,11 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         .icon(tray_icon)
         .menu(&tray_menu);
 
-    #[cfg(target_os = "macos")]
-    {
-        tray_builder = tray_builder.icon_as_template(true);
-    }
-
     let _tray = tray_builder
         .on_menu_event(|app_handle, event| {
             match event.id.as_ref() {
                 "show" => {
-                    show_main_window(app_handle);
+                    crate::utils::show_main_window(app_handle);
                 }
                 "quit" => {
                     let app_handle = app_handle.clone();
@@ -128,7 +131,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
             | TrayIconEvent::DoubleClick {
                 button: MouseButton::Left,
                 ..
-            } => show_main_window(tray.app_handle()),
+            } => crate::utils::show_main_window(tray.app_handle()),
             _ => {}
         })
         .build(app)?;

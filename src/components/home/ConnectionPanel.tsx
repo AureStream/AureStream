@@ -5,11 +5,16 @@ import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { surface, type } from "@/lib/typography"
 import { Card, CardContent } from "@/components/ui/card"
-import { invoke } from "@tauri-apps/api/core"
+import {
+  ensureEngineServiceInstalled,
+  probeEngineServiceState,
+  type EngineServiceState,
+} from "@/lib/engine-probe"
+import { syncActiveConnectionConfig } from "@/lib/config-sync"
+import { connectEngine } from "@/lib/connection-flow"
 import { useEngineState } from "@/hooks/useEngineState"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue } from "@/single/store"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
-import { mergeConnectionConfig } from "@/lib/connection-config"
 import { requireEngineIdle } from "@/lib/require-engine-idle"
 import {
   ROUTING_MODE_KEY,
@@ -28,7 +33,7 @@ function formatUptime(seconds: number): string {
 
 export function ConnectionPanel({ className }: { className?: string }) {
   const { t } = useTranslation()
-  const { engineState, isConnected, isRunning, isStarting, isStopping, isFailed, start, stop, clearError } =
+  const { engineState, isConnected, isRunning, isStarting, isStopping, isFailed, stop, clearError } =
     useEngineState()
   const { activeIdentifier } = useSubscriptions()
   const [routingMode, setRoutingMode] = useState<RoutingMode>("rule")
@@ -36,25 +41,22 @@ export function ConnectionPanel({ className }: { className?: string }) {
   const [uptime, setUptime] = useState(0)
   const uptimeRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const [isTunServiceInstalled, setIsTunServiceInstalled] = useState<boolean | null>(null)
+  const [tunServiceState, setTunServiceState] = useState<
+    EngineServiceState | "checking"
+  >("checking")
   const [isInstallingService, setIsInstallingService] = useState(false)
 
   const engineBusy = isConnected || isStarting || isStopping
 
   const checkTunService = useCallback(async () => {
-    try {
-      await invoke("engine_probe")
-      setIsTunServiceInstalled(true)
-    } catch {
-      setIsTunServiceInstalled(false)
-    }
+    setTunServiceState(await probeEngineServiceState())
   }, [])
 
   const handleInstallTunService = async () => {
     setIsInstallingService(true)
     try {
-      await invoke("engine_ensure_installed")
-      setIsTunServiceInstalled(true)
+      await ensureEngineServiceInstalled()
+      setTunServiceState("ready")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error("Install helper service failed:", err)
@@ -68,25 +70,49 @@ export function ConnectionPanel({ className }: { className?: string }) {
   }
 
   useEffect(() => {
-    getStoreValue(ROUTING_MODE_KEY, "rule").then(async (val) => {
+    let cancelled = false
+
+    Promise.all([
+      getStoreValue(ROUTING_MODE_KEY, "rule"),
+      getEnableTun(),
+    ]).then(async ([val, tunEnabled]) => {
       const mode = normalizeRoutingMode(val)
       if (val === "direct") {
         await setStoreValue(ROUTING_MODE_KEY, mode)
       }
+      if (cancelled) return
       setRoutingMode(mode)
+      setEnableTunState(tunEnabled)
+    }).catch((err) => {
+      console.error("Failed to load connection settings:", err)
     })
-    getEnableTun().then((val) => {
-      setEnableTunState(val)
-    })
-    checkTunService()
-  }, [checkTunService])
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (enableTun) {
+      checkTunService()
+    } else {
+      setTunServiceState("checking")
+    }
+  }, [enableTun, checkTunService])
 
   const handleRoutingModeChange = async (mode: RoutingMode) => {
-    if (engineBusy) {
-      if (!(await requireEngineIdle())) return
-    }
     setRoutingMode(mode)
     await setStoreValue(ROUTING_MODE_KEY, mode)
+    try {
+      await syncActiveConnectionConfig("routing-mode")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("Routing mode config sync failed:", err)
+      await message(`${t("config_parse_merge_failed")}: ${msg}`, {
+        title: t("error"),
+        kind: "error",
+      })
+    }
   }
 
   const handleEnableTunChange = async (useTun: boolean) => {
@@ -95,6 +121,14 @@ export function ConnectionPanel({ className }: { className?: string }) {
     }
     setEnableTunState(useTun)
     await setEnableTun(useTun)
+    void syncActiveConnectionConfig("tun-mode").catch((err) => {
+      console.error("TUN mode config sync failed:", err)
+    })
+    if (useTun) {
+      void ensureEngineServiceInstalled()
+        .then(() => setTunServiceState("ready"))
+        .catch((err) => console.warn("[tun] pre-install helper failed:", err))
+    }
   }
 
   const cycleRoutingMode = () => {
@@ -139,23 +173,16 @@ export function ConnectionPanel({ className }: { className?: string }) {
       const useTun = enableTun
 
       try {
-        await mergeConnectionConfig(activeIdentifier, routingMode, useTun)
+        await connectEngine(activeIdentifier, routingMode, useTun)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
-        console.error("Config merge failed:", err)
+        console.error("Connect failed:", err)
         await message(`${t("config_parse_merge_failed")}: ${msg}`, {
           title: t("error"),
           kind: "error",
         })
         return
       }
-
-      const configDir = await invoke<Record<string, string>>("get_app_paths").then(
-        (p) => p.config_dir
-      ).catch(() => "")
-      const configPath = `${configDir}/config.json`
-      const mode = useTun ? "IntoProxy" : "SystemProxy"
-      await start(configPath, mode)
     }
   }
 
@@ -320,7 +347,7 @@ export function ConnectionPanel({ className }: { className?: string }) {
                 </div>
               ) : (
                 <div className="w-full">
-                  {isTunServiceInstalled === false && (
+                  {tunServiceState === "missing" && (
                     <div className="flex items-center justify-between rounded-lg border border-rose-200/50 bg-rose-50/50 px-2.5 py-1 dark:border-rose-500/20 dark:bg-rose-950/20 animate-in fade-in duration-200 w-full">
                       <span className="type-caption font-semibold text-destructive">{t("tun_service_not_installed")}</span>
                       <button
@@ -332,13 +359,20 @@ export function ConnectionPanel({ className }: { className?: string }) {
                       </button>
                     </div>
                   )}
-                  {isTunServiceInstalled === true && (
+                  {tunServiceState === "ready" && (
                     <div className="flex items-center gap-1.5 px-1 py-0.5 type-caption font-semibold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
                       <span className="size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                       <span>{t("tun_service_ready")}</span>
                     </div>
                   )}
-                  {isTunServiceInstalled === null && (
+                  {tunServiceState === "unreachable" && (
+                    <div className="flex items-center gap-1.5 rounded-lg border border-amber-200/50 bg-amber-50/50 px-2.5 py-1 dark:border-amber-500/20 dark:bg-amber-950/20 animate-in fade-in duration-200 w-full">
+                      <span className="type-caption font-semibold text-amber-700 dark:text-amber-400">
+                        {t("tun_service_unreachable")}
+                      </span>
+                    </div>
+                  )}
+                  {tunServiceState === "checking" && (
                     <span className={cn(type.caption, "animate-in fade-in duration-200")}>
                       {t("checking_service_status")}
                     </span>

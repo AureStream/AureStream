@@ -1,11 +1,15 @@
 pub(crate) mod config_check;
 pub(crate) mod log;
 pub(crate) mod monitor;
+pub(crate) mod perf;
 pub(crate) mod ports;
 pub(crate) mod process;
 
 pub use self::log::cleanup_old_app_logs;
-pub(crate) use ports::{controller_port, mixed_proxy_port, probe_port_listening};
+pub(crate) use ports::{
+    controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_listening,
+    wait_for_port_release,
+};
 pub(crate) use process::{pm_snapshot, ProcessManager};
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -34,15 +38,23 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
-fn clear_orphans_on_proxy_ports(app: &AppHandle) {
+fn clear_orphans_on_proxy_ports_if_needed(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
-    let res = crate::commands::prestart::kill_orphans(app.clone(), Some(mixed_port));
-    ::log::info!("[start] prestart mixed :{mixed_port}: {}", res.message);
+    if probe_port_listening(mixed_port) {
+        let res = crate::commands::prestart::kill_orphans(app.clone(), Some(mixed_port));
+        ::log::info!("[start] prestart mixed :{mixed_port}: {}", res.message);
+    } else {
+        ::log::info!("[start] mixed :{mixed_port} free, skipping orphan cleanup");
+    }
 
     let ctrl_port = controller_port(app);
     if ctrl_port != mixed_port {
-        let res = crate::commands::prestart::kill_orphans(app.clone(), Some(ctrl_port));
-        ::log::info!("[start] prestart controller :{ctrl_port}: {}", res.message);
+        if probe_port_listening(ctrl_port) {
+            let res = crate::commands::prestart::kill_orphans(app.clone(), Some(ctrl_port));
+            ::log::info!("[start] prestart controller :{ctrl_port}: {}", res.message);
+        } else {
+            ::log::info!("[start] controller :{ctrl_port} free, skipping orphan cleanup");
+        }
     }
 }
 
@@ -58,7 +70,10 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
     let _ = app.emit(crate::engine::EVENT_TAURI_LOG, (0, format!("启动代理服务，模式: {}", mode_name)));
 
-    clear_orphans_on_proxy_ports(&app);
+    {
+        let _step = perf::StepTimer::new("start.clear_orphans");
+        clear_orphans_on_proxy_ports_if_needed(&app);
+    }
 
     {
         let cur = app.state::<EngineStateCell>().snapshot();
@@ -84,13 +99,20 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
 
-    if let Err(e) = config_check::verify(&app, &path).await {
-        ::log::error!("[start] action={action} config check failed: {}", e);
-        let _ = transition(&app, Intent::Fail { reason: e.clone() });
-        return Err(e);
+    if config_check::needs_verify(&path) {
+        let _step = perf::StepTimer::new("start.config_check");
+        if let Err(e) = config_check::verify(&app, &path).await {
+            ::log::error!("[start] action={action} config check failed: {}", e);
+            let _ = transition(&app, Intent::Fail { reason: e.clone() });
+            return Err(e);
+        }
+    } else {
+        ::log::info!("[start] action={action} config unchanged, skipping sing-box check");
     }
 
+    let engine_start = perf::StepTimer::new("start.engine");
     if let Err(e) = PlatformEngine::start(&app, mode.clone(), path, start_epoch).await {
+        drop(engine_start);
         ::log::error!(
             "[start] action={action} PlatformEngine::start failed: {}",
             e
@@ -100,6 +122,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         let _ = transition(&app, Intent::Fail { reason: e.clone() });
         return Err(e);
     }
+    drop(engine_start);
 
     // tokio::time::sleep(PlatformEngine::start_settle_delay(&mode)).await;
     let (post_pid, post_alive, _) = pm_snapshot();
@@ -171,14 +194,6 @@ pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn is_running(app: AppHandle) -> bool {
-    matches!(
-        app.state::<EngineStateCell>().snapshot(),
-        EngineState::Running { .. }
-    )
-}
-
-#[tauri::command]
 pub fn get_engine_state(app: AppHandle) -> EngineState {
     app.state::<EngineStateCell>().snapshot()
 }
@@ -234,16 +249,30 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
             return Err("No config path for running process".to_string());
         };
 
-        if let Err(e) = config_check::verify(&app, &path).await {
-            ::log::error!("[reload] action={action} config check failed: {}", e);
-            return Err(e);
+        if config_check::needs_verify(&path) {
+            let _step = perf::StepTimer::new("reload.config_check");
+            if let Err(e) = config_check::verify(&app, &path).await {
+                ::log::error!("[reload] action={action} config check failed: {}", e);
+                return Err(e);
+            }
+        } else {
+            ::log::info!("[reload] action={action} config unchanged, skipping sing-box check");
         }
 
         ::log::info!("[reload] action={action} dispatching PlatformEngine::restart");
-        PlatformEngine::restart(&app).await?;
+        {
+            let _step = perf::StepTimer::new("reload.engine_restart");
+            PlatformEngine::restart(&app).await?;
+        }
 
         if needs_proxy_reset {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            let _step = perf::StepTimer::new("reload.system_proxy");
+            let mixed_port = mixed_proxy_port(&app);
+            if !wait_for_port_listening(mixed_port, Duration::from_secs(5)).await {
+                ::log::warn!(
+                    "[reload] action={action} mixed :{mixed_port} not ready after restart, applying system proxy anyway"
+                );
+            }
             if let Err(e) = crate::engine::apply_system_proxy(&app).await {
                 ::log::error!(
                     "[reload] action={action} re-apply system proxy failed: {}",

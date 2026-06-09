@@ -34,6 +34,7 @@ graph TD
     subgraph Frontend [前端 UI 层 - React / Vite]
         UI[AureStream Web 视图]
         SStore[LazyStore 存储 settings.json]
+        ConfigSync[config-sync 预合并调度]
         Merger[配置合并生成系统]
         SingBoxAPI[sing-box 控制台 API 客户端]
     end
@@ -59,6 +60,7 @@ graph TD
 
     %% 组件交互
     UI -->|Tauri FFI 命令调用| TC
+    ConfigSync -->|输入变化时触发合并| Merger
     Merger -->|保存配置文件 config.json| TC
     TC -->|变更状态机意图| SM
     TC -->|拉起进程| PM
@@ -95,13 +97,17 @@ graph TD
   * `Starting/Running` ➔ `Failed(reason)`（失败）➔ `Idle`（空闲）
 * **配置校验**（`src-tauri/src/core/config_check.rs`）：`start` 前执行 `aurestream-core check -c config.json`，失败则进入 `Failed` 并返回 stderr。
 * **就绪探测器 (`src-tauri/src/engine/common/readiness.rs`)**：
-  在侧车拉起后，异步轮询 `experimental.clash_api.external_controller` 端口（默认 `9191`，与 `settings.json` 中 `singbox_api_port_key` 一致）；探测成功后方才将状态转移至 `Running`。停止时校验 mixed 代理端口（默认 `2345`）是否释放。
+  在侧车拉起后，异步轮询 `experimental.clash_api.external_controller` 端口（默认 `9191`，与 `settings.json` 中 `singbox_api_port_key` 一致）；探测成功后方才将状态转移至 `Running`。
+* **优雅停止 (`src-tauri/src/engine/common/shutdown.rs`)**：
+  侧车进程终止后，通过 `wait_for_port_release` 轮询 mixed 代理端口（默认 `2345`）与控制端口是否释放，替代固定 sleep，缩短 SystemProxy 模式断开等待时间。
+* **性能埋点 (`src-tauri/src/core/perf.rs`)**：
+  可选的 Rust 侧耗时统计，配合前端 `src/lib/perf.ts` 用于连接与热重载链路分析。
 
 ### 3.2 平台引擎特定实现 (`src-tauri/src/engine/`)
 为了在不同操作系统上管理网络代理和路由行为，AureStream 定义了统一的 `EngineManager` 接口特征（Trait）：
 * **Windows (`engine/windows/mod.rs`)**：利用 Tauri Sidecar 机制拉起 `sing-box` 进程，并通过 `sysproxy_rs` 调用 WinINet API 覆写 Windows 系统代理设置。
 * **macOS (`engine/macos/`)**：使用 `dns_watcher.rs` 监听 macOS 的 `SCDynamicStore` 网络变化事件，并通过 XPC 架构与特权辅助程序（Privileged Helper）交互实现高级路由配置。
-* **Linux (`engine/linux/mod.rs`)**：借由 `pkexec` 执行具有管理员权限的脚本，动态修改 `systemd-resolved` 服务的 DNS 解析配置。
+* **Linux (`engine/linux/mod.rs`)**：借由 `pkexec` 调用随 deb/rpm 安装的 `aurestream-tun-helper`（`src-tauri/resources/linux/`），动态修改 `systemd-resolved` 的 DNS 配置，并支持特权服务卸载。
 
 ### 3.3 系统代理配置库 `sysproxy_rs` (`src-tauri/sysproxy-rs/`)
 一个为项目量身定制的 Rust 跨平台代理开关及配置控制库：
@@ -116,16 +122,27 @@ graph TD
 
 ## 4. 核心前端组件设计 (TypeScript)
 
-### 4.1 智能配置合并系统 (`src/config/merger/main.ts`)
+### 4.1 智能配置合并系统 (`src/config/merger/`)
+
 该组件将内置规则模板、用户订阅节点以及偏好设置整合成 `sing-box` 能够直接读取的 `config.json` 规则文件。
+
+* **预合并调度 (`src/lib/config-sync.ts`)**：
+  订阅切换、路由模式/TUN 开关、节点变更、网络设置修改等输入变化时，通过 200ms 防抖触发后台合并；连接时仅调用 `ensureConnectionConfigReady` 校验缓存，不再在点击连接时执行完整 merge。
+* **合并缓存 (`src/lib/merge-cache.ts`)**：
+  基于订阅修订号、模板键、端口、TUN 栈、DNS 偏好等输入计算 `cacheKey`；未变化时跳过写入。
+* **热重载 (`src/lib/hot-reload-config.ts`)**：
+  引擎运行中重新 merge 并调用 `reload_config`，无需断开连接。
+* **连接入口 (`src/lib/connection-flow.ts`)**：
+  `connectEngine` 统一封装「校验配置 → 解析路径 → start」并附带 perf 埋点。
+
 * **合并流程**：
   1. 读取本地内置的基础配置模板（如端口默认设为 `2345`）。
   2. 从 SQLite 数据库中通过 `getSubscriptionConfig(identifier)` 加载用户选中的订阅节点列表。
-  3. 将解析出的代理节点组装并注入到模板的 `outbounds` 节点组中。
-  4. 将用户自定义的直连规则（`custom_ruleset_direct`）与代理规则（`custom_ruleset_proxy`）追加合并到 `route.rules` 中。
-  5. 重新分配 Sing-Box 内置 DNS 地址，并将持久化缓存文件路径重定向（如 `mixed-cache-rule-v2.db`）。
-  6. 注入 `experimental.clash_api`（控制台地址与 secret）与 `cache_file`。
-  7. 将组装完成的 JSON 文件写入到 Tauri 专属的应用配置目录。
+  3. 按 `routingMode` + `enableTun` 选择 `mixed` / `tun` / `*-global` 配置档并裁切 inbounds。
+  4. TUN 模式下通过 `configureTunInbound` 写入 `stack`（`system` / `gvisor` / `mixed`）、接口名、旁路由 DNS 等。
+  5. 将解析出的代理节点组装并注入到模板的 `outbounds` 节点组中。
+  6. 将用户自定义的直连/代理规则追加合并到 `route.rules` 中。
+  7. 注入 `experimental.clash_api`、`cache_file`，写入 Tauri 应用配置目录下的 `config.json`。
 
 ### 4.2 sing-box 控制台 API（前端 `src/utils/singbox-api/`）
 
@@ -163,10 +180,9 @@ sequence_chart
     participant OS as 操作系统
 
     用户 -> UI: 点击“开启连接”（系统代理模式）
-    UI -> Merger: 调用 setMixedConfig(active_sub)
-    Merger -> Merger: 读取模板并合并订阅节点
-    Merger -> OS: 写入 config.json 配置文件
-    UI -> Rust: 调用 tauri 命令 invoke("start", config_path, "SystemProxy")
+    Note over UI,Merger: config.json 已在输入变化时预合并
+    UI -> UI: ensureConnectionConfigReady（必要时 fallback merge）
+    UI -> Rust: connectEngine → invoke("start", config_path, "SystemProxy")
     Rust -> Rust: 引擎状态转移为 Starting（启动中）
     Rust -> Kernel: sing-box check 校验 config.json
     Rust -> PM: 进程管理器拉起子进程命令
@@ -198,7 +214,8 @@ sequence_chart
     OS -> OS: 还原注册表，清空系统代理开关（直接连接）
     Rust -> PM: 终止子进程
     PM -> Kernel: 发送 kill 信号
-    Kernel -> Kernel: 释放 2345 端口并安全退出
+    Rust -> Rust: wait_for_port_release 轮询 2345/9191 端口释放
+    Kernel -> Kernel: 释放端口并安全退出
     Rust -> PM: 进程信息置空重置 (reset)
     Rust -> Rust: 引擎状态转移为 Idle（空闲）
     Rust -> UI: 发送 status-changed 事件通知前端

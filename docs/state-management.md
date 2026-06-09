@@ -3,42 +3,53 @@
 AureStream 采用轻量级的状态管理方案，结合 React Context API 与 Tauri 的跨语言通信机制，摒弃了 Redux 或 Zustand 等大型状态库。
 
 ## 1. 概述
-- **React 层**: 使用内置的 Context API (`NavigationContext`, `SubscriptionContext`, `ThemeContext`)。
-- **进程通信**: 通过 Tauri Event 机制实现 Rust 后端到前端的数据推流。
-- **持久化层**: `settings.json` (轻量配置) + `data.db` (订阅与节点数据)。
+- **React 层**: Context API（`NavigationContext`、`SubscriptionContext`、`ThemeContext`）。
+- **进程通信**: Tauri Event（`engine-state`、`tauri-log`）。
+- **持久化**: `settings.json` + `data.db`。
+- **连接配置**: 内存 cacheKey（`merge-cache.ts`）+ 磁盘 `config.json`。
 
 ## 2. NavigationContext
-- 管理应用标签页导航状态。
-- 维护 `activeTab` 属性 (`'home'` | `'subscription'` | `'settings'`)。
-- 替代了传统的前端路由库，减少打包体积和复杂度。
+- `activeTab`: `'home'` | `'subscription'` | `'settings'`。
+- 无 react-router，减少打包体积。
 
 ## 3. SubscriptionContext
-- **核心状态**: `subscriptions` (列表), `activeIdentifier` (当前选中项), `activeConfig` (配置详情), `nodes` (解析出的节点列表)。
-- **状态行为**:
-  - `parseNodes()`: 解析内核配置，过滤掉 `selector`/`urltest`/`direct`/`block`/`dns` 等非真实节点。
-  - `selectSubscription()`: 切换订阅时带有引擎状态守卫 (Guard)，要求引擎处于 Idle 状态。
-- **定时更新**: 每 10 分钟触发轮询器，检查各订阅的更新策略。如果引擎在运行中，更新后会热重载 (Hot-reload) 配置。
+- **状态**: `subscriptions`、`activeIdentifier`、`activeConfig`、`nodes`、`loading`。
+- **行为**:
+  - `parseNodes()`: 过滤非真实节点 outbound。
+  - `selectSubscription()`: 切换订阅（引擎忙碌时守卫拦截）。
+  - 首次加载/切换完成后触发 `scheduleConfigSync`。
+- **定时更新**: 按各订阅策略轮询；运行中更新后 `hotReloadIfRunning`。
 
 ## 4. ThemeContext
-- 维护主题模式: `system` | `light` | `dark`。
-- 持久化保存在 `localStorage` 中。
-- 监听系统 `prefers-color-scheme` 的事件并响应更新。
+- `system` | `light` | `dark`，持久化于 `localStorage`。
 
 ## 5. 引擎状态 (useEngineState)
-- **事件监听**: 订阅 Tauri 的 `engine-state` 事件流。
-- **可辨识联合类型**: 引擎状态类型定义为 `idle` | `starting` | `running` | `stopping` | `failed`。
-- **提供动作**: `start(configPath, mode)`, `stop()`, `clearError()`。
-- 将后端的 Rust State Machine 反映到前端 UI。
+- 订阅 `engine-state` 事件。
+- 类型: `idle` | `starting` | `running` | `stopping` | `failed`。
+- 动作: `start`、`stop`、`clearError`。
 
-## 6. 配置存储 (single/store.ts)
-- 基于 `tauri-plugin-store` 的 `LazyStore('settings.json')`。
-- 包装了 30 多个 Getter/Setter 对，处理自动保存。
-- 涵盖操作系统语言检测（回退到 zh/en）、自定义路由规则存储、DNS 服务器偏好设置等。
+## 6. 连接配置状态 (`merge-cache` + `config-sync`)
 
-## 7. 数据库层 (single/db.ts)
-- 基于 `tauri-plugin-sql` 操作 SQLite。
-- 表结构: `subscriptions` 和 `subscription_configs`，通过级联删除维护数据一致性。
+配置「新鲜度」不由 React state 持有，而由合并缓存键判断：
 
-## 8. 引擎状态守卫 (Engine Guards)
-- 定义在 `src/lib/engine-guard.ts` 和 `require-engine-idle.ts`。
-- **拦截器机制**: 在执行切换订阅、更新订阅、修改核心端口等可能引起网络中断的操作前，如果 `isEngineBusy()`，则弹窗拦截，要求用户手动断开连接后再试。
+```
+输入变化 → invalidateConnectionConfigCache()
+         → onConnectionConfigStale → scheduleConfigSync (200ms 防抖)
+         → mergeConnectionConfig → 写入 config.json → setLastMergeCacheKey
+
+点击连接 → ensureConnectionConfigReady（cacheKey 匹配则跳过 merge）
+```
+
+Store 中与网络相关的 setter（端口、TUN 栈、DNS、Bypass 等）均会失效缓存，确保 `config.json` 与 UI 设置一致。
+
+## 7. 配置存储 (`single/store.ts`)
+- `LazyStore('settings.json')`，30+ Getter/Setter。
+- `TunStack`: `'system' | 'gvisor' | 'mixed'`，键名 `tun_stack_key`。
+- `getEnableTun()` / 路由模式等影响 merge profile 的项。
+
+## 8. 数据库层 (`single/db.ts`)
+- SQLite：`subscriptions`、`subscription_configs`，级联删除。
+
+## 9. 引擎状态守卫
+- `engine-guard.ts`、`require-engine-idle.ts`。
+- 切换订阅、改端口等操作前检查 `isEngineBusy()`。

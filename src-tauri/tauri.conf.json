@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "aurestream",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "identifier": "com.root.aurestream",
   "build": {
     "beforeDevCommand": "pnpm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm run build",
+    "beforeBundleCommand": "pnpm run pre-bundle",
     "frontendDist": "../dist"
   },
   "app": {
@@ -16,7 +17,9 @@
         "width": 1050,
         "height": 780,
         "minWidth": 960,
-        "minHeight": 750
+        "minHeight": 750,
+        "visible": false,
+        "backgroundColor": "#ECEEF2"
       }
     ],
     "security": {
@@ -27,6 +30,9 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/**/*"
+    ],
     "externalBin": [
       "binaries/aurestream-core"
     ],
@@ -36,7 +42,34 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-",
+      "infoPlist": "Info.privileged-helper.plist",
+      "files": {
+        "Library/LaunchServices/com.root.aurestream.helper": "target/helper/com.root.aurestream.helper"
+      }
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "resources/main.desktop",
+        "files": {
+          "/usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
+        },
+        "postInstallScript": "resources/linux/deb-postinst.sh",
+        "postRemoveScript": "resources/linux/deb-postrm.sh"
+      },
+      "rpm": {
+        "desktopTemplate": "resources/main.desktop",
+        "files": {
+          "/usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
+        }
+      }
+    }
   },
   "plugins": {
     "deep-link": {

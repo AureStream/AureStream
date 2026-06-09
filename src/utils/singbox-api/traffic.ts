@@ -1,6 +1,5 @@
 import type { SingBoxTrafficTick } from "@/types/singbox"
-import { getControllerSecret } from "@/single/store"
-import { getControllerBaseUrl } from "./client"
+import { getControllerAuth } from "./client"
 
 /**
  * Stream GET /traffic (newline-delimited JSON) from sing-box clash_api.
@@ -10,8 +9,7 @@ export async function subscribeTraffic(
   onTick: (tick: SingBoxTrafficTick) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const baseUrl = await getControllerBaseUrl()
-  const secret = await getControllerSecret()
+  const { baseUrl, secret } = await getControllerAuth()
   const res = await fetch(`${baseUrl}/traffic`, {
     headers: { Authorization: `Bearer ${secret}` },
     signal,

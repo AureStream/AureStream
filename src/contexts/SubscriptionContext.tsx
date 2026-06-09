@@ -7,16 +7,15 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import type Database from "@tauri-apps/plugin-sql"
 import { getDataBaseInstance } from "@/single/db"
-import { getStoreValue, setStoreValue, getEnableTun } from "@/single/store"
+import { getStoreValue, setStoreValue } from "@/single/store"
 import { requireEngineIdle } from "@/lib/require-engine-idle"
 import { AUTO_UPDATE_STORE_KEY, UPDATE_INTERVAL_STORE_KEY, INTERVAL_SECONDS, SSI_STORE_KEY } from "@/types/definition"
 import type { Subscription, SubscriptionConfig, UpdateInterval } from "@/types/definition"
 import type { ProxyNode } from "@/types/engine-state"
 import { updateSubscription } from "@/action/db"
-import { getEngineState } from "@/utils/vpn-service"
-import { mergeConnectionConfig } from "@/lib/connection-config"
-import { ROUTING_MODE_KEY, normalizeRoutingMode } from "@/lib/routing-mode"
+import { syncActiveConnectionConfig } from "@/lib/config-sync"
 
 const NON_PROXY_OUTBOUND_TYPES = new Set([
   "selector",
@@ -41,6 +40,26 @@ export type SubscriptionContextValue = {
 const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
   undefined
 )
+
+const parsedNodesCache = new Map<string, ProxyNode[]>()
+const PARSED_NODES_CACHE_MAX = 24
+
+function parseNodesCached(identifier: string, configContent: string): ProxyNode[] {
+  const cacheKey = `${identifier}:${configContent.length}`
+  const hit = parsedNodesCache.get(cacheKey)
+  if (hit) {
+    return hit
+  }
+  const nodes = parseNodes(configContent)
+  parsedNodesCache.set(cacheKey, nodes)
+  if (parsedNodesCache.size > PARSED_NODES_CACHE_MAX) {
+    const oldest = parsedNodesCache.keys().next().value
+    if (oldest) {
+      parsedNodesCache.delete(oldest)
+    }
+  }
+  return nodes
+}
 
 function parseNodes(configContent: string): ProxyNode[] {
   try {
@@ -71,20 +90,21 @@ function parseNodes(configContent: string): ProxyNode[] {
 }
 
 async function loadActiveSubscription(
-  activeId: string
+  activeId: string,
+  db?: Database
 ): Promise<{
   activeConfig: SubscriptionConfig | null
   nodes: ProxyNode[]
 }> {
-  const db = await getDataBaseInstance()
-  const configs = await db.select<SubscriptionConfig[]>(
+  const database = db ?? (await getDataBaseInstance())
+  const configs = await database.select<SubscriptionConfig[]>(
     "SELECT * FROM subscription_configs WHERE identifier = $1",
     [activeId]
   )
   if (configs.length > 0) {
     return {
       activeConfig: configs[0],
-      nodes: parseNodes(configs[0].config_content),
+      nodes: parseNodesCached(activeId, configs[0].config_content),
     }
   }
   return { activeConfig: null, nodes: [] }
@@ -99,18 +119,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [nodes, setNodes] = useState<ProxyNode[]>([])
   const [loading, setLoading] = useState(true)
 
+  const applyActiveState = useCallback(
+    (
+      activeId: string,
+      cfg: SubscriptionConfig | null,
+      parsedNodes: ProxyNode[]
+    ) => {
+      setActiveIdentifier(activeId)
+      setActiveConfig(cfg)
+      setNodes(parsedNodes)
+      window.dispatchEvent(
+        new CustomEvent("active-subscription-changed", {
+          detail: { identifier: activeId },
+        })
+      )
+    },
+    []
+  )
+
   const applyActiveId = useCallback(async (activeId: string) => {
     const { activeConfig: cfg, nodes: parsed } =
       await loadActiveSubscription(activeId)
-    setActiveIdentifier(activeId)
-    setActiveConfig(cfg)
-    setNodes(parsed)
-    window.dispatchEvent(
-      new CustomEvent("active-subscription-changed", {
-        detail: { identifier: activeId },
-      })
-    )
-  }, [])
+    applyActiveState(activeId, cfg, parsed)
+  }, [applyActiveState])
 
   const selectSubscription = useCallback(
     async (identifier: string): Promise<boolean> => {
@@ -118,6 +149,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (!(await requireEngineIdle())) return false
       await setStoreValue(SSI_STORE_KEY, identifier)
       await applyActiveId(identifier)
+      void syncActiveConnectionConfig("subscription-switched").catch((err) => {
+        console.error("[config-sync] merge after switch failed:", err)
+      })
       return true
     },
     [activeIdentifier, applyActiveId]
@@ -131,21 +165,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const db = await getDataBaseInstance()
+      const [db, storedActiveId] = await Promise.all([
+        getDataBaseInstance(),
+        getStoreValue(SSI_STORE_KEY) as Promise<string | undefined>,
+      ])
       const rows = await db.select<Subscription[]>(
         "SELECT * FROM subscriptions ORDER BY id DESC"
       )
       setSubscriptions(rows)
 
       if (rows.length > 0) {
-        let activeId = (await getStoreValue(SSI_STORE_KEY)) as string | undefined
+        let activeId = storedActiveId
         let activeSub = rows.find((r) => r.identifier === activeId)
         if (!activeSub) {
           activeSub = rows[0]
           activeId = activeSub.identifier
           await setStoreValue(SSI_STORE_KEY, activeId)
         }
-        await applyActiveId(activeSub.identifier)
+        const { activeConfig: cfg, nodes: parsed } =
+          await loadActiveSubscription(activeSub.identifier, db)
+        applyActiveState(activeSub.identifier, cfg, parsed)
+        void syncActiveConnectionConfig("subscription-loaded").catch((err) => {
+          console.error("[config-sync] initial merge failed:", err)
+        })
       } else {
         setActiveIdentifier("")
         setActiveConfig(null)
@@ -156,24 +198,25 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [applyActiveId])
+  }, [applyActiveState])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
-  // ── Auto-update timer ────────────────────────────────────────────────
+  // ── Auto-update timer (only while enabled) ─────────────────────────
   const activeIdentifierRef = useRef(activeIdentifier)
   useEffect(() => { activeIdentifierRef.current = activeIdentifier }, [activeIdentifier])
 
   useEffect(() => {
     const CHECK_INTERVAL_MS = 10 * 60 * 1000 // every 10 minutes
+    const INITIAL_AUTO_UPDATE_DELAY_MS = 60 * 1000
+    let initialTimer: ReturnType<typeof setTimeout> | null = null
+    let intervalTimer: ReturnType<typeof setInterval> | null = null
+    let cancelled = false
 
     const runAutoUpdateCycle = async () => {
       try {
-        const enabled = await getStoreValue(AUTO_UPDATE_STORE_KEY, false)
-        if (!enabled) return
-
         const intervalStr = (await getStoreValue(UPDATE_INTERVAL_STORE_KEY, "24h")) as UpdateInterval
         const intervalSec = INTERVAL_SECONDS[intervalStr] ?? INTERVAL_SECONDS["24h"]
         const now = Math.floor(Date.now() / 1000)
@@ -205,33 +248,52 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           await applyActiveId(currentActive)
         }
 
-        // If the active subscription was updated and engine is running, hot-reload config
         if (activeWasUpdated && currentActive) {
-          const state = await getEngineState()
-          if (state.kind === "running") {
-            try {
-              const routingRaw = await getStoreValue(ROUTING_MODE_KEY, "rule")
-              const routingMode = normalizeRoutingMode(routingRaw)
-              const enableTun = await getEnableTun()
-              await mergeConnectionConfig(currentActive, routingMode, enableTun)
-              const { invoke } = await import("@tauri-apps/api/core")
-              await invoke("reload_config")
-              console.log("[auto-update] config reloaded for active subscription while connected")
-            } catch (e) {
-              console.error("[auto-update] config reload failed:", e)
-            }
-          }
+          void syncActiveConnectionConfig("auto-update").catch((e) => {
+            console.error("[auto-update] config sync failed:", e)
+          })
         }
       } catch (err) {
         console.error("[auto-update] cycle failed:", err)
       }
     }
 
-    // Run once on mount
-    runAutoUpdateCycle()
+    const clearTimers = () => {
+      if (initialTimer) {
+        clearTimeout(initialTimer)
+        initialTimer = null
+      }
+      if (intervalTimer) {
+        clearInterval(intervalTimer)
+        intervalTimer = null
+      }
+    }
 
-    const timer = setInterval(runAutoUpdateCycle, CHECK_INTERVAL_MS)
-    return () => clearInterval(timer)
+    const startTimers = async () => {
+      clearTimers()
+      if (cancelled) return
+      const enabled = await getStoreValue(AUTO_UPDATE_STORE_KEY, false)
+      if (!enabled || cancelled) return
+      initialTimer = setTimeout(() => {
+        void runAutoUpdateCycle()
+      }, INITIAL_AUTO_UPDATE_DELAY_MS)
+      intervalTimer = setInterval(() => {
+        void runAutoUpdateCycle()
+      }, CHECK_INTERVAL_MS)
+    }
+
+    void startTimers()
+
+    const onAutoUpdateSettingChanged = () => {
+      void startTimers()
+    }
+    window.addEventListener("auto-update-setting-changed", onAutoUpdateSettingChanged)
+
+    return () => {
+      cancelled = true
+      clearTimers()
+      window.removeEventListener("auto-update-setting-changed", onAutoUpdateSettingChanged)
+    }
   }, [applyActiveId])
 
   return (

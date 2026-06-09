@@ -22,12 +22,10 @@ import { badge, btn, iconBadge, surface, type } from "@/lib/typography"
 import { useSubscriptions } from "@/hooks/useSubscriptions"
 import { insertSubscription, deleteSubscription, updateSubscription } from "@/action/db"
 import { message } from "@tauri-apps/plugin-dialog"
-import { getStoreValue, setStoreValue, getEnableTun } from "@/single/store"
+import { getStoreValue, setStoreValue } from "@/single/store"
 import { AUTO_UPDATE_STORE_KEY, UPDATE_INTERVAL_STORE_KEY } from "@/types/definition"
 import type { UpdateInterval } from "@/types/definition"
-import { mergeConnectionConfig } from "@/lib/connection-config"
-import { ROUTING_MODE_KEY, normalizeRoutingMode } from "@/lib/routing-mode"
-import { getEngineState } from "@/utils/vpn-service"
+import { syncActiveConnectionConfig } from "@/lib/config-sync"
 
 const getFriendlyNameFromUrl = (urlStr: string, t: (key: string) => string): string => {
   try {
@@ -111,6 +109,7 @@ export function SubscriptionPage() {
   const handleAutoUpdateChange = async (val: boolean) => {
     setAutoUpdate(val)
     await setStoreValue(AUTO_UPDATE_STORE_KEY, val)
+    window.dispatchEvent(new CustomEvent("auto-update-setting-changed"))
   }
 
   const handleUpdateIntervalChange = async (val: UpdateInterval) => {
@@ -118,20 +117,13 @@ export function SubscriptionPage() {
     await setStoreValue(UPDATE_INTERVAL_STORE_KEY, val)
   }
 
-  /** Rebuild config.json and hot-reload if this is the active subscription and engine is running. */
-  async function reloadIfActiveAndRunning(identifier: string) {
+  /** Rebuild config.json when the active subscription content changes. */
+  async function reloadIfActive(identifier: string) {
     if (identifier !== activeIdentifier) return
-    const state = await getEngineState()
-    if (state.kind !== "running") return
     try {
-      const routingRaw = await getStoreValue(ROUTING_MODE_KEY, "rule")
-      const routingMode = normalizeRoutingMode(routingRaw)
-      const enableTun = await getEnableTun()
-      await mergeConnectionConfig(activeIdentifier, routingMode, enableTun)
-      const { invoke } = await import("@tauri-apps/api/core")
-      await invoke("reload_config")
+      await syncActiveConnectionConfig("subscription-updated")
     } catch (e) {
-      console.error("[subscription] config reload after update failed:", e)
+      console.error("[subscription] config sync after update failed:", e)
     }
   }
 
@@ -180,7 +172,7 @@ export function SubscriptionPage() {
       const ok = await updateSubscription(identifier)
       if (ok) {
         await refresh()
-        await reloadIfActiveAndRunning(identifier)
+        await reloadIfActive(identifier)
       } else {
         await message(t("update_subscription_failed"), {
           title: t("update_failed"),
@@ -207,7 +199,7 @@ export function SubscriptionPage() {
       }
       await refresh()
       if (activeWasUpdated) {
-        await reloadIfActiveAndRunning(activeIdentifier)
+        await reloadIfActive(activeIdentifier)
       }
     } catch (err) {
       console.error(err)

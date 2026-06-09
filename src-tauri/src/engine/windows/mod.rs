@@ -123,9 +123,11 @@ impl EngineManager for WindowsEngine {
                 Err(e) => log::info!("[win-stop] child_kill_result=Err({}) pid={}", e, pid),
             }
             kill_result.map_err(|e| e.to_string())?;
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        } else {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
+            crate::engine::common::shutdown::wait_for_sidecar_ports_release(app).await;
+        } else if child_pid_for_log.is_none() {
             log::info!("[win-stop] post_kill_alive_check skipped reason=no_child_pid");
         }
 
@@ -152,8 +154,17 @@ impl EngineManager for WindowsEngine {
             .state::<crate::engine::state_machine::EngineStateCell>()
             .snapshot()
             .epoch();
+        let mixed_port = crate::core::mixed_proxy_port(app);
         Self::stop(app).await?;
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        let release_deadline =
+            std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < release_deadline
+            && crate::core::probe_port_listening(mixed_port)
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
         Self::start(app, mode, config_path, start_epoch).await
     }
 

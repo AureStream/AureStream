@@ -1,8 +1,3 @@
-import type { ComponentType, SVGProps } from "react"
-import * as Flags from "country-flag-icons/react/1x1"
-
-export type FlagComponent = ComponentType<SVGProps<SVGSVGElement>>
-
 type RegionDisplayNames = {
   of(code: string): string | undefined
 }
@@ -12,6 +7,7 @@ type RegionDisplayNamesConstructor = new (
 ) => RegionDisplayNames
 
 const REGION_INDICATOR_BASE = 0x1f1e6
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/
 const COUNTRY_ALIASES: Record<string, string[]> = {
   AE: ["UAE", "阿联酋"],
   AU: ["AUS", "澳大利亚", "澳洲"],
@@ -41,32 +37,52 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
   VN: ["VNM", "越南"],
 }
 
-const flagComponents = Flags as Record<string, FlagComponent | undefined>
-const flagCodes = Object.keys(flagComponents).filter((code) =>
-  /^[A-Z]{2}$/.test(code)
-)
 const DisplayNames = (Intl as typeof Intl & {
   DisplayNames?: RegionDisplayNamesConstructor
 }).DisplayNames
-const regionDisplayNames = DisplayNames
-  ? [
+const supportedValuesOf = (Intl as typeof Intl & {
+  supportedValuesOf?: (key: "region") => string[]
+}).supportedValuesOf
+
+function loadFlagCodes(): string[] {
+  if (!supportedValuesOf) return Object.keys(COUNTRY_ALIASES)
+  try {
+    return supportedValuesOf("region").filter((code) =>
+      COUNTRY_CODE_PATTERN.test(code)
+    )
+  } catch {
+    return Object.keys(COUNTRY_ALIASES)
+  }
+}
+
+function loadRegionDisplayNames(): RegionDisplayNames[] {
+  if (!DisplayNames) return []
+  try {
+    return [
       new DisplayNames("zh", { type: "region" }),
       new DisplayNames("en", { type: "region" }),
     ]
-  : []
-const regionNameMatches: Array<[string, string]> = DisplayNames
-  ? flagCodes.flatMap((code) => {
-      const names = regionDisplayNames.map((displayNames) =>
-        displayNames.of(code)
-      )
-      return names
-        .filter((name): name is string => Boolean(name))
-        .map(
-          (name) =>
-            [code, name.normalize("NFKC").toUpperCase()] as [string, string]
+  } catch {
+    return []
+  }
+}
+
+const flagCodes = loadFlagCodes()
+const regionDisplayNames = loadRegionDisplayNames()
+const regionNameMatches: Array<[string, string]> =
+  regionDisplayNames.length > 0
+    ? flagCodes.flatMap((code) => {
+        const names = regionDisplayNames.map((displayNames) =>
+          displayNames.of(code)
         )
-    })
-  : []
+        return names
+          .filter((name): name is string => Boolean(name))
+          .map(
+            (name) =>
+              [code, name.normalize("NFKC").toUpperCase()] as [string, string]
+          )
+      })
+    : []
 
 function hasLatinToken(text: string, token: string): boolean {
   return new RegExp(`(^|[^A-Z])${token}(?=$|[^A-Z]|\\d)`).test(text)
@@ -86,13 +102,14 @@ function getFlagCodeFromEmoji(name: string): string {
       const code =
         String.fromCharCode(65 + first - REGION_INDICATOR_BASE) +
         String.fromCharCode(65 + second - REGION_INDICATOR_BASE)
-      if (flagComponents[code]) return code
+      return code
     }
   }
   return ""
 }
 
 export function getCountryCode(name: string): string {
+  if (!name) return ""
   const emojiCode = getFlagCodeFromEmoji(name)
   if (emojiCode) return emojiCode
 
@@ -122,6 +139,3 @@ export function getCountryCode(name: string): string {
   return ""
 }
 
-export function getFlagComponent(code: string): FlagComponent | null {
-  return code ? flagComponents[code] ?? null : null
-}
