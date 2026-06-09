@@ -1,6 +1,7 @@
 use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::ports::{
     controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_listening,
+    wait_for_port_release,
 };
 use crate::engine::process::{pm_snapshot, ProcessManager};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
@@ -29,22 +30,31 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
-fn clear_orphans_on_proxy_ports_if_needed(app: &AppHandle) {
+async fn ensure_proxy_ports_free(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
-    if probe_port_listening(mixed_port) {
-        let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(mixed_port));
-        ::log::info!("[start] prestart mixed :{mixed_port}: {}", res.message);
-    } else {
-        ::log::info!("[start] mixed :{mixed_port} free, skipping orphan cleanup");
+    let ctrl_port = controller_port(app);
+
+    // Kill any orphan holding either port, then wait for release.
+    for &port in &[mixed_port, ctrl_port] {
+        if probe_port_listening(port) {
+            let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
+            ::log::info!("[start] prestart :{port}: {}", res.message);
+        }
     }
 
-    let ctrl_port = controller_port(app);
+    // Wait for both ports to be truly free before spawning sing-box.
+    // This prevents the TOCTOU race between probe_port_listening and bind().
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mixed_ok = wait_for_port_release(mixed_port, std::time::Duration::from_secs(5)).await;
+    if !mixed_ok {
+        ::log::warn!("[start] mixed :{mixed_port} not released after 5s, proceeding anyway");
+    }
+    let elapsed = deadline.elapsed();
+    let remaining = std::time::Duration::from_secs(5).saturating_sub(elapsed);
     if ctrl_port != mixed_port {
-        if probe_port_listening(ctrl_port) {
-            let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(ctrl_port));
-            ::log::info!("[start] prestart controller :{ctrl_port}: {}", res.message);
-        } else {
-            ::log::info!("[start] controller :{ctrl_port} free, skipping orphan cleanup");
+        let ctrl_ok = wait_for_port_release(ctrl_port, remaining).await;
+        if !ctrl_ok {
+            ::log::warn!("[start] controller :{ctrl_port} not released after {:?}, proceeding anyway", elapsed + remaining);
         }
     }
 }
@@ -65,8 +75,8 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     );
 
     {
-        let _step = perf::StepTimer::new("start.clear_orphans");
-        clear_orphans_on_proxy_ports_if_needed(&app);
+        let _step = perf::StepTimer::new("start.ensure_ports_free");
+        ensure_proxy_ports_free(&app).await;
     }
 
     {

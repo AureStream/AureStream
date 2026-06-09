@@ -151,6 +151,7 @@ impl EngineManager for LinuxEngine {
                     log::error!("Failed to stop TUN process: {}", e);
                     e
                 })?;
+                crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
             }
         }
         Ok(())
