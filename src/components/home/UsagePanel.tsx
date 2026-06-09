@@ -18,7 +18,6 @@ import { subscribeTraffic } from "@/utils/singbox-api"
 
 const HISTORY_LENGTH = 60
 const SMOOTH_WINDOW = 6
-const MAX_Y = 500 // KB/s — fixed cap to prevent chart jumping on spikes
 
 function createEmptyHistory(): TrafficPoint[] {
   return Array.from({ length: HISTORY_LENGTH }, () => ({
@@ -204,7 +203,7 @@ export function UsagePanel() {
             <XAxis dataKey="time" hide />
             <YAxis
               hide
-              domain={[0, MAX_Y]}
+              domain={[0, (max: number) => Math.max(max, 10)]}
               allowDataOverflow={false}
             />
             <ChartLegend content={<ChartLegendContent />} />
