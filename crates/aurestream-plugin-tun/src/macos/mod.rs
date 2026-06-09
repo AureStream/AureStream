@@ -73,8 +73,19 @@ pub async fn stop_tun_process() -> Result<(), String> {
     let applied = apply_captured_originals_sync(taken.as_ref());
 
     log::info!("[helper] sending SIGTERM to sing-box");
-    macos_helper::api::stop_sing_box()?;
-    log::info!("[helper] SIGTERM sent to sing-box, waiting 500ms for TUN teardown");
+    let stop_error = match macos_helper::api::stop_sing_box() {
+        Ok(()) => {
+            log::info!("[helper] SIGTERM sent to sing-box, waiting 500ms for TUN teardown");
+            None
+        }
+        Err(e) => {
+            log::warn!(
+                "[helper] stop_sing_box failed, continuing best-effort TUN cleanup: {}",
+                e
+            );
+            Some(e)
+        }
+    };
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
@@ -96,7 +107,11 @@ pub async fn stop_tun_process() -> Result<(), String> {
 
     macos_helper::api::flush_dns_cache().ok();
     log::info!("[dns] user-stop: restore sequence complete");
-    Ok(())
+    if let Some(e) = stop_error {
+        Err(e)
+    } else {
+        Ok(())
+    }
 }
 
 // ============================================================================

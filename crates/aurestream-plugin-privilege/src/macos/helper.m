@@ -178,6 +178,11 @@ void aurestream_helper_free_string(char *s) {
     }
 }
 
+static NSString *aurestream_xpc_error_message(NSError *error) {
+    return [NSString stringWithFormat:@"xpc error: %@",
+            error.localizedDescription ?: @"(nil)"];
+}
+
 // Shared template for simple "fire and forget with error reply" methods
 // that only return a NSString* error. Returns 0 on success, non-zero on
 // failure with *error_out set to an allocated C string.
@@ -196,12 +201,13 @@ static int invokeErrorOnly(AureStreamHelperInvokeBlock block,
 
         __block NSString *errString = nil;
         __block BOOL completed = NO;
+        __block BOOL xpcError = NO;
         dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
         id<AureStreamHelperProtocol> proxy = [conn remoteObjectProxyWithErrorHandler:^(NSError *err) {
             if (!completed) {
-                errString = [NSString stringWithFormat:@"xpc error: %@",
-                             err.localizedDescription ?: @"(nil)"];
+                xpcError = YES;
+                errString = aurestream_xpc_error_message(err);
                 completed = YES;
                 dispatch_semaphore_signal(sem);
             }
@@ -218,10 +224,15 @@ static int invokeErrorOnly(AureStreamHelperInvokeBlock block,
         dispatch_time_t deadline = dispatch_time(
             DISPATCH_TIME_NOW, timeoutSeconds * NSEC_PER_SEC);
         if (dispatch_semaphore_wait(sem, deadline) != 0) {
+            [[AureStreamHelperClient sharedClient] invalidate];
             if (error_out != NULL) {
                 *error_out = aurestream_copy_cstring(@"timeout waiting for helper reply");
             }
             return 1;
+        }
+
+        if (xpcError) {
+            [[AureStreamHelperClient sharedClient] invalidate];
         }
 
         if (errString == nil) {
@@ -232,6 +243,33 @@ static int invokeErrorOnly(AureStreamHelperInvokeBlock block,
         }
         return 1;
     }
+}
+
+static int invokeErrorOnlyWithRetry(AureStreamHelperInvokeBlock block,
+                                    int64_t timeoutSeconds,
+                                    char **error_out) {
+    char *firstError = NULL;
+    int rc = invokeErrorOnly(block, timeoutSeconds, &firstError);
+    if (rc == 0) {
+        if (firstError != NULL) free(firstError);
+        if (error_out != NULL) *error_out = NULL;
+        return 0;
+    }
+
+    NSString *first = firstError == NULL
+        ? @"unknown helper error"
+        : [NSString stringWithUTF8String:firstError];
+    BOOL retryable = [first hasPrefix:@"xpc error:"];
+    if (firstError != NULL) free(firstError);
+
+    if (!retryable) {
+        if (error_out != NULL) *error_out = aurestream_copy_cstring(first);
+        return rc;
+    }
+
+    NSLog(@"[client] retrying helper call after XPC error: %@", first);
+    [[AureStreamHelperClient sharedClient] invalidate];
+    return invokeErrorOnly(block, timeoutSeconds, error_out);
 }
 
 // ============================================================================
@@ -249,12 +287,13 @@ int aurestream_helper_ping(char **reply_out) {
         __block NSString *successReply = nil;
         __block NSString *errorReply = nil;
         __block BOOL completed = NO;
+        __block BOOL xpcError = NO;
         dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
         id<AureStreamHelperProtocol> proxy = [conn remoteObjectProxyWithErrorHandler:^(NSError *error) {
             if (!completed) {
-                errorReply = [NSString stringWithFormat:@"xpc error: %@",
-                              error.localizedDescription ?: @"(nil)"];
+                xpcError = YES;
+                errorReply = aurestream_xpc_error_message(error);
                 completed = YES;
                 dispatch_semaphore_signal(sem);
             }
@@ -271,10 +310,15 @@ int aurestream_helper_ping(char **reply_out) {
         dispatch_time_t deadline = dispatch_time(
             DISPATCH_TIME_NOW, kAureStreamHelperDefaultTimeoutSeconds * NSEC_PER_SEC);
         if (dispatch_semaphore_wait(sem, deadline) != 0) {
+            [[AureStreamHelperClient sharedClient] invalidate];
             if (reply_out != NULL) {
                 *reply_out = aurestream_copy_cstring(@"timeout waiting for helper reply");
             }
             return 2;
+        }
+
+        if (xpcError) {
+            [[AureStreamHelperClient sharedClient] invalidate];
         }
 
         if (successReply != nil) {
@@ -288,6 +332,61 @@ int aurestream_helper_ping(char **reply_out) {
         }
         return 1;
     }
+}
+
+static int aurestream_helper_start_sing_box_once(NSString *configPath,
+                                                 NSString *logPath,
+                                                 int *pid_out,
+                                                 NSString **error_string_out,
+                                                 BOOL *xpc_error_out) {
+    if (pid_out != NULL) *pid_out = 0;
+    if (error_string_out != NULL) *error_string_out = nil;
+    if (xpc_error_out != NULL) *xpc_error_out = NO;
+
+    NSXPCConnection *conn = [[AureStreamHelperClient sharedClient] connection];
+
+    __block int resultPid = 0;
+    __block NSString *errString = nil;
+    __block BOOL completed = NO;
+    __block BOOL xpcError = NO;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+    id<AureStreamHelperProtocol> proxy = [conn remoteObjectProxyWithErrorHandler:^(NSError *err) {
+        if (!completed) {
+            xpcError = YES;
+            errString = aurestream_xpc_error_message(err);
+            completed = YES;
+            dispatch_semaphore_signal(sem);
+        }
+    }];
+
+    [proxy startSingBoxWithConfigPath:configPath
+                              logPath:logPath
+                                reply:^(int pid, NSString *error) {
+        if (!completed) {
+            resultPid = pid;
+            errString = error;
+            completed = YES;
+            dispatch_semaphore_signal(sem);
+        }
+    }];
+
+    dispatch_time_t deadline = dispatch_time(
+        DISPATCH_TIME_NOW, kAureStreamHelperStartTimeoutSeconds * NSEC_PER_SEC);
+    if (dispatch_semaphore_wait(sem, deadline) != 0) {
+        [[AureStreamHelperClient sharedClient] invalidate];
+        if (error_string_out != NULL) *error_string_out = @"timeout waiting for startSingBox reply";
+        return 1;
+    }
+
+    if (pid_out != NULL) *pid_out = resultPid;
+    if (xpc_error_out != NULL) *xpc_error_out = xpcError;
+
+    if (resultPid > 0 && errString == nil) {
+        return 0;
+    }
+    if (error_string_out != NULL) *error_string_out = errString ?: @"unknown helper error";
+    return 1;
 }
 
 int aurestream_helper_start_sing_box(const char *config_path,
@@ -313,69 +412,45 @@ int aurestream_helper_start_sing_box(const char *config_path,
     @autoreleasepool {
         NSString *configPath = [NSString stringWithUTF8String:config_path];
         NSString *logPath = [NSString stringWithUTF8String:log_path];
-        NSXPCConnection *conn = [[AureStreamHelperClient sharedClient] connection];
+        NSString *lastError = nil;
 
-        __block int resultPid = 0;
-        __block NSString *errString = nil;
-        __block BOOL completed = NO;
-        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-
-        id<AureStreamHelperProtocol> proxy = [conn remoteObjectProxyWithErrorHandler:^(NSError *err) {
-            if (!completed) {
-                errString = [NSString stringWithFormat:@"xpc error: %@",
-                             err.localizedDescription ?: @"(nil)"];
-                completed = YES;
-                dispatch_semaphore_signal(sem);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            BOOL xpcError = NO;
+            int rc = aurestream_helper_start_sing_box_once(
+                configPath, logPath, pid_out, &lastError, &xpcError);
+            if (rc == 0) {
+                return 0;
             }
-        }];
-
-        [proxy startSingBoxWithConfigPath:configPath
-                                  logPath:logPath
-                                    reply:^(int pid, NSString *error) {
-            if (!completed) {
-                resultPid = pid;
-                errString = error;
-                completed = YES;
-                dispatch_semaphore_signal(sem);
+            if (!xpcError) {
+                break;
             }
-        }];
 
-        dispatch_time_t deadline = dispatch_time(
-            DISPATCH_TIME_NOW, kAureStreamHelperStartTimeoutSeconds * NSEC_PER_SEC);
-        if (dispatch_semaphore_wait(sem, deadline) != 0) {
-            if (error_out != NULL) {
-                *error_out = aurestream_copy_cstring(@"timeout waiting for startSingBox reply");
-            }
-            return 1;
+            [[AureStreamHelperClient sharedClient] invalidate];
+            NSLog(@"[client] retrying startSingBox after XPC error: %@", lastError ?: @"(nil)");
         }
 
-        if (pid_out != NULL) *pid_out = resultPid;
-
-        if (resultPid > 0 && errString == nil) {
-            return 0;
-        }
         if (error_out != NULL) {
-            *error_out = aurestream_copy_cstring(errString ?: @"unknown helper error");
+            *error_out = aurestream_copy_cstring(lastError ?: @"unknown helper error");
         }
         return 1;
     }
 }
 
 int aurestream_helper_stop_sing_box(char **error_out) {
-    return invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+    return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy stopSingBoxWithReply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
 }
 
 int aurestream_helper_reload_sing_box(char **error_out) {
-    return invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+    return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy reloadSingBoxWithReply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
 }
 
 int aurestream_helper_set_ip_forwarding(bool enable, char **error_out) {
     BOOL objcBool = enable ? YES : NO;
-    return invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+    return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy setIpForwarding:objcBool reply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
 }
@@ -391,13 +466,13 @@ int aurestream_helper_set_dns_servers(const char *service_name,
     }
     NSString *serviceName = [NSString stringWithUTF8String:service_name];
     NSString *dnsSpec = [NSString stringWithUTF8String:dns_spec];
-    return invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+    return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy setDnsServersForService:serviceName spec:dnsSpec reply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
 }
 
 int aurestream_helper_flush_dns_cache(char **error_out) {
-    return invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+    return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy flushDnsCacheWithReply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
 }
@@ -410,7 +485,7 @@ int aurestream_helper_remove_tun_routes(const char *interface_name, char **error
         return 1;
     }
     NSString *iface = [NSString stringWithUTF8String:interface_name];
-    return invokeErrorOnly(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
+    return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy removeTunRoutesForInterface:iface reply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
 }

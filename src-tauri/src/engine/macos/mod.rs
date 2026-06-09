@@ -1,4 +1,5 @@
 use crate::engine::process::ProcessManager;
+use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 use crate::engine::EngineManager;
 use crate::engine::ProxyMode;
 use aurestream_plugin_privilege::macos::helper as macos_helper;
@@ -8,7 +9,7 @@ use aurestream_plugin_tun::macos::{
     start_tun_via_helper, stop_tun_process,
 };
 use std::process::Command;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
 pub(crate) mod watchdog;
@@ -160,10 +161,22 @@ impl EngineManager for MacOSEngine {
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
             }
             ProxyMode::IntoProxy => {
-                stop_tun_process().await.map_err(|e| {
+                let stop_result = stop_tun_process().await.map_err(|e| {
                     log::error!("Failed to stop TUN process: {}", e);
                     e
-                })?;
+                });
+                watchdog::cancel();
+                crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
+                ProcessManager::acquire().reset();
+
+                let state = app.state::<EngineStateCell>().snapshot();
+                if matches!(
+                    state,
+                    EngineState::Stopping { .. } | EngineState::Starting { .. }
+                ) {
+                    let _ = transition(app, Intent::MarkIdle);
+                }
+                stop_result?;
             }
         }
         Ok(())

@@ -46,6 +46,7 @@ build_slice() {
         -Wall -Wextra \
         -framework Foundation \
         -framework Security \
+        -lbsm \
         -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist    -Xlinker "$HELPER_DIR/Info.plist" \
         -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __launchd_plist -Xlinker "$HELPER_DIR/Launchd.plist" \
         "${SOURCES[@]}" \

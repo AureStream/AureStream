@@ -152,6 +152,35 @@ static BOOL validateClient(NSXPCConnection *connection) {
     return YES;
 }
 
+static BOOL copyCallerUser(NSXPCConnection *connection, uid_t *uidOut, gid_t *gidOut) {
+    if (connection == nil || uidOut == NULL || gidOut == NULL) {
+        return NO;
+    }
+
+    uid_t auid = 0;
+    uid_t euid = 0;
+    gid_t egid = 0;
+    uid_t ruid = 0;
+    gid_t rgid = 0;
+    pid_t pid = 0;
+    au_asid_t asid = 0;
+    au_tid_t tid;
+    memset(&tid, 0, sizeof(tid));
+
+    audit_token_to_au32(connection.auditToken, &auid, &euid, &egid, &ruid, &rgid, &pid, &asid, &tid);
+
+    uid_t uid = euid != 0 ? euid : ruid;
+    gid_t gid = egid != 0 ? egid : rgid;
+    if (uid == 0) {
+        NSLog(@"[helper] reject: caller uid resolved to root pid=%d", pid);
+        return NO;
+    }
+
+    *uidOut = uid;
+    *gidOut = gid;
+    return YES;
+}
+
 // Derive the absolute path to the caller's bundled sing-box binary from
 // their SecCode.
 static NSString *copyCallerSingBoxPath(NSXPCConnection *connection) {
@@ -273,6 +302,44 @@ static NSString *validateDnsSpec(NSString *spec) {
     }
     if (!any) return @"dns spec has no entries";
     return nil;
+}
+
+static int openLogFileForCaller(NSString *path, NSXPCConnection *connection, NSString **errorOut) {
+    uid_t callerUid = 0;
+    gid_t callerGid = 0;
+    if (!copyCallerUser(connection, &callerUid, &callerGid)) {
+        if (errorOut) *errorOut = @"failed to resolve caller uid/gid";
+        return -1;
+    }
+
+    const char *logC = path.UTF8String;
+    int fd = open(logC, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0644);
+    if (fd < 0) {
+        if (errorOut) {
+            *errorOut = [NSString stringWithFormat:@"open log failed: %s", strerror(errno)];
+        }
+        return -1;
+    }
+
+    if (fchown(fd, callerUid, callerGid) != 0) {
+        int savedErrno = errno;
+        close(fd);
+        if (errorOut) {
+            *errorOut = [NSString stringWithFormat:@"chown log failed: %s", strerror(savedErrno)];
+        }
+        return -1;
+    }
+
+    if (fchmod(fd, 0644) != 0) {
+        int savedErrno = errno;
+        close(fd);
+        if (errorOut) {
+            *errorOut = [NSString stringWithFormat:@"chmod log failed: %s", strerror(savedErrno)];
+        }
+        return -1;
+    }
+
+    return fd;
 }
 
 // ============================================================================
@@ -400,15 +467,19 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
             self->_activeConnection = nil;
         }
 
+        NSString *logOpenErr = nil;
+        int logFd = openLogFileForCaller(logPath, conn, &logOpenErr);
+        if (logFd < 0) {
+            resultErr = logOpenErr ?: @"failed to open log file";
+            return;
+        }
+
         posix_spawn_file_actions_t actions;
         posix_spawn_file_actions_init(&actions);
         posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
-        
-        const char *logC = logPath.UTF8String;
-        posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, logC,
-            O_WRONLY | O_CREAT | O_APPEND, 0644);
-        posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, logC,
-            O_WRONLY | O_CREAT | O_APPEND, 0644);
+        posix_spawn_file_actions_adddup2(&actions, logFd, STDOUT_FILENO);
+        posix_spawn_file_actions_adddup2(&actions, logFd, STDERR_FILENO);
+        posix_spawn_file_actions_addclose(&actions, logFd);
 
         posix_spawnattr_t attrs;
         posix_spawnattr_init(&attrs);
@@ -436,6 +507,7 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
         int rc = posix_spawn(&pid, sidecarC, &actions, &attrs, argv, NULL);
         posix_spawn_file_actions_destroy(&actions);
         posix_spawnattr_destroy(&attrs);
+        close(logFd);
 
         if (rc != 0) {
             resultErr = [NSString stringWithFormat:@"posix_spawn failed: %s (%d)",

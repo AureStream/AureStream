@@ -177,7 +177,7 @@ export function ConnectionPanel({ className }: { className?: string }) {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("Connect failed:", err)
-        await message(`${t("config_parse_merge_failed")}: ${msg}`, {
+        await message(`${t("connection_start_failed")}: ${msg}`, {
           title: t("error"),
           kind: "error",
         })

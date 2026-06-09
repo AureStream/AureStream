@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "aurestream",
+  "productName": "AureStream",
   "version": "0.2.4",
   "identifier": "com.root.aurestream",
   "build": {

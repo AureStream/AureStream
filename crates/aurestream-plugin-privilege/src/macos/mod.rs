@@ -93,7 +93,16 @@ pub fn ensure_helper_installed() -> Result<(), String> {
     })?;
     log::debug!("[helper] bundled helper path: {:?}", bundled_path);
 
-    let ping_result = helper::api::ping();
+    let mut ping_result = helper::api::ping();
+    if let Err(first) = ping_result.as_ref() {
+        if first.contains("xpc error:") || first.contains("timeout waiting for helper reply") {
+            log::warn!(
+                "[helper] initial ping failed ({}), retrying after XPC reconnect",
+                first
+            );
+            ping_result = helper::api::ping();
+        }
+    }
     if ping_result.is_err() {
         log::info!("[helper] not responding, triggering SMJobBless install...");
         return helper::api::install().map_err(format_helper_install_error);

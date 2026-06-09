@@ -74,7 +74,27 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
         }
     }
 
-    Ok(log_path)
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(_) => Ok(log_path),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            let fallback = log_dir.join(format!("aurestream-core-user-{}.log", date));
+            log::warn!(
+                "[sing-box] log {} is not writable, using {}",
+                log_path.display(),
+                fallback.display()
+            );
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&fallback)?;
+            Ok(fallback)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub(crate) fn resolve_singbox_log_path(app: &AppHandle) -> Option<std::path::PathBuf> {

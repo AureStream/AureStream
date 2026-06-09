@@ -47,6 +47,7 @@ const buildSlice = (arch: string, target: string): string => {
         "-Wall", "-Wextra",
         "-framework", "Foundation",
         "-framework", "Security",
+        "-lbsm",
         "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist", "-Xlinker", infoPlist,
         "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__launchd_plist", "-Xlinker", launchdPlist,
         mainSource,
