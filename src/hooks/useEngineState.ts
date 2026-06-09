@@ -16,6 +16,7 @@ let snapshot: EngineSnapshot = {
   loading: true,
 }
 let subscriptionStarted = false
+let unlistenEngineState: (() => void) | undefined
 const subscribers = new Set<() => void>()
 
 function publish(next: Partial<EngineSnapshot>) {
@@ -36,6 +37,8 @@ function ensureEngineSubscription() {
 
   listen<EngineState>("engine-state", (event) => {
     publish({ engineState: event.payload, loading: false })
+  }).then((unlisten) => {
+    unlistenEngineState = unlisten
   }).catch((err) => {
     console.error("Failed to subscribe to engine state:", err)
   })

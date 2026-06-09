@@ -137,16 +137,17 @@ impl EngineManager for MacOSEngine {
         let (mode, child) = {
             let mut mgr = ProcessManager::acquire();
             mgr.is_stopping = true;
-            (mgr.mode.clone(), mgr.child.take())
+            let m = mgr.mode.clone();
+            let c = mgr.child.take();
+            mgr.reset();
+            (m, c)
         };
         let Some(mode) = mode else {
             return Ok(());
         };
         match mode.as_ref() {
             ProxyMode::SystemProxy => {
-                if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
-                    let _ = clear_system_proxy(app).await;
-                }
+                let _ = clear_system_proxy(app).await;
                 if let Some(child) = child {
                     use libc::{kill, SIGTERM};
                     let pid = child.pid();
@@ -167,7 +168,6 @@ impl EngineManager for MacOSEngine {
                 });
                 watchdog::cancel();
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
-                ProcessManager::acquire().reset();
 
                 let state = app.state::<EngineStateCell>().snapshot();
                 if matches!(

@@ -43,7 +43,19 @@ async function getConfigTemplate(mode: configType): Promise<any> {
         templateStringCache.set(cacheKey, config);
     }
 
-    const parsed = JSON.parse(config);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(config);
+    } catch (e) {
+      console.error(`[template] corrupt config for mode=${mode}, clearing cache:`, e);
+      templateStringCache.delete(cacheKey);
+      templateObjectCache.delete(cacheKey);
+      await setStoreValue(cacheKey, '');
+      config = getBuiltInTemplate(mode);
+      await setStoreValue(cacheKey, config);
+      templateStringCache.set(cacheKey, config);
+      parsed = JSON.parse(config);
+    }
     templateObjectCache.set(cacheKey, parsed);
     return structuredClone(parsed);
 }

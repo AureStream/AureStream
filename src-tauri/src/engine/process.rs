@@ -11,7 +11,32 @@ pub(crate) fn pid_is_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
 
-#[cfg(not(unix))]
+#[cfg(target_os = "windows")]
+pub(crate) fn pid_is_alive(pid: u32) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    if pid == 0 {
+        return false;
+    }
+
+    let handle: HANDLE = unsafe {
+        match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            Ok(h) => h,
+            Err(_) => return false,
+        }
+    };
+
+    let mut exit_code: u32 = 0;
+    let ok = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
+    unsafe { let _ = CloseHandle(handle); }
+
+    ok.is_ok() && exit_code == 259 // STILL_ACTIVE
+}
+
+#[cfg(not(any(unix, target_os = "windows")))]
 pub(crate) fn pid_is_alive(_pid: u32) -> bool {
     true
 }
