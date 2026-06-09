@@ -25,6 +25,7 @@ dist-ssr/
 .DS_Store
 
 # Tauri build outputs
+/target/
 src-tauri/target/
 src-tauri/gen/
 
@@ -38,4 +39,7 @@ src/config/templates/generated.ts
 
 # External binaries (downloaded at build time)
 src-tauri/binaries/
+src-tauri/*.db
 src-tauri/resources/*.db
+src-tauri/resources/rules/
+scripts/tmp/

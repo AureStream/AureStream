@@ -161,6 +161,7 @@
   "total_traffic_label": "Total",
   "please_select_valid_subscription": "Please add and select a valid subscription on the subscription page first",
   "config_parse_merge_failed": "Config parse and merge failed",
+  "connection_start_failed": "Connection start failed",
   "on": "On",
   "off": "Off",
   "never": "Never",

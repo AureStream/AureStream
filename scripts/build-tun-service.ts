@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Build the `tun-service` workspace member and stage it where Tauri can find
+ * Build the `tun-service` binary and stage it where Tauri can find
  * it both for `cargo tauri dev` and for production bundling.
  *
  * Dev flow (`pnpm tauri dev` → `predev`):
- *   `cargo build -p tun-service` produces `src-tauri/target/debug/tun-service.exe`
+ *   `cargo build -p aurestream-plugin-tun --bin tun-service` produces
+ *   `src-tauri/target/debug/tun-service.exe`
  *   right next to the dev-mode `aurestream.exe`. That's exactly where
  *   `vpn::windows::bundled_service_exe_path()` looks, so no further copying is
  *   needed for dev.
@@ -41,14 +42,18 @@ const profileArgs = releaseFlag ? ["--release"] : [];
 const profileDir = releaseFlag ? "release" : "debug";
 
 console.log(
-    `[build-tun-service] cargo build -p tun-service (${releaseFlag ? "release" : "dev"})`,
+    `[build-tun-service] cargo build -p aurestream-plugin-tun --bin tun-service (${releaseFlag ? "release" : "dev"})`,
 );
 
-const build = spawnSync("cargo", ["build", "-p", "tun-service", ...profileArgs], {
-    cwd: srcTauri,
-    stdio: "inherit",
-    shell: true,
-});
+const build = spawnSync(
+    "cargo",
+    ["build", "-p", "aurestream-plugin-tun", "--bin", "tun-service", ...profileArgs],
+    {
+        cwd: srcTauri,
+        stdio: "inherit",
+        shell: true,
+    },
+);
 
 if (build.status !== 0) {
     console.error(

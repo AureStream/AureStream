@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "aurestream",
-  "version": "0.2.4",
+  "productName": "AureStream",
+  "version": "0.2.5",
   "identifier": "com.root.aurestream",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -30,6 +30,9 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/**/*"
+    ],
     "externalBin": [
       "binaries/aurestream-core"
     ],
@@ -51,9 +54,9 @@
       "deb": {
         "desktopTemplate": "resources/main.desktop",
         "files": {
-          "/usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
-          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
-          "/etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
+          "/usr/lib/AureStream/aurestream-tun-helper": "../crates/aurestream-plugin-privilege/linux-helper/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "../crates/aurestream-plugin-privilege/linux-helper/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-plugin-privilege/linux-helper/49-aurestream.rules"
         },
         "postInstallScript": "resources/linux/deb-postinst.sh",
         "postRemoveScript": "resources/linux/deb-postrm.sh"
@@ -61,9 +64,9 @@
       "rpm": {
         "desktopTemplate": "resources/main.desktop",
         "files": {
-          "/usr/lib/AureStream/aurestream-tun-helper": "resources/linux/aurestream-tun-helper",
-          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "resources/linux/com.root.aurestream.policy",
-          "/etc/polkit-1/rules.d/49-aurestream.rules": "resources/linux/49-aurestream.rules"
+          "/usr/lib/AureStream/aurestream-tun-helper": "../crates/aurestream-plugin-privilege/linux-helper/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "../crates/aurestream-plugin-privilege/linux-helper/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-plugin-privilege/linux-helper/49-aurestream.rules"
         }
       }
     }

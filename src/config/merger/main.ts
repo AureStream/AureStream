@@ -43,7 +43,19 @@ async function getConfigTemplate(mode: configType): Promise<any> {
         templateStringCache.set(cacheKey, config);
     }
 
-    const parsed = JSON.parse(config);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(config);
+    } catch (e) {
+      console.error(`[template] corrupt config for mode=${mode}, clearing cache:`, e);
+      templateStringCache.delete(cacheKey);
+      templateObjectCache.delete(cacheKey);
+      await setStoreValue(cacheKey, '');
+      config = getBuiltInTemplate(mode);
+      await setStoreValue(cacheKey, config);
+      templateStringCache.set(cacheKey, config);
+      parsed = JSON.parse(config);
+    }
     templateObjectCache.set(cacheKey, parsed);
     return structuredClone(parsed);
 }
@@ -222,6 +234,15 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         patchDnsProxyConfig(newConfig),
         updateExperimentalConfig(newConfig, dbCacheFilePath),
     ]);
+
+    // Resolve local rule_set paths to absolute paths using Tauri's resource resolver
+    if (newConfig.route?.rule_set) {
+        for (const ruleSet of newConfig.route.rule_set) {
+            if (ruleSet.type === "local" && ruleSet.path) {
+                ruleSet.path = await path.resolveResource(ruleSet.path);
+            }
+        }
+    }
 
     if (options.tun) {
         await configureTunInbound(newConfig, bypassRouter, {

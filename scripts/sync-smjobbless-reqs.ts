@@ -7,7 +7,8 @@
  * Usage:
  *   pnpm exec tsx scripts/sync-smjobbless-reqs.ts path/to/aurestream.app
  *
- * After updating helper/Info.plist, rerun `pnpm pre-bundle` and rebuild the app.
+ * After updating crates/aurestream-plugin-privilege/macos-helper/Info.plist,
+ * rerun `pnpm pre-bundle` and rebuild the app.
  */
 
 import { spawnSync } from "node:child_process";
@@ -96,7 +97,10 @@ const helperInApp = join(
   "Contents/Library/LaunchServices/com.root.aurestream.helper"
 );
 const appInfoPlist = join(repoRoot, "src-tauri/Info.privileged-helper.plist");
-const helperInfoPlist = join(repoRoot, "src-tauri/helper/Info.plist");
+const helperInfoPlist = join(
+  repoRoot,
+  "crates/aurestream-plugin-privilege/macos-helper/Info.plist"
+);
 
 const appReq = designatedRequirement(appExec);
 const helperReq = designatedRequirement(helperInApp);

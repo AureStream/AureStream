@@ -85,7 +85,7 @@ export function AppSidebar() {
               {updateVersion ? (
                 <CircleArrowUpIcon className="size-5" />
               ) : (
-                <img src="/logo2.png" className="size-full object-contain" alt="AureStream Logo" />
+                <img src="/tray.png" className="size-full object-contain" alt="AureStream Logo" />
               )}
             </button>
           </TooltipTrigger>

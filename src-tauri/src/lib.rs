@@ -1,7 +1,8 @@
 mod app;
 mod commands;
 mod core;
-pub mod engine;
+mod engine;
+pub mod state;
 mod utils;
 
 use tauri::Manager;
@@ -33,16 +34,16 @@ pub fn run() {
     app::plugins::register_plugins(builder, migrations)
         .invoke_handler(tauri::generate_handler![
             // core engine commands
-            core::start,
-            core::stop,
-            core::get_engine_state,
-            core::clear_engine_error,
-            core::reload_config,
-            core::config_check::mark_config_verified,
+            crate::core::commands::start,
+            crate::core::commands::stop,
+            crate::core::commands::get_engine_state,
+            crate::core::commands::clear_engine_error,
+            crate::core::commands::reload_config,
+            crate::engine::config_check::mark_config_verified,
             // engine probe commands
-            engine::engine_ensure_installed,
-            engine::engine_uninstall_service,
-            engine::engine_probe,
+            crate::core::engine_commands::engine_ensure_installed,
+            crate::core::engine_commands::engine_uninstall_service,
+            crate::core::engine_commands::engine_probe,
             // shell commands
             commands::shell::version,
             commands::shell::read_logs,
