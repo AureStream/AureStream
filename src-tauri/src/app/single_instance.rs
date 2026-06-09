@@ -99,10 +99,7 @@ mod imp {
                         let _ = write!(f, "{}", pid);
                     }
                     Err(e) => {
-                        log::error!(
-                            "[single_instance] failed to acquire lock on retry: {}",
-                            e
-                        );
+                        log::error!("[single_instance] failed to acquire lock on retry: {}", e);
                     }
                 }
             }

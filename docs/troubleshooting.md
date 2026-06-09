@@ -29,7 +29,7 @@
   - 修改后需等待 config-sync 重写 `config.json`；运行中会热重载。
 
 ## 4. 系统代理未生效 / 退出未清理
-- 底层行为由 `sysproxy-rs` 处理：Windows 写注册表，macOS 调用 SystemConfiguration，Linux 修改 gsettings。
+- 底层行为由 `aurestream-plugin-proxy` 处理：Windows 写注册表，macOS 调用 SystemConfiguration，Linux 修改 gsettings。
 - 应用非正常退出时，由 Rust 侧的 `cleanup_on_shutdown()` 处理清理逻辑。
 - 在 Windows 环境，AureStream 已经集成了对 UWP 应用的自动环回免除 (Loopback Exemption)。
 

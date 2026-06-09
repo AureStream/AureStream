@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
 import { buildSubscriptionUserAgent, Subscription, SubscriptionConfig } from '../types/definition';
+import { parseSubscriptionBody } from '../config/subscription-decoder';
 
 export interface ResponseHeaders {
     'subscription-userinfo'?: string;
@@ -13,6 +14,7 @@ export interface ConfigResponse {
     data: any;
     headers: ResponseHeaders;
     status: number;
+    rawBody?: string;
 }
 
 export class FileError extends Error {
@@ -58,6 +60,8 @@ export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
             }
         }
 
+        const rawBody = (result as any).raw_body as string | undefined
+
         return {
             data: result.data ?? null,
             headers: {
@@ -66,6 +70,7 @@ export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
                 'content-disposition': normalizedHeaders['content-disposition'] || '',
             },
             status: result.status,
+            rawBody,
         };
     }
 }
@@ -109,7 +114,16 @@ export function getRemoteInfoBySubscriptionUserinfo(subscriptionUserinfo: string
 export async function insertSubscription(url: string, name?: string): Promise<string | undefined> {
     try {
         const response = await fetchConfigContent(url);
-        if (response.status !== 200 || !response.data) {
+        let data = response.data;
+        if (!data && response.rawBody) {
+            try {
+                data = parseSubscriptionBody(response.rawBody);
+                console.info(`[import] base64 subscription decoded, ${(data as any)?.outbounds?.length || 0} outbounds`);
+            } catch (e) {
+                console.warn(`[import] base64 decode failed for url=${url}:`, e);
+            }
+        }
+        if (response.status !== 200 || !data) {
             console.warn(`[import] abort non-200 status=${response.status} url=${url}`);
             return undefined;
         }
@@ -138,7 +152,7 @@ export async function insertSubscription(url: string, name?: string): Promise<st
             );
             await db.execute(
                 'UPDATE subscription_configs SET config_content = ? WHERE identifier = ?',
-                [JSON.stringify(response.data), identifier]
+                [JSON.stringify(data), identifier]
             );
             return identifier;
         }
@@ -154,7 +168,7 @@ export async function insertSubscription(url: string, name?: string): Promise<st
         );
         await db.execute(
             'INSERT INTO subscription_configs (identifier, config_content) VALUES (?, ?)',
-            [identifier, JSON.stringify(response.data)]
+            [identifier, JSON.stringify(data)]
         );
         return identifier;
     } catch (err) {
@@ -172,7 +186,15 @@ export async function updateSubscription(identifier: string): Promise<boolean> {
         }
         const url = result[0].subscription_url;
         const response = await fetchConfigContent(url);
-        if (response.status !== 200 || !response.data) {
+        let data = response.data;
+        if (!data && response.rawBody) {
+            try {
+                data = parseSubscriptionBody(response.rawBody);
+            } catch (_) {
+                // fall through
+            }
+        }
+        if (response.status !== 200 || !data) {
             return false;
         }
 
@@ -187,7 +209,7 @@ export async function updateSubscription(identifier: string): Promise<boolean> {
             'UPDATE subscriptions SET official_website = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
             [officialWebsite, used_traffic, total_traffic, expire_time, last_update_time, identifier]
         );
-        await db.execute('UPDATE subscription_configs SET config_content = ? WHERE identifier = ?', [JSON.stringify(response.data), identifier]);
+        await db.execute('UPDATE subscription_configs SET config_content = ? WHERE identifier = ?', [JSON.stringify(data), identifier]);
         return true;
     } catch (error) {
         console.error('Error updating subscription:', error);

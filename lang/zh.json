@@ -161,6 +161,7 @@
   "total_traffic_label": "累计",
   "please_select_valid_subscription": "请先在订阅页面添加并选择一个有效的订阅",
   "config_parse_merge_failed": "配置解析合并失败",
+  "connection_start_failed": "连接启动失败",
   "on": "开启",
   "off": "关闭",
   "never": "从未更新",
