@@ -9,6 +9,40 @@ fn is_blessed_helper_on_disk() -> bool {
         || std::path::Path::new(BLESSED_PLIST_PATH).exists()
 }
 
+fn launchctl_print_disabled_marks_helper_disabled(output: &str) -> bool {
+    output.lines().any(|line| {
+        line.contains(BLESSED_HELPER_LABEL) && line.contains("=>") && line.contains("disabled")
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_disabled_helper_from_launchctl_output() {
+        let output = r#"
+disabled services = {
+        "com.apple.something" => enabled
+        "com.root.aurestream.helper" => disabled
+}
+"#;
+
+        assert!(launchctl_print_disabled_marks_helper_disabled(output));
+    }
+
+    #[test]
+    fn ignores_enabled_helper_from_launchctl_output() {
+        let output = r#"
+disabled services = {
+        "com.root.aurestream.helper" => enabled
+}
+"#;
+
+        assert!(!launchctl_print_disabled_marks_helper_disabled(output));
+    }
+}
+
 pub fn probe_helper() -> Result<String, String> {
     match helper::api::ping() {
         Ok(msg) => Ok(msg),
@@ -28,7 +62,6 @@ fn force_remove_blessed_helper_via_admin() -> Result<(), String> {
 
     let shell = format!(
         "launchctl bootout system/{BLESSED_HELPER_LABEL} 2>/dev/null; \
-         launchctl unload -w {BLESSED_PLIST_PATH} 2>/dev/null; \
          rm -f {BLESSED_PLIST_PATH} {BLESSED_HELPER_PATH}"
     );
     let script = format!("do shell script \"{shell}\" with administrator privileges");
@@ -52,6 +85,58 @@ fn force_remove_blessed_helper_via_admin() -> Result<(), String> {
         stderr,
         stdout
     ))
+}
+
+fn is_helper_disabled_in_launchd() -> bool {
+    let output = std::process::Command::new("launchctl")
+        .args(["print-disabled", "system"])
+        .output();
+
+    let Ok(output) = output else {
+        return false;
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    launchctl_print_disabled_marks_helper_disabled(&stdout)
+}
+
+fn repair_disabled_helper_via_admin() -> Result<(), String> {
+    use std::process::Command;
+
+    let shell = format!(
+        "launchctl enable system/{BLESSED_HELPER_LABEL}; \
+         launchctl bootstrap system {BLESSED_PLIST_PATH} 2>/dev/null || true; \
+         launchctl kickstart -k system/{BLESSED_HELPER_LABEL} 2>/dev/null || true"
+    );
+    let script = format!("do shell script \"{shell}\" with administrator privileges");
+
+    log::info!("[mac] repairing disabled privileged helper via admin shell");
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("osascript spawn failed: {e}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Err(format!(
+        "admin helper repair failed (exit {}): {}{}",
+        output.status.code().unwrap_or(-1),
+        stderr,
+        stdout
+    ))
+}
+
+fn install_helper_and_repair_disabled_state() -> Result<(), String> {
+    helper::api::install().map_err(format_helper_install_error)?;
+    if is_helper_disabled_in_launchd() {
+        repair_disabled_helper_via_admin()?;
+    }
+    Ok(())
 }
 
 pub fn uninstall_privileged_helper() -> Result<(), String> {
@@ -103,9 +188,14 @@ pub fn ensure_helper_installed() -> Result<(), String> {
             ping_result = helper::api::ping();
         }
     }
+    if ping_result.is_err() && is_blessed_helper_on_disk() && is_helper_disabled_in_launchd() {
+        log::warn!("[helper] installed helper is disabled in launchd; attempting repair");
+        repair_disabled_helper_via_admin()?;
+        ping_result = helper::api::ping();
+    }
     if ping_result.is_err() {
         log::info!("[helper] not responding, triggering SMJobBless install...");
-        return helper::api::install().map_err(format_helper_install_error);
+        return install_helper_and_repair_disabled_state();
     }
 
     let bundled = bundled_helper_path().and_then(|p| read_helper_cfbundle_version(&p));
@@ -118,7 +208,7 @@ pub fn ensure_helper_installed() -> Result<(), String> {
                 b,
                 i
             );
-            helper::api::install().map_err(format_helper_install_error)
+            install_helper_and_repair_disabled_state()
         }
         _ => Ok(()),
     }
