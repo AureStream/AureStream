@@ -123,3 +123,67 @@ pub fn restore_system_dns(iface: &str, original_dns: &str) -> Result<(), String>
     );
     aurestream_plugin_privilege::linux::restore_dns(iface, original_dns)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_resolv_conf_nameservers() {
+        let contents = "# comment\nnameserver 8.8.8.8\nnameserver 1.1.1.1\n";
+        let servers: Vec<&str> = contents
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                trimmed.strip_prefix("nameserver").map(|s| s.trim())
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(servers, vec!["8.8.8.8", "1.1.1.1"]);
+    }
+
+    #[test]
+    fn parse_resolv_conf_empty() {
+        let contents = "# no nameservers configured\n";
+        let servers: Vec<&str> = contents
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                trimmed.strip_prefix("nameserver").map(|s| s.trim())
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert!(servers.is_empty());
+    }
+
+    #[test]
+    fn parse_resolv_conf_with_whitespace() {
+        let contents = "  nameserver   10.0.0.1  \n  nameserver\t10.0.0.2\n";
+        let servers: Vec<&str> = contents
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                trimmed.strip_prefix("nameserver").map(|s| s.trim())
+            })
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(servers, vec!["10.0.0.1", "10.0.0.2"]);
+    }
+
+    #[test]
+    fn dns_override_set_and_take() {
+        set_dns_override(Some(("eth0".into(), "8.8.8.8".into())));
+        let taken = take_dns_override();
+        assert_eq!(taken, Some(("eth0".into(), "8.8.8.8".into())));
+        let taken2 = take_dns_override();
+        assert_eq!(taken2, None);
+    }
+
+    #[test]
+    fn dns_override_second_set_replaces() {
+        set_dns_override(Some(("eth0".into(), "1.1.1.1".into())));
+        set_dns_override(Some(("wlan0".into(), "8.8.8.8".into())));
+        let taken = take_dns_override();
+        assert_eq!(taken, Some(("wlan0".into(), "8.8.8.8".into())));
+    }
+}

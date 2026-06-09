@@ -57,17 +57,19 @@ pub trait EngineManager {
 }
 
 pub fn cleanup_on_shutdown() {
-    let mut sysproxy = match aurestream_plugin_proxy::Sysproxy::get_system_proxy() {
-        Ok(proxy) => proxy,
-        Err(e) => {
-            ::log::error!("Sysproxy::get_system_proxy failed during shutdown: {}", e);
-            return;
+    std::thread::spawn(|| {
+        let mut sysproxy = match aurestream_plugin_proxy::Sysproxy::get_system_proxy() {
+            Ok(proxy) => proxy,
+            Err(e) => {
+                ::log::error!("Sysproxy::get_system_proxy failed during shutdown: {}", e);
+                return;
+            }
+        };
+        sysproxy.enable = false;
+        if let Err(e) = sysproxy.set_system_proxy() {
+            ::log::error!("Failed to unset system proxy during shutdown: {}", e);
+        } else {
+            ::log::info!("System proxy unset during shutdown");
         }
-    };
-    sysproxy.enable = false;
-    if let Err(e) = sysproxy.set_system_proxy() {
-        ::log::error!("Failed to unset system proxy during shutdown: {}", e);
-    } else {
-        ::log::info!("System proxy unset during shutdown");
-    }
+    });
 }

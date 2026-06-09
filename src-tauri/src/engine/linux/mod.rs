@@ -131,9 +131,7 @@ impl EngineManager for LinuxEngine {
         };
         match mode.as_ref() {
             ProxyMode::SystemProxy => {
-                if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
-                    let _ = clear_system_proxy(app).await;
-                }
+                let _ = clear_system_proxy(app).await;
                 if let Some(child) = child {
                     use libc::{kill, SIGTERM};
                     let pid = child.pid();

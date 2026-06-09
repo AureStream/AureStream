@@ -295,8 +295,10 @@ function parseVLess(uri: string): SingBoxOutbound | null {
 
 function parseHysteria2(uri: string): SingBoxOutbound | null {
   // hysteria2://password@host:port?query#name
+  // or: hy2://password@host:port?query#name
   // or: hysteria2://host:port?auth=password&query#name
-  const rest = uri.slice(12)
+  const prefix = uri.startsWith("hy2://") ? "hy2://" : "hysteria2://"
+  const rest = uri.slice(prefix.length)
   const hashIdx = rest.lastIndexOf("#")
   const name = hashIdx >= 0 ? decodeURIComponent(rest.slice(hashIdx + 1)) : "Hysteria2 Node"
   const base = hashIdx >= 0 ? rest.slice(0, hashIdx) : rest
@@ -400,16 +402,20 @@ export function parseSubscriptionBody(body: string): { outbounds: SingBoxOutboun
   }
 
   // 2. Try base64 decode → proxy list
-  const decoded = decodeBase64(body)
-  const outbounds = parseProxyList(decoded)
-  if (outbounds.length > 0) {
-    return { outbounds }
+  try {
+    const decoded = decodeBase64(body)
+    const outbounds = parseProxyList(decoded)
+    if (outbounds.length > 0) {
+      return { outbounds }
+    }
+  } catch {
+    // not base64, continue
   }
 
   // 3. Try parsing the raw body as plain proxy list
   const rawOutbounds = parseProxyList(body)
   if (rawOutbounds.length > 0) {
-    return { outbounds }
+    return { outbounds: rawOutbounds }
   }
 
   throw new Error("Cannot parse subscription: not JSON, not a recognized proxy list format")

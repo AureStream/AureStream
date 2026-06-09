@@ -155,4 +155,43 @@ mod tests {
             "localhost,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
         );
     }
+
+    #[test]
+    fn bypass_from_empty_store_is_default() {
+        let result = bypass_from_store_value(None);
+        assert_eq!(result, DEFAULT_BYPASS);
+    }
+
+    #[test]
+    fn bypass_from_whitespace_store_is_default() {
+        let result = bypass_from_store_value(Some("   ".into()));
+        assert_eq!(result, DEFAULT_BYPASS);
+    }
+
+    #[test]
+    fn bypass_from_valid_store_passes_through() {
+        let result = bypass_from_store_value(Some("localhost,127.0.0.1".into()));
+        #[cfg(target_os = "windows")]
+        assert_eq!(result, "localhost;127.0.0.1");
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(result, "localhost,127.0.0.1");
+    }
+
+    #[test]
+    fn normalize_empty_returns_empty() {
+        let tokens = normalize_tokens("");
+        assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn normalize_single_token() {
+        let tokens = normalize_tokens("localhost");
+        assert_eq!(tokens, vec!["localhost"]);
+    }
+
+    #[test]
+    fn normalize_trims_whitespace() {
+        let tokens = normalize_tokens("  localhost ,  127.0.0.1  ");
+        assert_eq!(tokens, vec!["localhost", "127.0.0.1"]);
+    }
 }
