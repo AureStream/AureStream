@@ -6,7 +6,6 @@ use aurestream_plugin_tun::scm;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
-use tauri_plugin_store::StoreExt;
 
 pub struct WindowsEngine;
 
@@ -35,7 +34,7 @@ impl EngineManager for WindowsEngine {
             let args = [config_path_str, &gateway, &core_path_str];
 
             log::info!("[win] starting AureStreamTunService with args: {:?}", args);
-            aurestream_plugin_tun::scm::start_service_with_args(&args)
+            scm::start_service_with_args(&args)
                 .map_err(|e| format!("Failed to start AureStream TUN Service: {}", e))?;
 
             {
@@ -116,7 +115,7 @@ impl EngineManager for WindowsEngine {
 
         if matches!(mode.as_ref(), ProxyMode::IntoProxy) {
             log::info!("[win-stop] stopping AureStreamTunService");
-            if let Err(e) = aurestream_plugin_tun::scm::stop_service() {
+            if let Err(e) = scm::stop_service() {
                 log::warn!("Failed to stop AureStreamTunService: {}", e);
             }
         }

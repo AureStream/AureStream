@@ -45,7 +45,9 @@ pub trait EngineManager {
 
     async fn restart(app: &tauri::AppHandle) -> Result<(), String>;
 
+    #[allow(dead_code)]
     fn on_network_up(_app: &tauri::AppHandle) {}
+    #[allow(dead_code)]
     fn on_network_down(_app: &tauri::AppHandle) {}
     fn on_process_terminated(_app: &tauri::AppHandle, _was_user_stop: bool) {}
 

@@ -90,7 +90,7 @@ fn capture_original_dns(iface: &str) -> Result<String, String> {
     Err(format!("could not determine original DNS for {}", iface))
 }
 
-pub fn prepare_dns_override(gateway: &str) -> Result<(String, String), String> {
+pub fn prepare_dns_override(_gateway: &str) -> Result<(String, String), String> {
     let iface = detect_active_iface()?;
     let original_dns = capture_original_dns(&iface)?;
     log::info!(

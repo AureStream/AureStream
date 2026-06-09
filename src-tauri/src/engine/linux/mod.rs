@@ -6,9 +6,7 @@ use aurestream_plugin_tun::linux::{
     apply_system_dns_override, prepare_dns_override, restore_system_dns, set_dns_override,
     stop_tun_and_restore_dns, take_dns_override,
 };
-use std::sync::Arc;
 use tauri::AppHandle;
-use tauri_plugin_store::StoreExt;
 
 pub struct LinuxEngine;
 
