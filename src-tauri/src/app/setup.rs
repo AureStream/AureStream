@@ -103,7 +103,10 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     #[cfg(target_os = "macos")]
     let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png"))?;
     #[cfg(not(target_os = "macos"))]
-    let tray_icon = app.default_window_icon().cloned().unwrap();
+    let tray_icon = app
+        .default_window_icon()
+        .cloned()
+        .unwrap_or_else(|| tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png")).unwrap());
 
     #[allow(unused_mut)]
     let mut tray_builder = TrayIconBuilder::with_id("main-tray")
