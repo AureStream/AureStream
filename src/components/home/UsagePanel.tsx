@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { CartesianGrid, Area, AreaChart, XAxis } from "recharts"
+import { CartesianGrid, Area, AreaChart, XAxis, YAxis } from "recharts"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { surface, type as text } from "@/lib/typography"
@@ -10,8 +10,6 @@ import {
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
 import type { TrafficPoint } from "@/types/engine-state"
@@ -19,6 +17,8 @@ import { useEngineState } from "@/hooks/useEngineState"
 import { subscribeTraffic } from "@/utils/singbox-api"
 
 const HISTORY_LENGTH = 60
+const SMOOTH_WINDOW = 6
+const MAX_Y = 500 // KB/s — fixed cap to prevent chart jumping on spikes
 
 function createEmptyHistory(): TrafficPoint[] {
   return Array.from({ length: HISTORY_LENGTH }, () => ({
@@ -26,6 +26,12 @@ function createEmptyHistory(): TrafficPoint[] {
     download: 0,
     upload: 0,
   }))
+}
+
+/** Exponential moving average to smooth raw traffic samples. */
+function smoothValue(current: number, prevSmoothed: number): number {
+  const alpha = 2 / (SMOOTH_WINDOW + 1)
+  return prevSmoothed * (1 - alpha) + current * alpha
 }
 
 function formatSpeed(bytesPerSecond: number): string {
@@ -95,6 +101,7 @@ export function UsagePanel() {
   const [uploadTotal, setUploadTotal] = useState(0)
   const [downloadTotal, setDownloadTotal] = useState(0)
   const [history, setHistory] = useState<TrafficPoint[]>(createEmptyHistory)
+  const smoothed = useRef({ download: 0, upload: 0 })
 
   const chartConfig = useMemo(
     () =>
@@ -104,6 +111,7 @@ export function UsagePanel() {
       }) satisfies ChartConfig,
     [t]
   )
+
   useEffect(() => {
     if (!isRunning) {
       setUploadSpeed(0)
@@ -111,6 +119,7 @@ export function UsagePanel() {
       setUploadTotal(0)
       setDownloadTotal(0)
       setHistory(createEmptyHistory)
+      smoothed.current = { download: 0, upload: 0 }
       return
     }
 
@@ -120,12 +129,20 @@ export function UsagePanel() {
     subscribeTraffic(
       ({ up, down }) => {
         if (!active) return
-        setUploadSpeed(up)
-        setDownloadSpeed(down)
+        smoothed.current = {
+          download: smoothValue(down, smoothed.current.download),
+          upload: smoothValue(up, smoothed.current.upload),
+        }
+        setUploadSpeed(smoothed.current.upload)
+        setDownloadSpeed(smoothed.current.download)
         setUploadTotal((prev) => prev + up)
         setDownloadTotal((prev) => prev + down)
         setHistory((prev) => {
-          return [...prev.slice(1), { time: "", download: down, upload: up }]
+          return [...prev.slice(1), {
+            time: "",
+            download: smoothed.current.download,
+            upload: smoothed.current.upload,
+          }]
         })
       },
       abort.signal
@@ -185,31 +202,35 @@ export function UsagePanel() {
               className="opacity-60"
             />
             <XAxis dataKey="time" hide />
-            <ChartTooltip content={<ChartTooltipContent />} />
+            <YAxis
+              hide
+              domain={[0, MAX_Y]}
+              allowDataOverflow={false}
+            />
             <ChartLegend content={<ChartLegendContent />} />
             <Area
-              type="basis"
+              type="monotone"
               dataKey="download"
               stroke="var(--primary)"
               strokeWidth={1.5}
               fillOpacity={1}
               fill="url(#colorDownload)"
               dot={false}
-              activeDot={{ r: 3, strokeWidth: 0 }}
-              animationDuration={400}
+              activeDot={false}
+              animationDuration={300}
               animationEasing="ease-out"
               isAnimationActive={true}
             />
             <Area
-              type="basis"
+              type="monotone"
               dataKey="upload"
               stroke="#10b981"
               strokeWidth={1.5}
               fillOpacity={1}
               fill="url(#colorUpload)"
               dot={false}
-              activeDot={{ r: 3, strokeWidth: 0 }}
-              animationDuration={400}
+              activeDot={false}
+              animationDuration={300}
               animationEasing="ease-out"
               isAnimationActive={true}
             />
