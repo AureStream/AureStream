@@ -213,7 +213,8 @@ async fn restart_tun_send_safe(app: AppHandle, path: Arc<String>) -> Result<(), 
     let exit_app = app.clone();
     let exit_mode = Arc::new(ProxyMode::IntoProxy);
     tokio::spawn(async move {
-        if let Some(exit) = exit_rx.recv().await {
+        match exit_rx.recv().await {
+            Ok(exit) => {
             log::info!(
                 "[helper-bridge] sing-box exit (watchdog restart) pid={} code={}",
                 exit.pid,
@@ -224,6 +225,10 @@ async fn restart_tun_send_safe(app: AppHandle, path: Arc<String>) -> Result<(), 
                 signal: None,
             };
             handle_process_termination(&exit_app, &exit_mode, payload, epoch_snap).await;
+            }
+            Err(_) => {
+                log::warn!("[helper-bridge] exit broadcast closed during watchdog restart");
+            }
         }
     });
 

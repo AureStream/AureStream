@@ -575,72 +575,22 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
 // ------------------------------------------------------------------
 - (void)stopSingBoxWithReply:(void (^)(NSString *))reply {
     __block pid_t target = 0;
-    __block NSXPCConnection *notifyConn = nil;
     dispatch_sync(_stateQueue, ^{
         target = self->_activePid;
-        notifyConn = self->_activeConnection;
-        // Cancel the exit source before reaping to avoid double-waitpid
-        if (self->_exitSource) {
-            dispatch_source_cancel(self->_exitSource);
-            self->_exitSource = nil;
-        }
     });
     if (target == 0) {
         reply(nil);
         return;
     }
 
+    NSString *err = nil;
     if (kill(target, SIGTERM) != 0 && errno != ESRCH) {
-        reply([NSString stringWithFormat:@"kill(%d, SIGTERM) failed: %s",
-               target, strerror(errno)]);
-        return;
+        err = [NSString stringWithFormat:@"kill(%d, SIGTERM) failed: %s",
+               target, strerror(errno)];
+    } else {
+        NSLog(@"[helper] sent SIGTERM to sing-box pid=%d", target);
     }
-    NSLog(@"[helper] sent SIGTERM to sing-box pid=%d, waiting for exit", target);
-
-    // Wait for the process to actually die before replying.
-    // This guarantees sockets are released by the time the client proceeds.
-    int status = 0;
-    pid_t waited = 0;
-    BOOL exited = NO;
-    for (int i = 0; i < 100; i++) {
-        waited = waitpid(target, &status, WNOHANG);
-        if (waited == target || waited == -1) { exited = YES; break; }
-        usleep(50000);
-    }
-    if (!exited) {
-        NSLog(@"[helper] sing-box pid=%d still alive after 5s SIGTERM, sending SIGKILL", target);
-        kill(target, SIGKILL);
-        for (int i = 0; i < 20; i++) {
-            waited = waitpid(target, &status, WNOHANG);
-            if (waited == target || waited == -1) break;
-            usleep(50000);
-        }
-    }
-
-    int exitCode = -1;
-    if (WIFEXITED(status)) {
-        exitCode = WEXITSTATUS(status);
-    } else if (WIFSIGNALED(status)) {
-        exitCode = 128 + WTERMSIG(status);
-    }
-    NSLog(@"[helper] sing-box pid=%d confirmed dead code=%d", target, exitCode);
-
-    // Notify client of exit (same as the dispatch_source handler used to do)
-    if (notifyConn) {
-        id<AureStreamHelperClientProtocol> client =
-            [notifyConn remoteObjectProxyWithErrorHandler:^(NSError *err) {
-                NSLog(@"[helper] failed to notify client of exit: %@", err);
-            }];
-        [client singBoxDidExitWithPid:target exitCode:exitCode];
-    }
-
-    dispatch_sync(_stateQueue, ^{
-        if (self->_activePid == target) {
-            self->_activePid = 0;
-            self->_activeConnection = nil;
-        }
-    });
-    reply(nil);
+    reply(err);
 }
 
 // ------------------------------------------------------------------
