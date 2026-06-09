@@ -93,8 +93,8 @@ pub fn stop_tun_and_restore_dns(dns_override: Option<&(String, String)>) -> Resu
         .output()
         .map_err(|e| format!("pkexec stop failed: {}", e))?;
     if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        log::warn!("[stop] pkexec non-zero exit: {}", stderr);
+        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+        return Err(format!("[stop] pkexec non-zero exit: {}", stderr.trim()));
     }
     Ok(())
 }

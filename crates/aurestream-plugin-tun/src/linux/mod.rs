@@ -37,6 +37,7 @@ fn detect_active_iface() -> Result<String, String> {
 }
 
 fn capture_original_dns(iface: &str) -> Result<String, String> {
+    // 1. Try nmcli (NetworkManager)
     let out = Command::new("nmcli")
         .args(["-t", "-f", "IP4.DNS", "dev", "show", iface])
         .output()
@@ -52,6 +53,7 @@ fn capture_original_dns(iface: &str) -> Result<String, String> {
         return Ok(servers.join(" "));
     }
 
+    // 2. Try resolvectl (systemd-resolved)
     let out = Command::new("resolvectl")
         .args(["status", iface])
         .output()
@@ -67,6 +69,22 @@ fn capture_original_dns(iface: &str) -> Result<String, String> {
                 }
             }
         }
+    }
+
+    // 3. Fallback: parse /etc/resolv.conf directly (static config, ifupdown, etc.)
+    let contents = std::fs::read_to_string("/etc/resolv.conf")
+        .map_err(|e| format!("could not read /etc/resolv.conf: {}", e))?;
+    let nameservers: Vec<&str> = contents
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            trimmed.strip_prefix("nameserver").map(|s| s.trim())
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+    if !nameservers.is_empty() {
+        log::info!("[dns] captured {} nameservers from /etc/resolv.conf", nameservers.len());
+        return Ok(nameservers.join(" "));
     }
 
     Err(format!("could not determine original DNS for {}", iface))
