@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
 use tokio::net::TcpStream;
+use tokio::sync::broadcast;
 use tokio::time::{sleep, timeout, Instant};
 
 use crate::engine::ports::{controller_port, mixed_proxy_port};
@@ -11,7 +12,32 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+#[derive(Debug, Clone, Copy)]
+pub enum Readiness {
+    Ready,
+    Failed,
+}
+
+static READY_SENDER: std::sync::OnceLock<tokio::sync::Mutex<broadcast::Sender<Readiness>>> =
+    std::sync::OnceLock::new();
+
+/// Subscribe to a readiness signal before spawning sing-box. The signal fires
+/// once when the readiness prober confirms ports are listening (or fails).
+pub fn subscribe_ready() -> broadcast::Receiver<Readiness> {
+    let slot = READY_SENDER.get_or_init(|| {
+        tokio::sync::Mutex::new(broadcast::channel(1).0)
+    });
+    slot.blocking_lock().subscribe()
+}
+
 pub fn spawn(app: AppHandle, start_epoch: u64) {
+    let sender = {
+        let slot = READY_SENDER.get_or_init(|| {
+            tokio::sync::Mutex::new(broadcast::channel(1).0)
+        });
+        slot.blocking_lock().clone()
+    };
+
     tokio::spawn(async move {
         let mixed_port = mixed_proxy_port(&app);
         let controller = controller_port(&app);
@@ -29,18 +55,16 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
                     started.elapsed().as_millis()
                 );
                 let _ = transition(&app, Intent::MarkRunning);
+                let _ = sender.send(Readiness::Ready);
                 return;
             }
 
             if Instant::now() >= deadline {
-                let _ = transition(
-                    &app,
-                    Intent::Fail {
-                        reason: format!(
-                            "startup timeout (127.0.0.1:{mixed_port} / :{controller} not ready)"
-                        ),
-                    },
+                let reason = format!(
+                    "startup timeout (127.0.0.1:{mixed_port} / :{controller} not ready)"
                 );
+                let _ = transition(&app, Intent::Fail { reason: reason.clone() });
+                let _ = sender.send(Readiness::Failed);
                 return;
             }
 
