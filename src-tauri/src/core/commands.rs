@@ -11,6 +11,7 @@ use crate::engine::{
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use tokio::sync::broadcast;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
@@ -114,6 +115,9 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         ::log::info!("[start] action={action} config unchanged, skipping sing-box check");
     }
 
+    // Subscribe to readiness BEFORE starting the engine so we don't miss the signal.
+    let mut ready_rx = crate::engine::readiness::subscribe_ready();
+
     let engine_start = perf::StepTimer::new("start.engine");
     if let Err(e) = PlatformEngine::start(&app, mode.clone(), path, start_epoch).await {
         drop(engine_start);
@@ -134,6 +138,34 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         post_pid, post_alive
     );
     readiness::spawn(app.clone(), start_epoch);
+
+    // Wait for the readiness prober to confirm sing-box is listening.
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(25),
+        ready_rx.recv(),
+    )
+    .await
+    {
+        Ok(Ok(readiness::Readiness::Ready)) => {
+            ::log::info!("[start] action={action} readiness confirmed");
+        }
+        Ok(Ok(readiness::Readiness::Failed)) => {
+            ::log::error!("[start] action={action} readiness prober reported failure");
+            return Err("startup failed: ports not reachable".into());
+        }
+        Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+            ::log::info!("[start] action={action} readiness signal lagged, assuming ready");
+        }
+        Ok(Err(broadcast::error::RecvError::Closed)) => {
+            ::log::warn!("[start] action={action} readiness channel closed unexpectedly");
+            return Err("readiness channel closed".into());
+        }
+        Err(_timeout) => {
+            ::log::error!("[start] action={action} readiness timeout");
+            return Err("startup timeout: sing-box did not become ready".into());
+        }
+    }
+
     Ok(())
 }
 
