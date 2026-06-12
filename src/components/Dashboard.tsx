@@ -2,10 +2,13 @@ import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Routes, Route, NavLink, useNavigate } from "react-router-dom"
 import SubscriptionPage from "./SubscriptionPage"
+import NodesPage from "./NodesPage"
+import ProfilePage from "./ProfilePage"
+import SettingsPage from "./SettingsPage"
+import CheckoutPage from "./CheckoutPage"
 import { type ProxyMode } from "./ModeSelector"
 import { useTheme } from "./ThemeProvider"
 import TrafficGraph from "./TrafficGraph"
-import { cn } from "@/lib/utils"
 
 /* ── Icons ── */
 const I = {
@@ -25,6 +28,7 @@ const I = {
   Moon: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>),
   ArrowRight: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>),
   Info: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>),
+  Rocket: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>),
 }
 
 /* ================================================================
@@ -40,25 +44,32 @@ function TopNav() {
     { to: "/dashboard", label: l("Dashboard", "首页"), end: true },
     { to: "/dashboard/nodes", label: l("Nodes", "节点") },
     { to: "/dashboard/subscription", label: l("Subscription", "套餐") },
-    { to: "/dashboard/rules", label: l("Rules", "规则") },
     { to: "/dashboard/settings", label: l("Settings", "设置") },
   ]
 
   return (
-    <div className="px-8 pt-6 pb-2 w-full max-w-[1400px] mx-auto relative z-20">
-      <div className="flex items-center justify-between px-4 py-2.5 bg-surface/80 backdrop-blur-xl border border-border shadow-glass rounded-[28px]">
+    <div className="px-4 md:px-8 pt-6 pb-2 w-full max-w-[1400px] mx-auto relative z-20">
+      <div className="flex flex-col lg:flex-row items-center justify-between py-4 px-4 md:px-8 border border-border bg-surface/80 backdrop-blur-3xl shadow-glass rounded-[28px]">
         
-        {/* Spacer to keep navigation centered since Logo was removed */}
-        <div className="flex-1 hidden lg:block"></div>
+        {/* Brand & Logo */}
+        <div className="flex items-center gap-2 mb-2 lg:mb-0 w-full lg:w-auto px-4 lg:px-0 justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-sm ring-1 ring-border-glass">
+              <I.Rocket />
+            </div>
+            <span className="font-heading font-bold text-lg text-text">AureStream</span>
+          </div>
+        </div>
 
-        <nav className="flex items-center gap-2 shrink-0">
+        {/* Navigation Links - Scrollable horizontally on mobile */}
+        <nav className="flex items-center gap-2 bg-surface-active/50 p-1.5 rounded-3xl border border-border-glass shadow-sm max-w-full overflow-x-auto no-scrollbar">
           {navLinks.map(link => (
             <NavLink
               key={link.to}
               to={link.to}
               end={link.end}
               className={({ isActive }) => 
-                `px-6 py-2.5 rounded-2xl text-sm font-semibold transition-all ${isActive ? 'bg-white dark:bg-surface-hover text-primary shadow-sm ring-1 ring-border-glass' : 'text-text-secondary hover:text-text hover:bg-surface-active/60'}`
+                `px-6 py-2.5 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap ${isActive ? 'glass-active-pill' : 'text-text-secondary hover:text-text hover:bg-surface-active/60'}`
               }
             >
               {link.label}
@@ -66,7 +77,7 @@ function TopNav() {
           ))}
         </nav>
 
-        <div className="flex-1 flex items-center gap-3 justify-end pr-1 min-w-0">
+        <div className="flex items-center gap-3 justify-end pr-1 min-w-0">
           <button onClick={toggleTheme} className="text-text-secondary hover:text-primary transition-colors shrink-0">
             {theme === 'dark' ? <I.Moon /> : <I.Sun />}
           </button>
@@ -77,17 +88,16 @@ function TopNav() {
           <div className="w-px h-6 bg-border-glass mx-2 shrink-0 hidden sm:block"></div>
           {/* User Profile & Logout */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2.5 text-text py-1">
+            <NavLink 
+              to="/dashboard/profile"
+              className={({ isActive }) => `flex items-center gap-2.5 py-1 px-2 rounded-2xl transition-colors ${isActive ? 'bg-surface-active/80 shadow-sm ring-1 ring-border-glass' : 'hover:bg-surface-active/40'}`}
+            >
               <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-accent-purple p-[2px] shrink-0">
                 <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden border border-surface">
                   <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="User" className="w-full h-full object-cover" />
                 </div>
               </div>
-              <div className="hidden lg:flex flex-col items-start pr-1 max-w-[140px]">
-                <span className="text-sm font-bold leading-tight truncate w-full text-left">User</span>
-                <span className="text-[11px] text-text-muted leading-tight font-medium truncate w-full text-left font-mono">user@example.com</span>
-              </div>
-            </div>
+            </NavLink>
 
             <button 
               onClick={() => navigate('/')} 
@@ -111,7 +121,6 @@ function HomePage() {
   const navigate = useNavigate()
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [isConnected, setIsConnected] = useState(false)
-  const [isSystemProxy, setIsSystemProxy] = useState(true)
   const [activeNodeId, setActiveNodeId] = useState<number>(1)
   
   const [startTime, setStartTime] = useState<number | null>(null)
@@ -156,7 +165,7 @@ function HomePage() {
   const greetingZh = hour < 12 ? '早上好，' : hour < 18 ? '下午好，' : '晚上好，'
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto animate-fade-in px-8 pb-12">
+    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto animate-fade-in px-4 md:px-8 pb-12">
       
       {/* Hero Welcome Banner */}
       <div className="relative overflow-hidden rounded-[32px] bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm p-8 mt-2 flex flex-col md:flex-row items-center justify-between">
@@ -260,7 +269,7 @@ function HomePage() {
           <div className="z-10 w-full mt-4 grid grid-cols-2 gap-3">
             <button
               onClick={() => setProxyMode('rule')}
-              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'rule' ? 'bg-white dark:bg-surface-hover shadow-md ring-1 ring-border-glass text-primary scale-100' : 'bg-surface-active/30 text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
+              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'rule' ? 'glass-active-pill' : 'bg-surface-active/30 text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
             >
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'rule' ? 'bg-primary text-white shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
                 <I.Activity />
@@ -273,7 +282,7 @@ function HomePage() {
 
             <button
               onClick={() => setProxyMode('tun' as ProxyMode)}
-              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'tun' ? 'bg-white dark:bg-surface-hover shadow-md ring-1 ring-border-glass text-primary scale-100' : 'bg-surface-active/30 text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
+              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'tun' ? 'glass-active-pill' : 'bg-surface-active/30 text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
             >
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'tun' ? 'bg-primary text-white shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
                 <I.Globe />
@@ -396,68 +405,27 @@ function HomePage() {
 }
 
 /* ================================================================
-   Settings Page Stub
-   ================================================================ */
-function SettingsPage() {
-  const { t, i18n } = useTranslation()
-  const { theme, toggleTheme } = useTheme()
-
-  return (
-    <div className="animate-fade-in p-8 max-w-2xl">
-      <h2 className="text-2xl font-heading font-bold mb-6 text-text">{t("nav_settings")}</h2>
-
-      <div className="flex flex-col gap-4">
-        <div className="bg-surface rounded-2xl p-5 flex items-center justify-between shadow-sm border border-border">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-accent-blue flex items-center justify-center text-accent-blue-text">
-              {theme === "dark" ? <I.Moon /> : <I.Sun />}
-            </div>
-            <div>
-              <div className="text-sm font-medium text-text">外观主题</div>
-              <div className="text-xs text-text-muted">{theme === "dark" ? "深色模式" : "浅色模式"}</div>
-            </div>
-          </div>
-          <button className={cn("toggle", theme === "dark" && "active")} onClick={toggleTheme} />
-        </div>
-
-        <div className="bg-surface rounded-2xl p-5 flex items-center justify-between shadow-sm border border-border">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-accent-purple flex items-center justify-center text-accent-purple-text">
-              <I.Globe />
-            </div>
-            <div>
-              <div className="text-sm font-medium text-text">系统语言</div>
-              <div className="text-xs text-text-muted">{i18n.language.startsWith("zh") ? "简体中文" : "English"}</div>
-            </div>
-          </div>
-          <div className="flex items-center bg-bg-alt rounded-lg p-1">
-            <button className={`px-4 py-1.5 text-xs rounded-md font-medium transition-colors ${i18n.language.startsWith("zh") ? "bg-white text-text shadow-sm" : "text-text-muted hover:text-text"}`} onClick={() => i18n.changeLanguage("zh")}>中</button>
-            <button className={`px-4 py-1.5 text-xs rounded-md font-medium transition-colors ${i18n.language === "en" ? "bg-white text-text shadow-sm" : "text-text-muted hover:text-text"}`} onClick={() => i18n.changeLanguage("en")}>EN</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ================================================================
    Layout
    ================================================================ */
 export default function Dashboard() {
   return (
-    <div className="min-h-screen w-full flex flex-col relative bg-bg">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+    <div className="h-screen w-full flex flex-col relative bg-bg overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-accent-blue rounded-full blur-[100px] opacity-80"></div>
         <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent-purple rounded-full blur-[120px] opacity-60"></div>
       </div>
       
       <div className="relative z-10 flex flex-col h-full">
         <TopNav />
-        <main className="flex-1 overflow-y-auto">
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto no-scrollbar">
           <Routes>
             <Route index element={<HomePage />} />
+            <Route path="nodes" element={<NodesPage />} />
             <Route path="subscription" element={<SubscriptionPage />} />
+            <Route path="checkout" element={<CheckoutPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Routes>
         </main>
       </div>

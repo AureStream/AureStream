@@ -1,6 +1,28 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@layer base {
+  /* Fluid root scaling: all Tailwind rem units (padding, margin, font, sizing) will scale proportionally based on screen size */
+  html {
+    font-size: 16px; /* Base scale for desktop */
+  }
+  @media screen and (max-width: 1024px) {
+    html {
+      font-size: 15px; /* 93.75% scale for small laptops/tablets */
+    }
+  }
+  @media screen and (max-width: 768px) {
+    html {
+      font-size: 14px; /* 87.5% scale for large phones */
+    }
+  }
+  @media screen and (max-width: 480px) {
+    html {
+      font-size: 13px; /* 81.25% scale for small phones */
+    }
+  }
+}
+
 /* ============================================================
    AureStream Design System v2 — Tailwind v4 @theme
    Style: Glassmorphism + Bento Box Grid
@@ -137,6 +159,20 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-text-muted); border-radius: var(--radius-full); }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
+
+/* Hide scrollbar globally */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Unified iOS-style active pill */
+@layer utilities {
+  .glass-active-pill {
+    @apply bg-white dark:bg-surface-hover text-primary shadow-sm ring-1 ring-border-glass scale-100;
+  }
+}
 
 /* ============================================================
    ANIMATIONS
@@ -954,26 +990,14 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 }
 
 /* ============================================================
-   AUTH PAGES
+   AUTH LEFT PANEL
    ============================================================ */
-.auth-layout {
-  display: flex;
-  width: 100vw; height: 100vh;
-  overflow: hidden;
-  position: relative;
-  background: var(--color-bg);
-}
 .auth-brand {
-  flex: 1;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
   background: linear-gradient(135deg, #6C63FF 0%, #8B5CF6 30%, #3B82F6 70%, #06B6D4 100%);
   background-size: 300% 300%;
   animation: gradient-shift 10s ease infinite;
   position: relative; overflow: hidden;
-  padding: 40px;
 }
-/* Animated floating blobs */
 .auth-brand::before {
   content: '';
   position: absolute; inset: 0;
@@ -984,7 +1008,6 @@ code, pre, .font-mono { font-family: var(--font-mono); }
   animation: gradient-mesh 12s ease infinite;
 }
 
-/* Floating shapes */
 .auth-blob {
   position: absolute; border-radius: 50%;
   background: rgba(255, 255, 255, 0.1);
@@ -998,10 +1021,6 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .auth-blob-3 { width: 60px; height: 60px; top: 50%; left: 22%; animation: floatSlow 7s ease-in-out infinite 2s; }
 .auth-blob-4 { width: 40px; height: 40px; top: 25%; right: 25%; animation: floatSlow 5s ease-in-out infinite 0.5s; }
 
-.auth-brand-content {
-  position: relative; z-index: 10;
-  text-align: center; color: white;
-}
 .auth-brand-logo {
   width: 72px; height: 72px;
   border-radius: var(--radius-xl);
@@ -1012,25 +1031,7 @@ code, pre, .font-mono { font-family: var(--font-mono); }
   display: flex; align-items: center; justify-content: center;
   margin: 0 auto 20px;
 }
-.auth-form-side {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center;
-  padding: 40px;
-  background: var(--color-bg);
-  position: relative;
-}
-.auth-form-side::before {
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 50% 20%, rgba(108, 99, 255, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 35% at 50% 80%, rgba(59, 130, 246, 0.02) 0%, transparent 50%);
-}
-.auth-form-container {
-  width: 100%; max-width: 420px;
-  position: relative; z-index: 1;
-  animation: fadeIn 0.5s ease-out;
-}
+
 
 /* ============================================================
    SUBSCRIPTION PAGE
@@ -1167,68 +1168,6 @@ code, pre, .font-mono { font-family: var(--font-mono); }
   box-shadow: var(--shadow-glow-primary);
 }
 
-/* ============================================================
-   FORM ELEMENTS
-   ============================================================ */
-.input {
-  width: 100%;
-  padding: 12px 16px;
-  background: var(--color-bg);
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-family: var(--font-body);
-  font-size: 14px; color: var(--color-text);
-  outline: none;
-  transition: all 0.2s ease;
-}
-.input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-glow);
-}
-.input-group { position: relative; }
-.input-group .input { padding-left: 44px; }
-.input-group .input-icon {
-  position: absolute; left: 14px; top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-text-muted);
-  width: 18px; height: 18px;
-}
-.input-group .input-action {
-  position: absolute; right: 10px; top: 50%;
-  transform: translateY(-50%);
-  background: none; border: none;
-  color: var(--color-text-muted);
-  cursor: pointer; padding: 4px;
-  border-radius: var(--radius-sm);
-  transition: color 0.15s;
-}
-.input-group .input-action:hover { color: var(--color-text-secondary); }
-
-/* Checkbox */
-.checkbox-wrapper {
-  display: flex; align-items: center; gap: 10px;
-  cursor: pointer; font-size: 13px;
-  color: var(--color-text-secondary);
-}
-.checkbox-wrapper input[type="checkbox"] {
-  appearance: none; width: 18px; height: 18px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 5px; cursor: pointer; flex-shrink: 0;
-  position: relative;
-  transition: all 0.15s ease;
-}
-.checkbox-wrapper input[type="checkbox"]:checked {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-.checkbox-wrapper input[type="checkbox"]:checked::after {
-  content: '';
-  position: absolute; left: 5px; top: 2px;
-  width: 5px; height: 9px;
-  border: 2px solid white;
-  border-top: none; border-left: none;
-  transform: rotate(45deg);
-}
 
 /* ============================================================
    MISC COMPONENTS

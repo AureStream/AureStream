@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { NavLink, useNavigate } from "react-router-dom"
 import { useTheme } from "./ThemeProvider"
-import TrafficGraph from "./TrafficGraph"
 
 /* Icons */
 const I = {
