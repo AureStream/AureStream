@@ -112,7 +112,7 @@ export default function TrafficGraph({
         <path
           d={buildPath("down")}
           fill="none"
-          stroke="var(--color-primary, #6C63FF)"
+          stroke="#0ea5e9"
           strokeWidth={mini ? 1.5 : 2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -121,7 +121,7 @@ export default function TrafficGraph({
         <path
           d={buildPath("up")}
           fill="none"
-          stroke="var(--color-secondary, #3B82F6)"
+          stroke="#10b981"
           strokeWidth={mini ? 1 : 1.5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -147,12 +147,12 @@ export default function TrafficGraph({
         {/* Gradients */}
         <defs>
           <linearGradient id="downGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-primary, #6C63FF)" stopOpacity={0.6} />
-            <stop offset="100%" stopColor="var(--color-primary, #6C63FF)" stopOpacity={0} />
+            <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.6} />
+            <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="upGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-secondary, #3B82F6)" stopOpacity={0.5} />
-            <stop offset="100%" stopColor="var(--color-secondary, #3B82F6)" stopOpacity={0} />
+            <stop offset="0%" stopColor="#10b981" stopOpacity={0.5} />
+            <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
           </linearGradient>
         </defs>
       </svg>
@@ -160,10 +160,10 @@ export default function TrafficGraph({
       {/* Current speed overlay */}
       {!mini && (
         <div className="absolute top-2 right-3 flex gap-4 text-[11px] font-mono">
-          <span style={{ color: "var(--color-primary)" }}>
+          <span style={{ color: "#0ea5e9" }}>
             ↓ {formatSpeed(last.down)}
           </span>
-          <span style={{ color: "var(--color-secondary)" }}>
+          <span style={{ color: "#10b981" }}>
             ↑ {formatSpeed(last.up)}
           </span>
         </div>

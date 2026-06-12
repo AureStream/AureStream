@@ -1,7 +1,7 @@
 import { type ReactElement } from "react"
 import { cn } from "@/lib/utils"
 
-export type ProxyMode = "rule" | "global" | "direct"
+export type ProxyMode = "rule" | "global" | "direct" | "tun"
 
 interface ModeSelectorProps {
   mode: ProxyMode

@@ -28,26 +28,26 @@ export default function Sidebar() {
   ]
 
   return (
-    <aside className="sidebar glass-sidebar">
+    <aside className="sidebar bg-surface border-r border-border shadow-sm flex flex-col z-40">
       {/* Brand */}
-      <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">
+      <div className="flex items-center gap-3 px-6 py-8">
+        <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center shadow-sm">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>
           </svg>
         </div>
-        <span className="sidebar-brand-text">AureStream</span>
+        <span className="font-heading font-bold text-xl tracking-tight text-text">AureStream</span>
       </div>
 
       {/* Main navigation */}
-      <nav className="sidebar-nav">
+      <nav className="flex-1 px-4 py-2 flex flex-col gap-2">
+        <div className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 px-4">Menu</div>
         {mainNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-            style={{ position: "relative" }}
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${isActive ? "bg-primary text-white shadow-md" : "text-text-secondary hover:bg-surface-active hover:text-text"}`}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -56,54 +56,41 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="sidebar-footer">
-        {/* Traffic mini widget */}
-        <div className="rounded-xl bg-bg-alt/50 p-3 border border-border-light">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">实时速度</span>
-          </div>
-          <TrafficGraph mini height={40} />
-          <div className="flex justify-between mt-1.5 text-[10px] font-mono">
-            <span className="flex items-center gap-1 text-primary">
-              <I.Download /> 8.2 MB/s
-            </span>
-            <span className="flex items-center gap-1 text-secondary">
-              <I.Upload /> 2.4 MB/s
-            </span>
-          </div>
-        </div>
-
+      <div className="p-6 flex flex-col gap-6 border-t border-border mt-auto">
         {/* User info */}
-        <div className="flex items-center gap-2.5 px-1.5 py-2">
-          <div className="avatar w-8 h-8 text-xs">U</div>
+        <div className="flex items-center gap-3 bg-surface-active p-3 rounded-2xl">
+          <div className="w-10 h-10 rounded-xl bg-accent-blue flex items-center justify-center font-bold text-accent-blue-text">
+            JD
+          </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium truncate">User</div>
-            <div className="text-[11px] text-text-muted truncate">user@example.com</div>
+            <div className="text-sm font-bold text-text truncate">John Doe</div>
+            <div className="text-xs text-text-muted truncate">john@example.com</div>
           </div>
         </div>
 
         {/* Upgrade banner */}
         <div
           onClick={() => navigate("/dashboard/subscription")}
-          className="cursor-pointer rounded-xl p-3.5 bg-gradient-to-br from-primary to-secondary text-white transition-all duration-200 hover:shadow-glow-primary hover:scale-[1.02]"
+          className="cursor-pointer rounded-2xl p-5 bg-gradient-to-br from-primary to-primary-hover text-white transition-transform hover:scale-105 shadow-md relative overflow-hidden"
         >
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full blur-xl -mr-10 -mt-10"></div>
+          <div className="flex items-center gap-2 mb-2 relative z-10">
             <I.Zap />
-            <span className="text-[13px] font-semibold">{t("upgrade_prompt")}</span>
+            <span className="text-sm font-bold">{t("upgrade_prompt")}</span>
           </div>
-          <p className="text-[11px] opacity-75 leading-relaxed">{t("upgrade_desc")}</p>
+          <p className="text-xs opacity-80 leading-relaxed relative z-10">{t("upgrade_desc")}</p>
         </div>
 
         {/* Controls row */}
-        <div className="flex items-center justify-between px-1">
-          <button onClick={toggleTheme} className="nav-item !w-auto !p-2" title={theme === "light" ? "深色模式" : "浅色模式"}>
+        <div className="flex items-center justify-between px-2 text-text-secondary">
+          <button onClick={toggleTheme} className="hover:text-primary transition-colors p-2" title={theme === "light" ? "深色模式" : "浅色模式"}>
             {theme === "light" ? <I.Moon /> : <I.Sun />}
           </button>
-          <div className="lang-selector">
-            <button className={`lang-option${i18n.language === "en" ? " active" : ""}`} onClick={() => i18n.changeLanguage("en")}>EN</button>
-            <button className={`lang-option${i18n.language.startsWith("zh") ? " active" : ""}`} onClick={() => i18n.changeLanguage("zh")}>中</button>
+          <div className="flex items-center bg-surface-active rounded-lg p-1">
+            <button className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${i18n.language === "en" ? "bg-white text-text shadow-sm" : "text-text-muted hover:text-text"}`} onClick={() => i18n.changeLanguage("en")}>EN</button>
+            <button className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${i18n.language.startsWith("zh") ? "bg-white text-text shadow-sm" : "text-text-muted hover:text-text"}`} onClick={() => i18n.changeLanguage("zh")}>中</button>
           </div>
-          <button onClick={() => navigate("/login")} className="nav-item !w-auto !p-2" title={t("logout")}>
+          <button onClick={() => navigate("/login")} className="hover:text-danger transition-colors p-2" title={t("logout")}>
             <I.Logout />
           </button>
         </div>

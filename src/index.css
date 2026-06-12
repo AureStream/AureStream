@@ -7,50 +7,50 @@
    ============================================================ */
 @theme {
   /* ── Background ── */
-  --color-bg: #F8F7F4;
-  --color-bg-alt: #F0EDE8;
-  --color-bg-mesh: #F5F3EE;
-  --color-surface: #FFFFFF;
-  --color-surface-hover: #FAF9F7;
-  --color-surface-active: #F0EDE8;
+  --color-bg: #EAF0F6;
+  --color-bg-alt: #FFFFFF;
+  --color-bg-mesh: #E4ECF4;
+  --color-surface: rgba(255, 255, 255, 0.7);
+  --color-surface-hover: rgba(255, 255, 255, 0.9);
+  --color-surface-active: #F3F5F9;
 
   /* ── Brand ── */
-  --color-primary: #6C63FF;
-  --color-primary-hover: #5B52E6;
-  --color-primary-light: #EDECFF;
-  --color-primary-glow: rgba(108, 99, 255, 0.2);
-  --color-secondary: #3B82F6;
+  --color-primary: #1F1B3E; /* Dark navy for text/icons */
+  --color-primary-hover: #2D275A;
+  --color-primary-light: #E4E5EA;
+  --color-primary-glow: rgba(31, 27, 62, 0.15);
+  --color-secondary: #5C67F2; /* Soft blue/purple */
 
-  /* ── Accent ── */
-  --color-accent-yellow: #FEF3C7;
-  --color-accent-yellow-text: #92400E;
-  --color-accent-purple: #EDE9FE;
-  --color-accent-purple-text: #5B21B6;
-  --color-accent-green: #D1FAE5;
+  /* ── Accent (Tasklyn Pastel Colors) ── */
+  --color-accent-blue: rgba(214, 232, 253, 0.8);
+  --color-accent-blue-text: #1F1B3E;
+  --color-accent-purple: rgba(237, 230, 254, 0.8);
+  --color-accent-purple-text: #1F1B3E;
+  --color-accent-yellow: rgba(251, 226, 210, 0.8);
+  --color-accent-yellow-text: #1F1B3E;
+  --color-accent-green: rgba(209, 250, 229, 0.8);
   --color-accent-green-text: #065F46;
-  --color-accent-blue: #DBEAFE;
-  --color-accent-blue-text: #1E40AF;
 
   /* ── Text ── */
-  --color-text: #1E293B;
-  --color-text-secondary: #64748B;
-  --color-text-muted: #94A3B8;
+  --color-text: #1F1B3E;
+  --color-text-secondary: #565A6E;
+  --color-text-muted: #9598A6;
   --color-text-inverse: #FFFFFF;
 
   /* ── Border ── */
-  --color-border: #E2E0DB;
-  --color-border-light: #F0EDE8;
-  --color-border-glass: rgba(255, 255, 255, 0.3);
+  --color-border: rgba(255, 255, 255, 0.5);
+  --color-border-light: rgba(255, 255, 255, 0.8);
+  --color-border-glass: rgba(255, 255, 255, 0.5);
 
   /* ── Semantic ── */
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-danger: #EF4444;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-danger: #F87171;
 
-  /* ── Sidebar ── */
-  --color-sidebar: rgba(255, 255, 255, 0.7);
-  --color-sidebar-active: rgba(108, 99, 255, 0.08);
-  --color-sidebar-hover: rgba(0, 0, 0, 0.03);
+  /* ── Sidebar / TopNav ── */
+  --color-sidebar: transparent;
+  --color-sidebar-active: #1F1B3E;
+  --color-sidebar-hover: rgba(0, 0, 0, 0.04);
 
   /* ── Typography ── */
   --font-heading: 'Space Grotesk', system-ui, sans-serif;
@@ -60,67 +60,55 @@
   /* ── Radius ── */
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 24px;
+  --radius-lg: 20px;
+  --radius-xl: 32px;
+  --radius-2xl: 40px;
   --radius-full: 9999px;
 
   /* ── Shadows ── */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08);
-  --shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.10);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08);
-  --shadow-glow-primary: 0 0 20px rgba(108, 99, 255, 0.15);
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06);
-  --shadow-glass-hover: 0 12px 40px rgba(0, 0, 0, 0.10);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 8px 32px rgba(31, 27, 62, 0.04);
+  --shadow-xl: 0 20px 50px rgba(31, 27, 62, 0.06);
+  --shadow-card: 0 10px 40px rgba(31, 27, 62, 0.03);
+  --shadow-card-hover: 0 15px 50px rgba(31, 27, 62, 0.05);
+  --shadow-glow-primary: 0 10px 25px rgba(31, 27, 62, 0.2);
+  --shadow-glass: 0 8px 32px rgba(31, 27, 62, 0.03);
+  --shadow-glass-hover: 0 12px 40px rgba(31, 27, 62, 0.05);
 }
 
 /* ============================================================
    DARK THEME
    ============================================================ */
 [data-theme="dark"] {
-  --color-bg: #0B1120;
-  --color-bg-alt: #0F172A;
-  --color-bg-mesh: #0D1424;
-  --color-surface: #1E293B;
-  --color-surface-hover: #263348;
-  --color-surface-active: #334155;
-  --color-primary: #818CF8;
-  --color-primary-hover: #6366F1;
-  --color-primary-light: rgba(99, 102, 241, 0.15);
-  --color-primary-glow: rgba(129, 140, 248, 0.25);
-  --color-secondary: #60A5FA;
-  --color-accent-yellow: #422006;
-  --color-accent-yellow-text: #FCD34D;
-  --color-accent-purple: #2E1065;
-  --color-accent-purple-text: #C4B5FD;
-  --color-accent-green: #052E16;
-  --color-accent-green-text: #6EE7B7;
-  --color-accent-blue: #1E3A5F;
-  --color-accent-blue-text: #93C5FD;
-  --color-text: #F1F5F9;
+  --color-bg: #13141C;
+  --color-bg-alt: #1C1D27;
+  --color-bg-mesh: #13141C;
+  --color-surface: rgba(28, 29, 39, 0.7);
+  --color-surface-hover: rgba(35, 37, 50, 0.9);
+  --color-surface-active: #2C2F40;
+  
+  --color-primary: #FFFFFF;
+  --color-primary-hover: #E2E8F0;
+  --color-primary-light: rgba(255, 255, 255, 0.1);
+  --color-primary-glow: rgba(255, 255, 255, 0.15);
+  --color-secondary: #5C67F2;
+  
+  --color-text: #F8FAFC;
   --color-text-secondary: #94A3B8;
   --color-text-muted: #64748B;
   --color-text-inverse: #0F172A;
-  --color-border: #334155;
-  --color-border-light: #1E293B;
-  --color-border-glass: rgba(255, 255, 255, 0.08);
-  --color-success: #34D399;
-  --color-warning: #FBBF24;
-  --color-danger: #F87171;
-  --color-sidebar: rgba(15, 23, 42, 0.8);
-  --color-sidebar-active: rgba(129, 140, 248, 0.12);
-  --color-sidebar-hover: rgba(255, 255, 255, 0.04);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.2);
-  --shadow-glass-hover: 0 12px 40px rgba(0, 0, 0, 0.3);
+  
+  --color-border: rgba(255, 255, 255, 0.05);
+  --color-border-light: rgba(255, 255, 255, 0.1);
+  --color-border-glass: rgba(255, 255, 255, 0.05);
+  
+  --color-sidebar: transparent;
+  --color-sidebar-active: #FFFFFF;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.05);
+  
+  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 15px 50px rgba(0, 0, 0, 0.4);
 }
 
 /* ============================================================
