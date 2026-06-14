@@ -8,12 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-white hover:bg-primary-hover shadow-sm hover:shadow-glow-primary",
-        secondary: "bg-primary-light text-primary hover:bg-primary hover:text-white",
+        primary: "bg-primary text-text-inverse hover:bg-primary-hover shadow-sm hover:shadow-glow-primary",
+        secondary: "bg-primary-light text-primary hover:bg-primary hover:text-text-inverse",
         ghost: "text-text-secondary hover:bg-surface-hover hover:text-text",
-        destructive: "bg-danger text-white hover:opacity-90",
+        destructive: "bg-danger text-text-inverse hover:opacity-90",
         gradient:
-          "bg-gradient-to-br from-[#6C63FF] via-[#8B5CF6] to-[#3B82F6] text-white hover:opacity-90 shadow-glow-primary",
+          "bg-gradient-to-br from-[#6C63FF] via-[#8B5CF6] to-[#3B82F6] text-text-inverse hover:opacity-90 shadow-glow-primary",
         outline: "border border-border bg-transparent hover:bg-surface-hover text-text",
       },
       size: {

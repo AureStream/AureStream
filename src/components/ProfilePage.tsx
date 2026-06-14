@@ -23,10 +23,10 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"account" | "subscription" | "devices">("account")
 
   return (
-    <div className="flex flex-col md:flex-row gap-8 w-full max-w-[1200px] mx-auto animate-fade-in px-4 md:px-8 pb-12 pt-4">
+    <div className="w-full max-w-[1000px] mx-auto animate-fade-in px-4 md:px-8 pb-12 pt-8 flex flex-col md:flex-row gap-8 lg:gap-12 relative z-10">
       
       {/* Left Sidebar */}
-      <div className="w-full md:w-64 shrink-0 flex flex-col gap-6">
+      <div className="w-full md:w-[260px] shrink-0 flex flex-col gap-8">
         
         {/* User Mini Profile */}
         <div className="flex items-center gap-4 px-2">
@@ -87,10 +87,10 @@ export default function ProfilePage() {
               <p className="text-sm text-text-muted mt-1">{l("Manage your email, password, and security preferences.", "管理您的邮箱、密码与安全偏好。")}</p>
             </div>
 
-            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass rounded-[32px] p-2 shadow-sm">
-              <button className="w-full flex items-center justify-between p-4 rounded-3xl hover:bg-surface-active/60 transition-colors group">
+            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm rounded-[24px] overflow-hidden flex flex-col">
+              <button className="w-full flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors group border-b border-border-glass text-left">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-surface-active text-text shadow-sm ring-1 ring-border-glass flex items-center justify-center group-hover:text-primary transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-surface-active text-text-secondary flex items-center justify-center group-hover:text-primary transition-colors">
                     <I.Mail />
                   </div>
                   <div className="text-left">
@@ -101,11 +101,9 @@ export default function ProfilePage() {
                 <div className="text-text-muted group-hover:text-primary transition-colors px-2"><I.ChevronRight /></div>
               </button>
 
-              <div className="h-px bg-border-glass mx-6"></div>
-
-              <button className="w-full flex items-center justify-between p-4 rounded-3xl hover:bg-surface-active/60 transition-colors group">
+              <button className="w-full flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors group text-left">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-surface-active text-text shadow-sm ring-1 ring-border-glass flex items-center justify-center group-hover:text-primary transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-surface-active text-text-secondary flex items-center justify-center group-hover:text-primary transition-colors">
                     <I.Key />
                   </div>
                   <div className="text-left">
@@ -127,35 +125,35 @@ export default function ProfilePage() {
               <p className="text-sm text-text-muted mt-1">{l("View your current plan limits and billing cycle.", "查看您当前套餐的额度与计费周期。")}</p>
             </div>
 
-            <div className="bg-gradient-to-br from-primary to-secondary p-8 rounded-[32px] text-white shadow-glow-primary relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-accent-yellow/20 blur-[80px] rounded-full pointer-events-none -mr-20 -mt-20"></div>
+            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm rounded-[24px] p-8 flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[80px] rounded-full pointer-events-none -mr-20 -mt-20"></div>
               
               <div className="flex justify-between items-start mb-8 relative z-10">
                 <div>
-                  <div className="text-3xl font-heading font-bold mb-1">{l("Pro Plan", "专业版")}</div>
-                  <div className="text-white/70 text-sm">{l("Billed monthly, next charge on Dec 15", "按月计费，下次扣费日期 12月15日")}</div>
+                  <div className="text-3xl font-heading font-bold mb-1 text-text">{l("Pro Plan", "专业版")}</div>
+                  <div className="text-text-muted text-sm">{l("Billed monthly, next charge on Dec 15", "按月计费，下次扣费日期 12月15日")}</div>
                 </div>
                 <button 
                   onClick={() => navigate('/dashboard/subscription')}
-                  className="text-sm font-bold text-primary bg-white hover:bg-white/90 px-5 py-2.5 rounded-xl transition-all shadow-sm"
+                  className="text-sm font-bold text-text-inverse bg-primary hover:bg-primary-hover px-5 py-2.5 rounded-xl transition-all shadow-sm"
                 >
                   {l("Upgrade Plan", "升级套餐")}
                 </button>
               </div>
 
-              <div className="bg-black/20 rounded-2xl p-6 backdrop-blur-md border border-white/10 relative z-10">
+              <div className="bg-white/50 dark:bg-surface-active rounded-2xl p-6 border border-border-glass relative z-10">
                 <div className="flex justify-between items-end mb-3">
                   <div>
-                    <div className="text-sm text-white/70 mb-1 font-medium">{l("Data Usage", "已用流量")}</div>
-                    <div className="text-3xl font-bold font-mono tracking-tight">12.5 <span className="text-lg text-white/70">GB</span></div>
+                    <div className="text-sm text-text-muted mb-1 font-medium">{l("Data Usage", "已用流量")}</div>
+                    <div className="text-3xl font-bold font-mono tracking-tight text-text">12.5 <span className="text-lg text-text-muted">GB</span></div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-white/70 mb-1 font-medium">{l("Total Allowance", "总额度")}</div>
-                    <div className="text-xl font-bold font-mono tracking-tight">20 <span className="text-sm text-white/70">GB</span></div>
+                    <div className="text-sm text-text-muted mb-1 font-medium">{l("Total Allowance", "总额度")}</div>
+                    <div className="text-xl font-bold font-mono tracking-tight text-text">20 <span className="text-sm text-text-muted">GB</span></div>
                   </div>
                 </div>
-                <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden mt-4 shadow-inner">
-                  <div className="h-full rounded-full bg-white shadow-sm" style={{ width: "62%" }}></div>
+                <div className="w-full h-2.5 rounded-full bg-border-glass overflow-hidden mt-4 shadow-inner">
+                  <div className="h-full rounded-full bg-primary shadow-sm" style={{ width: "62%" }}></div>
                 </div>
               </div>
             </div>
@@ -170,10 +168,10 @@ export default function ProfilePage() {
               <p className="text-sm text-text-muted mt-1">{l("Manage devices currently connected to your proxy.", "管理当前已连接到代理网络的设备。")}</p>
             </div>
 
-            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass rounded-[32px] p-2 shadow-sm flex flex-col gap-2">
-              <div className="flex items-center justify-between p-4 rounded-[24px] bg-white dark:bg-surface-active border border-border-glass shadow-sm">
+            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm rounded-[24px] overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors border-b border-border-glass">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-success/10 text-success flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-success/10 text-success flex items-center justify-center">
                     <I.Monitor />
                   </div>
                   <div>
@@ -186,9 +184,9 @@ export default function ProfilePage() {
                 <button className="px-4 py-2 text-sm font-semibold text-danger hover:bg-danger/10 rounded-xl transition-colors">{l("Revoke", "下线")}</button>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-[24px] bg-transparent hover:bg-surface-active/40 border border-transparent transition-colors">
+              <div className="flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-bg text-text-muted flex items-center justify-center border border-border-glass">
+                  <div className="w-10 h-10 rounded-xl bg-surface-active text-text-muted flex items-center justify-center border border-border-glass">
                     <I.Smartphone />
                   </div>
                   <div>

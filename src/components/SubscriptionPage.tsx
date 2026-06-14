@@ -109,32 +109,19 @@ export default function SubscriptionPage() {
       {/* Pricing Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-6">
         {plans.map(plan => (
-          <div 
-            key={plan.id}
-            className={`relative flex flex-col rounded-[32px] p-8 transition-all duration-300 overflow-hidden ${plan.isPro ? 'bg-primary text-white shadow-glow-primary scale-105 z-10' : 'bg-surface/80 backdrop-blur-xl border border-border-glass text-text hover:shadow-glass hover:-translate-y-1'}`}
-          >
-            {/* Pro ambient background */}
-            {plan.isPro && (
-              <>
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-secondary/30 blur-[80px] rounded-full pointer-events-none"></div>
-                <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-accent-purple/20 blur-[60px] rounded-full pointer-events-none"></div>
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-secondary to-accent-purple"></div>
-              </>
-            )}
-
-            {plan.isPro && (
-              <div className="absolute top-6 right-6 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white border border-white/20">
-                {l("Most Popular", "最受欢迎")}
-              </div>
-            )}
+            <div 
+              key={plan.id}
+              className={`relative flex flex-col rounded-[32px] p-8 transition-all duration-300 overflow-hidden bg-surface/80 backdrop-blur-xl border-2 border-transparent text-text hover:bg-white dark:hover:bg-white/5 hover:-translate-y-1 hover:border-border-light hover:shadow-glass-hover`}
+            >
+            {/* Optional badge placeholder, currently removed for consistency */}
 
             <div className="flex items-center gap-3 mb-4 relative z-10">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${plan.isPro ? 'bg-white/20 text-white backdrop-blur-md border border-white/20' : 'bg-surface-active/80 text-primary border border-border-glass'}`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-colors bg-surface-active/80 text-text-secondary border border-border-glass`}>
                 {plan.icon}
               </div>
               <div>
-                <h3 className={`text-xl font-heading font-bold ${plan.isPro ? 'text-white' : 'text-text'}`}>{plan.name}</h3>
-                <p className={`text-xs mt-0.5 ${plan.isPro ? 'text-white/80' : 'text-text-muted'}`}>{plan.desc}</p>
+                <h3 className={`text-xl font-heading font-bold text-text`}>{plan.name}</h3>
+                <p className="text-xs mt-0.5 text-text-muted">{plan.desc}</p>
               </div>
             </div>
 
@@ -142,25 +129,27 @@ export default function SubscriptionPage() {
               <span className="text-4xl font-heading font-bold tracking-tight">
                 ¥{billing === "monthly" ? plan.priceMonthly : plan.priceYearly}
               </span>
-              <span className={`text-sm font-medium ml-1 ${plan.isPro ? 'text-white/70' : 'text-text-muted'}`}>
+              <span className={`text-sm font-medium ml-1 text-text-muted`}>
                 / {billing === "monthly" ? l("month", "月") : l("year", "年")}
               </span>
             </div>
 
             <button 
-              onClick={() => navigate("/dashboard/checkout")}
-              className={`w-full py-3.5 rounded-2xl font-bold text-sm transition-all shadow-sm mb-8 relative z-10 ${plan.isPro ? 'bg-white text-primary hover:bg-white/90 shadow-lg shadow-black/10' : 'bg-surface-active/50 border border-border-glass text-text hover:bg-surface-active hover:text-primary'}`}
+              onClick={() => navigate('/dashboard/checkout')}
+              className={`w-full py-3.5 rounded-xl font-bold transition-all mb-8 relative z-10 shadow-sm bg-text dark:bg-white text-white dark:text-bg hover:scale-[1.02] active:scale-[0.98]`}
             >
-              {plan.isPro ? l("Upgrade to Pro", "升级至专业版") : l("Get Started", "立即订阅")}
+              {l("Subscribe Now", "立即订阅")}
             </button>
 
             <div className="flex flex-col gap-4 relative z-10 mt-auto">
               {plan.features.map((feature, i) => (
                 <div key={i} className={`flex items-start gap-3 text-sm ${!feature.included && 'opacity-40'}`}>
-                  <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${feature.included ? (plan.isPro ? 'bg-white/20 text-white' : 'bg-success/20 text-success') : (plan.isPro ? 'bg-white/10 text-white/50' : 'bg-bg text-text-muted')}`}>
+                  <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${feature.included ? 'bg-success/20 text-success' : 'bg-surface-active text-text-muted'}`}>
                     {feature.included ? <I.Check /> : <I.Cross />}
                   </div>
-                  <span className={`${plan.isPro ? 'text-white/90' : 'text-text-secondary'} ${!feature.included && 'line-through'}`}>{feature.name}</span>
+                  <span className={`${feature.included ? 'font-medium text-text' : 'text-text-muted'}`}>
+                    {feature.name}
+                  </span>
                 </div>
               ))}
             </div>

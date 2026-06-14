@@ -22,7 +22,7 @@ export default function AuthLayout() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-accent-purple rounded-full blur-[140px] opacity-50 pointer-events-none"></div>
         
         <div className="relative z-10 flex flex-col items-center text-center animate-fade-in max-w-md">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-glow-primary mb-8 border border-white/20">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-text-inverse shadow-glow-primary mb-8 border border-text-inverse/20">
             <I.Rocket />
           </div>
           <h1 className="text-5xl font-heading font-bold text-text mb-4 tracking-tight">AureStream</h1>

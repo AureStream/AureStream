@@ -40,8 +40,8 @@ export default function ModeSelector({ mode, onChange }: ModeSelectorProps) {
           className={cn(
             "flex-1 flex flex-col items-center gap-0.5 py-2.5 px-3 rounded-lg cursor-pointer border-none font-[inherit] transition-all duration-200",
             mode === m.id
-              ? "bg-white text-text shadow-sm [&_svg]:text-primary"
-              : "text-text-muted hover:text-text-secondary hover:bg-white/50",
+              ? "bg-white dark:bg-white/10 text-text dark:text-white shadow-sm scale-[1.02]"
+              : "text-text-muted hover:text-text-secondary hover:bg-surface-active",
           )}
         >
           <span className="leading-none"><m.Icon /></span>

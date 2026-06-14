@@ -54,7 +54,7 @@ function TopNav() {
         {/* Brand & Logo */}
         <div className="flex items-center gap-2 mb-2 lg:mb-0 w-full lg:w-auto px-4 lg:px-0 justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white shadow-sm ring-1 ring-border-glass">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-text-inverse shadow-sm ring-1 ring-border-glass">
               <I.Rocket />
             </div>
             <span className="font-heading font-bold text-lg text-text">AureStream</span>
@@ -165,14 +165,11 @@ function HomePage() {
   const greetingZh = hour < 12 ? '早上好，' : hour < 18 ? '下午好，' : '晚上好，'
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto animate-fade-in px-4 md:px-8 pb-12">
+    <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto animate-fade-in px-4 md:px-8 pb-4">
       
       {/* Hero Welcome Banner */}
       <div className="relative overflow-hidden rounded-[32px] bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm p-8 mt-2 flex flex-col md:flex-row items-center justify-between">
-        {/* Ambient Glows */}
-        <div className="absolute -left-24 -top-24 w-72 h-72 bg-primary/20 blur-[100px] rounded-full pointer-events-none"></div>
-        <div className="absolute -right-10 -bottom-10 w-80 h-80 bg-accent-blue/15 blur-[100px] rounded-full pointer-events-none"></div>
-        
+
         <div className="relative z-10 flex flex-col items-start">
           {/* Status Badge */}
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-active/60 border border-border-glass mb-4 shadow-sm backdrop-blur-md">
@@ -203,8 +200,8 @@ function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* 1. Core Control Card (Refined without circular button) */}
-        <div className="lg:col-span-5 rounded-[32px] p-6 shadow-glass relative flex flex-col justify-between bg-surface backdrop-blur-xl border border-border min-h-[460px]">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-accent-blue rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none opacity-50 dark:opacity-20"></div>
+        <div className="lg:col-span-5 rounded-[32px] p-6 shadow-glass relative flex flex-col justify-between bg-surface backdrop-blur-xl border border-border">
+
           
           {/* Status Header */}
           <div className="flex justify-between items-center z-10 w-full mb-6">
@@ -269,27 +266,27 @@ function HomePage() {
           <div className="z-10 w-full mt-4 grid grid-cols-2 gap-3">
             <button
               onClick={() => setProxyMode('rule')}
-              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'rule' ? 'glass-active-pill' : 'bg-surface-active/30 text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
+              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'rule' ? 'bg-white dark:bg-white/10 border-2 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'bg-surface-active/30 border-2 border-transparent text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'rule' ? 'bg-primary text-white shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'rule' ? 'bg-text dark:bg-white text-white dark:text-bg shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
                 <I.Activity />
               </div>
               <div>
                 <div className="text-sm font-bold font-heading">{l("Smart Routing", "智能分流模式")}</div>
-                <div className={`text-[11px] mt-0.5 ${proxyMode === 'rule' ? 'text-primary/70' : 'text-text-muted'}`}>{l("Rule-based proxy", "按规则自动代理流量")}</div>
+                <div className={`text-[11px] mt-0.5 ${proxyMode === 'rule' ? 'text-text-muted dark:text-white/70' : 'text-text-muted'}`}>{l("Rule-based proxy", "按规则自动代理流量")}</div>
               </div>
             </button>
 
             <button
               onClick={() => setProxyMode('tun' as ProxyMode)}
-              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'tun' ? 'glass-active-pill' : 'bg-surface-active/30 text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
+              className={`flex flex-col gap-2 p-4 rounded-3xl transition-all text-left ${proxyMode === 'tun' ? 'bg-white dark:bg-white/10 border-2 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'bg-surface-active/30 border-2 border-transparent text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'tun' ? 'bg-primary text-white shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'tun' ? 'bg-text dark:bg-white text-white dark:text-bg shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
                 <I.Globe />
               </div>
               <div>
                 <div className="text-sm font-bold font-heading">{l("TUN Mode", "虚拟网卡模式")}</div>
-                <div className={`text-[11px] mt-0.5 ${proxyMode === 'tun' ? 'text-primary/70' : 'text-text-muted'}`}>{l("Route all system traffic", "全局接管所有应用流量")}</div>
+                <div className={`text-[11px] mt-0.5 ${proxyMode === 'tun' ? 'text-text-muted dark:text-white/70' : 'text-text-muted'}`}>{l("Route all system traffic", "全局接管所有应用流量")}</div>
               </div>
             </button>
           </div>
@@ -411,14 +408,14 @@ export default function Dashboard() {
   return (
     <div className="h-screen w-full flex flex-col relative bg-bg overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-accent-blue rounded-full blur-[100px] opacity-80"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent-purple rounded-full blur-[120px] opacity-60"></div>
+        <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-accent-blue rounded-full blur-[100px] opacity-80 dark:opacity-5 transition-opacity duration-500"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent-purple rounded-full blur-[120px] opacity-60 dark:opacity-[0.03] transition-opacity duration-500"></div>
       </div>
       
       <div className="relative z-10 flex flex-col h-full">
         <TopNav />
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto no-scrollbar">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
           <Routes>
             <Route index element={<HomePage />} />
             <Route path="nodes" element={<NodesPage />} />

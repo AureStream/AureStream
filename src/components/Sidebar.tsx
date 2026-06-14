@@ -31,7 +31,7 @@ export default function Sidebar() {
       {/* Brand */}
       <div className="flex items-center gap-3 px-6 py-8">
         <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center shadow-sm">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>
           </svg>
         </div>
@@ -46,7 +46,7 @@ export default function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${isActive ? "bg-primary text-white shadow-md" : "text-text-secondary hover:bg-surface-active hover:text-text"}`}
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${isActive ? "bg-white dark:bg-white/10 text-text dark:text-white shadow-sm ring-1 ring-border-glass dark:ring-white/20 scale-[1.02]" : "text-text-secondary hover:bg-surface-active hover:text-text"}`}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -70,7 +70,7 @@ export default function Sidebar() {
         {/* Upgrade banner */}
         <div
           onClick={() => navigate("/dashboard/subscription")}
-          className="cursor-pointer rounded-2xl p-5 bg-gradient-to-br from-primary to-primary-hover text-white transition-transform hover:scale-105 shadow-md relative overflow-hidden"
+          className="cursor-pointer rounded-2xl p-5 bg-gradient-to-br from-primary to-primary-hover text-text-inverse transition-transform hover:scale-105 shadow-md relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full blur-xl -mr-10 -mt-10"></div>
           <div className="flex items-center gap-2 mb-2 relative z-10">

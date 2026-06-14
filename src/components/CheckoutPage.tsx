@@ -38,7 +38,7 @@ export default function CheckoutPage() {
         
         {/* Left Col: Order Summary */}
         <div className="w-full md:w-[360px] shrink-0">
-          <div className="bg-gradient-to-br from-primary to-secondary p-6 rounded-[32px] text-white shadow-glow-primary relative overflow-hidden">
+          <div className="bg-gradient-to-br from-primary to-secondary p-6 rounded-[32px] text-text-inverse shadow-glow-primary relative overflow-hidden">
             <div className="absolute top-0 right-0 w-48 h-48 bg-accent-blue/20 blur-[60px] rounded-full pointer-events-none -mr-10 -mt-10"></div>
             
             <div className="flex items-center gap-3 mb-6 relative z-10">
@@ -47,27 +47,27 @@ export default function CheckoutPage() {
               </div>
               <div>
                 <div className="text-xl font-heading font-bold leading-none">{l("Pro Plan", "专业版套餐")}</div>
-                <div className="text-white/80 text-sm mt-1">{l("Billed Yearly", "按年计费")}</div>
+                <div className="text-text-inverse/80 text-sm mt-1">{l("Billed Yearly", "按年计费")}</div>
               </div>
             </div>
 
             <div className="space-y-3 mb-6 relative z-10 text-sm">
-              <div className="flex justify-between text-white/90">
+              <div className="flex justify-between text-text-inverse/90">
                 <span>{l("Plan Base Price", "套餐基础价格")}</span>
                 <span>$49.00</span>
               </div>
-              <div className="flex justify-between text-white/90">
+              <div className="flex justify-between text-text-inverse/90">
                 <span>{l("Yearly Discount", "年度优惠")}</span>
                 <span className="text-accent-yellow">-$9.80</span>
               </div>
               <div className="h-px bg-white/20 my-2"></div>
               <div className="flex justify-between items-end">
-                <span className="text-white/80">{l("Total Amount", "订单总额")}</span>
+                <span className="text-text-inverse/80">{l("Total Amount", "订单总额")}</span>
                 <span className="text-3xl font-bold font-mono">$39.20</span>
               </div>
             </div>
             
-            <div className="bg-black/20 rounded-2xl p-4 backdrop-blur-md border border-white/10 relative z-10 text-xs text-white/80">
+            <div className="bg-black/20 rounded-2xl p-4 backdrop-blur-md border border-white/10 relative z-10 text-xs text-text-inverse/80">
               {l("By completing this purchase, your account will be immediately upgraded to Pro.", "完成支付后，您的账户将立即升级为专业版。")}
             </div>
           </div>
@@ -81,7 +81,7 @@ export default function CheckoutPage() {
             
             <button 
               onClick={() => setPaymentMethod("alipay")}
-              className={`flex items-center p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'alipay' ? 'glass-active-pill border-transparent' : 'border-border-glass bg-white dark:bg-surface-active hover:border-primary/50'}`}
+              className={`flex items-center p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'alipay' ? 'bg-white dark:bg-white/10 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'border-transparent bg-surface/80 hover:bg-white dark:hover:bg-white/5 hover:border-border-light'}`}
             >
               <div className="w-12 h-12 rounded-xl bg-[#1677FF]/10 text-[#1677FF] flex items-center justify-center shrink-0">
                 <I.CreditCard />
@@ -90,14 +90,14 @@ export default function CheckoutPage() {
                 <div className="font-bold text-text">{l("Alipay", "支付宝")}</div>
                 <div className="text-xs text-text-muted mt-0.5">{l("Fast and secure payment", "快捷安全的支付方式")}</div>
               </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'alipay' ? 'border-primary bg-primary text-white' : 'border-border-glass text-transparent'}`}>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'alipay' ? 'border-text dark:border-white bg-text dark:bg-white text-white dark:text-bg' : 'border-border-glass text-transparent'}`}>
                 <I.Check />
               </div>
             </button>
 
             <button 
               onClick={() => setPaymentMethod("wechat")}
-              className={`flex items-center p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'wechat' ? 'glass-active-pill border-transparent' : 'border-border-glass bg-white dark:bg-surface-active hover:border-primary/50'}`}
+              className={`flex items-center p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'wechat' ? 'bg-white dark:bg-white/10 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'border-transparent bg-surface/80 hover:bg-white dark:hover:bg-white/5 hover:border-border-light'}`}
             >
               <div className="w-12 h-12 rounded-xl bg-[#09B83E]/10 text-[#09B83E] flex items-center justify-center shrink-0">
                 <I.CreditCard />
@@ -106,14 +106,14 @@ export default function CheckoutPage() {
                 <div className="font-bold text-text">{l("WeChat Pay", "微信支付")}</div>
                 <div className="text-xs text-text-muted mt-0.5">{l("Pay with WeChat app", "使用微信扫码支付")}</div>
               </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'wechat' ? 'border-primary bg-primary text-white' : 'border-border-glass text-transparent'}`}>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'wechat' ? 'border-text dark:border-white bg-text dark:bg-white text-white dark:text-bg' : 'border-border-glass text-transparent'}`}>
                 <I.Check />
               </div>
             </button>
 
             <button 
               onClick={() => setPaymentMethod("crypto")}
-              className={`flex items-center p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'crypto' ? 'glass-active-pill border-transparent' : 'border-border-glass bg-white dark:bg-surface-active hover:border-primary/50'}`}
+              className={`flex items-center p-4 rounded-2xl border-2 transition-all text-left ${paymentMethod === 'crypto' ? 'bg-white dark:bg-white/10 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'border-transparent bg-surface/80 hover:bg-white dark:hover:bg-white/5 hover:border-border-light'}`}
             >
               <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
                 <I.Crypto />
@@ -122,7 +122,7 @@ export default function CheckoutPage() {
                 <div className="font-bold text-text">{l("Cryptocurrency", "加密货币")}</div>
                 <div className="text-xs text-text-muted mt-0.5">USDT, BTC, ETH</div>
               </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'crypto' ? 'border-primary bg-primary text-white' : 'border-border-glass text-transparent'}`}>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'crypto' ? 'border-text dark:border-white bg-text dark:bg-white text-white dark:text-bg' : 'border-border-glass text-transparent'}`}>
                 <I.Check />
               </div>
             </button>
@@ -130,7 +130,7 @@ export default function CheckoutPage() {
           </div>
 
           <div className="mt-8 pt-6 border-t border-border-glass">
-            <button className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-lg shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all">
+            <button className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-secondary text-text-inverse font-bold text-lg shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all">
               {l(`Pay $39.20 Now`, `确认支付 $39.20`)}
             </button>
             <div className="text-center text-xs text-text-muted mt-4 flex items-center justify-center gap-1">
