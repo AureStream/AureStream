@@ -112,7 +112,7 @@ export default function RegisterPage() {
       </form>
 
       <div className="mt-8 text-center text-[13px] text-text-secondary">
-        {t("already_have_account")}{" "}
+        {t("has_account")}{" "}
         <Link to="/login" className="font-bold text-primary hover:text-primary-hover transition-colors ml-1">
           {t("sign_in")}
         </Link>
