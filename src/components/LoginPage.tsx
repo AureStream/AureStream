@@ -23,13 +23,7 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-[380px] animate-fade-in-up">
-      {/* Mobile Logo (Visible only on small screens) */}
-      <div className="md:hidden flex items-center gap-3 mb-10">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-text-inverse shadow-sm border border-text-inverse/20">
-          <I.Rocket />
-        </div>
-        <span className="text-2xl font-heading font-bold text-text tracking-tight">AureStream</span>
-      </div>
+      {/* Welcome Header */}
 
       <div className="mb-10">
         <h2 className="text-3xl font-heading font-bold text-text mb-2">{t("welcome_back")}</h2>
