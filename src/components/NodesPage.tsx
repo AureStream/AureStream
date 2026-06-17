@@ -1,5 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
+import { getSubscriptionConfig } from "../action/db"
+import { getStoreValue } from "../single/store"
+import { SSI_STORE_KEY } from "../types/definition"
 
 /* ── Icons ── */
 const I = {
@@ -40,6 +43,61 @@ export default function NodesPage() {
 
   const [nodes, setNodes] = useState<NodeData[]>(initialNodes)
   const [isTestingSpeed, setIsTestingSpeed] = useState(false)
+
+  useEffect(() => {
+    const loadNodes = async () => {
+      const activeSubId = await getStoreValue(SSI_STORE_KEY)
+      if (!activeSubId) return
+      try {
+        const config = await getSubscriptionConfig(activeSubId)
+        if (config && Array.isArray(config.outbounds)) {
+          const filtered = config.outbounds.filter((item: any) => {
+            return item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block" && item.type !== "dns";
+          });
+          const mapped = filtered.map((n: any) => {
+            const tag = n.tag || "";
+            let flag = "🌐";
+            let region: "asia" | "america" | "europe" = "asia";
+            
+            if (tag.includes("日本") || tag.toLowerCase().includes("jp") || tag.toLowerCase().includes("tokyo")) {
+              flag = "🇯🇵";
+              region = "asia";
+            } else if (tag.includes("新加坡") || tag.toLowerCase().includes("sg") || tag.toLowerCase().includes("singapore")) {
+              flag = "🇸🇬";
+              region = "asia";
+            } else if (tag.includes("香港") || tag.toLowerCase().includes("hk") || tag.toLowerCase().includes("hong kong")) {
+              flag = "🇭🇰";
+              region = "asia";
+            } else if (tag.includes("美国") || tag.toLowerCase().includes("us") || tag.toLowerCase().includes("america") || tag.toLowerCase().includes("los angeles") || tag.toLowerCase().includes("new york")) {
+              flag = "🇺🇸";
+              region = "america";
+            } else if (tag.includes("英国") || tag.toLowerCase().includes("uk") || tag.toLowerCase().includes("london") || tag.toLowerCase().includes("gb")) {
+              flag = "🇬🇧";
+              region = "europe";
+            } else if (tag.toLowerCase().includes("de") || tag.includes("德国") || tag.toLowerCase().includes("frankfurt")) {
+              flag = "🇩🇪";
+              region = "europe";
+            }
+            
+            return {
+              id: tag,
+              name: tag,
+              ping: 30 + Math.floor(Math.random() * 80),
+              flag,
+              protocol: n.type ? n.type.toUpperCase() : "SHADOWSOCKS",
+              region
+            };
+          });
+          if (mapped.length > 0) {
+            setNodes(mapped);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load nodes in NodesPage:", err);
+      }
+    };
+    loadNodes();
+  }, []);
 
   const handleSpeedTest = () => {
     if (isTestingSpeed) return;
@@ -118,7 +176,7 @@ export default function NodesPage() {
       </div>
 
       {/* Nodes Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {filteredNodes.map(node => {
           const isConnected = connectedNodeId === node.id
           
@@ -126,47 +184,64 @@ export default function NodesPage() {
             <div 
               key={node.id}
               onClick={() => setConnectedNodeId(node.id)}
-              className={`group relative rounded-[24px] p-5 cursor-pointer transition-all duration-300 ${isConnected ? 'bg-white dark:bg-white/10 border-2 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'bg-surface/80 backdrop-blur-xl border-2 border-transparent text-text hover:bg-white dark:hover:bg-white/5 hover:-translate-y-1 hover:shadow-glass-hover scale-100'}`}
+              className={`group relative rounded-[20px] p-3.5 cursor-pointer transition-all duration-300 ${isConnected ? 'bg-white dark:bg-white/10 border-2 border-primary/20 dark:border-white/20 shadow-md scale-[1.01] z-10' : 'bg-surface/80 backdrop-blur-xl border-2 border-transparent text-text hover:bg-white dark:hover:bg-white/5 hover:-translate-y-0.5 hover:shadow-glass-hover scale-100'}`}
             >
 
               
-              <div className="flex justify-between items-start mb-4 relative z-10">
-                <div className="flex items-center gap-3">
-                  <div className={`text-3xl ${isConnected ? 'drop-shadow-md' : ''}`}>{node.flag}</div>
-                  <div>
-                    <div className={`font-semibold text-[17px] mb-0.5 ${isConnected ? 'text-text dark:text-white' : 'text-text'}`}>{node.name}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className={`text-xs font-mono flex items-center ${isConnected ? 'text-text' : 'text-text-muted'}`}>
+              {/* Header Info: Flag, Name, and Ping */}
+              <div className="flex items-center justify-between gap-3 relative z-10 w-full mb-3">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  {/* Flag Container */}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 border transition-all ${
+                    isConnected ? 'bg-primary/10 border-primary/20 shadow-sm' : 'bg-surface-active/40 border-border-glass'
+                  }`}>
+                    {node.flag}
+                  </div>
+                  {/* Name, ID & Protocol */}
+                  <div className="min-w-0 flex-1">
+                    <h4 className={`font-bold text-[14px] leading-tight truncate ${isConnected ? 'text-primary dark:text-white font-extrabold' : 'text-text'}`} title={node.name}>
+                      {node.name}
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[9px] font-mono text-text-muted tracking-wider truncate max-w-[80px]" title={node.id}>
                         {node.id.toUpperCase()}
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase border ${isConnected ? 'bg-text dark:bg-white text-white dark:text-bg border-transparent' : 'bg-surface-active text-text-secondary border-border-glass'}`}>
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase ${isConnected ? 'bg-primary/15 text-primary' : 'bg-surface-active text-text-secondary border border-border-glass'}`}>
                         {node.protocol}
                       </span>
                     </div>
                   </div>
                 </div>
-                
-                <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 ${isConnected ? 'bg-primary/10 text-primary' : 'bg-surface-active text-text-secondary border border-border-glass'}`}>
+
+                {/* Ping latency indicator */}
+                <div className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 shrink-0 ${isConnected ? 'bg-primary/15 text-primary border border-primary/20' : 'bg-surface-active/60 text-text-secondary border border-border-glass'}`}>
                   {isTestingSpeed ? (
                     <span className="animate-pulse">-- ms</span>
                   ) : (
                     <>
-                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-text dark:bg-white' : 'bg-success'}`}></span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-primary animate-pulse' : 'bg-success'}`}></span>
                       {node.ping}ms
                     </>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mt-6 relative z-10">
+              {/* Divider */}
+              <div className="border-t border-border-glass/40 my-2.5"></div>
+
+              {/* Footer Info: Status & Quick Connect Icon */}
+              <div className="flex items-center justify-between mt-2 relative z-10">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-text dark:bg-white' : 'bg-success'}`}></div>
-                  <div className={`text-sm font-semibold ${isConnected ? 'text-text dark:text-white' : 'text-text-secondary'}`}>
+                  <span className="relative flex h-2 w-2">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-primary' : 'bg-success'}`}></span>
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${isConnected ? 'bg-primary' : 'bg-success'}`}></span>
+                  </span>
+                  <div className={`text-xs font-semibold ${isConnected ? 'text-primary dark:text-white font-bold' : 'text-text-secondary'}`}>
                     {isTestingSpeed ? l("Testing...", "探测中...") : l("Available", "节点可用")}
                   </div>
                 </div>
                 
-                <button className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm ${isConnected ? 'bg-text dark:bg-white text-white dark:text-bg hover:scale-105' : 'bg-white dark:bg-surface-active border border-border-glass text-text-secondary hover:text-text hover:border-border-light'}`}>
+                <button className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all shadow-sm ${isConnected ? 'bg-primary text-text-inverse hover:scale-105' : 'bg-white dark:bg-surface-active border border-border-glass text-text-secondary hover:text-text hover:border-border-light'}`}>
                   {isConnected ? <I.Zap /> : <I.Wifi />}
                 </button>
               </div>

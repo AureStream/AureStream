@@ -14,13 +14,16 @@ interface TrafficGraphProps {
   height?: number
   /** Mini mode (no labels) */
   mini?: boolean
+  /** Whether the engine is currently connected */
+  isConnected?: boolean
+  /** Callback for current speed (in MB/s) */
+  onTick?: (tick: DataPoint) => void
 }
 
-function generateMockData(): DataPoint {
-  return {
-    up: Math.max(0.1, 0.5 + Math.random() * 3.5),
-    down: Math.max(0.2, 1 + Math.random() * 8),
-  }
+import { subscribeTraffic } from "@/utils/singbox-api/traffic"
+
+function generateZeroData(): DataPoint {
+  return { up: 0, down: 0 }
 }
 
 function formatSpeed(mbps: number): string {
@@ -33,23 +36,61 @@ export default function TrafficGraph({
   timeRange: _timeRange = 60,
   height = 120,
   mini = false,
+  isConnected = false,
+  onTick,
 }: TrafficGraphProps) {
   const [points, setPoints] = useState<DataPoint[]>(() =>
-    Array.from({ length: mini ? 30 : 60 }, generateMockData)
+    Array.from({ length: mini ? 30 : 60 }, generateZeroData)
   )
   const maxRef = useRef(10)
 
   useEffect(() => {
+    if (!isConnected) {
+      const timer = setInterval(() => {
+        setPoints((prev) => {
+          const next = [...prev.slice(1), generateZeroData()]
+          const maxVal = Math.max(...next.flatMap((p) => [p.up, p.down]))
+          maxRef.current = Math.max(maxRef.current * 0.95, maxVal * 1.15, 1)
+          return next
+        })
+      }, interval)
+      return () => clearInterval(timer)
+    }
+
+    const abort = new AbortController()
+    let lastTick: DataPoint = { up: 0, down: 0 }
+
+    subscribeTraffic((tick) => {
+      // API returns bytes, we want MB/s or KB/s depending on formatSpeed.
+      // Actually formatSpeed takes mbps if we interpret it as such, but let's convert to bytes/second.
+      // Wait, formatSpeed says if mbps >= 1 return MB/s, meaning the input is in MB/s.
+      // The API returns bytes.
+      lastTick = {
+        up: tick.up / (1024 * 1024),
+        down: tick.down / (1024 * 1024)
+      }
+      onTick?.(lastTick)
+    }, abort.signal).catch(err => {
+      if (err.name !== "AbortError") {
+        console.error("Traffic subscription failed:", err)
+      }
+    })
+
     const timer = setInterval(() => {
       setPoints((prev) => {
-        const next = [...prev.slice(1), generateMockData()]
+        const next = [...prev.slice(1), { ...lastTick }]
         const maxVal = Math.max(...next.flatMap((p) => [p.up, p.down]))
-        maxRef.current = Math.max(maxRef.current * 0.95, maxVal * 1.15, 1)
+        maxRef.current = Math.max(maxRef.current * 0.95, maxVal * 1.15, 0.01)
         return next
       })
+      lastTick = { up: 0, down: 0 } // Reset if no new tick
     }, interval)
-    return () => clearInterval(timer)
-  }, [interval])
+
+    return () => {
+      abort.abort()
+      clearInterval(timer)
+    }
+  }, [interval, isConnected])
 
   if (points.length === 0) return null
 
@@ -79,8 +120,6 @@ export default function TrafficGraph({
     const bottom = pad.top + plotH
     return `${line} L ${lastX} ${bottom} L ${xScale(0)} ${bottom} Z`
   }
-
-  const last = points[points.length - 1]
 
   return (
     <div className="relative" style={{ width: "100%", height }}>
@@ -158,13 +197,13 @@ export default function TrafficGraph({
       </svg>
 
       {/* Current speed overlay */}
-      {!mini && (
+      {!mini && !onTick && (
         <div className="absolute top-2 right-3 flex gap-4 text-[11px] font-mono">
           <span style={{ color: "#0ea5e9" }}>
-            ↓ {formatSpeed(last.down)}
+            ↓ {formatSpeed(points[points.length - 1]?.down ?? 0)}
           </span>
           <span style={{ color: "#10b981" }}>
-            ↑ {formatSpeed(last.up)}
+            ↑ {formatSpeed(points[points.length - 1]?.up ?? 0)}
           </span>
         </div>
       )}

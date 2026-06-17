@@ -12,7 +12,7 @@ const I = {
 }
 
 export default function AuthLayout() {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const { theme, toggleTheme } = useTheme()
 
   return (
