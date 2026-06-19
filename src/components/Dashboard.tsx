@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { Routes, Route } from "react-router-dom"
 import Sidebar from "./Sidebar"
@@ -9,7 +9,8 @@ import { type ProxyMode } from "./ModeSelector"
 import { useAuth } from "../contexts/AuthContext"
 import { fetchSubscriptions, type Subscription } from "../api/subscriptions"
 import TrafficGraph from "./TrafficGraph"
-import { getEngineState, startEngine, stopEngine } from "../utils/vpn-service"
+import { startEngine, stopEngine } from "../utils/vpn-service"
+import { useEngineState } from "../hooks/useEngineState"
 import { mergeConnectionConfig } from "../lib/connection-config"
 import { getConfigJsonPath } from "../lib/app-paths"
 import { getEnableTun, setEnableTun, getStoreValue, getProxyDnsServer } from "../single/store"
@@ -47,8 +48,17 @@ const I = {
 function HomePage() {
   const { i18n } = useTranslation()
   const { user } = useAuth()
+  const {
+    isConnected: engineConnected,
+    isStarting,
+    isStopping,
+    engineState
+  } = useEngineState()
+
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
-  const [isConnected, setIsConnected] = useState(false)
+  const [localConnecting, setLocalConnecting] = useState(false)
+  const isConnected = engineConnected
+  const isConnecting = isStarting || isStopping || localConnecting
 
   useEffect(() => {
     const initMode = async () => {
@@ -57,14 +67,26 @@ function HomePage() {
     }
     initMode()
   }, [])
-  const [isConnecting, setIsConnecting] = useState(false)
+
+  useEffect(() => {
+    setLocalConnecting(false)
+  }, [engineState.kind])
+
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
 
   const [startTime, setStartTime] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const [currentSpeed, setCurrentSpeed] = useState({ up: 0, down: 0 })
-  const isFirstPollRef = useRef(true)
+
+  // Set start time reactively based on engineState
+  useEffect(() => {
+    if (engineState.kind === "running" && engineState.since) {
+      setStartTime(engineState.since * 1000)
+    } else {
+      setStartTime(null)
+    }
+  }, [engineState])
 
   const [subs, setSubs] = useState<Subscription[]>([])
   const [subsLoading, setSubsLoading] = useState(true)
@@ -157,57 +179,14 @@ function HomePage() {
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
-  // Poll engine state
-  useEffect(() => {
-    let active = true
-    const checkState = async () => {
-      try {
-        const state = await getEngineState()
-        if (!active) return
-        if (state.kind === "running") {
-          setIsConnected(true)
-          setIsConnecting(false)
-          if (state.since) {
-            if (isFirstPollRef.current) {
-              setStartTime(state.since * 1000)
-            } else {
-              setStartTime(prev => prev || Date.now())
-            }
-          }
-        } else if (state.kind === "starting") {
-          setIsConnected(false)
-          setIsConnecting(true)
-          setStartTime(null)
-        } else if (state.kind === "stopping") {
-          setIsConnected(false)
-          setIsConnecting(true)
-          setStartTime(null)
-        } else {
-          setIsConnected(false)
-          setIsConnecting(false)
-          setStartTime(null)
-        }
-        isFirstPollRef.current = false
-      } catch {
-        // ignore
-      }
-    }
-    checkState()
-    const timer = setInterval(checkState, 1000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [])
-
   const handleToggleConnection = async () => {
     if (isConnecting) return
     try {
       if (isConnected) {
-        setIsConnecting(true)
+        setLocalConnecting(true)
         await stopEngine()
       } else {
-        setIsConnecting(true)
+        setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
         const isTun = proxyMode === "tun"
         
@@ -218,7 +197,30 @@ function HomePage() {
       }
     } catch (err) {
       console.error("Toggle connection failed:", err)
-      setIsConnecting(false)
+      setLocalConnecting(false)
+    }
+  }
+
+  const handleSwitchMode = async (newMode: "rule" | "tun") => {
+    if (isConnecting) return
+    const isTun = newMode === "tun"
+    setProxyMode(newMode)
+    await setEnableTun(isTun)
+
+    if (isConnected) {
+      try {
+        setLocalConnecting(true)
+        await stopEngine()
+        
+        const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
+        await mergeConnectionConfig(subId, "rule", isTun, { force: true })
+        const configPath = await getConfigJsonPath()
+        
+        await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
+      } catch (err) {
+        console.error("Switch mode failed:", err)
+        setLocalConnecting(false)
+      }
     }
   }
 
@@ -554,7 +556,7 @@ function HomePage() {
             {/* Smart Mode Selector (Sleek Glass Segment tabs) */}
             <div className="bg-surface-active/40 border border-border-glass rounded-2xl p-1 flex gap-1">
               <button
-                onClick={async () => { setProxyMode('rule'); await setEnableTun(false); }}
+                onClick={() => handleSwitchMode('rule')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-extrabold text-[11px] tracking-wide transition-all ${
                   proxyMode === 'rule' 
                     ? 'glass-active-pill' 
@@ -566,7 +568,7 @@ function HomePage() {
               </button>
               
               <button
-                onClick={async () => { setProxyMode('tun'); await setEnableTun(true); }}
+                onClick={() => handleSwitchMode('tun')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-extrabold text-[11px] tracking-wide transition-all ${
                   proxyMode === 'tun' 
                     ? 'glass-active-pill' 
