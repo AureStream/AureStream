@@ -14,7 +14,7 @@ import { useEngineState } from "../hooks/useEngineState"
 import { mergeConnectionConfig } from "../lib/connection-config"
 import { getConfigJsonPath } from "../lib/app-paths"
 import { getEnableTun, setEnableTun, getStoreValue, getProxyDnsServer } from "../single/store"
-import { SSI_STORE_KEY } from "../types/definition"
+import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions } from "../action/db"
 import { syncActiveConnectionConfig } from "../lib/config-sync"
 import { controllerFetch } from "../utils/singbox-api"
@@ -145,28 +145,45 @@ function HomePage() {
 
   useEffect(() => {
     let active = true
+    // macOS WKWebView (App Transport Security) blocks plain-HTTP requests, so we
+    // must use HTTPS geo-IP providers. Try a couple for resilience.
+    const fetchGeo = async (): Promise<{ query: string; country: string; city: string; isp: string } | null> => {
+      try {
+        const res = await fetch("https://ipwho.is/?lang=zh-CN", { cache: "no-store" })
+        if (res.ok) {
+          const d = await res.json()
+          if (d && d.success !== false && d.ip) {
+            return {
+              query: d.ip,
+              country: d.country || "",
+              city: d.city || "",
+              isp: d.connection?.isp || d.connection?.org || "",
+            }
+          }
+        }
+      } catch { /* fall through to next provider */ }
+      try {
+        const res = await fetch("https://ipapi.co/json/", { cache: "no-store" })
+        if (res.ok) {
+          const d = await res.json()
+          if (d && !d.error && d.ip) {
+            return {
+              query: d.ip,
+              country: d.country_name || d.country || "",
+              city: d.city || "",
+              isp: d.org || "",
+            }
+          }
+        }
+      } catch { /* give up */ }
+      return null
+    }
+
     const checkIp = async () => {
       setIpLoading(true)
       try {
-        const res = await fetch("http://ip-api.com/json?lang=zh-CN")
-        if (!active) return
-        if (res.ok) {
-          const data = await res.json()
-          if (data && data.status === "success") {
-            setIpInfo({
-              query: data.query,
-              country: data.country,
-              city: data.city,
-              isp: data.isp
-            })
-          } else {
-            setIpInfo(null)
-          }
-        } else {
-          setIpInfo(null)
-        }
-      } catch (e) {
-        if (active) setIpInfo(null)
+        const info = await fetchGeo()
+        if (active) setIpInfo(info)
       } finally {
         if (active) setIpLoading(false)
       }
@@ -382,8 +399,10 @@ function HomePage() {
             };
           });
           setNodes(mapped);
-          if (mapped.length > 0 && !activeNodeId) {
-            setActiveNodeId(mapped[0].id);
+          if (mapped.length > 0) {
+            const savedTag = (await getStoreValue(selectedNodeTagStoreKey(activeSubId), "")) as string
+            const exists = savedTag && mapped.some((n: any) => n.id === savedTag)
+            setActiveNodeId(exists ? savedTag : mapped[0].id)
           }
         }
       } catch (err) {
