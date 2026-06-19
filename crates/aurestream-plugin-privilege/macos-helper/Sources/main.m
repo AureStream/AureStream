@@ -483,8 +483,11 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
 
         posix_spawnattr_t attrs;
         posix_spawnattr_init(&attrs);
-        short flags = POSIX_SPAWN_SETSIGDEF;
+        // Put sing-box in its own process group (pgid == child pid) so we can
+        // signal the whole group on stop and never leave a port-holding straggler.
+        short flags = POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETPGROUP;
         posix_spawnattr_setflags(&attrs, flags);
+        posix_spawnattr_setpgroup(&attrs, 0);
         sigset_t defaultSignals;
         sigemptyset(&defaultSignals);
         sigaddset(&defaultSignals, SIGTERM);
@@ -573,24 +576,81 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
 // ------------------------------------------------------------------
 // stopSingBox
 // ------------------------------------------------------------------
+static void reapSingBoxPid(pid_t pid) {
+    if (pid <= 0) return;
+    // Signal the whole process group (negative pid) so any child sing-box spawned
+    // also dies; fall back to the single pid if the group send fails.
+    if (killpg(pid, SIGTERM) != 0) {
+        kill(pid, SIGTERM);
+    }
+    NSLog(@"[helper] sent SIGTERM to sing-box pid=%d (group)", pid);
+    for (int i = 0; i < 300; i++) {
+        if (kill(pid, 0) != 0 && errno == ESRCH) {
+            return;
+        }
+        usleep(10000);
+    }
+    if (killpg(pid, SIGKILL) != 0) {
+        kill(pid, SIGKILL);
+    }
+    NSLog(@"[helper] sent SIGKILL to sing-box pid=%d (group)", pid);
+    int status = 0;
+    for (int i = 0; i < 100; i++) {
+        pid_t w = waitpid(pid, &status, WNOHANG);
+        if (w == pid || w == -1) break;
+        usleep(10000);
+    }
+}
+
+// Kill any process holding a LISTEN socket on `port` (absolute lsof path because
+// launchd daemons run with a minimal PATH). Returns the number of pids killed.
+static int killListenersOnPort(int port) {
+    char cmd[160];
+    snprintf(cmd, sizeof(cmd),
+             "/usr/sbin/lsof -ti TCP:%d -sTCP:LISTEN 2>/dev/null", port);
+    FILE *fp = popen(cmd, "r");
+    if (!fp) return 0;
+    int killed = 0;
+    char line[32];
+    while (fgets(line, sizeof(line), fp)) {
+        pid_t pid = (pid_t)atoi(line);
+        if (pid > 0) {
+            NSLog(@"[helper] killing orphan listener pid=%d on :%d", pid, port);
+            reapSingBoxPid(pid);
+            killed++;
+        }
+    }
+    pclose(fp);
+    return killed;
+}
+
 - (void)stopSingBoxWithReply:(void (^)(NSString *))reply {
     __block pid_t target = 0;
     dispatch_sync(_stateQueue, ^{
         target = self->_activePid;
     });
-    if (target == 0) {
-        reply(nil);
-        return;
+
+    if (target != 0) {
+        reapSingBoxPid(target);
+        dispatch_sync(_stateQueue, ^{
+            if (self->_activePid == target) {
+                self->_activePid = 0;
+                self->_activeConnection = nil;
+                if (self->_exitSource) {
+                    dispatch_source_cancel(self->_exitSource);
+                    self->_exitSource = nil;
+                }
+            }
+        });
     }
 
-    NSString *err = nil;
-    if (kill(target, SIGTERM) != 0 && errno != ESRCH) {
-        err = [NSString stringWithFormat:@"kill(%d, SIGTERM) failed: %s",
-               target, strerror(errno)];
-    } else {
-        NSLog(@"[helper] sent SIGTERM to sing-box pid=%d", target);
-    }
-    reply(err);
+    // Always sweep the proxy/controller ports afterwards. The tracked pid may be
+    // stale (helper restarted via launchctl kickstart orphans its sing-box), or a
+    // straggler from a previous session may still hold a port.
+    killListenersOnPort(2345);
+    killListenersOnPort(9191);
+
+    reply(nil);
 }
 
 // ------------------------------------------------------------------

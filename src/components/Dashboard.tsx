@@ -18,6 +18,8 @@ import { SSI_STORE_KEY } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions } from "../action/db"
 import { syncActiveConnectionConfig } from "../lib/config-sync"
 import { controllerFetch } from "../utils/singbox-api"
+import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
+import { ask, message } from "@tauri-apps/plugin-dialog"
 
 /* ── Icons ── */
 const I = {
@@ -58,6 +60,7 @@ function HomePage() {
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isSwitchingMode, setIsSwitchingMode] = useState(false)
+  const [isInstallingService, setIsInstallingService] = useState(false)
   const isConnected = engineConnected || isSwitchingMode
   const isConnecting = (isStarting || isStopping || localConnecting) && !isSwitchingMode
 
@@ -203,8 +206,58 @@ function HomePage() {
   }
 
   const handleSwitchMode = async (newMode: "rule" | "tun") => {
-    if (isConnecting || isSwitchingMode) return
+    if (isConnecting || isSwitchingMode || isInstallingService) return
     const isTun = newMode === "tun"
+
+    // When switching to TUN mode, check if the privileged helper service is installed
+    if (isTun) {
+      try {
+        const serviceState = await probeEngineServiceState(true)
+        if (serviceState !== "ready") {
+          const dialogMessage = serviceState === "missing"
+            ? l(
+                "Virtual TUN mode requires a privileged helper service to be installed. This will prompt for your system password once. Do you want to install it now?",
+                "虚拟网关模式需要安装特权辅助服务才能运行。安装过程中需要输入一次系统密码进行授权。是否立即安装？"
+              )
+            : l(
+                "The privileged helper service is installed but not responding. It needs to be reinstalled to work properly. This will prompt for your system password once. Do you want to reinstall it now?",
+                "特权辅助服务已安装但无法响应，需要重新安装才能正常运行。安装过程中需要输入一次系统密码进行授权。是否立即重新安装？"
+              )
+          const dialogTitle = serviceState === "missing"
+            ? l("Install Required Service", "安装所需服务")
+            : l("Repair Required Service", "修复所需服务")
+          const confirmed = await ask(dialogMessage, {
+              title: dialogTitle,
+              kind: "warning",
+              okLabel: l("Install", "安装"),
+              cancelLabel: l("Cancel", "取消"),
+            }
+          )
+          if (!confirmed) return
+
+          try {
+            setIsInstallingService(true)
+            await ensureEngineServiceInstalled()
+            invalidateEngineProbeCache()
+          } catch (installErr) {
+            console.error("Service installation failed:", installErr)
+            await message(
+              l(
+                `Failed to install helper service: ${installErr}`,
+                `辅助服务安装失败：${installErr}`
+              ),
+              { title: l("Installation Failed", "安装失败"), kind: "error" }
+            )
+            return
+          } finally {
+            setIsInstallingService(false)
+          }
+        }
+      } catch (probeErr) {
+        console.error("Service probe failed:", probeErr)
+      }
+    }
+
     setProxyMode(newMode)
     await setEnableTun(isTun)
 
@@ -571,14 +624,24 @@ function HomePage() {
               
               <button
                 onClick={() => handleSwitchMode('tun')}
+                disabled={isInstallingService}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-extrabold text-[11px] tracking-wide transition-all ${
-                  proxyMode === 'tun' 
-                    ? 'glass-active-pill' 
-                    : 'text-text-muted hover:text-text hover:bg-surface-active/50'
+                  isInstallingService
+                    ? 'text-text-muted/50 cursor-wait'
+                    : proxyMode === 'tun' 
+                      ? 'glass-active-pill' 
+                      : 'text-text-muted hover:text-text hover:bg-surface-active/50'
                 }`}
               >
-                <I.Globe />
-                <span>{l("Virtual TUN", "虚拟网关模式")}</span>
+                {isInstallingService ? (
+                  <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <I.Globe />
+                )}
+                <span>{isInstallingService ? l("Installing...", "安装中...") : l("Virtual TUN", "虚拟网关模式")}</span>
               </button>
             </div>
           </div>

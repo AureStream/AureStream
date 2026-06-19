@@ -79,11 +79,11 @@ async fn probe_port_once(port: u16) -> bool {
 }
 
 async fn probe_ports_once(mixed_port: u16, controller_port: u16) -> bool {
-    if probe_port_once(mixed_port).await {
-        return true;
+    if !probe_port_once(mixed_port).await {
+        return false;
     }
-    if controller_port != mixed_port && probe_port_once(controller_port).await {
-        return true;
+    if controller_port != mixed_port && !probe_port_once(controller_port).await {
+        return false;
     }
-    false
+    true
 }

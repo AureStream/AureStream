@@ -19,8 +19,8 @@ impl EngineManager for WindowsEngine {
         let should_set_system_proxy = matches!(mode, ProxyMode::SystemProxy);
 
         if matches!(mode, ProxyMode::IntoProxy) {
-            // First, make sure the service is installed
-            Self::ensure_installed(app).await?;
+            // Frontend pre-checks helper installation before switching to TUN mode.
+            // If somehow we reach here without the service, the TUN service call will fail with a clear error.
 
             // Resolve the paths using the standard Tauri v2 sidecar layout
             let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)

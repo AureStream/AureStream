@@ -4,7 +4,7 @@ use tauri::AppHandle;
 
 use crate::engine::ports::{controller_port, mixed_proxy_port, wait_for_port_release};
 
-const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(3);
+const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// After SIGTERM/kill, poll until mixed (and controller) proxy ports are free.
 pub(crate) async fn wait_for_sidecar_ports_release(app: &AppHandle) {

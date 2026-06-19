@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
+import { ask, message } from "@tauri-apps/plugin-dialog"
 import { useTheme } from "./ThemeProvider"
 import { 
   getProxyBypass, 
@@ -11,6 +12,12 @@ import {
   getEnableTun,
   setEnableTun
 } from "../single/store"
+import {
+  probeEngineServiceState,
+  uninstallEngineService,
+  invalidateEngineProbeCache,
+  type EngineServiceState,
+} from "../lib/engine-probe"
 
 /* ── Icons ── */
 const I = {
@@ -22,6 +29,7 @@ const I = {
   ShieldOff: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .66 0c2.5-1.03 4.67-2.7 5.67-5.94"/><path d="M21 11V5a1 1 0 0 0-1-1l-8-3-8 3"/></svg>),
   Check: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>),
   Alert: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>),
+  Trash: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>),
 }
 
 export default function SettingsPage() {
@@ -37,6 +45,9 @@ export default function SettingsPage() {
   
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
+
+  const [helperState, setHelperState] = useState<EngineServiceState | "unknown">("unknown")
+  const [isUninstalling, setIsUninstalling] = useState(false)
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -55,7 +66,47 @@ export default function SettingsPage() {
       }
     }
     loadSettings()
+    probeEngineServiceState(true)
+      .then(setHelperState)
+      .catch(() => setHelperState("missing"))
   }, [])
+
+  const handleUninstallHelper = async () => {
+    if (isUninstalling) return
+    const confirmed = await ask(
+      l(
+        "This removes the privileged helper service used by Virtual TUN mode. You may be asked for your system password. Reinstall happens automatically next time you switch to TUN mode. Continue?",
+        "这将移除虚拟网关模式所需的特权辅助服务，过程中可能需要输入系统密码。下次切换到虚拟网关模式时会自动重新安装。是否继续？"
+      ),
+      {
+        title: l("Uninstall Helper Service", "卸载辅助服务"),
+        kind: "warning",
+        okLabel: l("Uninstall", "卸载"),
+        cancelLabel: l("Cancel", "取消"),
+      }
+    )
+    if (!confirmed) return
+
+    try {
+      setIsUninstalling(true)
+      await uninstallEngineService()
+      invalidateEngineProbeCache()
+      setHelperState("missing")
+      await message(
+        l("Helper service uninstalled successfully.", "辅助服务已成功卸载。"),
+        { title: l("Done", "完成"), kind: "info" }
+      )
+    } catch (err) {
+      console.error("Uninstall helper failed:", err)
+      await message(
+        l(`Failed to uninstall helper service: ${err}`, `卸载辅助服务失败：${err}`),
+        { title: l("Uninstall Failed", "卸载失败"), kind: "error" }
+      )
+      probeEngineServiceState(true).then(setHelperState).catch(() => {})
+    } finally {
+      setIsUninstalling(false)
+    }
+  }
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -235,7 +286,30 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="shrink-0 flex justify-end items-center gap-3">
+            <div className="shrink-0 flex justify-between items-center gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <button
+                  onClick={handleUninstallHelper}
+                  disabled={isUninstalling || helperState === "missing"}
+                  title={l("Uninstall the privileged helper service", "卸载特权辅助服务")}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-danger/10 hover:bg-danger/15 text-danger text-[11px] font-bold tracking-wide border border-danger/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <I.Trash />
+                  {isUninstalling
+                    ? l("Uninstalling...", "正在卸载...")
+                    : l("Uninstall Helper", "卸载辅助服务")}
+                </button>
+                <span className="text-[10px] text-text-muted truncate">
+                  {helperState === "missing"
+                    ? l("Helper not installed", "辅助服务未安装")
+                    : helperState === "ready"
+                      ? l("Helper installed", "辅助服务已安装")
+                      : helperState === "unreachable"
+                        ? l("Installed but unresponsive", "已安装但无响应")
+                        : ""}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
               {saveStatus === "success" && (
                 <span className="text-success text-xs font-semibold flex items-center gap-1">
                   <I.Check /> {l("Settings saved successfully!", "配置保存成功！")}
@@ -253,6 +327,7 @@ export default function SettingsPage() {
               >
                 {isSaving ? l("Saving...", "正在保存...") : l("Save Configuration", "保存高级配置")}
               </button>
+              </div>
             </div>
           </div>
         </div>

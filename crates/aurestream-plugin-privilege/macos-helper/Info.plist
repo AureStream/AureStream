@@ -17,9 +17,9 @@
          treats it as up-to-date. There is no automatic sync; see the
          "Privileged helper version bump" section in CLAUDE.md. -->
     <key>CFBundleShortVersionString</key>
-    <string>1.0.3</string>
+    <string>1.0.4</string>
     <key>CFBundleVersion</key>
-    <string>5</string>
+    <string>6</string>
     <key>SMAuthorizedClients</key>
     <array>
         <string>identifier "com.root.aurestream"</string>
