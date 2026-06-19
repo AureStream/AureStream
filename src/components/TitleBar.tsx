@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { type as osType } from "@tauri-apps/plugin-os"
 
@@ -6,17 +6,6 @@ import { type as osType } from "@tauri-apps/plugin-os"
 const Min = () => (
   <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
     <line x1="2.5" y1="6" x2="9.5" y2="6" />
-  </svg>
-)
-const Restore = () => (
-  <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="3.2" y="3.2" width="5.6" height="5.6" rx="1" />
-    <path d="M4.6 3.2V2.4a1 1 0 0 1 1-1h3.6a1 1 0 0 1 1 1v3.6a1 1 0 0 1-1 1h-.8" />
-  </svg>
-)
-const Maximize = () => (
-  <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3">
-    <rect x="2.6" y="2.6" width="6.8" height="6.8" rx="1" />
   </svg>
 )
 const Close = () => (
@@ -27,8 +16,6 @@ const Close = () => (
 )
 
 export default function TitleBar() {
-  const [maximized, setMaximized] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
   const [isMac] = useState(() => {
     try {
       return osType() === "macos"
@@ -38,34 +25,11 @@ export default function TitleBar() {
   })
   const appWindow = getCurrentWindow()
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    appWindow.isMaximized().then(setMaximized).catch(() => {})
-    appWindow
-      .onResized(() => {
-        appWindow.isMaximized().then(setMaximized).catch(() => {})
-      })
-      .then((fn) => { unlisten = fn })
-      .catch(() => {})
-    return () => unlisten?.()
-  }, [])
-
-  const toggleFullscreen = async () => {
-    try {
-      const next = !fullscreen
-      await appWindow.setFullscreen(next)
-      setFullscreen(next)
-    } catch {
-      // Fallback to maximize if fullscreen is unavailable.
-      appWindow.toggleMaximize().catch(() => {})
-    }
-  }
-
   const title = (
     <span className="text-[11px] font-extrabold tracking-wide text-text-secondary">AureStream</span>
   )
 
-  // macOS traffic lights: red close · yellow minimize · green fullscreen.
+  // macOS traffic lights: red close · yellow minimize.
   const lightBtn =
     "w-[13px] h-[13px] rounded-full border border-black/10 flex items-center justify-center text-black/60 cursor-pointer"
   const glyph = "w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -82,12 +46,6 @@ export default function TitleBar() {
           <line x1="1.6" y1="4" x2="6.4" y2="4" />
         </svg>
       </button>
-      <button onClick={toggleFullscreen} title="Fullscreen" className={`${lightBtn} bg-[#28C840]`}>
-        <svg className={glyph} viewBox="0 0 8 8" fill="currentColor">
-          <polygon points="1.2,1.2 4.6,1.2 1.2,4.6" />
-          <polygon points="6.8,6.8 3.4,6.8 6.8,3.4" />
-        </svg>
-      </button>
     </div>
   )
 
@@ -98,9 +56,6 @@ export default function TitleBar() {
     <div className="flex items-center gap-1 shrink-0">
       <button className={btn} title="Minimize" onClick={() => appWindow.minimize()}>
         <Min />
-      </button>
-      <button className={btn} title={maximized ? "Restore" : "Maximize"} onClick={() => appWindow.toggleMaximize()}>
-        {maximized ? <Restore /> : <Maximize />}
       </button>
       <button
         className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-white hover:bg-danger transition-colors cursor-pointer"
