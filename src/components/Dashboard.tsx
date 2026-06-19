@@ -13,9 +13,9 @@ import { startEngine, stopEngine } from "../utils/vpn-service"
 import { useEngineState } from "../hooks/useEngineState"
 import { mergeConnectionConfig } from "../lib/connection-config"
 import { getConfigJsonPath } from "../lib/app-paths"
-import { getEnableTun, setEnableTun, getStoreValue, getProxyDnsServer } from "../single/store"
+import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsServer } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
-import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions } from "../action/db"
+import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
 import { syncActiveConnectionConfig } from "../lib/config-sync"
 import { controllerFetch } from "../utils/singbox-api"
 import { invoke } from "@tauri-apps/api/core"
@@ -319,27 +319,50 @@ function HomePage() {
 
   const loadSubs = useCallback(async () => {
     try {
-      // 1. Try to load from SQLite database first
+      // 1. Load from SQLite database first for instant UI response
       const localData = await getLocalSubscriptions()
       if (localData && localData.length > 0) {
         setSubs(localData)
         setSubsLoading(false)
-        return
       }
 
-      // 2. If no local data, pull from network (fallback/first-time sync)
-      const data = await fetchSubscriptions()
-      setSubs(data)
-      if (data && data.length > 0) {
-        try {
-          await insertSubscription(data[0].url, data[0].name, data[0].id)
-          await syncActiveConnectionConfig("init-sync")
-        } catch (dbErr) {
-          console.error("Failed to auto-sync subscription into SQLite on home mount:", dbErr)
+      // 2. Fetch the latest subscription list from the server to sync
+      const remoteSubs = await fetchSubscriptions()
+      
+      // 3. Sync database with remote list
+      if (Array.isArray(remoteSubs)) {
+        const remoteIds = remoteSubs.map(s => s.id)
+        
+        // A. Delete local subscriptions that do not exist on the server anymore (orphaned/dirty data)
+        const localList = await getLocalSubscriptions()
+        for (const local of localList) {
+          if (!remoteIds.includes(local.id)) {
+            await deleteSubscription(local.id)
+          }
+        }
+        
+        // B. Insert or update remote subscriptions in local database
+        for (const sub of remoteSubs) {
+          await insertSubscription(sub.url, sub.name, sub.id)
+        }
+        
+        // C. Reload and set active state
+        const updatedLocal = await getLocalSubscriptions()
+        setSubs(updatedLocal)
+
+        // D. If the currently selected subscription was deleted, reset selected subscription key
+        const currentSelectedId = await getStoreValue(SSI_STORE_KEY)
+        if (currentSelectedId && !remoteIds.includes(currentSelectedId)) {
+          if (remoteIds.length > 0) {
+            await setStoreValue(SSI_STORE_KEY, remoteIds[0])
+          } else {
+            await setStoreValue(SSI_STORE_KEY, '')
+          }
+          await syncActiveConnectionConfig("sync-cleanup")
         }
       }
     } catch (err) {
-      console.error("[HOME] Failed to fetch subscriptions:", err)
+      console.error("[HOME] Failed to fetch and sync subscriptions:", err)
     } finally {
       setSubsLoading(false)
     }
