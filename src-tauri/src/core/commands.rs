@@ -126,6 +126,19 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     ) {
         return Err(format!("state transition rejected: {}", e));
     }
+
+    // 保存用户选择的模式，供托盘菜单恢复选中状态
+    let mode_key = match mode {
+        ProxyMode::IntoProxy => "tun",
+        ProxyMode::SystemProxy => "system",
+    };
+    {
+        use tauri_plugin_store::StoreExt;
+        if let Ok(store) = app.store("settings.json") {
+            let _ = store.set("last_proxy_mode", serde_json::Value::String(mode_key.to_string()));
+            store.save().ok();
+        }
+    }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
 
     if config_check::needs_verify(&path) {

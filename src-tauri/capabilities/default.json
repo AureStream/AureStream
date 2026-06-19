@@ -16,6 +16,8 @@
     "core:window:allow-is-fullscreen",
     "core:window:allow-set-theme",
     "core:window:allow-start-dragging",
+    "core:tray:allow-new",
+    "core:tray:allow-set-tooltip",
     "opener:default",
     "sql:default",
     "sql:allow-execute",

@@ -11,6 +11,7 @@ pub struct AppData {
     pub log_buffer: Mutex<Vec<String>>,
     pub error_log_buffer: Mutex<Vec<String>>,
     pub pending_deep_link: Mutex<Option<DeepLinkPayload>>,
+    pub tray_handle: Mutex<Option<tauri::tray::TrayIcon>>,
 }
 
 pub enum LogType {
@@ -24,6 +25,7 @@ impl AppData {
             log_buffer: Mutex::new(Vec::new()),
             error_log_buffer: Mutex::new(Vec::new()),
             pending_deep_link: Mutex::new(None),
+            tray_handle: Mutex::new(None),
         }
     }
 

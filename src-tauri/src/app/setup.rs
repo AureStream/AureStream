@@ -1,10 +1,9 @@
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 
+use crate::app::tray::setup_tray;
 use crate::utils::show_dashboard;
 
 fn hide_on_launch_enabled(app_handle: &tauri::AppHandle) -> bool {
@@ -94,51 +93,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
     spawn_lifecycle_listener(app.handle());
 
     // ── System Tray ──────────────────────────────────────────────────
-    let show_item = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "退出应用").build(app)?;
-    let tray_menu = MenuBuilder::new(app)
-        .items(&[&show_item, &quit_item])
-        .build()?;
-
-    #[cfg(target_os = "macos")]
-    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png"))?;
-    #[cfg(not(target_os = "macos"))]
-    let tray_icon = app
-        .default_window_icon()
-        .cloned()
-        .unwrap_or_else(|| tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png")).unwrap());
-
-    #[allow(unused_mut)]
-    let mut tray_builder = TrayIconBuilder::with_id("main-tray")
-        .icon(tray_icon)
-        .menu(&tray_menu);
-
-    let _tray = tray_builder
-        .on_menu_event(|app_handle, event| match event.id.as_ref() {
-            "show" => {
-                crate::utils::show_main_window(app_handle);
-            }
-            "quit" => {
-                let app_handle = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    crate::commands::shell::quit(app_handle).await;
-                });
-            }
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, event| match event {
-            TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            }
-            | TrayIconEvent::DoubleClick {
-                button: MouseButton::Left,
-                ..
-            } => crate::utils::show_main_window(tray.app_handle()),
-            _ => {}
-        })
-        .build(app)?;
+    setup_tray(app)?;
 
     Ok(())
 }
