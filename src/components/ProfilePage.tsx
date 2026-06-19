@@ -203,24 +203,55 @@ export default function ProfilePage() {
               <p className="text-[11px] text-text-muted leading-relaxed">{l("Your current device session. Other terminals can be managed for account safety.", "当前正在使用的终端设备信息，保障网络及账号安全。")}</p>
             </div>
 
-            <div className="flex flex-col gap-2.5 flex-1 justify-center my-3 overflow-y-auto no-scrollbar pr-0.5">
+            <div className="flex flex-col gap-2.5 flex-1 my-3 overflow-y-auto no-scrollbar pr-0.5">
               {currentDevice ? (
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-active/10 border border-border-glass/30">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border bg-success/10 border-success/20 text-success">
-                      {currentDevice.mobile ? <I.Smartphone /> : <I.Monitor />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-bold text-text text-xs truncate" title={currentDevice.name}>{currentDevice.name}</div>
-                      <div className="text-[10px] text-text-muted flex items-center gap-1.5 mt-0.5 font-semibold truncate">
-                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0"></span>
-                        {l("Connected Now", "当前在线")} · {currentDevice.os}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="shrink-0 px-3 py-1.5 text-[10px] font-bold text-secondary bg-secondary/10 border border-secondary/15 rounded-xl">
-                    {l("This Device", "本机")}
-                  </span>
+                <div className="w-full overflow-x-auto mt-2">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border-glass/40">
+                        <th className="pb-2.5 text-[10px] font-extrabold text-text-muted uppercase tracking-wider text-left pl-1">
+                          {l("Device", "设备名称")}
+                        </th>
+                        <th className="pb-2.5 text-[10px] font-extrabold text-text-muted uppercase tracking-wider text-left">
+                          {l("System", "操作系统")}
+                        </th>
+                        <th className="pb-2.5 text-[10px] font-extrabold text-text-muted uppercase tracking-wider text-left">
+                          {l("Status", "在线状态")}
+                        </th>
+                        <th className="pb-2.5 text-[10px] font-extrabold text-text-muted uppercase tracking-wider text-left pr-1">
+                          {l("Action", "操作")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-border-glass/10 hover:bg-surface-active/5 transition-colors">
+                        <td className="py-3.5 text-xs font-bold text-text text-left pl-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-success shrink-0">
+                              {currentDevice.mobile ? <I.Smartphone /> : <I.Monitor />}
+                            </span>
+                            <span className="truncate max-w-[140px]" title={currentDevice.name}>
+                              {currentDevice.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 text-xs font-semibold text-text-secondary text-left font-mono">
+                          {currentDevice.os}
+                        </td>
+                        <td className="py-3.5 text-xs font-semibold text-success text-left">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shrink-0"></span>
+                            <span>{l("Online", "当前在线")}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 text-xs font-medium text-left pr-1">
+                          <span className="px-2.5 py-1 text-[9px] font-extrabold text-secondary bg-secondary/15 border border-secondary/15 rounded-lg">
+                            {l("This Device", "本机")}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="text-center py-4 flex flex-col items-center justify-center gap-2 text-text-muted animate-fade-in">
