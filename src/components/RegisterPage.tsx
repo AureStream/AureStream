@@ -122,7 +122,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full py-4 rounded-[20px] bg-gradient-to-r from-secondary to-accent-purple hover:opacity-95 active:scale-[0.98] transition-all text-white font-extrabold shadow-md mt-4 text-[15px] disabled:opacity-60 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
+          className="w-full py-4 rounded-[20px] bg-secondary hover:bg-secondary/90 active:scale-[0.98] transition-all text-white font-extrabold shadow-md mt-4 text-[15px] disabled:opacity-60 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
         >
           {submitting ? (
             <>

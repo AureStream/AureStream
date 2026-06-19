@@ -130,7 +130,7 @@ export default function CheckoutPage() {
           </div>
 
           <div className="mt-8 pt-6 border-t border-border-glass">
-            <button className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-secondary text-text-inverse font-bold text-lg shadow-glow-primary hover:scale-[1.02] active:scale-95 transition-all">
+            <button className="w-full py-4 rounded-2xl bg-secondary text-text-inverse font-bold text-lg shadow-glow-primary hover:bg-secondary/90 active:scale-[0.98] transition-all">
               {l(`Pay $39.20 Now`, `确认支付 $39.20`)}
             </button>
             <div className="text-center text-xs text-text-muted mt-4 flex items-center justify-center gap-1">

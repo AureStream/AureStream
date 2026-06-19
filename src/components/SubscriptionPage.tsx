@@ -177,7 +177,7 @@ export default function SubscriptionPage() {
 
             <button 
               onClick={() => navigate('/dashboard/checkout')}
-              className={`w-full py-2.5 rounded-xl font-bold transition-all mb-4 relative z-10 shadow-md hover:scale-[1.01] active:scale-[0.99] text-xs ${plan.isPro ? 'bg-gradient-to-r from-secondary to-accent-purple text-white hover:opacity-95' : 'bg-primary dark:bg-white text-text-inverse dark:text-bg hover:bg-primary-hover hover:opacity-95'}`}
+              className={`w-full py-2.5 rounded-xl font-bold transition-all mb-4 relative z-10 shadow-md hover:scale-[1.01] active:scale-[0.99] text-xs ${plan.isPro ? 'bg-secondary text-white hover:bg-secondary/90' : 'bg-primary dark:bg-white text-text-inverse dark:text-bg hover:bg-primary-hover hover:opacity-95'}`}
             >
               {l("Subscribe Now", "立即订阅")}
             </button>
