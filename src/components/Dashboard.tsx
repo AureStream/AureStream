@@ -18,6 +18,7 @@ import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions } from "../action/db"
 import { syncActiveConnectionConfig } from "../lib/config-sync"
 import { controllerFetch } from "../utils/singbox-api"
+import { invoke } from "@tauri-apps/api/core"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { ask, message } from "@tauri-apps/plugin-dialog"
 
@@ -140,50 +141,24 @@ function HomePage() {
     return () => clearInterval(timer)
   }, [isConnected])
 
-  const [ipInfo, setIpInfo] = useState<{ query: string; country: string; city: string; isp: string } | null>(null)
+  const [ipInfo, setIpInfo] = useState<{ region: string; isp: string } | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
 
   useEffect(() => {
     let active = true
-    // macOS WKWebView (App Transport Security) blocks plain-HTTP requests, so we
-    // must use HTTPS geo-IP providers. Try a couple for resilience.
-    const fetchGeo = async (): Promise<{ query: string; country: string; city: string; isp: string } | null> => {
-      try {
-        const res = await fetch("https://ipwho.is/?lang=zh-CN", { cache: "no-store" })
-        if (res.ok) {
-          const d = await res.json()
-          if (d && d.success !== false && d.ip) {
-            return {
-              query: d.ip,
-              country: d.country || "",
-              city: d.city || "",
-              isp: d.connection?.isp || d.connection?.org || "",
-            }
-          }
-        }
-      } catch { /* fall through to next provider */ }
-      try {
-        const res = await fetch("https://ipapi.co/json/", { cache: "no-store" })
-        if (res.ok) {
-          const d = await res.json()
-          if (d && !d.error && d.ip) {
-            return {
-              query: d.ip,
-              country: d.country_name || d.country || "",
-              city: d.city || "",
-              isp: d.org || "",
-            }
-          }
-        }
-      } catch { /* give up */ }
-      return null
-    }
-
+    // Query via the Rust backend (ip-api.com lang=zh-CN) — bypasses WKWebView's
+    // plain-HTTP block and routes through the local mixed proxy when connected so
+    // the result reflects the real egress region (in Chinese).
     const checkIp = async () => {
       setIpLoading(true)
       try {
-        const info = await fetchGeo()
-        if (active) setIpInfo(info)
+        const info = (await invoke("get_geoip_info", { useProxy: isConnected })) as {
+          region?: string
+          isp?: string
+        }
+        if (active) setIpInfo(info && info.region ? { region: info.region, isp: info.isp || "" } : null)
+      } catch {
+        if (active) setIpInfo(null)
       } finally {
         if (active) setIpLoading(false)
       }
@@ -561,7 +536,7 @@ function HomePage() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("OUTBOUND REGION", "出网物理区域")}</div>
                   <h3 className="text-xs font-bold text-text truncate mt-0.5">
-                    {ipLoading ? l("Detecting...", "正在检测物理区域...") : ipInfo ? `${ipInfo.country} · ${ipInfo.city}` : l("Offline / LAN", "未连通 / 局域网")}
+                    {ipLoading ? l("Detecting...", "正在检测物理区域...") : ipInfo ? ipInfo.region : l("Offline / LAN", "未连通 / 局域网")}
                   </h3>
                 </div>
               </div>

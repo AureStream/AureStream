@@ -77,7 +77,7 @@ export default function ProfilePage() {
           
           <div className="flex flex-col items-center justify-center pt-8 text-center">
             {/* Avatar Container */}
-            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-secondary to-accent-purple p-[3px] shadow-glow-primary mb-4 animate-pulse-slow">
+            <div className="w-20 h-20 rounded-full bg-secondary p-[3px] shadow-glow-primary mb-4 animate-pulse-slow">
               <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden">
                 <img src={avatarUrl} alt="User" className="w-full h-full aspect-square shrink-0 object-cover" />
               </div>
@@ -138,7 +138,7 @@ export default function ProfilePage() {
                     <div className="text-[10px] text-text-muted mt-1">{l("Service Expiry Date", "服务重置与到期时间")}：{expireDate}</div>
                   </div>
                   <span className={`px-2.5 py-1 text-[9px] font-extrabold rounded-lg tracking-wider shadow-sm select-none uppercase ${
-                    hasSub ? "bg-gradient-to-r from-secondary to-accent-purple text-white" : "bg-text-muted/15 text-text-muted"
+                    hasSub ? "bg-secondary text-white" : "bg-text-muted/15 text-text-muted"
                   }`}>
                     {hasSub ? l("Active Service", "服务生效中") : l("Expired / None", "套餐未激活")}
                   </span>
@@ -158,7 +158,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <div className="w-full h-2 rounded-full bg-border-glass overflow-hidden mt-3 shadow-inner">
-                  <div className="h-full rounded-full bg-gradient-to-r from-secondary to-accent-purple shadow-glow-primary" style={{ width: `${percentUsed}%` }}></div>
+                  <div className="h-full rounded-full bg-secondary shadow-glow-primary" style={{ width: `${percentUsed}%` }}></div>
                 </div>
                 {hasSub && (
                   <div className="flex justify-end text-[9px] text-text-muted mt-1.5 font-semibold">

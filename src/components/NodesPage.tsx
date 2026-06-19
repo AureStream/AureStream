@@ -191,7 +191,7 @@ export default function NodesPage() {
           <button 
             onClick={handleSpeedTest}
             disabled={isTestingSpeed}
-            className="h-[36px] px-4 rounded-xl bg-gradient-to-r from-secondary to-accent-purple hover:opacity-95 text-white transition-all shadow-sm flex items-center gap-2 shrink-0 text-sm font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
+            className="h-[36px] px-4 rounded-xl bg-secondary hover:bg-secondary/90 text-white transition-all shadow-sm flex items-center gap-2 shrink-0 text-sm font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <div className={isTestingSpeed ? 'animate-pulse' : ''}><I.Activity /></div>
             <span>{isTestingSpeed ? l("Testing...", "测速中...") : l("Test Speed", "延迟测速")}</span>
