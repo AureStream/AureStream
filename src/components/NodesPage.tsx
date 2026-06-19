@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { getSubscriptionConfig } from "../action/db"
-import { getStoreValue } from "../single/store"
-import { SSI_STORE_KEY } from "../types/definition"
+import { getStoreValue, setStoreValue } from "../single/store"
+import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
+import { hotReloadIfRunning } from "../lib/hot-reload-config"
 
 /* ── Icons ── */
 const I = {
@@ -29,7 +30,8 @@ export default function NodesPage() {
   
   const [searchQuery, setSearchQuery] = useState("")
   const [activeRegion, setActiveRegion] = useState<"all" | "asia" | "america" | "europe">("all")
-  const [connectedNodeId, setConnectedNodeId] = useState<string>("jp-1")
+  const [connectedNodeId, setConnectedNodeId] = useState<string>("")
+  const [activeSubId, setActiveSubId] = useState<string>("")
 
   const initialNodes: NodeData[] = [
     { id: "jp-1", name: l("Tokyo, JP - Premium 01", "日本 东京 - 专线 01"), flag: "🇯🇵", ping: 45, protocol: "Trojan", region: "asia" },
@@ -48,10 +50,18 @@ export default function NodesPage() {
 
   useEffect(() => {
     const loadNodes = async () => {
-      const activeSubId = await getStoreValue(SSI_STORE_KEY)
-      if (!activeSubId) return
+      const subId = await getStoreValue(SSI_STORE_KEY)
+      if (!subId) return
+      setActiveSubId(subId)
+      
+      const key = selectedNodeTagStoreKey(subId)
+      const savedNodeId = await getStoreValue(key)
+      if (savedNodeId) {
+        setConnectedNodeId(savedNodeId)
+      }
+      
       try {
-        const config = await getSubscriptionConfig(activeSubId)
+        const config = await getSubscriptionConfig(subId)
         if (config && Array.isArray(config.outbounds)) {
           const filtered = config.outbounds.filter((item: any) => {
             return item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block" && item.type !== "dns";
@@ -208,7 +218,14 @@ export default function NodesPage() {
             return (
               <div 
                 key={node.id}
-                onClick={() => setConnectedNodeId(node.id)}
+                onClick={async () => {
+                  setConnectedNodeId(node.id)
+                  if (activeSubId) {
+                    const key = selectedNodeTagStoreKey(activeSubId)
+                    await setStoreValue(key, node.id, { immediate: true })
+                    await hotReloadIfRunning(activeSubId)
+                  }
+                }}
                 className={`glass-card group relative rounded-[20px] p-3.5 cursor-pointer transition-all duration-300 ${isConnected ? 'ring-1 ring-secondary/30 bg-surface-active/50' : 'hover:bg-surface-active/30'}`}
               >
 
