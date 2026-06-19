@@ -31,6 +31,12 @@ interface NodeData {
 export default function NodesPage() {
   const { i18n } = useTranslation()
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
+
+  const getPingTone = (p: number) => {
+    if (p <= 500) return { text: "text-success", dot: "bg-success" }
+    if (p <= 1000) return { text: "text-warning", dot: "bg-warning" }
+    return { text: "text-danger", dot: "bg-danger" }
+  }
   
   const [searchQuery, setSearchQuery] = useState("")
   const [activeRegion, setActiveRegion] = useState<"all" | "asia" | "america" | "europe">("all")
@@ -267,10 +273,15 @@ export default function NodesPage() {
                     ) : node.ping === 0 ? (
                       <span className="text-text-muted">-- ms</span>
                     ) : (
-                      <>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-secondary animate-pulse' : 'bg-success'}`}></span>
-                        {node.ping}ms
-                      </>
+                      (() => {
+                        const tone = getPingTone(node.ping);
+                        return (
+                          <>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-secondary animate-pulse' : tone.dot}`}></span>
+                            <span className={tone.text}>{node.ping}ms</span>
+                          </>
+                        );
+                      })()
                     )}
                   </div>
                 </div>

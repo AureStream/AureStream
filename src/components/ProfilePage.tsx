@@ -133,7 +133,7 @@ export default function ProfilePage() {
 
           <button 
             onClick={() => logout().then(() => navigate('/login'))}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-extrabold text-danger hover:bg-danger/10 transition-all border border-danger/10 cursor-pointer mt-6"
+            className="w-full py-4 rounded-[20px] bg-gradient-to-r from-secondary to-accent-purple hover:opacity-95 active:scale-[0.98] transition-all text-white font-extrabold shadow-md mt-6 text-[15px] cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
           >
             <I.LogOut /> {l("Log Out of Session", "安全退出登录")}
           </button>

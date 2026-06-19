@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
+import { APP_VERSION } from "../types/definition"
 
 /* ── Icons ── */
 const I = {
@@ -198,7 +199,7 @@ export default function SubscriptionPage() {
       </div>
 
       <div className="text-center mt-6 text-xs text-text-muted">
-        AureStream v0.2.5 &middot; &copy; 2026 {l("All rights reserved.", "版权所有")}
+        AureStream v{APP_VERSION} &middot; &copy; 2026 {l("All rights reserved.", "版权所有")}
       </div>
     </div>
   )
