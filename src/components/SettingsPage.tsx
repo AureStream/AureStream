@@ -1,6 +1,16 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { useTheme } from "./ThemeProvider"
+import { 
+  getProxyBypass, 
+  setProxyBypass, 
+  getProxyPort, 
+  setProxyPort as writeProxyPort, 
+  getDirectDNS, 
+  setDirectDNS,
+  getEnableTun,
+  setEnableTun
+} from "../single/store"
 
 /* ── Icons ── */
 const I = {
@@ -10,207 +20,243 @@ const I = {
   Rocket: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>),
   Bell: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>),
   ShieldOff: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .66 0c2.5-1.03 4.67-2.7 5.67-5.94"/><path d="M21 11V5a1 1 0 0 0-1-1l-8-3-8 3"/></svg>),
-  Settings: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>),
+  Check: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>),
+  Alert: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>),
 }
-
-type TabKey = 'general' | 'application' | 'network';
 
 export default function SettingsPage() {
   const { i18n } = useTranslation()
   const { theme, toggleTheme } = useTheme()
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
-  const [activeTab, setActiveTab] = useState<TabKey>('general')
-  const [bypassDomains, setBypassDomains] = useState("localhost, 127.0.0.1, ::1, *.local")
+  const [bypassDomains, setBypassDomains] = useState("")
+  const [dnsServer, setDnsServer] = useState("8.8.8.8")
+  const [proxyPort, setProxyPort] = useState(2080)
   const [autoConnect, setAutoConnect] = useState(true)
   const [notifications, setNotifications] = useState(false)
+  
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
 
-  const tabs = [
-    { id: 'general', label: l("General", "通用设置"), icon: <I.Settings /> },
-    { id: 'application', label: l("Application", "应用行为"), icon: <I.Rocket /> },
-    { id: 'network', label: l("Network", "高级网络"), icon: <I.Globe /> },
-  ] as const;
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const bypass = await getProxyBypass()
+        const port = await getProxyPort()
+        const dns = await getDirectDNS()
+        const tun = await getEnableTun()
+        
+        setBypassDomains(bypass)
+        setProxyPort(port)
+        setDnsServer(dns)
+        setAutoConnect(tun)
+      } catch (e) {
+        console.error("Failed to load settings:", e)
+      }
+    }
+    loadSettings()
+  }, [])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setSaveStatus("idle")
+    try {
+      await setProxyBypass(bypassDomains)
+      await writeProxyPort(Number(proxyPort))
+      await setDirectDNS(dnsServer)
+      await setEnableTun(autoConnect)
+      setSaveStatus("success")
+      setTimeout(() => setSaveStatus("idle"), 3000)
+    } catch (e) {
+      console.error("Failed to save settings:", e)
+      setSaveStatus("error")
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
-    <div className="w-full max-w-[1000px] mx-auto animate-fade-in px-4 md:px-8 pb-12 pt-8 flex flex-col md:flex-row gap-8 lg:gap-12 relative z-10">
+    <div className="flex flex-col gap-4 w-full h-full max-w-[1300px] mx-auto animate-fade-in px-8 pt-7 pb-5 overflow-hidden">
       
-      {/* Left Sidebar */}
-      <div className="w-full md:w-[260px] shrink-0 flex flex-col gap-8">
-        <div className="mb-2">
-          <h1 className="text-3xl font-heading font-bold text-text">{l("Settings", "系统设置")}</h1>
-          <p className="text-sm text-text-muted mt-2">
-            {l("Customize application preferences", "自定义您的应用偏好设置")}
-          </p>
+      {/* Bento Box Grid (No Header) */}
+      <div className="flex flex-col gap-5 flex-grow h-full min-h-0">
+        
+        {/* Top Section - Preferences & Behavior (Compact 4-column layout) */}
+        <div className="glass-card rounded-[28px] p-5 shadow-glass shrink-0">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-secondary"><I.Globe /></span>
+            <h3 className="text-sm font-extrabold text-text uppercase tracking-wider">{l("Preferences & Behavior", "偏好与运行设置")}</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Theme */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-active/10 border border-border-glass/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
+                  {theme === "dark" ? <I.Moon /> : <I.Sun />}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-text text-xs truncate">{l("Theme", "外观主题")}</div>
+                  <div className="text-[10px] text-text-muted mt-0.5 truncate">{theme === "dark" ? l("Dark", "深色") : l("Light", "浅色")}</div>
+                </div>
+              </div>
+              <button 
+                onClick={toggleTheme}
+                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors relative shadow-inner shrink-0 cursor-pointer ${theme === 'dark' ? 'bg-secondary' : 'bg-border-light dark:bg-black/20'}`}
+              >
+                <div className={`w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-transform absolute top-0.5 ${theme === 'dark' ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+              </button>
+            </div>
+
+            {/* Language */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-active/10 border border-border-glass/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+                  <I.Globe />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-text text-xs truncate">{l("Language", "语言设置")}</div>
+                  <div className="text-[10px] text-text-muted mt-0.5 truncate">{l("Display lang", "界面语言")}</div>
+                </div>
+              </div>
+              <div className="flex bg-surface-active/50 rounded-lg p-0.5 border border-border-glass select-none shrink-0 scale-95 origin-right">
+                <button 
+                  onClick={() => i18n.changeLanguage("zh-CN")}
+                  className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer ${i18n.language.startsWith("zh") ? 'glass-active-pill' : 'text-text-muted hover:text-text'}`}
+                >
+                  中
+                </button>
+                <button 
+                  onClick={() => i18n.changeLanguage("en")}
+                  className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer ${!i18n.language.startsWith("zh") ? 'glass-active-pill' : 'text-text-muted hover:text-text'}`}
+                >
+                  EN
+                </button>
+              </div>
+            </div>
+
+            {/* Auto Connect */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-active/10 border border-border-glass/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-success/10 text-success flex items-center justify-center shrink-0">
+                  <I.Rocket />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-text text-xs truncate">{l("Auto Connect", "开机自动连接")}</div>
+                  <div className="text-[10px] text-text-muted mt-0.5 truncate">{l("Instant tunnel launch", "打开应用自动连接")}</div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAutoConnect(!autoConnect)}
+                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors relative shadow-inner shrink-0 cursor-pointer ${autoConnect ? 'bg-secondary' : 'bg-border-light dark:bg-black/20'}`}
+              >
+                <div className={`w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-transform absolute top-0.5 ${autoConnect ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+              </button>
+            </div>
+
+            {/* Notifications */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-active/10 border border-border-glass/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
+                  <I.Bell />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-text text-xs truncate">{l("Notifications", "系统消息通知")}</div>
+                  <div className="text-[10px] text-text-muted mt-0.5 truncate">{l("Alert warnings", "流量不足或断开消息")}</div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setNotifications(!notifications)}
+                className={`w-10 h-5.5 rounded-full p-0.5 transition-colors relative shadow-inner shrink-0 cursor-pointer ${notifications ? 'bg-secondary' : 'bg-border-light dark:bg-black/20'}`}
+              >
+                <div className={`w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-transform absolute top-0.5 ${notifications ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+              </button>
+            </div>
+          </div>
         </div>
-        
-        <nav className="flex flex-col gap-2">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${activeTab === tab.id ? 'glass-active-pill' : 'text-text-secondary hover:text-text hover:bg-surface-active/60'}`}
-            >
-              <span className={`${activeTab === tab.id ? 'text-inherit' : 'text-text-muted'}`}>{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
 
-      {/* Right Content Area */}
-      <div className="flex-1 min-h-[500px]">
-        
-        {/* --- GENERAL TAB --- */}
-        {activeTab === 'general' && (
-          <div className="animate-fade-in flex flex-col gap-6">
-            <div>
-              <h1 className="text-2xl font-heading font-bold text-text">{l("Appearance & Language", "外观与语言")}</h1>
-              <p className="text-sm text-text-muted mt-1">{l("Configure your visual and localization preferences.", "配置您的视觉和本地化偏好。")}</p>
+        {/* Bottom Section - Network & Advanced Routing (Fills remaining height) */}
+        <div className="glass-card rounded-[28px] p-5 shadow-glass flex-1 min-h-0 flex flex-col justify-between overflow-hidden">
+          <div className="flex flex-col h-full justify-between flex-grow min-h-0">
+            <div className="shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-warning"><I.ShieldOff /></span>
+                  <h3 className="text-sm font-extrabold text-text uppercase tracking-wider">{l("Network & Routing Configuration", "网络及高级分流设置")}</h3>
+                </div>
+                <span className="px-2 py-0.5 text-[8px] font-extrabold bg-warning/10 text-warning rounded-full border border-warning/10 tracking-widest uppercase">{l("Advanced", "高级设置")}</span>
+              </div>
+              <p className="text-[11px] text-text-muted leading-relaxed">
+                {l("Customize local port, direct DNS server, and list of domains/IPs that should bypass proxy tunnel.", "自定义本地代理端口、直连物理网络的DNS服务器，以及直接访问、跳过加密代理隧道的域名或IP白名单。")}
+              </p>
             </div>
 
-            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm rounded-[24px] overflow-hidden flex flex-col">
-              
-              <div className="flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors border-b border-border-glass">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
-                    {theme === "dark" ? <I.Moon /> : <I.Sun />}
+            {/* Form Fields & Textarea Container */}
+            <div className="flex-1 flex flex-col gap-4 my-3 min-h-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
+                {/* Local Proxy Port */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-active/10 border border-border-glass/40">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold text-text text-xs">{l("Mixed Proxy Port", "混合代理端口")}</span>
+                    <span className="text-[10px] text-text-muted">{l("Local SOCKS5 / HTTP listener", "本地监听端口")}</span>
                   </div>
-                  <div>
-                    <div className="font-semibold text-text text-[15px]">{l("Appearance", "外观主题")}</div>
-                    <div className="text-xs text-text-muted mt-0.5">{theme === "dark" ? l("Dark mode enabled", "已启用深色模式") : l("Light mode enabled", "已启用浅色模式")}</div>
-                  </div>
+                  <input 
+                    type="number"
+                    value={proxyPort}
+                    onChange={(e) => setProxyPort(Math.max(1, Math.min(65535, Number(e.target.value))))}
+                    className="w-24 px-3 py-1.5 rounded-xl bg-surface-active/30 border border-border-glass text-xs text-right font-mono focus:outline-none focus:border-secondary/50 text-text"
+                  />
                 </div>
-                <button 
-                  onClick={toggleTheme}
-                  className={`w-12 h-7 rounded-full p-1 transition-colors relative shadow-inner shrink-0 ${theme === 'dark' ? 'bg-primary' : 'bg-border-light dark:bg-black/20'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform absolute top-1 ${theme === 'dark' ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                </button>
-              </div>
 
-              {/* Language Row */}
-              <div className="flex items-center justify-between p-4 rounded-[24px] bg-transparent hover:bg-surface-active/40 border border-transparent transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                    <I.Globe />
+                {/* Direct DNS Server */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-active/10 border border-border-glass/40">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold text-text text-xs">{l("Direct DNS Server", "直连 DNS 服务器")}</span>
+                    <span className="text-[10px] text-text-muted">{l("DNS for direct traffic", "直连物理网络解析DNS")}</span>
                   </div>
-                  <div>
-                    <div className="font-semibold text-text text-[15px]">{l("Language", "语言设置")}</div>
-                    <div className="text-xs text-text-muted mt-0.5">{l("Interface language", "应用界面显示语言")}</div>
-                  </div>
-                </div>
-                <div className="flex bg-surface-active/50 rounded-xl p-1 border border-border-glass shadow-inner">
-                  <button 
-                    onClick={() => i18n.changeLanguage("zh-CN")}
-                    className={`px-5 py-2 text-xs font-bold rounded-lg transition-all ${i18n.language.startsWith("zh") ? 'bg-white dark:bg-surface text-text shadow-sm ring-1 ring-border-glass' : 'text-text-muted hover:text-text'}`}
-                  >
-                    中文
-                  </button>
-                  <button 
-                    onClick={() => i18n.changeLanguage("en")}
-                    className={`px-5 py-2 text-xs font-bold rounded-lg transition-all ${!i18n.language.startsWith("zh") ? 'bg-white dark:bg-surface text-text shadow-sm ring-1 ring-border-glass' : 'text-text-muted hover:text-text'}`}
-                  >
-                    EN
-                  </button>
+                  <input 
+                    type="text"
+                    value={dnsServer}
+                    onChange={(e) => setDnsServer(e.target.value)}
+                    className="w-40 px-3 py-1.5 rounded-xl bg-surface-active/30 border border-border-glass text-xs text-right font-mono focus:outline-none focus:border-secondary/50 text-text"
+                  />
                 </div>
               </div>
 
+              {/* Bypass domains text box (Fills remaining height) */}
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5">{l("Bypass Domains & IPs List", "绕过代理域名与 IP 段列表")}</div>
+                <textarea 
+                  value={bypassDomains}
+                  onChange={(e) => setBypassDomains(e.target.value)}
+                  className="w-full flex-grow p-4 rounded-2xl bg-surface-active/10 border border-border-glass/60 focus:border-secondary/30 outline-none transition-all text-xs font-mono text-text resize-none shadow-inner no-scrollbar min-h-[100px]"
+                  placeholder="localhost, 127.0.0.1, ::1"
+                />
+              </div>
+            </div>
+
+            <div className="shrink-0 flex justify-end items-center gap-3">
+              {saveStatus === "success" && (
+                <span className="text-success text-xs font-semibold flex items-center gap-1">
+                  <I.Check /> {l("Settings saved successfully!", "配置保存成功！")}
+                </span>
+              )}
+              {saveStatus === "error" && (
+                <span className="text-danger text-xs font-semibold flex items-center gap-1">
+                  <I.Alert /> {l("Failed to save configuration", "保存配置失败")}
+                </span>
+              )}
+              <button 
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-secondary to-accent-purple hover:opacity-95 text-white text-xs font-extrabold tracking-wider shadow-sm transition-all cursor-pointer disabled:opacity-75"
+              >
+                {isSaving ? l("Saving...", "正在保存...") : l("Save Configuration", "保存高级配置")}
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* --- APPLICATION TAB --- */}
-        {activeTab === 'application' && (
-          <div className="animate-fade-in flex flex-col gap-6">
-            <div>
-              <h1 className="text-2xl font-heading font-bold text-text">{l("Application Behavior", "应用行为")}</h1>
-              <p className="text-sm text-text-muted mt-1">{l("Manage startup and notification settings.", "管理启动和通知相关设置。")}</p>
-            </div>
-
-            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm rounded-[24px] overflow-hidden flex flex-col">
-              
-              <div className="flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors border-b border-border-glass">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-green-500/10 text-green-600 flex items-center justify-center">
-                    <I.Rocket />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-text text-[15px]">{l("Auto-Connect on Startup", "启动时自动连接")}</div>
-                    <div className="text-xs text-text-muted mt-0.5">{l("Connect to the fastest node when opened", "打开应用时自动连接延迟最低的节点")}</div>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setAutoConnect(!autoConnect)}
-                  className={`w-12 h-7 rounded-full p-1 transition-colors relative shadow-inner shrink-0 ${autoConnect ? 'bg-success' : 'bg-border-light dark:bg-black/20'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform absolute top-1 ${autoConnect ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
-                    <I.Bell />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-text text-[15px]">{l("System Notifications", "系统通知")}</div>
-                    <div className="text-xs text-text-muted mt-0.5">{l("Show alerts for traffic usage and status", "接收流量不足或连接状态变化的通知")}</div>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setNotifications(!notifications)}
-                  className={`w-12 h-7 rounded-full p-1 transition-colors relative shadow-inner shrink-0 ${notifications ? 'bg-primary' : 'bg-border-light dark:bg-black/20'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform absolute top-1 ${notifications ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                </button>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* --- NETWORK TAB --- */}
-        {activeTab === 'network' && (
-          <div className="animate-fade-in flex flex-col gap-6">
-            <div>
-              <h1 className="text-2xl font-heading font-bold text-text flex items-center gap-3">
-                {l("Network Configuration", "网络配置")}
-                <span className="px-2.5 py-0.5 text-[11px] font-bold bg-warning/10 text-warning rounded-full">{l("Advanced", "高级")}</span>
-              </h1>
-              <p className="text-sm text-text-muted mt-1">{l("Configure routing and bypass rules.", "配置路由与跳过规则。")}</p>
-            </div>
-
-            <div className="bg-surface/60 backdrop-blur-2xl border border-border-glass rounded-[32px] p-2 shadow-sm flex flex-col gap-2">
-              <div className="p-4 rounded-[24px] bg-white dark:bg-surface-active border border-border-glass shadow-sm flex flex-col">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 shrink-0 rounded-2xl bg-text-muted/10 text-text-muted flex items-center justify-center">
-                    <I.ShieldOff />
-                  </div>
-                  <div className="flex-1 w-full pt-1">
-                    <div className="font-semibold text-text text-[15px]">{l("Bypass Proxy List", "代理白名单 (跳过代理)")}</div>
-                    <div className="text-sm text-text-muted mt-1 leading-relaxed">
-                      {l("Traffic to these destinations will bypass the proxy and use direct connection. Supports wildcards (*.example.com). Separate by commas.", "发往这些目标地址的流量将直接连接，不经过代理服务器。支持通配符（如 *.example.com），多个地址请用英文逗号分隔。")}
-                    </div>
-                    
-                    <textarea 
-                      value={bypassDomains}
-                      onChange={(e) => setBypassDomains(e.target.value)}
-                      className="w-full mt-5 p-4 rounded-xl bg-surface border border-border focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none transition-all text-[14px] font-mono text-text resize-y min-h-[120px] shadow-inner"
-                      placeholder="localhost, 127.0.0.1"
-                    />
-                    
-                    <div className="flex justify-end mt-4">
-                      <button className="px-6 py-2.5 rounded-xl bg-primary text-text-inverse text-[14px] font-semibold shadow-sm hover:bg-primary-hover active:scale-95 transition-all">
-                        {l("Save Configuration", "保存配置")}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        
       </div>
     </div>
   )

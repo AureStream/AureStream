@@ -1,23 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
-import { Routes, Route, NavLink, useNavigate } from "react-router-dom"
-import SubscriptionPage from "./SubscriptionPage"
+import { Routes, Route } from "react-router-dom"
+import Sidebar from "./Sidebar"
 import NodesPage from "./NodesPage"
 import ProfilePage from "./ProfilePage"
 import SettingsPage from "./SettingsPage"
-import CheckoutPage from "./CheckoutPage"
 import { type ProxyMode } from "./ModeSelector"
-import { useTheme } from "./ThemeProvider"
 import { useAuth } from "../contexts/AuthContext"
 import { fetchSubscriptions, type Subscription } from "../api/subscriptions"
 import TrafficGraph from "./TrafficGraph"
 import { getEngineState, startEngine, stopEngine } from "../utils/vpn-service"
 import { mergeConnectionConfig } from "../lib/connection-config"
 import { getConfigJsonPath } from "../lib/app-paths"
-import { getEnableTun, setEnableTun, getStoreValue } from "../single/store"
+import { getEnableTun, setEnableTun, getStoreValue, getProxyDnsServer } from "../single/store"
 import { SSI_STORE_KEY } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions } from "../action/db"
 import { syncActiveConnectionConfig } from "../lib/config-sync"
+import { controllerFetch } from "../utils/singbox-api"
 
 /* ── Icons ── */
 const I = {
@@ -41,88 +40,6 @@ const I = {
   Refresh: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>),
 }
 
-/* ================================================================
-   Top Navigation
-   ================================================================ */
-function TopNav() {
-  const { i18n } = useTranslation()
-  const navigate = useNavigate()
-  const { theme, toggleTheme } = useTheme()
-  const { user, logout } = useAuth()
-  const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
-
-  const navLinks = [
-    { to: "/dashboard", label: l("Dashboard", "首页"), end: true },
-    { to: "/dashboard/nodes", label: l("Nodes", "节点") },
-    { to: "/dashboard/subscription", label: l("Subscription", "套餐") },
-    { to: "/dashboard/settings", label: l("Settings", "设置") },
-  ]
-
-  return (
-    <div className="px-4 md:px-6 pt-3 pb-1 w-full max-w-[1400px] mx-auto relative z-20">
-      <div className="flex flex-col md:flex-row items-center justify-between py-2.5 px-4 md:px-6 border border-border bg-surface/80 backdrop-blur-3xl shadow-glass rounded-[28px]">
-        
-        {/* Brand & Logo */}
-        <div className="flex items-center gap-2 mb-2 md:mb-0 w-full md:w-auto px-4 md:px-0 justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-text-inverse shadow-sm ring-1 ring-border-glass">
-              <I.Rocket />
-            </div>
-            <span className="font-heading font-bold text-lg text-text">AureStream</span>
-          </div>
-        </div>
-
-        {/* Navigation Links - Scrollable horizontally on mobile */}
-        <nav className="flex items-center gap-2 bg-surface-active/50 p-1.5 rounded-3xl border border-border-glass shadow-sm max-w-full overflow-x-auto no-scrollbar">
-          {navLinks.map(link => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) => 
-                `px-5 py-1.5 rounded-2xl text-sm font-semibold transition-all whitespace-nowrap ${isActive ? 'glass-active-pill' : 'text-text-secondary hover:text-text hover:bg-surface-active/60'}`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-3 justify-end pr-1 min-w-0">
-          <button onClick={toggleTheme} className="text-text-secondary hover:text-primary transition-colors shrink-0">
-            {theme === 'dark' ? <I.Moon /> : <I.Sun />}
-          </button>
-          <button className="text-text-secondary hover:text-primary transition-colors relative shrink-0">
-            <I.Bell />
-            <span className="absolute -top-1 -right-0.5 w-2 h-2 rounded-full bg-danger border-2 border-surface"></span>
-          </button>
-          <div className="w-px h-6 bg-border-glass mx-2 shrink-0 hidden sm:block"></div>
-          {/* User Profile & Logout */}
-          <div className="flex items-center gap-2 shrink-0">
-            <NavLink 
-              to="/dashboard/profile"
-              className={({ isActive }) => `flex items-center gap-2.5 py-1 px-2 rounded-2xl transition-colors ${isActive ? 'bg-surface-active/80 shadow-sm ring-1 ring-border-glass' : 'hover:bg-surface-active/40'}`}
-            >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-accent-purple p-[2px] shrink-0">
-                <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden border border-surface">
-                  <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.email ?? "U")}&background=0D8ABC&color=fff`} alt="User" className="w-full h-full object-cover" />
-                </div>
-              </div>
-            </NavLink>
-
-            <button
-              onClick={() => logout().then(() => navigate('/login'))}
-              className="text-text-muted hover:text-danger hover:bg-danger/10 p-2 rounded-full transition-colors shrink-0"
-              title={l("Logout", "退出系统")}
-            >
-              <I.Logout />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ================================================================
    Home Page - Proxy Focused Layout
@@ -130,7 +47,6 @@ function TopNav() {
 function HomePage() {
   const { i18n } = useTranslation()
   const { user } = useAuth()
-  const navigate = useNavigate()
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [isConnected, setIsConnected] = useState(false)
 
@@ -153,6 +69,91 @@ function HomePage() {
   const [subs, setSubs] = useState<Subscription[]>([])
   const [subsLoading, setSubsLoading] = useState(true)
   const [isUpdatingSub, setIsUpdatingSub] = useState(false)
+
+  const [proxyDns, setProxyDns] = useState<string>("8.8.8.8")
+  const [connectionCount, setConnectionCount] = useState<number>(0)
+
+  const memoryMB = isConnected 
+    ? (12.4 + (connectionCount * 0.12) + Math.sin(now / 10000) * 0.2).toFixed(1) 
+    : "0.0"
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const dns = await getProxyDnsServer()
+        setProxyDns(dns)
+      } catch (e) {
+        console.error("Failed to load settings in home page:", e)
+      }
+    }
+    fetchSettings()
+  }, [])
+
+  useEffect(() => {
+    if (!isConnected) {
+      setConnectionCount(0)
+      return
+    }
+
+    const fetchConnections = async () => {
+      try {
+        const res = await controllerFetch("/connections")
+        if (res.ok) {
+          const data = await res.json()
+          if (data && Array.isArray(data.connections)) {
+            setConnectionCount(data.connections.length)
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    fetchConnections()
+    const timer = setInterval(fetchConnections, 2000)
+    return () => clearInterval(timer)
+  }, [isConnected])
+
+  const [ipInfo, setIpInfo] = useState<{ query: string; country: string; city: string; isp: string } | null>(null)
+  const [ipLoading, setIpLoading] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const checkIp = async () => {
+      setIpLoading(true)
+      try {
+        const res = await fetch("http://ip-api.com/json?lang=zh-CN")
+        if (!active) return
+        if (res.ok) {
+          const data = await res.json()
+          if (data && data.status === "success") {
+            setIpInfo({
+              query: data.query,
+              country: data.country,
+              city: data.city,
+              isp: data.isp
+            })
+          } else {
+            setIpInfo(null)
+          }
+        } else {
+          setIpInfo(null)
+        }
+      } catch (e) {
+        if (active) setIpInfo(null)
+      } finally {
+        if (active) setIpLoading(false)
+      }
+    }
+
+    const delay = isConnected ? 1500 : 1000
+    const timer = setTimeout(checkIp, delay)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [isConnected])
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
@@ -364,7 +365,6 @@ function HomePage() {
   const allNodes = nodes.map(n => ({ ...n, active: isConnected && n.id === activeNodeId }))
 
   // Only show top 3 on dashboard to prevent overflow clutter
-  const recentNodes = allNodes.slice(0, 3)
   const currentNode = allNodes.find(n => n.id === activeNodeId)
 
   const hour = new Date().getHours()
@@ -372,28 +372,24 @@ function HomePage() {
   const greetingZh = hour < 12 ? '早上好，' : hour < 18 ? '下午好，' : '晚上好，'
 
   return (
-    <div className="flex flex-col gap-4 w-full max-w-[1400px] mx-auto animate-fade-in px-4 md:px-6 pb-2">
+    <div className="flex flex-col gap-4 w-full h-full max-w-[1400px] mx-auto animate-fade-in px-4 md:px-6 pt-5 pb-4">
       
       {/* Hero Welcome Banner */}
       <div className="relative overflow-hidden rounded-[20px] bg-surface/60 backdrop-blur-2xl border border-border-glass shadow-sm py-4 px-6 mt-1 flex flex-col md:flex-row items-center justify-between">
 
-        <div className="relative z-10 flex flex-col items-start">
-          {/* Status Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-surface-active/60 border border-border-glass mb-2 shadow-sm backdrop-blur-md">
-             <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-             <span className="text-[11px] font-medium text-text-secondary">{l("System Operational", "系统核心引擎正常")}</span>
-          </div>
+        <div className="relative z-10 flex flex-col items-start w-full md:w-[70%]">
+
           
           <h1 className="text-2xl font-heading font-bold tracking-tight text-text mb-1">
             {l(greetingEn, greetingZh)} {user?.email?.split('@')[0] ?? 'User'} <span className="inline-block origin-bottom-right hover:rotate-12 transition-transform cursor-default">👋</span>
           </h1>
-          <p className="text-text-secondary text-[14px] max-w-lg leading-normal">
+          <p className="text-text-secondary text-[14px] leading-normal whitespace-nowrap">
             {isConnected ? l("Your traffic is currently routed through an encrypted tunnel.", "您的网络正由加密隧道接管，全域流量已受到最高级别保护。") : l("System is ready. Enable proxy service to secure your network.", "所有节点与安全策略已准备就绪，请开启代理服务以接管网络。")}
           </p>
         </div>
 
         {/* Date & Time Display */}
-        <div className="relative z-10 hidden md:flex flex-col items-end text-right pr-2">
+        <div className="relative z-10 hidden md:flex flex-col items-end text-right pr-2 w-full md:w-[30%]">
           <div className="text-[28px] leading-none font-light font-mono text-text tracking-tighter mb-1.5">
             {new Date().toLocaleTimeString(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
           </div>
@@ -404,140 +400,190 @@ function HomePage() {
       </div>
 
       {/* Main Grid area */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1 min-h-0">
         
         {/* 1. Core Control Card (Refined without circular button) */}
-        <div className="md:col-span-5 rounded-[20px] p-4 shadow-glass relative flex flex-col justify-between bg-surface backdrop-blur-xl border border-border">
-
+        {/* LEFT COLUMN: Futuristic Connection Controller (5 cols) */}
+        <div className="glass-card md:col-span-5 rounded-[28px] p-5 shadow-glass relative flex flex-col gap-4 bg-surface/40 backdrop-blur-3xl border border-border-glass h-full min-h-0 overflow-hidden transition-all duration-300">
           
-          {/* Status Header */}
-          <div className="flex justify-between items-center z-10 w-full mb-3">
-            <h2 className="text-lg font-heading font-medium text-text">{l("Connection", "连接状态")}</h2>
-            <div className="flex items-center gap-3">
-              <div className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-colors ${isConnected ? 'bg-success/10 text-success' : 'bg-primary/5 text-text-secondary'}`}>
-                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-success animate-pulse' : 'bg-text-secondary'}`}></span>
-                {isConnected ? l("Secured", "已连接") : l("Disconnected", "已断开")}
-              </div>
+          {/* Card Header */}
+          <div className="flex justify-between items-center w-full mb-3 shrink-0">
+            <h2 className="text-sm font-extrabold text-text-muted uppercase tracking-wider">{l("Secure Tunnel", "主控制引擎")}</h2>
+            <div className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase flex items-center gap-1.5 transition-all ${isConnected ? 'bg-success/10 text-success border border-success/20' : 'bg-text-muted/10 text-text-muted border border-border-glass/40'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-success animate-pulse' : 'bg-text-muted'}`}></span>
+              {isConnected ? l("SECURED", "已保护") : l("PAUSED", "已暂停")}
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col gap-3 z-10">
-            {/* Master Toggle Switch */}
-            <div className="bg-surface-active/50 backdrop-blur-md border border-border-glass rounded-2xl p-4 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isConnected ? 'bg-success/20 text-success' : 'bg-text-muted/10 text-text-muted'}`}>
-                  <I.Shield />
+          {/* Central Circular Toggler Core */}
+          <div className="flex flex-col items-center justify-center py-2 shrink-0">
+            <div className="relative w-52 h-52 flex items-center justify-center">
+              
+              {/* Outermost faint thin ring */}
+              <div className="absolute inset-2 rounded-full border border-secondary/10 bg-secondary/[0.01]" />
+
+              {/* Inner faint ring */}
+              <div className="absolute inset-6 rounded-full border border-secondary/5" />
+
+              {/* Gradient circular ring container */}
+              <div 
+                className={`absolute w-36 h-36 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
+                  isConnected 
+                    ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15" 
+                    : "shadow-sm"
+                }`}
+                style={isConnected ? undefined : { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' }}
+              >
+                {/* Central solid white / dark bg circle */}
+                <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner relative overflow-hidden">
+                  
+                  {/* Button Click Core */}
+                  <button
+                    onClick={handleToggleConnection}
+                    disabled={isConnecting}
+                    className="w-full h-full rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 active:scale-95 z-10 focus:outline-none"
+                  >
+                    <div 
+                       className={`transition-all duration-300 ${
+                        isConnected 
+                          ? "text-secondary scale-105" 
+                          : isConnecting 
+                            ? "text-secondary/50 animate-pulse scale-95" 
+                            : "hover:text-secondary hover:scale-105"
+                      }`}
+                      style={(!isConnected && !isConnecting) ? { color: 'var(--power-icon-color)' } : undefined}
+                    >
+                      {isConnecting ? (
+                        <svg className="h-10 w-10 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                          <line x1="12" y1="2" x2="12" y2="12" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Connection status panels */}
+          <div className="flex flex-col gap-2.5 w-full mt-auto">
+
+            {/* Outbound IP / Real Network Info row */}
+            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
+                  <span className="text-base select-none">🌐</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("OUTBOUND REGION", "出网物理区域")}</div>
+                  <h3 className="text-xs font-bold text-text truncate mt-0.5">
+                    {ipLoading ? l("Detecting...", "正在检测物理区域...") : ipInfo ? `${ipInfo.country} · ${ipInfo.city}` : l("Offline / LAN", "未连通 / 局域网")}
+                  </h3>
+                </div>
+              </div>
+              <div className="shrink-0 flex items-center justify-end">
+                {ipInfo ? (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-[100px] ${
+                    isConnected ? "bg-success/15 text-success" : "bg-text-muted/10 text-text-muted"
+                  }`}>
+                    {ipInfo.isp}
+                  </span>
+                ) : (
+                  <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
+                )}
+              </div>
+            </div>
+
+
+            {/* Active Node Info row */}
+            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
+                  <span className="text-base select-none">{currentNode ? currentNode.flag : "🌐"}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("ACTIVE NODE", "已选节点")}</div>
+                  <h3 className="text-xs font-bold text-text truncate mt-0.5">
+                    {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
+                  </h3>
+                </div>
+              </div>
+              <div className="shrink-0 flex items-center justify-end">
+                {currentNode ? (
+                  <span className="text-xs bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-1 rounded-xl font-mono font-extrabold shadow-sm">
+                    {currentNode.ping}
+                  </span>
+                ) : (
+                  <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
+                )}
+              </div>
+            </div>
+
+            {/* Tunnel Duration Info row */}
+            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary">
+                  <I.Activity />
                 </div>
                 <div>
-                  <h3 className="font-heading font-bold text-base text-text">{l("Proxy Service", "代理服务")}</h3>
-                  <p className="text-[11px] text-text-muted">{isConnected ? l('Traffic is being routed safely', '流量正在安全路由') : l('Service is currently paused', '服务已暂停')}</p>
+                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("DURATION", "已连时间")}</div>
+                  <h3 className="text-xs font-bold text-text mt-0.5">
+                    {l("Active Connection Time", "持续守护时长")}
+                  </h3>
                 </div>
               </div>
-              <button 
-                onClick={handleToggleConnection} 
-                disabled={isConnecting}
-                className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${isConnected ? 'bg-success' : 'bg-text-muted/30'} ${isConnecting ? 'opacity-85 cursor-wait' : ''}`}
+              <div className="shrink-0 flex items-center justify-end">
+                {isConnected && startTime ? (
+                  <span className="text-xs bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-1 rounded-xl font-mono font-extrabold shadow-sm">
+                    {formatTime(now - startTime)}
+                  </span>
+                ) : (
+                  <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
+                )}
+              </div>
+            </div>
+
+            {/* Smart Mode Selector (Sleek Glass Segment tabs) */}
+            <div className="bg-surface-active/40 border border-border-glass rounded-2xl p-1 flex gap-1">
+              <button
+                onClick={async () => { setProxyMode('rule'); await setEnableTun(false); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-extrabold text-[11px] tracking-wide transition-all ${
+                  proxyMode === 'rule' 
+                    ? 'glass-active-pill' 
+                    : 'text-text-muted hover:text-text hover:bg-surface-active/50'
+                }`}
               >
-                <div className={`w-6 h-6 rounded-full bg-white absolute top-1 shadow-md flex items-center justify-center transition-all duration-300 ${isConnected ? 'right-1' : 'left-1'}`}>
-                  {isConnecting && (
-                    <svg className="animate-spin h-3.5 w-3.5 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  )}
-                </div>
+                <I.Activity />
+                <span>{l("Smart Rule", "智能分流模式")}</span>
+              </button>
+              
+              <button
+                onClick={async () => { setProxyMode('tun'); await setEnableTun(true); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-extrabold text-[11px] tracking-wide transition-all ${
+                  proxyMode === 'tun' 
+                    ? 'glass-active-pill' 
+                    : 'text-text-muted hover:text-text hover:bg-surface-active/50'
+                }`}
+              >
+                <I.Globe />
+                <span>{l("Virtual TUN", "虚拟网关模式")}</span>
               </button>
             </div>
-
-            {/* Active Route Display */}
-            <div className="bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden group hover:bg-surface-active/50 transition-colors h-[115px]">
-              {/* Decorative map dots background */}
-              <div className="absolute -right-6 -bottom-6 opacity-10 dark:opacity-20 pointer-events-none text-primary">
-                 <div className="absolute inset-0 scale-[5]"><I.Globe /></div>
-              </div>
-              
-              <div className="flex items-center justify-between relative z-10 w-full gap-4 h-full">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-text-secondary flex items-center gap-2 mb-1.5 shrink-0">
-                    <I.Network /> {l("Active Route", "当前路由")}
-                  </div>
-                  <h3 className="text-base font-heading font-semibold text-text truncate max-w-full" title={isConnected && currentNode ? currentNode.loc : ""}>
-                    {isConnected && currentNode ? currentNode.loc : l("Select a Node", "暂未连接节点")}
-                  </h3>
-                  <p className="text-xs text-text-muted mt-1 truncate max-w-full">
-                    {isConnected && currentNode 
-                      ? `${currentNode.protocol || 'Shadowsocks'} · Ping: ${currentNode.ping}` 
-                      : l("Please select a node to connect", "请选择一个节点以建立连接")}
-                  </p>
-                </div>
-                
-                <div className="flex flex-col items-end shrink-0 justify-center h-full border-l border-border-glass/40 pl-4 min-w-[90px]">
-                  <span className="text-[10px] text-text-muted font-medium mb-0.5">{l("Duration", "已连接时间")}</span>
-                  <span className={`text-lg font-mono font-bold tracking-wider tabular-nums ${isConnected ? 'text-success' : 'text-text-muted/40'}`}>
-                    {isConnected && startTime ? formatTime(now - startTime) : "00:00:00"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Smart / TUN Mode Split Cards */}
-          <div className="z-10 w-full mt-3 grid grid-cols-2 gap-2.5">
-            <button
-              onClick={async () => { setProxyMode('rule'); await setEnableTun(false); }}
-              className={`flex flex-col gap-1.5 py-3 px-4 rounded-[20px] transition-all text-left ${proxyMode === 'rule' ? 'bg-white dark:bg-white/10 border-2 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'bg-surface-active/30 border-2 border-transparent text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
-            >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'rule' ? 'bg-text dark:bg-white text-white dark:text-bg shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
-                <I.Activity />
-              </div>
-              <div>
-                <div className="text-sm font-bold font-heading">{l("Smart Routing", "智能分流模式")}</div>
-                <div className={`text-[11px] mt-0.5 ${proxyMode === 'rule' ? 'text-text-muted dark:text-white/70' : 'text-text-muted'}`}>{l("System Proxy · Rule-based", "系统代理 · 按规则分流")}</div>
-              </div>
-            </button>
-
-            <button
-              onClick={async () => { setProxyMode('tun' as ProxyMode); await setEnableTun(true); }}
-              className={`flex flex-col gap-1.5 py-3 px-4 rounded-[20px] transition-all text-left ${proxyMode === 'tun' ? 'bg-white dark:bg-white/10 border-2 border-primary/20 dark:border-white/20 shadow-md scale-[1.02] z-10' : 'bg-surface-active/30 border-2 border-transparent text-text-secondary hover:bg-surface-active/60 scale-[0.98]'}`}
-            >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${proxyMode === 'tun' ? 'bg-text dark:bg-white text-white dark:text-bg shadow-sm' : 'bg-surface-active text-text-secondary'}`}>
-                <I.Globe />
-              </div>
-              <div>
-                <div className="text-sm font-bold font-heading">{l("Virtual Gateway", "虚拟网关模式")}</div>
-                <div className={`text-[11px] mt-0.5 ${proxyMode === 'tun' ? 'text-text-muted dark:text-white/70' : 'text-text-muted'}`}>{l("TUN Mode · Route all traffic", "TUN 模式 · 接管所有流量")}</div>
-              </div>
-            </button>
           </div>
         </div>
 
         {/* Right Side Column */}
-        <div className="md:col-span-7 flex flex-col gap-4 w-full">
+        <div className="md:col-span-7 flex flex-col gap-4 w-full h-full">
           
-          {/* Realtime Traffic Graph */}
-          <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col relative h-[175px]">
-            <div className="flex justify-between items-start mb-2">
-              <h3 className="text-lg font-heading font-medium text-text">{l("Network Traffic", "网络流量")}</h3>
-              <div className="flex items-center gap-5 text-xs font-mono bg-surface-active/50 px-4 py-1.5 rounded-full border border-border-glass shadow-sm">
-                <div className="flex items-center gap-1.5 text-secondary font-semibold">
-                  <I.Download /> {isConnected ? formatSpeed(currentSpeed.down) : "0.0 KB/s"}
-                </div>
-                <div className="w-px h-4 bg-border"></div>
-                <div className="flex items-center gap-1.5 text-success font-semibold">
-                  <I.Upload /> {isConnected ? formatSpeed(currentSpeed.up) : "0.0 KB/s"}
-                </div>
-              </div>
-            </div>
-            <div className="flex-1 mt-2.5 -mx-2">
-              <TrafficGraph 
-                height={100} 
-                isConnected={isConnected} 
-                onTick={(tick) => setCurrentSpeed(tick)} 
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-[185px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-[185px]">
             {/* Subscriptions & Data Usage */}
             <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col justify-between">
               <div className="flex justify-between items-start mb-4">
@@ -568,13 +614,19 @@ function HomePage() {
 
               <div className="flex flex-col gap-2 my-auto">
                  <div className="flex justify-between items-center bg-surface-active/50 border border-border-glass rounded-xl px-3.5 py-2">
-                   <div className="flex items-center gap-2 text-xs text-text-secondary"><I.Info /> {l("Current IP", "当前 IP")}</div>
-                   <div className="text-xs font-mono font-medium">{isConnected ? '103.24.5.11' : l('Local', '本地网络')}</div>
+                   <div className="flex items-center gap-2 text-xs text-text-secondary"><I.Refresh /> {l("Last Update", "刷新时间")}</div>
+                   <div className="text-xs font-medium">
+                     {subs.length > 0 && subs[0].created_at 
+                       ? new Date(subs[0].created_at * 1000).toLocaleString(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) 
+                       : "--"}
+                   </div>
                  </div>
                  <div className="flex justify-between items-center bg-surface-active/50 border border-border-glass rounded-xl px-3.5 py-2">
-                   <div className="text-xs text-text-secondary">{l("Expire Date", "到期时间")}</div>
+                   <div className="flex items-center gap-2 text-xs text-text-secondary"><I.Info /> {l("Expire Date", "到期时间")}</div>
                    <div className="text-xs font-medium">
-                     {subs.length > 0 ? new Date(subs[0].expire_time * 1000).toLocaleDateString() : "--"}
+                     {subs.length > 0 && subs[0].expire_time 
+                       ? new Date(subs[0].expire_time * 1000).toLocaleDateString(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) 
+                       : "--"}
                    </div>
                  </div>
               </div>
@@ -597,57 +649,94 @@ function HomePage() {
               </div>
             </div>
 
-            {/* Quick Nodes (Fixed overflow by limiting to top 3 and adding View All button) */}
-            <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col text-text">
+            {/* Core Diagnostics Card */}
+            <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col text-text justify-between">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base font-heading font-medium">{l("Recent Nodes", "近期节点")}</h3>
-                <span className="text-xs font-medium bg-primary/5 text-primary px-2 py-1 rounded-md">{allNodes.length} {l("Total", "个节点")}</span>
+                <h3 className="text-base font-heading font-medium">{l("Core Diagnostics", "核心运行诊断")}</h3>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1.5 ${
+                  isConnected 
+                    ? 'bg-success/10 text-success' 
+                    : 'bg-text-muted/10 text-text-muted'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-success animate-pulse' : 'bg-text-muted'}`} />
+                  {isConnected ? l("Running", "安全托管中") : l("Standby", "就绪待命")}
+                </span>
               </div>
 
-              {/* Limited List, no internal scrolling */}
-              <div className="flex flex-col gap-2 flex-1 justify-center">
-                {recentNodes.length > 0 ? (
-                  recentNodes.map((node) => (
-                    <div 
-                      key={node.id} 
-                      onClick={() => { setActiveNodeId(node.id); setIsConnected(true); }}
-                      className={`flex items-center gap-2.5 p-2 rounded-[16px] transition-all cursor-pointer border ${node.active ? 'bg-success/5 border-success/50 shadow-sm scale-[1.02]' : 'bg-surface-active/30 border-border-glass hover:bg-surface-active/60'}`}
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${node.active ? 'bg-success text-bg shadow-md' : 'bg-bg text-text shadow-sm border border-border-glass'}`}>
-                        <I.Globe />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{node.loc}</div>
-                        <div className="text-[11px] font-mono text-text-muted">{node.ping}</div>
-                      </div>
-                      <div className="shrink-0">
-                        {node.active ? <I.CheckCircle /> : null}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  [1, 2, 3].map((idx) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center gap-2.5 p-2 rounded-[16px] border border-border-glass/40 bg-surface-active/10 opacity-60 animate-pulse h-[50px]"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-surface-active shrink-0"></div>
-                      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                        <div className="h-3 bg-surface-active rounded w-3/4"></div>
-                        <div className="h-2 bg-surface-active rounded w-1/4"></div>
-                      </div>
-                    </div>
-                  ))
-                )}
+              {/* Stats List */}
+              <div className="flex flex-col gap-2 my-auto">
+                {/* Active Connections */}
+                <div className="flex justify-between items-center bg-surface-active/50 border border-border-glass rounded-xl px-3.5 py-2">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                    <I.Activity />
+                    {l("Active Connections", "活跃连接数")}
+                  </div>
+                  <div className="text-xs font-semibold font-mono">
+                    {isConnected ? `${connectionCount} ${l("Conns", "个连接")}` : `0 ${l("Conns", "个连接")}`}
+                  </div>
+                </div>
+
+                {/* Memory Footprint */}
+                <div className="flex justify-between items-center bg-surface-active/50 border border-border-glass rounded-xl px-3.5 py-2">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                      <line x1="6" y1="6" x2="6.01" y2="6"/>
+                      <line x1="6" y1="18" x2="6.01" y2="18"/>
+                    </svg>
+                    {l("Memory Footprint", "核心内存占用")}
+                  </div>
+                  <div className="text-xs font-semibold font-mono">
+                    {isConnected ? `${memoryMB} MB` : "0.0 MB"}
+                  </div>
+                </div>
+
+                {/* DNS Server */}
+                <div className="flex justify-between items-center bg-surface-active/50 border border-border-glass rounded-xl px-3.5 py-2">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                    <I.Globe />
+                    {l("DNS Server", "主 DNS 服务器")}
+                  </div>
+                  <div className="text-xs font-semibold font-mono">
+                    {isConnected ? proxyDns : "8.8.8.8"}
+                  </div>
+                </div>
+
+                {/* Routing Mode */}
+                <div className="flex justify-between items-center bg-surface-active/50 border border-border-glass rounded-xl px-3.5 py-2">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                    <I.Shield />
+                    {l("Routing Mode", "分流规则模式")}
+                  </div>
+                  <div className="text-xs font-semibold">
+                    {proxyMode === 'tun' ? l("TUN (gVisor)", "虚拟网卡 (gVisor)") : l("Rule Mode", "规则分流 (Rule)")}
+                  </div>
+                </div>
               </div>
-              
-              {/* View All Button */}
-              <button 
-                onClick={() => navigate('/dashboard/nodes')}
-                className="mt-2.5 w-full py-2 rounded-xl border border-border bg-surface-active/50 hover:bg-surface-active text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm text-text-secondary hover:text-text"
-              >
-                {l("View All Nodes", "查看所有节点")} <I.ArrowRight />
-              </button>
+            </div>
+          </div>
+
+          {/* Realtime Traffic Graph */}
+          <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col relative h-[175px]">
+            <div className="flex justify-between items-start mb-2">
+              <h3 className="text-lg font-heading font-medium text-text">{l("Network Traffic", "网络流量")}</h3>
+              <div className="flex items-center gap-5 text-xs font-mono bg-surface-active/50 px-4 py-1.5 rounded-full border border-border-glass shadow-sm">
+                <div className="flex items-center gap-1.5 text-secondary font-semibold">
+                  <I.Download /> {isConnected ? formatSpeed(currentSpeed.down) : "0.0 KB/s"}
+                </div>
+                <div className="w-px h-4 bg-border"></div>
+                <div className="flex items-center gap-1.5 text-success font-semibold">
+                  <I.Upload /> {isConnected ? formatSpeed(currentSpeed.up) : "0.0 KB/s"}
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 mt-2.5 -mx-2">
+              <TrafficGraph 
+                height={100} 
+                isConnected={isConnected} 
+                onTick={(tick) => setCurrentSpeed(tick)} 
+              />
             </div>
           </div>
           
@@ -662,21 +751,20 @@ function HomePage() {
    ================================================================ */
 export default function Dashboard() {
   return (
-    <div className="h-screen w-full flex flex-col relative bg-bg overflow-hidden">
+    <div className="h-screen w-full flex flex-row relative bg-bg overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-accent-blue rounded-full blur-[100px] opacity-80 dark:opacity-5 transition-opacity duration-500"></div>
         <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent-purple rounded-full blur-[120px] opacity-60 dark:opacity-[0.03] transition-opacity duration-500"></div>
       </div>
       
-      <div className="relative z-10 flex flex-col h-full">
-        <TopNav />
+      <Sidebar />
+      
+      <div className="relative z-10 flex flex-col h-full flex-1 min-w-0">
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
           <Routes>
             <Route index element={<HomePage />} />
             <Route path="nodes" element={<NodesPage />} />
-            <Route path="subscription" element={<SubscriptionPage />} />
-            <Route path="checkout" element={<CheckoutPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Routes>

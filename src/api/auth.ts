@@ -28,9 +28,8 @@ export async function login(email: string, password: string): Promise<AuthResult
 }
 
 export async function register(email: string, password: string): Promise<AuthResult> {
-  const res = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8787"}/auth/register`, {
+  const res = await apiFetch("/auth/register", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   })
   if (!res.ok) {
@@ -57,7 +56,7 @@ export async function refreshToken(): Promise<boolean> {
   const rt = localStorage.getItem("aurestream_refresh_token")
   if (!rt) return false
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8787"}/auth/refresh`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8788"}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: rt }),

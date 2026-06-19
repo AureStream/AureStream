@@ -1,98 +1,103 @@
 import { useTranslation } from "react-i18next"
 import { NavLink, useNavigate } from "react-router-dom"
 import { useTheme } from "./ThemeProvider"
+import { useAuth } from "../contexts/AuthContext"
 
 /* Icons */
 const I = {
   Home: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>),
+  Globe: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20"/><path d="M2 12h20"/></svg>),
   Plans: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>),
   Settings: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>),
+  User: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>),
   Sun: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>),
   Moon: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>),
   Logout: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
   Zap: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>),
-  Download: () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>),
-  Upload: () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>),
 }
 
 export default function Sidebar() {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const { theme, toggleTheme } = useTheme()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
+  const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
+
   const mainNav = [
-    { to: "/dashboard", icon: <I.Home />, label: t("nav_home"), end: true },
-    { to: "/dashboard/subscription", icon: <I.Plans />, label: t("nav_subscription") },
-    { to: "/dashboard/settings", icon: <I.Settings />, label: t("nav_settings") },
+    { to: "/dashboard", icon: <I.Home />, label: l("Dashboard", "首页"), end: true },
+    { to: "/dashboard/nodes", icon: <I.Globe />, label: l("Nodes", "节点") },
+    { to: "/dashboard/settings", icon: <I.Settings />, label: l("Settings", "设置") },
+    { to: "/dashboard/profile", icon: <I.User />, label: l("Profile", "个人中心") },
   ]
 
+  const emailUser = user?.email ?? "User";
+  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(emailUser)}&background=5C67F2&color=fff`;
+
   return (
-    <aside className="sidebar bg-surface border-r border-border shadow-sm flex flex-col z-40">
-      {/* Brand */}
-      <div className="flex items-center gap-3 px-6 py-8">
-        <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center shadow-sm">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>
-          </svg>
-        </div>
-        <span className="font-heading font-bold text-xl tracking-tight text-text">AureStream</span>
+    <aside className="glass-sidebar w-[72px] shrink-0 flex flex-col z-40 h-full border-r border-border-glass items-center">
+      {/* Brand / User Avatar */}
+      <div className="flex flex-col items-center justify-center py-6">
+        <img
+          src={avatarUrl}
+          alt="Avatar"
+          className="w-10 h-10 aspect-square shrink-0 rounded-full object-cover shadow-glow-primary border border-border-glass cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200"
+          onClick={() => navigate("/dashboard/profile")}
+          title={l("Profile", "个人中心")}
+        />
       </div>
 
       {/* Main navigation */}
-      <nav className="flex-1 px-4 py-2 flex flex-col gap-2">
-        <div className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 px-4">Menu</div>
+      <nav className="flex-1 w-full px-2 flex flex-col gap-4 z-10 items-center mt-2">
         {mainNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
-            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${isActive ? "bg-white dark:bg-white/10 text-text dark:text-white shadow-sm ring-1 ring-border-glass dark:ring-white/20 scale-[1.02]" : "text-text-secondary hover:bg-surface-active hover:text-text"}`}
+            className={({ isActive }) => `group relative w-11 h-11 flex items-center justify-center rounded-xl font-bold transition-all duration-200 ${isActive ? "text-secondary dark:text-white" : "text-text-secondary/70 hover:text-text hover:bg-surface-active/40"}`}
           >
-            {item.icon}
-            <span>{item.label}</span>
+            {({ isActive }) => (
+              <>
+                {/* Left Discord-style Active Indicator */}
+                <div className={`absolute left-0 w-[3px] h-4 bg-secondary rounded-r-md transition-all duration-200 ${isActive ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-50'}`} />
+                
+                <span className="shrink-0 transition-transform group-hover:scale-105">{item.icon}</span>
+                
+                {/* Futuristic Glass Floating Tooltip */}
+                <span className="absolute left-[64px] bg-primary/95 dark:bg-bg/95 backdrop-blur-md text-white dark:text-text text-[11px] font-extrabold px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-250 shadow-lg border border-border-glass/40 translate-x-[-8px] group-hover:translate-x-0 whitespace-nowrap z-50">
+                  {item.label}
+                </span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
       {/* Bottom section */}
-      <div className="p-6 flex flex-col gap-6 border-t border-border mt-auto">
-        {/* User info */}
-        <div className="flex items-center gap-3 bg-surface-active p-3 rounded-2xl">
-          <div className="w-10 h-10 rounded-xl bg-accent-blue flex items-center justify-center font-bold text-accent-blue-text">
-            JD
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-text truncate">John Doe</div>
-            <div className="text-xs text-text-muted truncate">john@example.com</div>
-          </div>
-        </div>
-
-        {/* Upgrade banner */}
-        <div
-          onClick={() => navigate("/dashboard/subscription")}
-          className="cursor-pointer rounded-2xl p-5 bg-gradient-to-br from-primary to-primary-hover text-text-inverse transition-transform hover:scale-105 shadow-md relative overflow-hidden"
+      <div className="py-6 flex flex-col gap-4 border-t border-border-glass mt-auto z-10 w-full items-center px-2">
+        {/* Theme Toggle */}
+        <button 
+          onClick={toggleTheme} 
+          className="group relative w-10 h-10 flex items-center justify-center hover:text-primary hover:bg-surface-active/40 rounded-xl transition-all text-text-secondary cursor-pointer"
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full blur-xl -mr-10 -mt-10"></div>
-          <div className="flex items-center gap-2 mb-2 relative z-10">
-            <I.Zap />
-            <span className="text-sm font-bold">{t("upgrade_prompt")}</span>
-          </div>
-          <p className="text-xs opacity-80 leading-relaxed relative z-10">{t("upgrade_desc")}</p>
-        </div>
-
-        {/* Controls row */}
-        <div className="flex items-center justify-between px-2 text-text-secondary">
-          <button onClick={toggleTheme} className="hover:text-primary transition-colors p-2" title={theme === "light" ? "深色模式" : "浅色模式"}>
-            {theme === "light" ? <I.Moon /> : <I.Sun />}
-          </button>
-          <div className="flex items-center bg-surface-active rounded-lg p-1">
-            <button className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${i18n.language === "en" ? "bg-white text-text shadow-sm" : "text-text-muted hover:text-text"}`} onClick={() => i18n.changeLanguage("en")}>EN</button>
-            <button className={`px-2 py-1 text-xs rounded-md font-medium transition-colors ${i18n.language.startsWith("zh") ? "bg-white text-text shadow-sm" : "text-text-muted hover:text-text"}`} onClick={() => i18n.changeLanguage("zh")}>中</button>
-          </div>
-          <button onClick={() => navigate("/login")} className="hover:text-danger transition-colors p-2" title={t("logout")}>
-            <I.Logout />
-          </button>
-        </div>
+          {theme === "light" ? <I.Moon /> : <I.Sun />}
+          
+          <span className="absolute left-[64px] bg-primary/95 dark:bg-bg/95 backdrop-blur-md text-white dark:text-text text-[11px] font-extrabold px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-250 shadow-lg border border-border-glass/40 translate-x-[-8px] group-hover:translate-x-0 whitespace-nowrap z-50">
+            {theme === "light" ? l("Dark Mode", "深色模式") : l("Light Mode", "浅色模式")}
+          </span>
+        </button>
+        
+        {/* Language Switch */}
+        <button 
+          className="group relative text-[11px] font-extrabold text-text-secondary hover:text-primary w-10 h-10 flex items-center justify-center bg-surface-active/40 hover:bg-surface-active/80 border border-border-glass/40 rounded-xl shadow-sm transition-all cursor-pointer"
+          onClick={() => i18n.changeLanguage(i18n.language.startsWith("zh") ? "en" : "zh")}
+        >
+          {i18n.language.startsWith("zh") ? "EN" : "中"}
+          
+          <span className="absolute left-[64px] bg-primary/95 dark:bg-bg/95 backdrop-blur-md text-white dark:text-text text-[11px] font-extrabold px-3 py-1.5 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-250 shadow-lg border border-border-glass/40 translate-x-[-8px] group-hover:translate-x-0 whitespace-nowrap z-50">
+            {l("Switch Language", "切换语言")}
+          </span>
+        </button>
       </div>
     </aside>
   )

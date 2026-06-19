@@ -96,7 +96,7 @@ export default function TrafficGraph({
 
   const w = 600
   const h = height
-  const pad = mini ? { top: 2, right: 2, bottom: 2, left: 2 } : { top: 10, right: 10, bottom: 18, left: 38 }
+  const pad = mini ? { top: 2, right: 2, bottom: 2, left: 2 } : { top: 10, right: 10, bottom: 18, left: 48 }
   const plotW = w - pad.left - pad.right
   const plotH = h - pad.top - pad.bottom
   const max = maxRef.current

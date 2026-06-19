@@ -46,10 +46,9 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="w-full max-w-[380px] animate-fade-in-up">
-      <div className="mb-8">
-        <h2 className="text-3xl font-heading font-bold text-text mb-2">{t("register")}</h2>
-        <p className="text-[15px] text-text-secondary">{t("register_subtitle")}</p>
+    <div className="w-full">
+      <div className="mb-8 text-center">
+        <h2 className="text-3.5xl font-heading font-extrabold tracking-tight bg-gradient-to-r from-secondary to-accent-purple bg-clip-text text-transparent">{t("register")}</h2>
       </div>
 
       {error && (
@@ -60,36 +59,36 @@ export default function RegisterPage() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-bold text-text-secondary ml-1">{t("email")}</label>
-          <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-surface-active/50 border border-border-glass focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all shadow-sm">
-            <div className="text-text-muted"><I.Mail /></div>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-extrabold text-text-secondary/80 ml-1 uppercase tracking-wider">{t("email")}</label>
+          <div className="glass-input flex items-center gap-3 px-4.5 py-4 rounded-[20px]">
+            <div className="text-text-muted/80"><I.Mail /></div>
             <input
-              className="flex-1 bg-transparent border-none outline-none text-text text-sm placeholder:text-text-muted/60"
+              className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
+              placeholder={t("email_placeholder", "请输入您的邮箱地址")}
               required
             />
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-bold text-text-secondary ml-1">{t("password")}</label>
-          <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-surface-active/50 border border-border-glass focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all shadow-sm">
-            <div className="text-text-muted"><I.Lock /></div>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-extrabold text-text-secondary/80 ml-1 uppercase tracking-wider">{t("password")}</label>
+          <div className="glass-input flex items-center gap-3 px-4.5 py-4 rounded-[20px]">
+            <div className="text-text-muted/80"><I.Lock /></div>
             <input
-              className="flex-1 bg-transparent border-none outline-none text-text text-sm placeholder:text-text-muted/60 tracking-wider"
+              className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold tracking-wider"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder={t("password_placeholder", "请输入您的密码")}
               required
             />
             <button
               type="button"
-              className="text-text-muted hover:text-text transition-colors"
+              className="text-text-muted/80 hover:text-text transition-colors"
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <I.EyeOff /> : <I.Eye />}
@@ -97,16 +96,16 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-bold text-text-secondary ml-1">{t("confirm_password")}</label>
-          <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-surface-active/50 border border-border-glass focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/50 transition-all shadow-sm">
-            <div className="text-text-muted"><I.Lock /></div>
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-extrabold text-text-secondary/80 ml-1 uppercase tracking-wider">{t("confirm_password")}</label>
+          <div className="glass-input flex items-center gap-3 px-4.5 py-4 rounded-[20px]">
+            <div className="text-text-muted/80"><I.Lock /></div>
             <input
-              className="flex-1 bg-transparent border-none outline-none text-text text-sm placeholder:text-text-muted/60 tracking-wider"
+              className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold tracking-wider"
               type={showPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder={t("confirm_placeholder", "请再次输入密码以确认")}
               required
             />
           </div>
@@ -115,15 +114,22 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full py-3.5 rounded-2xl bg-primary hover:bg-primary-hover active:scale-[0.98] transition-all text-text-inverse font-bold shadow-sm mt-4 text-[15px] disabled:opacity-60"
+          className="w-full py-4 rounded-[20px] bg-gradient-to-r from-secondary to-accent-purple hover:opacity-95 active:scale-[0.98] transition-all text-white font-extrabold shadow-md mt-4 text-[15px] disabled:opacity-60 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
         >
-          {submitting ? "..." : t("sign_up")}
+          {submitting ? (
+            <>
+              <span className="w-4 h-4 rounded-full border-2 border-t-transparent border-white animate-spin shrink-0" />
+              <span>{t("submitting", "请稍候...")}</span>
+            </>
+          ) : (
+            t("sign_up")
+          )}
         </button>
       </form>
 
       <div className="mt-8 text-center text-[13px] text-text-secondary">
         {t("has_account")}{" "}
-        <Link to="/login" className="font-bold text-primary hover:text-primary-hover transition-colors ml-1">
+        <Link to="/login" className="font-bold text-secondary hover:text-secondary/80 transition-colors ml-1">
           {t("sign_in")}
         </Link>
       </div>
