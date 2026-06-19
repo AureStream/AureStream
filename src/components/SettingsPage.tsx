@@ -174,7 +174,7 @@ export default function SettingsPage() {
   }[helperState]
 
   return (
-    <div className="relative flex flex-col w-full h-full max-w-[1080px] mx-auto animate-fade-in px-8 py-6 overflow-y-auto no-scrollbar gap-8">
+    <div className="relative flex flex-col w-full h-full max-w-[1080px] mx-auto animate-fade-in px-8 py-6 overflow-y-auto no-scrollbar gap-5">
 
 
 
@@ -276,7 +276,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Network & routing */}
-      <div className="glass-card rounded-[24px] p-5 shadow-glass shrink-0">
+      <div className="glass-card rounded-[24px] p-5 shadow-glass flex-1 flex flex-col min-h-0">
         <SectionHeader
           icon={<I.Route />}
           tint="bg-warning/15 text-warning"
@@ -314,8 +314,8 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="mt-3">
-          <div className="flex items-center justify-between mb-1.5">
+        <div className="mt-3 flex-1 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-1.5 shrink-0">
             <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("Bypass Domains & IPs", "绕过代理域名与 IP 段")}</span>
             <span className="text-[10px] text-text-muted">{l("comma separated", "逗号分隔")}</span>
           </div>
@@ -323,7 +323,7 @@ export default function SettingsPage() {
             value={bypassDomains}
             onChange={(e) => setBypassDomains(e.target.value)}
             onBlur={() => persist(() => setProxyBypass(bypassDomains))}
-            className="w-full h-28 p-4 rounded-2xl bg-surface-active/15 focus:ring-1 focus:ring-secondary/30 outline-none transition-all text-xs font-mono text-text resize-none shadow-inner no-scrollbar"
+            className="w-full flex-1 min-h-0 p-4 rounded-2xl bg-surface-active/15 focus:ring-1 focus:ring-secondary/30 outline-none transition-all text-xs font-mono text-text resize-none shadow-inner no-scrollbar"
             placeholder="localhost, 127.0.0.1, ::1"
           />
         </div>
