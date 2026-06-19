@@ -4,6 +4,8 @@ import { getSubscriptionConfig } from "../action/db"
 import { getStoreValue, setStoreValue } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { hotReloadIfRunning } from "../lib/hot-reload-config"
+import { invoke } from "@tauri-apps/api/core"
+import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
 
 /* ── Icons ── */
 const I = {
@@ -22,6 +24,8 @@ interface NodeData {
   ping: number
   protocol: string
   region: "asia" | "america" | "europe"
+  server: string
+  port: number
 }
 
 export default function NodesPage() {
@@ -33,18 +37,7 @@ export default function NodesPage() {
   const [connectedNodeId, setConnectedNodeId] = useState<string>("")
   const [activeSubId, setActiveSubId] = useState<string>("")
 
-  const initialNodes: NodeData[] = [
-    { id: "jp-1", name: l("Tokyo, JP - Premium 01", "日本 东京 - 专线 01"), flag: "🇯🇵", ping: 45, protocol: "Trojan", region: "asia" },
-    { id: "jp-2", name: l("Tokyo, JP - Standard 02", "日本 东京 - 标准 02"), flag: "🇯🇵", ping: 52, protocol: "Vmess", region: "asia" },
-    { id: "sg-1", name: l("Singapore - Optim", "新加坡 - 优化节点"), flag: "🇸🇬", ping: 68, protocol: "Shadowsocks", region: "asia" },
-    { id: "hk-1", name: l("Hong Kong - IEPL", "中国 香港 - 专线"), flag: "🇭🇰", ping: 35, protocol: "Trojan", region: "asia" },
-    { id: "us-1", name: l("Los Angeles, US - 01", "美国 洛杉矶 - 01"), flag: "🇺🇸", ping: 142, protocol: "Vless", region: "america" },
-    { id: "us-2", name: l("New York, US - 02", "美国 纽约 - 02"), flag: "🇺🇸", ping: 165, protocol: "Vmess", region: "america" },
-    { id: "uk-1", name: l("London, UK - Main", "英国 伦敦 - 主干"), flag: "🇬🇧", ping: 210, protocol: "Shadowsocks", region: "europe" },
-    { id: "de-1", name: l("Frankfurt, DE", "德国 法兰克福"), flag: "🇩🇪", ping: 195, protocol: "Trojan", region: "europe" },
-  ]
-
-  const [nodes, setNodes] = useState<NodeData[]>(initialNodes)
+  const [nodes, setNodes] = useState<NodeData[]>([])
   const [isTestingSpeed, setIsTestingSpeed] = useState(false)
   const [sortBy, setSortBy] = useState<"name" | "ping">("ping")
 
@@ -94,15 +87,15 @@ export default function NodesPage() {
             return {
               id: tag,
               name: tag,
-              ping: 30 + Math.floor(Math.random() * 80),
+              ping: getNodeLatency(tag) ?? 0,
               flag,
               protocol: n.type ? n.type.toUpperCase() : "SHADOWSOCKS",
-              region
+              region,
+              server: n.server || "",
+              port: Number(n.server_port) || 0,
             };
           });
-          if (mapped.length > 0) {
-            setNodes(mapped);
-          }
+          setNodes(mapped);
         }
       } catch (err) {
         console.error("Failed to load nodes in NodesPage:", err);
@@ -111,23 +104,33 @@ export default function NodesPage() {
     loadNodes();
   }, []);
 
-  const handleSpeedTest = () => {
-    if (isTestingSpeed) return;
+  const handleSpeedTest = async () => {
+    if (isTestingSpeed || nodes.length === 0) return;
     setIsTestingSpeed(true);
-    
-    // Simulate setting pings to 0 while testing
+    // Reset to "testing" state, then measure real TCP latency to each node's
+    // server via the backend `ping_tcp` command (independent of sing-box).
     setNodes(prev => prev.map(n => ({ ...n, ping: 0 })));
 
-    // Simulate network delay and randomize new pings
-    setTimeout(() => {
-      setNodes(prev => prev.map(n => {
-        // Create realistic random variance based on the original ping
-        const originalPing = initialNodes.find(inNode => inNode.id === n.id)?.ping || 100;
-        const variance = Math.floor(Math.random() * 20) - 10; // -10 to +10 ms
-        return { ...n, ping: Math.max(10, originalPing + variance) };
-      }));
+    try {
+      await Promise.all(
+        nodes.map(async (n) => {
+          let delay = -1
+          if (n.server && n.port) {
+            try {
+              delay = (await invoke("ping_tcp", { host: n.server, port: n.port })) as number
+            } catch {
+              delay = -1
+            }
+          }
+          setNodeLatency(n.id, delay)
+          setNodes(prev => prev.map(p => (p.id === n.id ? { ...p, ping: delay } : p)))
+        })
+      )
+    } catch (err) {
+      console.error("Speed test failed:", err)
+    } finally {
       setIsTestingSpeed(false);
-    }, 1500);
+    }
   }
 
   const filteredNodes = nodes.filter(node => {
@@ -141,8 +144,8 @@ export default function NodesPage() {
       return a.name.localeCompare(b.name, i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US')
     }
     if (sortBy === "ping") {
-      const pingA = a.ping === 0 ? 9999 : a.ping
-      const pingB = b.ping === 0 ? 9999 : b.ping
+      const pingA = a.ping <= 0 ? 9999 : a.ping
+      const pingB = b.ping <= 0 ? 9999 : b.ping
       return pingA - pingB
     }
     return 0 // default order
@@ -257,8 +260,12 @@ export default function NodesPage() {
 
                   {/* Ping latency indicator */}
                   <div className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 shrink-0 ${isConnected ? 'bg-secondary/15 text-secondary border border-secondary/20' : 'bg-surface-active/60 text-text-secondary border border-border-glass'}`}>
-                    {isTestingSpeed ? (
+                    {isTestingSpeed && node.ping === 0 ? (
                       <span className="animate-pulse">-- ms</span>
+                    ) : node.ping < 0 ? (
+                      <span className="text-danger">{l("Timeout", "超时")}</span>
+                    ) : node.ping === 0 ? (
+                      <span className="text-text-muted">-- ms</span>
                     ) : (
                       <>
                         <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-secondary animate-pulse' : 'bg-success'}`}></span>

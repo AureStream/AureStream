@@ -19,6 +19,7 @@ import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions } from
 import { syncActiveConnectionConfig } from "../lib/config-sync"
 import { controllerFetch } from "../utils/singbox-api"
 import { invoke } from "@tauri-apps/api/core"
+import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { ask, message } from "@tauri-apps/plugin-dialog"
 
@@ -79,6 +80,51 @@ function HomePage() {
 
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
+  // Real TCP latency of the active node (0 = unknown, -1 = timeout) via the
+  // backend `ping_tcp` command (independent of sing-box).
+  const [activeNodePing, setActiveNodePing] = useState<number>(0)
+
+  useEffect(() => {
+    let active = true
+    if (!activeNodeId) {
+      setActiveNodePing(0)
+      return
+    }
+    // Show the cached value instantly (survives page navigation), then refresh.
+    const cached = getNodeLatency(activeNodeId)
+    if (cached !== undefined) setActiveNodePing(cached)
+
+    const node = nodes.find((n) => n.id === activeNodeId)
+    if (!node?.server || !node?.port) return
+
+    invoke("ping_tcp", { host: node.server, port: node.port })
+      .then((d) => {
+        setNodeLatency(activeNodeId, d as number)
+        if (active) setActiveNodePing(d as number)
+      })
+      .catch(() => {
+        setNodeLatency(activeNodeId, -1)
+        if (active) setActiveNodePing(-1)
+      })
+    return () => { active = false }
+  }, [activeNodeId, nodes])
+
+  // Latency color tiers: ≤300ms green, 300–1000ms yellow, >1000ms red.
+  const pingTone = (p: number) =>
+    p <= 300 ? { text: "text-success", dot: "bg-success" }
+      : p <= 1000 ? { text: "text-warning", dot: "bg-warning" }
+        : { text: "text-danger", dot: "bg-danger" }
+
+  const renderPing = (p: number) => {
+    if (p < 0) return <span className="text-danger text-xs font-mono font-bold whitespace-nowrap">{l("Timeout", "超时")}</span>
+    if (p === 0) return <span className="text-text-muted text-xs font-mono font-bold whitespace-nowrap">-- ms</span>
+    const tone = pingTone(p)
+    return (
+      <span className={`flex items-center gap-1.5 text-xs font-mono font-extrabold whitespace-nowrap ${tone.text}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>{p}ms
+      </span>
+    )
+  }
 
   const [startTime, setStartTime] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
@@ -367,10 +413,11 @@ function HomePage() {
             return {
               id: tag,
               loc: tag,
-              ping: `${30 + Math.floor(Math.random() * 80)}ms`,
               flag,
               protocol: n.type || "Shadowsocks",
-              region
+              region,
+              server: n.server || "",
+              port: Number(n.server_port) || 0,
             };
           });
           setNodes(mapped);
@@ -528,21 +575,20 @@ function HomePage() {
           <div className="flex flex-col gap-2.5 w-full mt-auto">
 
             {/* Outbound IP / Real Network Info row */}
-            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+              <div className="flex items-center gap-3 min-w-0 flex-[6]">
                 <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
                   <span className="text-base select-none">🌐</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("OUTBOUND REGION", "出网物理区域")}</div>
-                  <h3 className="text-xs font-bold text-text truncate mt-0.5">
+                  <h3 className="text-xs font-bold text-text truncate">
                     {ipLoading ? l("Detecting...", "正在检测物理区域...") : ipInfo ? ipInfo.region : l("Offline / LAN", "未连通 / 局域网")}
                   </h3>
                 </div>
               </div>
-              <div className="shrink-0 flex items-center justify-end">
+              <div className="flex items-center justify-end flex-[4] min-w-0">
                 {ipInfo ? (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-[100px] ${
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full ${
                     isConnected ? "bg-success/15 text-success" : "bg-text-muted/10 text-text-muted"
                   }`}>
                     {ipInfo.isp}
@@ -555,23 +601,20 @@ function HomePage() {
 
 
             {/* Active Node Info row */}
-            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+              <div className="flex items-center gap-3 min-w-0 flex-[6]">
                 <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
                   <span className="text-base select-none">{currentNode ? currentNode.flag : "🌐"}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("ACTIVE NODE", "已选节点")}</div>
-                  <h3 className="text-xs font-bold text-text truncate mt-0.5">
+                  <h3 className="text-xs font-bold text-text truncate" title={currentNode ? currentNode.loc : undefined}>
                     {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
                   </h3>
                 </div>
               </div>
-              <div className="shrink-0 flex items-center justify-end">
+              <div className="flex items-center justify-end flex-[4] min-w-0">
                 {currentNode ? (
-                  <span className="text-xs bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-1 rounded-xl font-mono font-extrabold shadow-sm">
-                    {currentNode.ping}
-                  </span>
+                  renderPing(activeNodePing)
                 ) : (
                   <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
                 )}
@@ -579,21 +622,20 @@ function HomePage() {
             </div>
 
             {/* Tunnel Duration Info row */}
-            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary">
+            <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+              <div className="flex items-center gap-3 min-w-0 flex-[6]">
+                <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
                   <I.Activity />
                 </div>
-                <div>
-                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{l("DURATION", "已连时间")}</div>
-                  <h3 className="text-xs font-bold text-text mt-0.5">
+                <div className="min-w-0">
+                  <h3 className="text-xs font-bold text-text truncate">
                     {l("Active Connection Time", "持续守护时长")}
                   </h3>
                 </div>
               </div>
-              <div className="shrink-0 flex items-center justify-end">
+              <div className="flex items-center justify-end flex-[4] min-w-0">
                 {isConnected && startTime ? (
-                  <span className="text-xs bg-secondary/15 text-secondary border border-secondary/20 px-2.5 py-1 rounded-xl font-mono font-extrabold shadow-sm">
+                  <span className="text-xs text-secondary font-mono font-extrabold whitespace-nowrap">
                     {formatTime(now - startTime)}
                   </span>
                 ) : (
@@ -779,7 +821,7 @@ function HomePage() {
           </div>
 
           {/* Realtime Traffic Graph */}
-          <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col relative h-[175px]">
+          <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col relative h-[230px]">
             <div className="flex justify-between items-start mb-2">
               <h3 className="text-lg font-heading font-medium text-text">{l("Network Traffic", "网络流量")}</h3>
               <div className="flex items-center gap-5 text-xs font-mono bg-surface-active/50 px-4 py-1.5 rounded-full border border-border-glass shadow-sm">
@@ -794,7 +836,7 @@ function HomePage() {
             </div>
             <div className="flex-1 mt-2.5 -mx-2">
               <TrafficGraph 
-                height={100} 
+                height={150} 
                 isConnected={isConnected} 
                 onTick={(tick) => setCurrentSpeed(tick)} 
               />
