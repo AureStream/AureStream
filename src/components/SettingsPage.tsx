@@ -86,7 +86,7 @@ export default function SettingsPage() {
   const [autoConnect, setAutoConnect] = useState(true)
   const [notifications, setNotifications] = useState(false)
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
+
 
   const [helperState, setHelperState] = useState<EngineServiceState | "unknown">("unknown")
   const [isUninstalling, setIsUninstalling] = useState(false)
@@ -151,20 +151,12 @@ export default function SettingsPage() {
     }
   }
 
-  const flashSaved = () => {
-    setSaveStatus("saved")
-    setTimeout(() => setSaveStatus((s) => (s === "saved" ? "idle" : s)), 1600)
-  }
-
   // Persist a single field; called on blur for inputs and on change for toggles.
   const persist = async (fn: () => Promise<void>) => {
     try {
       await fn()
-      flashSaved()
     } catch (e) {
       console.error("Failed to save setting:", e)
-      setSaveStatus("error")
-      setTimeout(() => setSaveStatus((s) => (s === "error" ? "idle" : s)), 2500)
     }
   }
 
@@ -184,21 +176,7 @@ export default function SettingsPage() {
   return (
     <div className="relative flex flex-col w-full h-full max-w-[1080px] mx-auto animate-fade-in px-8 py-6 overflow-y-auto no-scrollbar gap-5">
 
-      {/* Auto-save indicator (transient) */}
-      <div
-        className={`pointer-events-none fixed bottom-6 right-8 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-glass transition-all duration-300 ${
-          saveStatus === "idle"
-            ? "opacity-0 translate-y-1"
-            : "opacity-100 translate-y-0"
-        } ${
-          saveStatus === "error"
-            ? "bg-danger/15 text-danger border border-danger/20"
-            : "bg-success/15 text-success border border-success/20"
-        }`}
-      >
-        {saveStatus === "error" ? <I.Alert /> : <I.Check />}
-        {saveStatus === "error" ? l("Save failed", "保存失败") : l("Saved", "已保存")}
-      </div>
+
 
       {/* Preferences */}
       <div className="glass-card rounded-[24px] p-5 shadow-glass shrink-0">
