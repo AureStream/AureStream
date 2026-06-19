@@ -56,7 +56,7 @@ export async function refreshToken(): Promise<boolean> {
   const rt = localStorage.getItem("aurestream_refresh_token")
   if (!rt) return false
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8788"}/auth/refresh`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL ?? "https://aurestream.chilix.qzz.io/api"}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: rt }),

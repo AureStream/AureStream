@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8788"
+const API_BASE = import.meta.env.VITE_API_URL ?? "https://aurestream.chilix.qzz.io/api"
 
 let accessToken: string | null = localStorage.getItem("aurestream_access_token")
 let refreshToken: string | null = localStorage.getItem("aurestream_refresh_token")

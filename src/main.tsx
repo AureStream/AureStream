@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"
 
 import App from "./App"
+import TitleBar from "./components/TitleBar"
 import { ThemeProvider } from "./components/ThemeProvider"
 import { AuthProvider } from "./contexts/AuthContext"
 import "./index.css"
@@ -13,7 +14,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <div className="app-shell flex flex-col h-screen w-screen bg-bg">
+            <TitleBar />
+            <div className="flex-1 min-h-0">
+              <App />
+            </div>
+          </div>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

@@ -854,7 +854,7 @@ function HomePage() {
    ================================================================ */
 export default function Dashboard() {
   return (
-    <div className="h-screen w-full flex flex-row relative bg-bg overflow-hidden">
+    <div className="h-full w-full flex flex-row relative bg-bg overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-accent-blue rounded-full blur-[100px] opacity-80 dark:opacity-5 transition-opacity duration-500"></div>
         <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent-purple rounded-full blur-[120px] opacity-60 dark:opacity-[0.03] transition-opacity duration-500"></div>

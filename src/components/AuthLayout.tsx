@@ -16,7 +16,7 @@ export default function AuthLayout() {
   const { theme, toggleTheme } = useTheme()
 
   return (
-    <div className="flex min-h-screen w-full bg-bg font-sans overflow-hidden relative bg-mesh-vibrant">
+    <div className="flex h-full w-full bg-bg font-sans overflow-hidden relative bg-mesh-vibrant">
       
       {/* Background Decorative Blurs */}
       <div className="absolute top-1/4 left-1/4 w-[350px] h-[350px] bg-secondary opacity-[0.12] rounded-full blur-[80px] pointer-events-none animate-pulse" style={{ animationDuration: '8s' }}></div>
