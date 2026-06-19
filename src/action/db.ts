@@ -227,6 +227,17 @@ export async function deleteSubscription(identifier: string): Promise<void> {
     }
 }
 
+export async function clearAllLocalSubscriptionData(): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        await db.execute('DELETE FROM subscriptions');
+        await db.execute('DELETE FROM subscription_configs');
+        await db.execute('DELETE FROM node_latencies');
+    } catch (error) {
+        console.error('Error clearing all local subscription and latency data:', error);
+    }
+}
+
 /** Lightweight revision for config-merge cache invalidation. */
 export async function getSubscriptionMergeRevision(
   identifier: string

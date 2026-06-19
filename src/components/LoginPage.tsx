@@ -33,6 +33,14 @@ export default function LoginPage() {
     setError("")
     setSubmitting(true)
     try {
+      // Clear old local user data before new login starts
+      try {
+        const { clearLocalUserData } = await import("../lib/auth-cleanup")
+        await clearLocalUserData()
+      } catch (cleanErr) {
+        console.error("Failed to clear local user data before login:", cleanErr)
+      }
+
       await login(email, password)
       
       // Auto fetch and sync subscriptions immediately after login

@@ -65,7 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
+    // Clear tokens on the backend & localStorage
     await apiLogout()
+    // Clear local databases, stores and latency caches
+    try {
+      const { clearLocalUserData } = await import("../lib/auth-cleanup")
+      await clearLocalUserData()
+    } catch (e) {
+      console.error("Failed to clean local user data on logout:", e)
+    }
     setUser(null)
   }, [])
 

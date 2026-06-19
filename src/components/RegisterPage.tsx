@@ -36,6 +36,14 @@ export default function RegisterPage() {
     }
     setSubmitting(true)
     try {
+      // Clear old local user data before registration starts
+      try {
+        const { clearLocalUserData } = await import("../lib/auth-cleanup")
+        await clearLocalUserData()
+      } catch (cleanErr) {
+        console.error("Failed to clear local user data before registration:", cleanErr)
+      }
+
       await register(email, password)
       navigate("/dashboard")
     } catch (err) {
