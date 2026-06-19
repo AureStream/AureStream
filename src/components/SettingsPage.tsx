@@ -174,7 +174,7 @@ export default function SettingsPage() {
   }[helperState]
 
   return (
-    <div className="relative flex flex-col w-full h-full max-w-[1080px] mx-auto animate-fade-in px-8 py-6 overflow-y-auto no-scrollbar gap-5">
+    <div className="relative flex flex-col w-full h-full max-w-[1080px] mx-auto animate-fade-in px-8 py-6 overflow-y-auto no-scrollbar gap-8">
 
 
 
