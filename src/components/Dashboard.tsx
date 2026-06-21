@@ -86,6 +86,24 @@ function HomePage() {
     setLocalConnecting(false)
   }, [engineState.kind])
 
+  // 同步主界面与后台引擎/系统托盘切换后的代理模式状态
+  useEffect(() => {
+    if (engineState.kind === "running" || engineState.kind === "starting") {
+      const mode = (engineState as any).mode
+      if (mode === "tun") {
+        if (proxyMode !== "tun") {
+          setProxyMode("tun")
+          void setEnableTun(true)
+        }
+      } else if (mode === "mixed") {
+        if (proxyMode !== "rule") {
+          setProxyMode("rule")
+          void setEnableTun(false)
+        }
+      }
+    }
+  }, [engineState, proxyMode])
+
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
   // Real TCP latency of the active node (0 = unknown, -1 = timeout) via the
