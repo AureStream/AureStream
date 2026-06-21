@@ -166,8 +166,7 @@ pub fn prestart_check(port: Option<u16>) -> PrestartCheckResult {
     }
 }
 
-pub fn kill_orphans(_app: tauri::AppHandle, port: Option<u16>) -> KillOrphansResult {
-    let port = port.unwrap_or(DEFAULT_MIXED_PROXY_PORT);
+pub fn free_port(port: u16) -> KillOrphansResult {
     // Bypass prestart_check and probe directly — we want to kill orphans even
     // when the port is blocked by ESTABLISHED connections that connect() won't see.
     let orphan_pids = if !probe_port_bindable(port) {

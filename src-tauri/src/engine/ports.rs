@@ -105,7 +105,9 @@ async fn poll_port(port: u16, timeout: Duration, wait_listening: bool) -> bool {
 /// `TcpListener::bind` until the port is truly available or the timeout expires.
 ///
 /// On macOS this delegates to `ensurePortFree` XPC which kills processes in all
-/// TCP states (not just LISTEN). On other platforms it falls back to polling.
+/// TCP states (not just LISTEN). When the XPC helper is unreachable (common after
+/// `stopSingBox`), falls back to user-level `free_port` (lsof + kill), then
+/// polls `probe_port_bindable` with exponential backoff.
 #[cfg(target_os = "macos")]
 pub(crate) async fn ensure_port_free_with_retry(
     port: u16,
@@ -120,28 +122,57 @@ pub(crate) async fn ensure_port_free_with_retry(
     let deadline = Instant::now() + timeout;
     let mut attempt: u32 = 0;
     let mut last_killed: i32 = 0;
+    let mut xpc_dead = false;
 
     loop {
         attempt += 1;
 
-        match tokio::task::spawn_blocking(move || {
-            aurestream_plugin_privilege::macos::helper::api::ensure_port_free(port)
-        })
-        .await
-        {
-            Ok(Ok(killed)) => {
-                last_killed = killed;
-                log::info!(
-                    "[port-cleanup] :{port} attempt {attempt}: helper killed {killed} process(es)"
-                );
-            }
-            Ok(Err(e)) => {
-                log::warn!("[port-cleanup] :{port} attempt {attempt}: helper error: {e}");
-            }
-            Err(e) => {
-                log::warn!(
-                    "[port-cleanup] :{port} attempt {attempt}: spawn_blocking error: {e}"
-                );
+        if !xpc_dead {
+            match tokio::task::spawn_blocking(move || {
+                aurestream_plugin_privilege::macos::helper::api::ensure_port_free(port)
+            })
+            .await
+            {
+                Ok(Ok(killed)) => {
+                    last_killed = killed;
+                    log::info!(
+                        "[port-cleanup] :{port} attempt {attempt}: helper killed {killed} process(es)"
+                    );
+                }
+                Ok(Err(e)) => {
+                    log::warn!("[port-cleanup] :{port} attempt {attempt}: helper error: {e}");
+                    // XPC is unreachable — fall back to user-level cleanup once,
+                    // then switch to poll-only mode.
+                    if !xpc_dead {
+                        xpc_dead = true;
+                        log::info!("[port-cleanup] :{port} falling back to user-level free_port");
+                        let result = tokio::task::spawn_blocking(move || {
+                            aurestream_plugin_privilege::free_port(port)
+                        })
+                        .await
+                        .unwrap_or_else(|e| {
+                            log::error!("[port-cleanup] :{port} free_port join error: {e}");
+                            aurestream_plugin_privilege::KillOrphansResult {
+                                success: false,
+                                killed_pids: vec![],
+                                port_released: false,
+                                message: format!("join error: {e}"),
+                            }
+                        });
+                        if result.port_released {
+                            log::info!("[port-cleanup] :{port} free_port released after {attempt} attempt(s)");
+                            return Ok(());
+                        }
+                        last_killed = result.killed_pids.len() as i32;
+                        log::info!("[port-cleanup] :{port} free_port: {}", result.message);
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "[port-cleanup] :{port} attempt {attempt}: spawn_blocking error: {e}"
+                    );
+                    xpc_dead = true;
+                }
             }
         }
 

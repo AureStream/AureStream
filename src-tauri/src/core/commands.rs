@@ -1,7 +1,7 @@
 use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::ports::{
-    controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_bindable,
-    wait_for_port_listening,
+    controller_port, mixed_proxy_port, probe_port_bindable, probe_port_listening,
+    wait_for_port_bindable, wait_for_port_listening,
 };
 use crate::engine::process::{pm_snapshot, ProcessManager};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
@@ -80,7 +80,7 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
     // Also run user-level kill_orphans as belt-and-suspenders for any
     // user-owned processes the helper may have missed.
     for &port in &[mixed_port, ctrl_port] {
-        let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
+        let res = aurestream_plugin_privilege::free_port(port);
         ::log::info!("[start] prestart :{port}: {}", res.message);
     }
 
@@ -336,10 +336,10 @@ pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let mixed_port = mixed_proxy_port(&app);
-    let port_listening = probe_port_listening(mixed_port);
-    if port_listening {
+    let port_bindable = probe_port_bindable(mixed_port);
+    if !port_bindable {
         ::log::warn!(
-            "[stop] action={action} returning with :{mixed_port} STILL LISTENING — pm_child_pid={:?} may have survived",
+            "[stop] action={action} returning with :{mixed_port} STILL NOT BINDABLE — pm_child_pid={:?} may have survived",
             pm_pid
         );
     } else {

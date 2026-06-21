@@ -110,17 +110,35 @@ void aurestream_helper_set_exit_callback(AureStreamHelperExitCallback cb) {
         conn.exportedObject = self;
 
         __weak AureStreamHelperClient *weakSelf = self;
+        __weak NSXPCConnection *weakConn = conn;
         conn.invalidationHandler = ^{
             NSLog(@"[client] XPC connection invalidated");
             AureStreamHelperClient *strongSelf = weakSelf;
             if (strongSelf) {
                 [strongSelf->_connectionLock lock];
-                strongSelf->_connection = nil;
+                // Only clear _connection if it still points to this (now-defunct) connection.
+                // This prevents a stale invalidationHandler from nilling a newly-created
+                // replacement connection that was created between invalidate() and this callback.
+                if (strongSelf->_connection == weakConn) {
+                    strongSelf->_connection = nil;
+                }
                 [strongSelf->_connectionLock unlock];
             }
         };
         conn.interruptionHandler = ^{
             NSLog(@"[client] XPC connection interrupted");
+            // Apple: "If the connection has been interrupted, you should invalidate
+            // the current connection and create a new one when you're ready to resume."
+            // The next call to -connection will lazily create a fresh connection.
+            AureStreamHelperClient *strongSelf = weakSelf;
+            if (strongSelf) {
+                [strongSelf->_connectionLock lock];
+                if (strongSelf->_connection == weakConn) {
+                    strongSelf->_connection = nil;
+                }
+                [strongSelf->_connectionLock unlock];
+            }
+            [weakConn invalidate];
         };
 
         [conn resume];
