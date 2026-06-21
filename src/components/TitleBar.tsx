@@ -14,6 +14,11 @@ const Close = () => (
     <line x1="9" y1="3" x2="3" y2="9" />
   </svg>
 )
+const Max = () => (
+  <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <rect x="2.5" y="2.5" width="7" height="7" rx="0.5" />
+  </svg>
+)
 
 export default function TitleBar() {
   const [isMac] = useState(() => {
@@ -42,6 +47,14 @@ export default function TitleBar() {
           <line x1="1.6" y1="4" x2="6.4" y2="4" />
         </svg>
       </button>
+      <button disabled title="Maximize" className={`${lightBtn} bg-[#28C840] opacity-50 cursor-not-allowed`}>
+        <svg className={glyph} viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+          <line x1="1.5" y1="1.5" x2="3" y2="3" />
+          <path d="M1.5 3 L1.5 1.5 L3 1.5" />
+          <line x1="6.5" y1="6.5" x2="5" y2="5" />
+          <path d="M6.5 5 L6.5 6.5 L5 6.5" />
+        </svg>
+      </button>
     </div>
   )
 
@@ -52,6 +65,13 @@ export default function TitleBar() {
     <div className="flex items-center gap-1 shrink-0">
       <button className={btn} title="Minimize" onClick={() => appWindow.minimize()}>
         <Min />
+      </button>
+      <button
+        disabled
+        className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted/40 cursor-not-allowed opacity-50"
+        title="Maximize"
+      >
+        <Max />
       </button>
       <button
         className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-white hover:bg-danger transition-colors cursor-pointer"
