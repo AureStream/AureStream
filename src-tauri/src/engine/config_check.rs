@@ -43,6 +43,14 @@ fn mark_verified(config_path: &str) {
     guard.insert(config_path.to_string(), stamp);
 }
 
+/// Clear the verified-config cache so the next `needs_verify` returns `true`.
+/// Called when switching proxy modes to force re-validation of `config.json`.
+pub fn invalidate_cache() {
+    let mut guard = verified_cache().lock().unwrap_or_else(|e| e.into_inner());
+    guard.clear();
+    log::debug!("[config_check] cache invalidated");
+}
+
 /// Mark config as valid without spawning `aurestream-core check`.
 /// Called after the frontend merger writes `config.json` (trusted path).
 #[tauri::command]

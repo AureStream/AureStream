@@ -1,7 +1,7 @@
 use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::ports::{
-    controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_listening,
-    wait_for_port_release,
+    controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_bindable,
+    wait_for_port_listening,
 };
 use crate::engine::process::{pm_snapshot, ProcessManager};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
@@ -44,9 +44,17 @@ async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
         Ok(Err(e)) => ::log::warn!("[start] helper stop_sing_box failed: {}", e),
         Err(e) => ::log::warn!("[start] helper stop_sing_box join error: {}", e),
     }
-    let _ = wait_for_port_release(mixed_port, Duration::from_secs(5)).await;
+    // Use bind-based check: TcpListener::bind catches TIME_WAIT and other
+    // kernel-level port holds that TcpStream::connect misses.
+    let mixed_ok = wait_for_port_bindable(mixed_port, Duration::from_secs(5)).await;
+    if !mixed_ok {
+        ::log::warn!("[start] helper: mixed :{mixed_port} not bindable after 5s");
+    }
     if ctrl_port != mixed_port {
-        let _ = wait_for_port_release(ctrl_port, Duration::from_secs(5)).await;
+        let ctrl_ok = wait_for_port_bindable(ctrl_port, Duration::from_secs(5)).await;
+        if !ctrl_ok {
+            ::log::warn!("[start] helper: ctrl :{ctrl_port} not bindable after 5s");
+        }
     }
 }
 
@@ -67,19 +75,20 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
         }
     }
 
-    // Wait for both ports to be truly free before spawning sing-box.
-    // This prevents the TOCTOU race between probe_port_listening and bind().
+    // Wait for both ports to be truly bindable before spawning sing-box.
+    // Uses TcpListener::bind instead of TcpStream::connect to avoid TOCTOU
+    // races where the port appears free (no listener) but is still bound.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    let mixed_ok = wait_for_port_release(mixed_port, std::time::Duration::from_secs(5)).await;
+    let mixed_ok = wait_for_port_bindable(mixed_port, std::time::Duration::from_secs(5)).await;
     if !mixed_ok {
-        ::log::warn!("[start] mixed :{mixed_port} not released after 5s, proceeding anyway");
+        ::log::warn!("[start] mixed :{mixed_port} not bindable after 5s, proceeding anyway");
     }
     let elapsed = deadline.elapsed();
     let remaining = std::time::Duration::from_secs(5).saturating_sub(elapsed);
     if ctrl_port != mixed_port {
-        let ctrl_ok = wait_for_port_release(ctrl_port, remaining).await;
+        let ctrl_ok = wait_for_port_bindable(ctrl_port, remaining).await;
         if !ctrl_ok {
-            ::log::warn!("[start] controller :{ctrl_port} not released after {:?}, proceeding anyway", elapsed + remaining);
+            ::log::warn!("[start] controller :{ctrl_port} not bindable after {:?}, proceeding anyway", elapsed + remaining);
         }
     }
 }
@@ -98,6 +107,25 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         EVENT_TAURI_LOG,
         (0, format!("启动代理服务，模式: {}", mode_name)),
     );
+
+    // Invalidate config_check cache when the proxy mode changed since last
+    // start, so `config.json` is always re-verified after a mode switch
+    // (prevents stale TUN-inbound config from being used in SystemProxy mode).
+    {
+        let prev_mode = {
+            let mgr = ProcessManager::acquire();
+            mgr.mode.as_ref().map(|m| m.as_ref().clone())
+        };
+        if let Some(ref prev) = prev_mode {
+            if *prev != mode {
+                ::log::info!(
+                    "[start] action={action} mode changed {:?} -> {:?}, invalidating config cache",
+                    prev, mode
+                );
+                config_check::invalidate_cache();
+            }
+        }
+    }
 
     {
         let _step = perf::StepTimer::new("start.ensure_ports_free");

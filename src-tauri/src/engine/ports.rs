@@ -41,14 +41,42 @@ pub fn probe_port_listening(port: u16) -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
 }
 
+/// Returns `true` when the port is truly free for a new `bind()`.
+///
+/// Unlike `probe_port_listening` (which uses `TcpStream::connect`), this
+/// attempts an actual `TcpListener::bind`.  It catches TIME_WAIT and other
+/// kernel-level port holds that a connect-based probe misses.
+pub fn probe_port_bindable(port: u16) -> bool {
+    use std::net::TcpListener;
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+    TcpListener::bind(addr).is_ok()
+}
+
 /// Poll until mixed proxy port accepts connections or timeout (all platforms).
 pub(crate) async fn wait_for_port_listening(port: u16, timeout: Duration) -> bool {
     poll_port(port, timeout, true).await
 }
 
-/// Poll until a localhost port stops accepting connections or timeout.
-pub(crate) async fn wait_for_port_release(port: u16, timeout: Duration) -> bool {
-    poll_port(port, timeout, false).await
+/// Poll until a localhost port becomes bindable (truly free) or timeout.
+pub(crate) async fn wait_for_port_bindable(port: u16, timeout: Duration) -> bool {
+    use tokio::time::{sleep, Instant};
+
+    if probe_port_bindable(port) {
+        return true;
+    }
+
+    let deadline = Instant::now() + timeout;
+    let mut interval = Duration::from_millis(50);
+
+    while Instant::now() < deadline {
+        if probe_port_bindable(port) {
+            return true;
+        }
+        sleep(interval).await;
+        interval = std::cmp::min(interval.saturating_mul(2), Duration::from_millis(200));
+    }
+
+    probe_port_bindable(port)
 }
 
 async fn poll_port(port: u16, timeout: Duration, wait_listening: bool) -> bool {

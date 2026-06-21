@@ -20,6 +20,7 @@ import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, delet
 import { syncActiveConnectionConfig } from "../lib/config-sync"
 import { controllerFetch } from "../utils/singbox-api"
 import { invoke } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event"
 import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { ask, message } from "@tauri-apps/plugin-dialog"
@@ -104,6 +105,7 @@ function HomePage() {
     }
   }, [engineState, proxyMode])
 
+
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
   // Real TCP latency of the active node (0 = unknown, -1 = timeout) via the
@@ -171,6 +173,54 @@ function HomePage() {
 
   const [proxyDns, setProxyDns] = useState<string>("8.8.8.8")
   const [connectionCount, setConnectionCount] = useState<number>(0)
+
+  // 监听系统托盘发出的代理模式切换事件，执行完整关闭、配置合并及启动流程
+  useEffect(() => {
+    const unlistenPromise = listen<string>("tray-switch-mode", async (event) => {
+      const targetMode = event.payload // "system" | "tun"
+      const isTun = targetMode === "tun"
+      const newModeStr = isTun ? "tun" : "rule"
+
+      const currentMode = engineState.kind === "running" || engineState.kind === "starting"
+        ? ((engineState as any).mode === "tun" ? "tun" : "rule")
+        : null
+
+      const isCurrentActive = currentMode === newModeStr
+
+      if (isCurrentActive) {
+        try {
+          await stopEngine()
+        } catch (err) {
+          console.error("Tray stop engine failed:", err)
+        }
+      } else {
+        try {
+          // 1. 更新代理模式及 store 设置
+          setProxyMode(newModeStr)
+          await setEnableTun(isTun)
+
+          // 2. 如果当前有正在运行的引擎，先执行停止
+          if (currentMode !== null) {
+            await stopEngine()
+          }
+
+          // 3. 合并配置文件，生成最新的 config.json（自动根据新模式添加或移除 tun inbound）
+          const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
+          await mergeConnectionConfig(subId, "rule", isTun, { force: true })
+          const configPath = await getConfigJsonPath()
+
+          // 4. 启动引擎
+          await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
+        } catch (err) {
+          console.error("Tray start engine failed:", err)
+        }
+      }
+    })
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten())
+    }
+  }, [engineState, subs])
 
   const memoryMB = isConnected 
     ? (12.4 + (connectionCount * 0.12) + Math.sin(now / 10000) * 0.2).toFixed(1) 
