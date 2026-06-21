@@ -783,7 +783,10 @@ function HomePage() {
             {/* Core Diagnostics Card */}
             <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col text-text justify-between">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base font-heading font-medium">{l("Core Diagnostics", "核心运行诊断")}</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-secondary shrink-0"><I.Shield /></span>
+                  <h3 className="text-base font-heading font-medium">{l("Core Diagnostics", "核心运行诊断")}</h3>
+                </div>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1.5 ${
                   isConnected 
                     ? 'bg-success/10 text-success' 
