@@ -81,10 +81,12 @@ export default function ProfilePage() {
     ? new Date(subs[0].expire_time * 1000).toLocaleDateString(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : l("Never Expire", "永久有效")
   
+  const ONE_TB_BYTES = 1024 * 1024 * 1024 * 1024;
   const trafficUsed = hasSub ? subs[0].traffic_used : 0
-  const trafficTotal = hasSub ? subs[0].traffic_total : 0
+  const trafficTotal = (hasSub && subs[0].traffic_total > 1) ? subs[0].traffic_total : ONE_TB_BYTES
+  const isTrafficTotalFallback = !hasSub || subs[0].traffic_total <= 1;
   const trafficUsedGB = (trafficUsed / (1024 * 1024 * 1024)).toFixed(2)
-  const trafficTotalGB = (trafficTotal / (1024 * 1024 * 1024)).toFixed(0)
+  const trafficTotalText = isTrafficTotalFallback ? "1 TB" : `${(subs[0].traffic_total / (1024 * 1024 * 1024)).toFixed(0)} GB`
   const percentUsed = trafficTotal > 0 ? Math.min(100, Math.round((trafficUsed / trafficTotal) * 100)) : 0
 
   return (
@@ -175,7 +177,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] text-text-muted mb-1 font-bold">{l("TOTAL LIMIT", "总流量额度")}</div>
-                    <div className="text-lg font-bold font-mono tracking-tight text-text">{hasSub ? trafficTotalGB : "--"} <span className="text-[10px] text-text-muted font-bold">GB</span></div>
+                    <div className="text-lg font-bold font-mono tracking-tight text-text">{trafficTotalText}</div>
                   </div>
                 </div>
                 <div className="w-full h-2 rounded-full bg-border-glass overflow-hidden mt-3 shadow-inner">

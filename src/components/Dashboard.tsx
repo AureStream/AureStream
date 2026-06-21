@@ -11,6 +11,7 @@ import { fetchSubscriptions, type Subscription } from "../api/subscriptions"
 import TrafficGraph from "./TrafficGraph"
 import { startEngine, stopEngine } from "../utils/vpn-service"
 import { useEngineState } from "../hooks/useEngineState"
+import { useTrafficAccumulator } from "../hooks/useTrafficAccumulator"
 import { mergeConnectionConfig } from "../lib/connection-config"
 import { getConfigJsonPath } from "../lib/app-paths"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsServer } from "../single/store"
@@ -72,6 +73,8 @@ function HomePage() {
   const [isInstallingService, setIsInstallingService] = useState(false)
   const isConnected = engineConnected || isSwitchingMode
   const isConnecting = (isStarting || isStopping || localConnecting) && !isSwitchingMode
+
+  useTrafficAccumulator(loadSubs)
 
   useEffect(() => {
     const initMode = async () => {
@@ -762,22 +765,34 @@ function HomePage() {
                  </div>
               </div>
 
-              <div className="mt-2.5">
-                <div className="flex justify-between items-end mb-1.5">
-                  <div className="text-xl font-bold font-heading text-text">{((subs[0]?.traffic_used ?? 0) / (1024*1024*1024)).toFixed(2)} GB</div>
-                  <div className="text-[10px] font-semibold text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded-md">
-                    {subs[0]?.traffic_total ? `${Math.round(subs[0].traffic_used / subs[0].traffic_total * 100)}%` : "0%"}
+              {(() => {
+                const ONE_TB_BYTES = 1024 * 1024 * 1024 * 1024;
+                const hasSub = subs.length > 0;
+                const sub = subs[0];
+                const trafficTotal = (hasSub && sub.traffic_total > 1) ? sub.traffic_total : ONE_TB_BYTES;
+                const isTrafficTotalFallback = !hasSub || sub.traffic_total <= 1;
+                const trafficUsed = hasSub ? sub.traffic_used : 0;
+                const percent = trafficTotal > 0 ? Math.min(100, Math.round(trafficUsed / trafficTotal * 100)) : 0;
+                const trafficTotalText = isTrafficTotalFallback ? "1TB" : `${(sub.traffic_total / (1024*1024*1024)).toFixed(0)} GB`;
+                return (
+                  <div className="mt-2.5">
+                    <div className="flex justify-between items-end mb-1.5">
+                      <div className="text-xl font-bold font-heading text-text">{(trafficUsed / (1024*1024*1024)).toFixed(2)} GB</div>
+                      <div className="text-[10px] font-semibold text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded-md">
+                        {percent}%
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-border-light overflow-hidden shadow-inner">
+                      <div className="h-full rounded-full bg-gradient-to-r from-secondary to-accent-purple"
+                        style={{ width: `${percent}%` }} />
+                    </div>
+                    <div className="flex justify-between mt-1.5 text-[10px] font-medium text-text-muted">
+                      <span>{l("Traffic used", "已用流量")}</span>
+                      <span>{trafficTotalText}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="w-full h-1.5 rounded-full bg-border-light overflow-hidden shadow-inner">
-                  <div className="h-full rounded-full bg-gradient-to-r from-secondary to-accent-purple"
-                    style={{ width: `${subs[0]?.traffic_total ? Math.min(100, Math.round(subs[0].traffic_used / subs[0].traffic_total * 100)) : 0}%` }} />
-                </div>
-                <div className="flex justify-between mt-1.5 text-[10px] font-medium text-text-muted">
-                  <span>{l("Traffic used", "已用流量")}</span>
-                  <span>{subs[0]?.traffic_total ? `${(subs[0].traffic_total / (1024*1024*1024)).toFixed(0)} GB` : "--"}</span>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             {/* Core Diagnostics Card */}
