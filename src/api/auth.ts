@@ -27,7 +27,7 @@ export async function login(email: string, password: string): Promise<AuthResult
   return data
 }
 
-export async function register(email: string, password: string): Promise<AuthResult> {
+export async function register(email: string, password: string): Promise<any> {
   const res = await apiFetch("/auth/register", {
     method: "POST",
     body: JSON.stringify({ email, password }),
@@ -37,7 +37,6 @@ export async function register(email: string, password: string): Promise<AuthRes
     throw new Error(err.error ?? "Registration failed")
   }
   const data = await res.json()
-  setTokens(data.access_token, data.refresh_token)
   return data
 }
 

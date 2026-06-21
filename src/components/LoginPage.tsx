@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { fetchSubscriptions } from "../api/subscriptions"
 import { setStoreValue } from "../single/store"
@@ -21,11 +21,21 @@ export default function LoginPage() {
   const { t } = useTranslation()
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [successMessage] = useState<string>(() => {
+    const msg = location.state?.message || ""
+    if (msg) {
+      setTimeout(() => {
+        window.history.replaceState({}, document.title)
+      }, 0)
+    }
+    return msg
+  })
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,6 +86,12 @@ export default function LoginPage() {
       {error && (
         <div className="mb-5 p-3.5 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm font-medium">
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-5 p-3.5 rounded-xl bg-success/10 border border-success/20 text-success text-sm font-medium">
+          {successMessage}
         </div>
       )}
 

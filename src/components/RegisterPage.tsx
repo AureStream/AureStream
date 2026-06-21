@@ -45,7 +45,7 @@ export default function RegisterPage() {
       }
 
       await register(email, password)
-      navigate("/dashboard")
+      navigate("/login", { state: { message: t("register_success_please_login", "注册成功！请使用新账号登录") } })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed")
     } finally {
@@ -110,7 +110,7 @@ export default function RegisterPage() {
             <div className="text-text-muted/80"><I.Lock /></div>
             <input
               className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold tracking-wider"
-              type={showPassword ? "text" : "password"}
+              type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder={t("confirm_placeholder", "请再次输入密码以确认")}
