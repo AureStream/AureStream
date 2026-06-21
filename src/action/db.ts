@@ -3,6 +3,8 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
 import { buildSubscriptionUserAgent, Subscription, SubscriptionConfig } from '../types/definition';
 import { parseSubscriptionBody } from '../config/subscription-decoder';
+import { apiFetch } from '../api/client';
+
 
 export interface ResponseHeaders {
     'subscription-userinfo'?: string;
@@ -380,3 +382,56 @@ export async function getLocalSubscriptions(): Promise<any[]> {
         return [];
     }
 }
+
+export async function accumulateUsedTraffic(
+    identifier: string,
+    uploadBytes: number,
+    downloadBytes: number
+): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        const totalBytes = uploadBytes + downloadBytes;
+        await db.execute(
+            'UPDATE subscriptions SET used_traffic = used_traffic + ?, pending_upload = pending_upload + ?, pending_download = pending_download + ? WHERE identifier = ?',
+            [totalBytes, uploadBytes, downloadBytes, identifier]
+        );
+    } catch (err) {
+        console.error('Error accumulating used traffic:', err);
+    }
+}
+
+export async function uploadPendingTraffic(): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        const pendingSubs: any[] = await db.select(
+            'SELECT identifier, pending_upload, pending_download FROM subscriptions WHERE pending_upload > 0 OR pending_download > 0'
+        );
+        
+        for (const sub of pendingSubs) {
+            const { identifier, pending_upload, pending_download } = sub;
+            try {
+                const res = await apiFetch(`/subscriptions/${identifier}/usage`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        upload: pending_upload,
+                        download: pending_download
+                    })
+                });
+                if (res.ok) {
+                    await db.execute(
+                        'UPDATE subscriptions SET pending_upload = pending_upload - ?, pending_download = pending_download - ? WHERE identifier = ?',
+                        [pending_upload, pending_download, identifier]
+                    );
+                    console.info(`[Traffic Sync] Sync completed for subscription: ${identifier}`);
+                } else {
+                    console.warn(`[Traffic Sync] Cloud API rejected traffic submission for ${identifier}: ${res.status}`);
+                }
+            } catch (apiErr) {
+                console.error(`[Traffic Sync] Cloud connection failed for ${identifier}:`, apiErr);
+            }
+        }
+    } catch (dbErr) {
+        console.error('[Traffic Sync] DB query failed:', dbErr);
+    }
+}
+
