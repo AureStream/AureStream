@@ -267,7 +267,7 @@ export default function SettingsPage() {
           <button
             onClick={handleUninstallHelper}
             disabled={isUninstalling || helperState === "missing"}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger text-[11px] font-bold tracking-wide border border-danger/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-[12px] bg-secondary hover:bg-secondary/90 active:scale-[0.98] text-white text-[11px] font-extrabold shadow-md transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
             <I.Trash />
             {isUninstalling ? l("Uninstalling...", "卸载中...") : l("Uninstall", "卸载")}
