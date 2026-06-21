@@ -91,7 +91,10 @@ impl EngineManager for WindowsEngine {
         let (mode, child) = {
             let mut mgr = ProcessManager::acquire();
             mgr.is_stopping = true;
-            (mgr.mode.clone(), mgr.child.take())
+            let m = mgr.mode.clone();
+            let c = mgr.child.take();
+            mgr.reset();
+            (m, c)
         };
         let Some(mode) = mode else {
             return Ok(());
@@ -160,7 +163,7 @@ impl EngineManager for WindowsEngine {
 
         let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while std::time::Instant::now() < release_deadline
-            && crate::engine::ports::probe_port_listening(mixed_port)
+            && !crate::engine::ports::probe_port_bindable(mixed_port)
         {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
