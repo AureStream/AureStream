@@ -11,6 +11,7 @@ use crate::engine::{
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use tokio::sync::broadcast;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
@@ -30,11 +31,35 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
+/// Always ask the privileged helper to release sing-box (TUN mode runs as root).
+#[cfg(target_os = "macos")]
+async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
+    ::log::info!("[start] ensuring helper-managed sing-box is stopped");
+    let stop_result = tokio::task::spawn_blocking(|| {
+        aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
+    })
+    .await;
+    match stop_result {
+        Ok(Ok(())) => ::log::info!("[start] helper stop_sing_box ok"),
+        Ok(Err(e)) => ::log::warn!("[start] helper stop_sing_box failed: {}", e),
+        Err(e) => ::log::warn!("[start] helper stop_sing_box join error: {}", e),
+    }
+    let _ = wait_for_port_release(mixed_port, Duration::from_secs(5)).await;
+    if ctrl_port != mixed_port {
+        let _ = wait_for_port_release(ctrl_port, Duration::from_secs(5)).await;
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn stop_helper_managed_sing_box(_mixed_port: u16, _ctrl_port: u16) {}
+
 async fn ensure_proxy_ports_free(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
     let ctrl_port = controller_port(app);
 
-    // Kill any orphan holding either port, then wait for release.
+    stop_helper_managed_sing_box(mixed_port, ctrl_port).await;
+
+    // Kill any user-owned orphan holding either port, then wait for release.
     for &port in &[mixed_port, ctrl_port] {
         if probe_port_listening(port) {
             let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
@@ -101,6 +126,19 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     ) {
         return Err(format!("state transition rejected: {}", e));
     }
+
+    // 保存用户选择的模式，供托盘菜单恢复选中状态
+    let mode_key = match mode {
+        ProxyMode::IntoProxy => "tun",
+        ProxyMode::SystemProxy => "system",
+    };
+    {
+        use tauri_plugin_store::StoreExt;
+        if let Ok(store) = app.store("settings.json") {
+            let _ = store.set("last_proxy_mode", serde_json::Value::String(mode_key.to_string()));
+            store.save().ok();
+        }
+    }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
 
     if config_check::needs_verify(&path) {
@@ -113,6 +151,9 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     } else {
         ::log::info!("[start] action={action} config unchanged, skipping sing-box check");
     }
+
+    // Subscribe to readiness BEFORE starting the engine so we don't miss the signal.
+    let mut ready_rx = crate::engine::readiness::subscribe_ready();
 
     let engine_start = perf::StepTimer::new("start.engine");
     if let Err(e) = PlatformEngine::start(&app, mode.clone(), path, start_epoch).await {
@@ -134,6 +175,34 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         post_pid, post_alive
     );
     readiness::spawn(app.clone(), start_epoch);
+
+    // Wait for the readiness prober to confirm sing-box is listening.
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(25),
+        ready_rx.recv(),
+    )
+    .await
+    {
+        Ok(Ok(readiness::Readiness::Ready)) => {
+            ::log::info!("[start] action={action} readiness confirmed");
+        }
+        Ok(Ok(readiness::Readiness::Failed)) => {
+            ::log::error!("[start] action={action} readiness prober reported failure");
+            return Err("startup failed: ports not reachable".into());
+        }
+        Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+            ::log::info!("[start] action={action} readiness signal lagged, assuming ready");
+        }
+        Ok(Err(broadcast::error::RecvError::Closed)) => {
+            ::log::warn!("[start] action={action} readiness channel closed unexpectedly");
+            return Err("readiness channel closed".into());
+        }
+        Err(_timeout) => {
+            ::log::error!("[start] action={action} readiness timeout");
+            return Err("startup timeout: sing-box did not become ready".into());
+        }
+    }
+
     Ok(())
 }
 

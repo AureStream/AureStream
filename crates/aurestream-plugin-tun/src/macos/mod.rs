@@ -114,7 +114,8 @@ pub async fn stop_tun_process() -> Result<(), String> {
             log::warn!("[helper] exit broadcast channel closed unexpectedly");
         }
         Err(_timeout) => {
-            log::warn!("[helper] timed out waiting for sing-box exit event");
+            log::warn!("[helper] timed out waiting for sing-box exit event; forcing helper stop");
+            let _ = macos_helper::api::stop_sing_box();
         }
     }
 

@@ -1,4 +1,3 @@
-
 export const SING_BOX_MAJOR_VERSION = "1.13";
 export const SING_BOX_MINOR_VERSION = "13";
 export const SING_BOX_VERSION = `v${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION}`;
@@ -27,7 +26,7 @@ export const CONTROLLER_SECRET_STORE_KEY = 'singbox_api_secret_key';
 export const LEGACY_CLASH_API_PORT_STORE_KEY = 'clash_api_port_key';
 export const LEGACY_CLASH_API_SECRET_STORE_KEY = 'clash_api_secret_key';
 
-export const APP_VERSION = '0.2.5';
+export const APP_VERSION = '0.3.0';
 
 export function buildSubscriptionUserAgent(): string {
     return `sing-box`;

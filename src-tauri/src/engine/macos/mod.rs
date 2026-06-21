@@ -62,8 +62,8 @@ impl EngineManager for MacOSEngine {
                 }
             }
             ProxyMode::IntoProxy => {
-                // AureStream uses IntoProxy for TUN mode
-                Self::ensure_installed(app).await?;
+                // Frontend pre-checks helper installation before switching to TUN mode.
+                // If somehow we reach here without helper, start_tun_via_helper will fail with a clear error.
                 let bypass_router_enabled = app
                     .get_store("settings.json")
                     .and_then(|store| store.get("enable_bypass_router_key"))
@@ -171,6 +171,11 @@ impl EngineManager for MacOSEngine {
                     log::error!("Failed to stop TUN process: {}", e);
                     e
                 });
+                // Belt-and-suspenders: helper may have lost track of the pid.
+                let _ = tokio::task::spawn_blocking(|| {
+                    aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
+                })
+                .await;
                 watchdog::cancel();
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
 
@@ -226,11 +231,15 @@ impl EngineManager for MacOSEngine {
     }
 
     async fn uninstall_service(app: &AppHandle) -> Result<(), String> {
-        let running = {
+        let should_stop = {
             let mgr = ProcessManager::acquire();
             mgr.child.is_some()
+                || matches!(
+                    mgr.mode.as_ref().map(|m| m.as_ref()),
+                    Some(ProxyMode::IntoProxy)
+                )
         };
-        if running {
+        if should_stop {
             Self::stop(app).await?;
         }
 

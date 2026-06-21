@@ -47,3 +47,9 @@ export async function ensureEngineServiceInstalled(): Promise<void> {
   await invoke("engine_ensure_installed")
   lastProbe = { state: "ready", at: Date.now() }
 }
+
+/** Uninstall the privileged service/helper (macOS XPC / Windows SCM / Linux pkexec). */
+export async function uninstallEngineService(): Promise<void> {
+  await invoke("engine_uninstall_service")
+  lastProbe = { state: "missing", at: Date.now() }
+}

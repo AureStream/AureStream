@@ -21,6 +21,8 @@ import {
     AUTO_START_STORE_KEY,
     HIDE_ON_LAUNCH_STORE_KEY,
     MINIMIZE_TO_TRAY_STORE_KEY,
+    SSI_STORE_KEY,
+    SELECTED_NODE_TAG_STORE_PREFIX,
 } from '../types/definition';
 
 export const LANGUAGE_STORE_KEY = 'language';
@@ -133,6 +135,29 @@ export async function setStoreValue(
     options?: { immediate?: boolean },
 ) {
     await persistStoreKey(key, value, options);
+}
+
+export async function clearUserDataStore(): Promise<void> {
+    // Clear user-specific keys from memory cache
+    memoryCache.delete(SSI_STORE_KEY);
+    for (const key of Array.from(memoryCache.keys())) {
+        if (key.startsWith(SELECTED_NODE_TAG_STORE_PREFIX)) {
+            memoryCache.delete(key);
+        }
+    }
+
+    // Clear user-specific keys from LazyStore
+    try {
+        const keys = await store.keys();
+        for (const key of keys) {
+            if (key === SSI_STORE_KEY || key.startsWith(SELECTED_NODE_TAG_STORE_PREFIX)) {
+                await store.delete(key);
+            }
+        }
+        await flushStore();
+    } catch (e) {
+        console.error('Failed to clear user data from store:', e);
+    }
 }
 
 export async function getEnableTun(): Promise<boolean> {

@@ -1,108 +1,61 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react"
-import { getAppConfigDir } from "@/lib/app-paths"
-import "@/lib/config-sync"
-import { dismissBootSplash } from "@/lib/boot-splash"
-import { AppSidebar } from "@/components/layout/AppSidebar"
-import { LoadingScreen } from "@/components/layout/LoadingScreen"
-import {
-  SubscriptionProvider,
-  useSubscriptionContext,
-} from "@/contexts/SubscriptionContext"
-import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
-import { HomePage } from "@/pages/HomePage"
-import { cn } from "@/lib/utils"
-import "@/lib/i18n"
+import { useEffect } from "react"
+import { Routes, Route, Navigate } from "react-router-dom"
+import AuthLayout from "./components/AuthLayout"
+import LoginPage from "./components/LoginPage"
+import RegisterPage from "./components/RegisterPage"
+import Dashboard from "./components/Dashboard"
+import { useAuth } from "./contexts/AuthContext"
+import { initNodeLatency } from "./lib/node-latency"
 
-const SubscriptionPage = lazy(() =>
-  import("@/pages/SubscriptionPage").then((module) => ({
-    default: module.SubscriptionPage,
-  }))
-)
-const SettingsPage = lazy(() =>
-  import("@/pages/SettingsPage").then((module) => ({
-    default: module.SettingsPage,
-  }))
-)
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
 
-const BOOT_MIN_VISIBLE_MS = 650
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full bg-bg">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <span className="text-sm text-text-muted">AureStream</span>
+        </div>
+      </div>
+    )
+  }
 
-function AppLayout() {
-  const { activeTab } = useNavigation()
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
 
-  return (
-    <div className="relative flex h-screen w-screen overflow-hidden p-2.5 gap-2.5">
-      {/* Light mode background */}
-      <div className="absolute inset-0 bg-background dark:hidden" />
-      <div className="absolute top-[-10%] right-[-10%] size-[450px] rounded-full bg-primary/15 blur-[110px] dark:hidden" />
-      <div className="absolute bottom-[-10%] left-[-15%] size-[420px] rounded-full bg-[#6366f1]/12 blur-[100px] dark:hidden" />
-      <div className="absolute top-[25%] left-[-10%] size-[350px] rounded-full bg-[#ec4899]/5 blur-[90px] dark:hidden" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.4)_0%,_transparent_80%)] dark:hidden" />
-
-      {/* Dark mode background */}
-      <div className="absolute inset-0 bg-background hidden dark:block" />
-      <div className="absolute top-[-10%] right-[-10%] size-[380px] rounded-full bg-primary/10 blur-[100px] hidden dark:block" />
-      <div className="absolute bottom-[-10%] left-[-10%] size-[380px] rounded-full bg-[#4f46e5]/6 blur-[100px] hidden dark:block" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.01)_0%,_transparent_75%)] hidden dark:block" />
-
-      <AppSidebar />
-
-      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card/40 backdrop-blur-2xl border border-border/60 dark:bg-black/30 dark:border-white/10 rounded-[24px] shadow-sm p-4 sm:p-5">
-        <Suspense fallback={<LoadingScreen />}>
-          {activeTab === "home" && <HomePage />}
-          {activeTab === "subscription" && <SubscriptionPage />}
-          {activeTab === "settings" && <SettingsPage />}
-        </Suspense>
-      </main>
-    </div>
-  )
+  return <>{children}</>
 }
 
-function AppBootstrap() {
-  const { loading } = useSubscriptionContext()
-  const bootStartedAt = useRef(Date.now())
-  const [shellReady, setShellReady] = useState(false)
-
-  useEffect(() => {
-    void getAppConfigDir()
-  }, [])
-
-  useEffect(() => {
-    if (loading) {
-      return
-    }
-
-    const elapsed = Date.now() - bootStartedAt.current
-    const delay = Math.max(0, BOOT_MIN_VISIBLE_MS - elapsed)
-    const timer = window.setTimeout(() => {
-      void dismissBootSplash().then(() => {
-        setShellReady(true)
-      })
-    }, delay)
-
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [loading])
-
-  return (
-    <div
-      className={cn(
-        "h-screen w-screen transition-opacity duration-500 ease-out",
-        shellReady ? "opacity-100" : "opacity-0"
-      )}
-    >
-      <AppLayout />
-    </div>
-  )
+function PublicOnly({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (user) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
 }
 
 function App() {
+  useEffect(() => {
+    initNodeLatency()
+  }, [])
+
   return (
-    <NavigationProvider>
-      <SubscriptionProvider>
-        <AppBootstrap />
-      </SubscriptionProvider>
-    </NavigationProvider>
+    <Routes>
+      <Route element={<PublicOnly><AuthLayout /></PublicOnly>}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+      </Route>
+      <Route
+        path="/dashboard/*"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   )
 }
 

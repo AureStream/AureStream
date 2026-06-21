@@ -2,6 +2,17 @@ name: Build desktop bundles
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - linux-x64
+          - windows-x64
+          - macos-aarch64
+          - macos-x64
   release:
     types: [published]
 
@@ -13,23 +24,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - name: Compute build matrix
+        id: gen
+        shell: bash
+        run: |
+          full='[
+            {"name":"linux-x64","os":"ubuntu-24.04","rust_target":"x86_64-unknown-linux-gnu"},
+            {"name":"windows-x64","os":"windows-2025","rust_target":"x86_64-pc-windows-msvc"},
+            {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
+            {"name":"macos-x64","os":"macos-15-intel","rust_target":"x86_64-apple-darwin"}
+          ]'
+          sel='${{ github.event.inputs.platform }}'
+          if [[ -z "$sel" || "$sel" == "all" ]]; then
+            matrix=$(echo "$full" | jq -c '{include: .}')
+          else
+            matrix=$(echo "$full" | jq -c --arg s "$sel" '{include: [.[] | select(.name == $s)]}')
+          fi
+          echo "Selected platform: ${sel:-all}"
+          echo "matrix=$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: setup
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: linux-x64
-            os: ubuntu-24.04
-            rust_target: x86_64-unknown-linux-gnu
-          - name: windows-x64
-            os: windows-2025
-            rust_target: x86_64-pc-windows-msvc
-          - name: macos-aarch64
-            os: macos-latest
-            rust_target: aarch64-apple-darwin
-          - name: macos-x64
-            os: macos-15-intel
-            rust_target: x86_64-apple-darwin
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
 
@@ -68,6 +92,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
+          version: 11.4.0
           run_install: false
 
       - name: Get pnpm store path
