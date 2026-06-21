@@ -21,28 +21,16 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
         .state::<crate::engine::state_machine::EngineStateCell>()
         .snapshot();
 
-    // 读取当前应该选中的代理模式
-    // 1. 如果处于 Starting 或 Running 状态，以其实际状态中的模式为准
-    // 2. 否则读取本地存储中保存的上一次模式
-    let current_mode = match &state {
+    // 读取当前应该选中的代理模式（仅在引擎启动或运行时选中打勾，关闭时不勾选）
+    let (is_system_checked, is_tun_checked) = match &state {
         EngineState::Starting { mode, .. } | EngineState::Running { mode, .. } => {
             if mode == "tun" {
-                "tun".to_string()
+                (false, true)
             } else {
-                "system".to_string()
+                (true, false)
             }
         }
-        _ => {
-            use tauri_plugin_store::StoreExt;
-            let store = app_handle.store("settings.json");
-            match store {
-                Ok(s) => match s.get("last_proxy_mode") {
-                    Some(serde_json::Value::String(mode)) => mode.clone(),
-                    _ => "system".to_string(),
-                },
-                Err(_) => "system".to_string(),
-            }
-        }
+        _ => (false, false),
     };
 
     let show_item = MenuItemBuilder::with_id("tray_show", "显示主窗口").build(app_handle)?;
@@ -50,10 +38,10 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
     
     // 使用 CheckMenuItemBuilder 构建具有勾选框的菜单项
     let mode_system = CheckMenuItemBuilder::with_id("tray_mode_system", "智能分流")
-        .checked(current_mode == "system")
+        .checked(is_system_checked)
         .build(app_handle)?;
     let mode_tun = CheckMenuItemBuilder::with_id("tray_mode_tun", "虚拟网关")
-        .checked(current_mode == "tun")
+        .checked(is_tun_checked)
         .build(app_handle)?;
         
     let sep2 = PredefinedMenuItem::separator(app_handle)?;
