@@ -25,10 +25,6 @@ export default function TitleBar() {
   })
   const appWindow = getCurrentWindow()
 
-  const title = (
-    <span className="text-[11px] font-extrabold tracking-wide text-text-secondary">AureStream</span>
-  )
-
   // macOS traffic lights: red close · yellow minimize.
   const lightBtn =
     "w-[13px] h-[13px] rounded-full border border-black/10 flex items-center justify-center text-black/60 cursor-pointer"
@@ -75,17 +71,11 @@ export default function TitleBar() {
       {isMac ? (
         <>
           {trafficLights}
-          <div data-tauri-drag-region className="flex-1 flex justify-center pointer-events-none">
-            {title}
-          </div>
-          {/* balance the centered title against the left traffic lights */}
-          <div className="w-[64px] shrink-0" />
+          <div data-tauri-drag-region className="flex-1" />
         </>
       ) : (
         <>
-          <div data-tauri-drag-region className="flex-1 flex items-center pointer-events-none">
-            {title}
-          </div>
+          <div data-tauri-drag-region className="flex-1" />
           {winControls}
         </>
       )}
