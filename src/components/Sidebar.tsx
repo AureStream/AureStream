@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { NavLink, useNavigate } from "react-router-dom"
 import { useTheme } from "./ThemeProvider"
-import { useAuth } from "../contexts/AuthContext"
 
 /* Icons */
 const I = {
@@ -24,7 +23,6 @@ const I = {
 export default function Sidebar() {
   const { i18n } = useTranslation()
   const { theme, toggleTheme } = useTheme()
-  const { user } = useAuth()
   const navigate = useNavigate()
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
@@ -36,8 +34,7 @@ export default function Sidebar() {
     { to: "/dashboard/profile", icon: <I.User />, label: l("Profile", "个人中心") },
   ]
 
-  const emailUser = user?.email ?? "User";
-  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(emailUser)}&background=5C67F2&color=fff`;
+  const avatarUrl = "/avatar.svg";
 
   return (
     <aside className="glass-sidebar w-[72px] shrink-0 flex flex-col z-40 h-full border-r border-border-glass items-center">

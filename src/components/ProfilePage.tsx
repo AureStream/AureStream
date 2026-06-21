@@ -100,11 +100,8 @@ export default function ProfilePage() {
           <div className="flex flex-col items-center justify-center pt-8 text-center">
             {/* Avatar Container */}
             <div className="w-20 h-20 rounded-full bg-secondary p-[3px] shadow-glow-primary mb-4 animate-pulse-slow">
-              <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden text-secondary">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
+              <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden">
+                <img src="/avatar.svg" alt="User" className="w-full h-full aspect-square shrink-0 object-cover" />
               </div>
             </div>
 
