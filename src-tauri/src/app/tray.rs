@@ -72,10 +72,12 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
             "tray_mode_system" => {
                 use tauri::Emitter;
                 let _ = app_handle.emit("tray-switch-mode", "system");
+                update_tray_menu(app_handle);
             }
             "tray_mode_tun" => {
                 use tauri::Emitter;
                 let _ = app_handle.emit("tray-switch-mode", "tun");
+                update_tray_menu(app_handle);
             }
             "tray_quit" => {
                 let handle = app_handle.clone();

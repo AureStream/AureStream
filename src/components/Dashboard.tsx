@@ -17,7 +17,12 @@ import { getConfigJsonPath } from "../lib/app-paths"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsServer } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
-import { syncActiveConnectionConfig } from "../lib/config-sync"
+import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
+import {
+  planTrayModeAction,
+  uiModeFromEngineState,
+  type TrayRequestedMode,
+} from "../lib/tray-mode"
 import { controllerFetch } from "../utils/singbox-api"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
@@ -89,19 +94,10 @@ function HomePage() {
 
   // 同步主界面与后台引擎/系统托盘切换后的代理模式状态
   useEffect(() => {
-    if (engineState.kind === "running" || engineState.kind === "starting") {
-      const mode = (engineState as any).mode
-      if (mode === "tun") {
-        if (proxyMode !== "tun") {
-          setProxyMode("tun")
-          void setEnableTun(true)
-        }
-      } else if (mode === "mixed") {
-        if (proxyMode !== "rule") {
-          setProxyMode("rule")
-          void setEnableTun(false)
-        }
-      }
+    const engineUiMode = uiModeFromEngineState(engineState)
+    if (engineUiMode && proxyMode !== engineUiMode) {
+      setProxyMode(engineUiMode)
+      void withScheduledConfigSyncSuspended(() => setEnableTun(engineUiMode === "tun"))
     }
   }, [engineState, proxyMode])
 
@@ -177,6 +173,16 @@ function HomePage() {
   // Guard against concurrent tray-triggered operations (prevents start/stop
   // cascade when the user clicks a tray item multiple times in quick succession).
   const trayOperationRef = useRef(false)
+  const engineStateRef = useRef(engineState)
+  const subsRef = useRef(subs)
+
+  useEffect(() => {
+    engineStateRef.current = engineState
+  }, [engineState])
+
+  useEffect(() => {
+    subsRef.current = subs
+  }, [subs])
 
   // Reset tray operation guard when the engine settles into a stable state.
   useEffect(() => {
@@ -195,51 +201,50 @@ function HomePage() {
       }
       trayOperationRef.current = true
 
-      const targetMode = event.payload // "system" | "tun"
-      const isTun = targetMode === "tun"
-      const newModeStr = isTun ? "tun" : "rule"
+      const targetMode = event.payload
+      if (targetMode !== "system" && targetMode !== "tun") {
+        console.warn("[tray-switch] invalid mode:", targetMode)
+        trayOperationRef.current = false
+        return
+      }
 
-      const currentMode = engineState.kind === "running" || engineState.kind === "starting"
-        ? ((engineState as any).mode === "tun" ? "tun" : "rule")
-        : null
+      const plan = planTrayModeAction(engineStateRef.current, targetMode as TrayRequestedMode)
+      if (plan.action === "noop") {
+        trayOperationRef.current = false
+        return
+      }
 
-      const isCurrentActive = currentMode === newModeStr
-
-      if (isCurrentActive) {
-        try {
-          await stopEngine()
-        } catch (err) {
-          console.error("Tray stop engine failed:", err)
-        }
-      } else {
-        try {
-          // 1. 更新代理模式及 store 设置
-          setProxyMode(newModeStr)
+      try {
+        setLocalConnecting(plan.action === "connect")
+        setIsSwitchingMode(plan.action === "switch")
+        await withScheduledConfigSyncSuspended(async () => {
+          const isTun = plan.targetUiMode === "tun"
+          setProxyMode(plan.targetUiMode)
           await setEnableTun(isTun)
 
-          // 2. 如果当前有正在运行的引擎，先执行停止
-          if (currentMode !== null) {
+          if (plan.action === "switch") {
             await stopEngine()
           }
 
-          // 3. 合并配置文件，生成最新的 config.json（自动根据新模式添加或移除 tun inbound）
-          const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
+          const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
           await mergeConnectionConfig(subId, "rule", isTun, { force: true })
           const configPath = await getConfigJsonPath()
 
-          // 4. 启动引擎
-          await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
-        } catch (err) {
-          console.error("Tray start engine failed:", err)
-          trayOperationRef.current = false
-        }
+          await startEngine(configPath, plan.targetEngineMode)
+        })
+      } catch (err) {
+        console.error("Tray switch engine failed:", err)
+      } finally {
+        setLocalConnecting(false)
+        setIsSwitchingMode(false)
+        trayOperationRef.current = false
       }
     })
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten())
     }
-  }, [engineState, subs])
+  }, [])
 
   const memoryMB = isConnected 
     ? (12.4 + (connectionCount * 0.12) + Math.sin(now / 10000) * 0.2).toFixed(1) 
@@ -340,6 +345,7 @@ function HomePage() {
 
   const handleSwitchMode = async (newMode: "rule" | "tun") => {
     if (isConnecting || isSwitchingMode || isInstallingService) return
+    if (proxyMode === newMode) return
     const isTun = newMode === "tun"
 
     // When switching to TUN mode, check if the privileged helper service is installed
@@ -391,24 +397,28 @@ function HomePage() {
       }
     }
 
-    setProxyMode(newMode)
-    await setEnableTun(isTun)
+    try {
+      await withScheduledConfigSyncSuspended(async () => {
+        setProxyMode(newMode)
+        await setEnableTun(isTun)
 
-    if (isConnected) {
-      try {
+        if (!isConnected) {
+          return
+        }
+
         setIsSwitchingMode(true)
         await stopEngine()
-        
+
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
         await mergeConnectionConfig(subId, "rule", isTun, { force: true })
         const configPath = await getConfigJsonPath()
-        
+
         await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
-      } catch (err) {
-        console.error("Switch mode failed:", err)
-      } finally {
-        setIsSwitchingMode(false)
-      }
+      })
+    } catch (err) {
+      console.error("Switch mode failed:", err)
+    } finally {
+      setIsSwitchingMode(false)
     }
   }
 

@@ -26,6 +26,27 @@ const DEBOUNCE_MS = 200
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let inFlightSync: Promise<boolean> | null = null
+let scheduledSyncSuspensionDepth = 0
+
+export function cancelPendingConfigSync(): void {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+}
+
+export async function withScheduledConfigSyncSuspended<T>(
+  work: () => Promise<T>
+): Promise<T> {
+  scheduledSyncSuspensionDepth += 1
+  cancelPendingConfigSync()
+  try {
+    return await work()
+  } finally {
+    scheduledSyncSuspensionDepth -= 1
+    cancelPendingConfigSync()
+  }
+}
 
 export async function resolveActiveConnectionConfigParams(): Promise<ConnectionConfigParams | null> {
   const subscriptionIdentifier = (await getStoreValue(
@@ -103,6 +124,9 @@ export async function syncActiveConnectionConfig(
 
 /** Debounced background merge after settings inputs change. */
 export function scheduleConfigSync(reason?: string): void {
+  if (scheduledSyncSuspensionDepth > 0) {
+    return
+  }
   if (debounceTimer) {
     clearTimeout(debounceTimer)
   }
