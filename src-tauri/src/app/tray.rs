@@ -49,10 +49,10 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
     let sep1 = PredefinedMenuItem::separator(app_handle)?;
     
     // 使用 CheckMenuItemBuilder 构建具有勾选框的菜单项
-    let mode_system = CheckMenuItemBuilder::with_id("tray_mode_system", "智能分流模式")
+    let mode_system = CheckMenuItemBuilder::with_id("tray_mode_system", "智能分流")
         .checked(current_mode == "system")
         .build(app_handle)?;
-    let mode_tun = CheckMenuItemBuilder::with_id("tray_mode_tun", "虚拟网关模式")
+    let mode_tun = CheckMenuItemBuilder::with_id("tray_mode_tun", "虚拟网关")
         .checked(current_mode == "tun")
         .build(app_handle)?;
         
