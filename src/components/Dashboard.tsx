@@ -74,8 +74,6 @@ function HomePage() {
   const isConnected = engineConnected || isSwitchingMode
   const isConnecting = (isStarting || isStopping || localConnecting) && !isSwitchingMode
 
-  useTrafficAccumulator(loadSubs)
-
   useEffect(() => {
     const initMode = async () => {
       const tun = await getEnableTun()
@@ -377,6 +375,8 @@ function HomePage() {
       setSubsLoading(false)
     }
   }, [])
+
+  useTrafficAccumulator(loadSubs)
 
   const handleUpdateSubscription = async () => {
     if (subs.length === 0 || isUpdatingSub) return
