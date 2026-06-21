@@ -94,6 +94,8 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
                                 crate::core::commands::start(handle, path, crate::engine::ProxyMode::SystemProxy)
                                     .await;
                         }
+                    } else {
+                        let _ = crate::core::commands::stop(handle).await;
                     }
                 });
             }
@@ -114,6 +116,8 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
                                 crate::core::commands::start(handle, path, crate::engine::ProxyMode::IntoProxy)
                                     .await;
                         }
+                    } else {
+                        let _ = crate::core::commands::stop(handle).await;
                     }
                 });
             }
