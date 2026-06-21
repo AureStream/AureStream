@@ -171,39 +171,31 @@ impl EngineManager for MacOSEngine {
                     log::error!("Failed to stop TUN process: {}", e);
                     e
                 });
-                // Belt-and-suspenders: helper may have lost track of the pid.
-                let _ = tokio::task::spawn_blocking(|| {
-                    aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
-                })
-                .await;
-                watchdog::cancel();
-                crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
 
-                // Aggressive fallback: if ports are still held after the helper
-                // stop + 8 s wait, try SIGKILL-ing any remaining user-owned
-                // processes, then ask the helper one more time.
+                watchdog::cancel();
+
+                // Centralized port cleanup: ask the root helper to kill all port
+                // holders (any TCP state), then poll TcpListener::bind until ports
+                // are truly free.
                 let mixed = crate::engine::ports::mixed_proxy_port(app);
                 let ctrl = crate::engine::ports::controller_port(app);
-                let mixed_still_up = crate::engine::ports::probe_port_listening(mixed);
-                let ctrl_still_up = ctrl != mixed && crate::engine::ports::probe_port_listening(ctrl);
-                if mixed_still_up || ctrl_still_up {
-                    log::warn!(
-                        "[stop] IntoProxy ports still occupied after 8 s wait (mixed={} ctrl={}), trying kill_orphans",
-                        mixed_still_up, ctrl_still_up
-                    );
-                    if mixed_still_up {
-                        let _ = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(mixed));
+                if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+                    mixed,
+                    std::time::Duration::from_secs(10),
+                )
+                .await
+                {
+                    log::error!("[stop] mixed :{mixed} still blocked after cleanup: {e}");
+                }
+                if ctrl != mixed {
+                    if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+                        ctrl,
+                        std::time::Duration::from_secs(10),
+                    )
+                    .await
+                    {
+                        log::error!("[stop] controller :{ctrl} still blocked after cleanup: {e}");
                     }
-                    if ctrl_still_up {
-                        let _ = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(ctrl));
-                    }
-                    // Retry helper stop in case the root process survived the
-                    // first request (e.g. it was slow to react).
-                    let _ = tokio::task::spawn_blocking(|| {
-                        aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
-                    })
-                    .await;
-                    crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
                 }
 
                 let state = app.state::<EngineStateCell>().snapshot();

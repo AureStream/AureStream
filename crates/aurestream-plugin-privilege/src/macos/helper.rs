@@ -25,6 +25,11 @@ mod ffi {
             error_out: *mut *mut c_char,
         ) -> c_int;
         pub fn aurestream_helper_stop_sing_box(error_out: *mut *mut c_char) -> c_int;
+        pub fn aurestream_helper_ensure_port_free(
+            port: c_int,
+            killed_out: *mut c_int,
+            error_out: *mut *mut c_char,
+        ) -> c_int;
         pub fn aurestream_helper_reload_sing_box(error_out: *mut *mut c_char) -> c_int;
 
         pub fn aurestream_helper_set_ip_forwarding(
@@ -193,6 +198,26 @@ pub mod api {
         call_error_only(|err_out| unsafe { ffi::aurestream_helper_stop_sing_box(err_out) })
     }
 
+    pub fn ensure_port_free(port: u16) -> Result<i32, String> {
+        let mut killed: std::os::raw::c_int = 0;
+        let mut err: *mut std::os::raw::c_char = ptr::null_mut();
+        let rc = unsafe {
+            ffi::aurestream_helper_ensure_port_free(
+                port as std::os::raw::c_int,
+                &mut killed,
+                &mut err,
+            )
+        };
+        let message = consume_cstring(err);
+        if rc == 0 {
+            Ok(killed as i32)
+        } else if message.is_empty() {
+            Err(format!("helper ensure_port_free({port}) failed with rc={rc}"))
+        } else {
+            Err(message)
+        }
+    }
+
     pub fn reload_sing_box() -> Result<(), String> {
         call_error_only(|err_out| unsafe { ffi::aurestream_helper_reload_sing_box(err_out) })
     }
@@ -244,6 +269,9 @@ pub mod api {
         Err(MSG.to_string())
     }
     pub fn stop_sing_box() -> Result<(), String> {
+        Err(MSG.to_string())
+    }
+    pub fn ensure_port_free(_port: u16) -> Result<i32, String> {
         Err(MSG.to_string())
     }
     pub fn reload_sing_box() -> Result<(), String> {

@@ -100,3 +100,87 @@ async fn poll_port(port: u16, timeout: Duration, wait_listening: bool) -> bool {
 
     satisfied()
 }
+
+/// Ask the privileged helper (root) to forcibly free a port, then poll with
+/// `TcpListener::bind` until the port is truly available or the timeout expires.
+///
+/// On macOS this delegates to `ensurePortFree` XPC which kills processes in all
+/// TCP states (not just LISTEN). On other platforms it falls back to polling.
+#[cfg(target_os = "macos")]
+pub(crate) async fn ensure_port_free_with_retry(
+    port: u16,
+    timeout: Duration,
+) -> Result<(), String> {
+    use tokio::time::{sleep, Instant};
+
+    if probe_port_bindable(port) {
+        return Ok(());
+    }
+
+    let deadline = Instant::now() + timeout;
+    let mut attempt: u32 = 0;
+    let mut last_killed: i32 = 0;
+
+    loop {
+        attempt += 1;
+
+        match tokio::task::spawn_blocking(move || {
+            aurestream_plugin_privilege::macos::helper::api::ensure_port_free(port)
+        })
+        .await
+        {
+            Ok(Ok(killed)) => {
+                last_killed = killed;
+                log::info!(
+                    "[port-cleanup] :{port} attempt {attempt}: helper killed {killed} process(es)"
+                );
+            }
+            Ok(Err(e)) => {
+                log::warn!("[port-cleanup] :{port} attempt {attempt}: helper error: {e}");
+            }
+            Err(e) => {
+                log::warn!(
+                    "[port-cleanup] :{port} attempt {attempt}: spawn_blocking error: {e}"
+                );
+            }
+        }
+
+        // Give the kernel time to release the port after killing processes.
+        sleep(Duration::from_millis(300)).await;
+
+        if probe_port_bindable(port) {
+            log::info!(
+                "[port-cleanup] :{port} bindable after {attempt} attempt(s), {last_killed} process(es) killed"
+            );
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "port :{port} still not bindable after {timeout:?} ({attempt} attempts, {last_killed} processes killed)"
+            ));
+        }
+
+        // Exponential backoff: 500ms, 1s, 2s, 2s...
+        let backoff = std::cmp::min(
+            Duration::from_millis(500).saturating_mul(2u32.saturating_pow(attempt - 1)),
+            Duration::from_secs(2),
+        );
+        sleep(backoff).await;
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) async fn ensure_port_free_with_retry(
+    port: u16,
+    timeout: Duration,
+) -> Result<(), String> {
+    wait_for_port_bindable(port, timeout).await;
+    if probe_port_bindable(port) {
+        Ok(())
+    } else {
+        Err(format!(
+            "port :{port} still not bindable after {timeout:?}"
+        ))
+    }
+}

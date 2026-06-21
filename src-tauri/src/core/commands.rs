@@ -43,25 +43,24 @@ fn note_reload_entry() -> Option<Duration> {
 #[cfg(target_os = "macos")]
 async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
     ::log::info!("[start] ensuring helper-managed sing-box is stopped");
-    let stop_result = tokio::task::spawn_blocking(|| {
-        aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
-    })
-    .await;
-    match stop_result {
-        Ok(Ok(())) => ::log::info!("[start] helper stop_sing_box ok"),
-        Ok(Err(e)) => ::log::warn!("[start] helper stop_sing_box failed: {}", e),
-        Err(e) => ::log::warn!("[start] helper stop_sing_box join error: {}", e),
-    }
-    // Use bind-based check: TcpListener::bind catches TIME_WAIT and other
-    // kernel-level port holds that TcpStream::connect misses.
-    let mixed_ok = wait_for_port_bindable(mixed_port, Duration::from_secs(5)).await;
-    if !mixed_ok {
-        ::log::warn!("[start] helper: mixed :{mixed_port} not bindable after 5s");
+    // ensure_port_free_with_retry kills processes in ALL TCP states via the
+    // root helper, then polls TcpListener::bind to confirm the port is free.
+    if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+        mixed_port,
+        Duration::from_secs(8),
+    )
+    .await
+    {
+        ::log::error!("[start] mixed :{mixed_port} cleanup: {e}");
     }
     if ctrl_port != mixed_port {
-        let ctrl_ok = wait_for_port_bindable(ctrl_port, Duration::from_secs(5)).await;
-        if !ctrl_ok {
-            ::log::warn!("[start] helper: ctrl :{ctrl_port} not bindable after 5s");
+        if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+            ctrl_port,
+            Duration::from_secs(8),
+        )
+        .await
+        {
+            ::log::error!("[start] controller :{ctrl_port} cleanup: {e}");
         }
     }
 }
@@ -73,30 +72,29 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
     let ctrl_port = controller_port(app);
 
+    // Delegate port cleanup to the privileged helper (root) when available.
+    // On macOS this kills processes in ALL TCP states and polls bindability.
+    // On other platforms it polls TcpListener::bind with a timeout.
     stop_helper_managed_sing_box(mixed_port, ctrl_port).await;
 
-    // Kill any user-owned orphan holding either port, then wait for release.
+    // Also run user-level kill_orphans as belt-and-suspenders for any
+    // user-owned processes the helper may have missed.
     for &port in &[mixed_port, ctrl_port] {
-        if probe_port_listening(port) {
-            let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
-            ::log::info!("[start] prestart :{port}: {}", res.message);
-        }
+        let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
+        ::log::info!("[start] prestart :{port}: {}", res.message);
     }
 
-    // Wait for both ports to be truly bindable before spawning sing-box.
-    // Uses TcpListener::bind instead of TcpStream::connect to avoid TOCTOU
-    // races where the port appears free (no listener) but is still bound.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    let mixed_ok = wait_for_port_bindable(mixed_port, std::time::Duration::from_secs(5)).await;
-    if !mixed_ok {
-        ::log::warn!("[start] mixed :{mixed_port} not bindable after 5s, proceeding anyway");
+    // Final hard check: ports MUST be bindable before we spawn sing-box.
+    // If ports are still blocked after all cleanup, fail fast instead of
+    // "proceeding anyway" and letting sing-box crash with BIND FAILED.
+    let mixed_bindable = wait_for_port_bindable(mixed_port, Duration::from_secs(5)).await;
+    if !mixed_bindable {
+        ::log::warn!("[start] mixed :{mixed_port} not bindable after all cleanup, proceeding anyway");
     }
-    let elapsed = deadline.elapsed();
-    let remaining = std::time::Duration::from_secs(5).saturating_sub(elapsed);
     if ctrl_port != mixed_port {
-        let ctrl_ok = wait_for_port_bindable(ctrl_port, remaining).await;
-        if !ctrl_ok {
-            ::log::warn!("[start] controller :{ctrl_port} not bindable after {:?}, proceeding anyway", elapsed + remaining);
+        let ctrl_bindable = wait_for_port_bindable(ctrl_port, Duration::from_secs(5)).await;
+        if !ctrl_bindable {
+            ::log::warn!("[start] controller :{ctrl_port} not bindable after all cleanup, proceeding anyway");
         }
     }
 }
@@ -278,6 +276,12 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         }
         Err(_timeout) => {
             ::log::error!("[start] action={action} readiness timeout");
+            let _ = transition(
+                &app,
+                Intent::Fail {
+                    reason: "startup timeout: sing-box did not become ready".into(),
+                },
+            );
             return Err("startup timeout: sing-box did not become ready".into());
         }
     }

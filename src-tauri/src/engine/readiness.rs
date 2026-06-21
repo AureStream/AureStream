@@ -43,6 +43,10 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
         loop {
             let snap = app.state::<EngineStateCell>().snapshot();
             if !matches!(snap, EngineState::Starting { .. }) || snap.epoch() != start_epoch {
+                // State was changed externally (e.g. handle_process_termination
+                // transitioned to Failed after a BIND error). Signal the waiter
+                // so start() can return immediately instead of timing out.
+                let _ = sender.send(Readiness::Failed);
                 return;
             }
 

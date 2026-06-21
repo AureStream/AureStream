@@ -37,6 +37,7 @@ static const int64_t kAureStreamHelperStartTimeoutSeconds = 30;
                             logPath:(NSString *)logPath
                                reply:(void (^)(int pid, NSString *error))reply;
 - (void)stopSingBoxWithReply:(void (^)(NSString *error))reply;
+- (void)ensurePortFree:(int)port reply:(void (^)(int killedCount, NSString *error))reply;
 - (void)reloadSingBoxWithReply:(void (^)(NSString *error))reply;
 - (void)setIpForwarding:(BOOL)enable
                   reply:(void (^)(NSString *error))reply;
@@ -488,6 +489,67 @@ int aurestream_helper_remove_tun_routes(const char *interface_name, char **error
     return invokeErrorOnlyWithRetry(^(id<AureStreamHelperProtocol> proxy, void (^replyHandler)(NSString *)) {
         [proxy removeTunRoutesForInterface:iface reply:replyHandler];
     }, kAureStreamHelperDefaultTimeoutSeconds, error_out);
+}
+
+// ============================================================================
+// ensurePortFree — ask the helper to kill all port holders (any TCP state)
+// ============================================================================
+
+int aurestream_helper_ensure_port_free(int port, int *killed_out, char **error_out) {
+    if (killed_out != NULL) *killed_out = 0;
+    if (error_out != NULL) *error_out = NULL;
+
+    @autoreleasepool {
+        NSXPCConnection *conn = [[AureStreamHelperClient sharedClient] connection];
+
+        __block int resultKilled = 0;
+        __block NSString *errString = nil;
+        __block BOOL completed = NO;
+        __block BOOL xpcError = NO;
+        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+        id<AureStreamHelperProtocol> proxy = [conn remoteObjectProxyWithErrorHandler:^(NSError *err) {
+            if (!completed) {
+                xpcError = YES;
+                errString = aurestream_xpc_error_message(err);
+                completed = YES;
+                dispatch_semaphore_signal(sem);
+            }
+        }];
+
+        [proxy ensurePortFree:port reply:^(int killedCount, NSString *error) {
+            if (!completed) {
+                resultKilled = killedCount;
+                errString = error;
+                completed = YES;
+                dispatch_semaphore_signal(sem);
+            }
+        }];
+
+        dispatch_time_t deadline = dispatch_time(
+            DISPATCH_TIME_NOW, kAureStreamHelperDefaultTimeoutSeconds * NSEC_PER_SEC);
+        if (dispatch_semaphore_wait(sem, deadline) != 0) {
+            [[AureStreamHelperClient sharedClient] invalidate];
+            if (error_out != NULL) {
+                *error_out = aurestream_copy_cstring(@"timeout waiting for helper reply");
+            }
+            return 1;
+        }
+
+        if (xpcError) {
+            [[AureStreamHelperClient sharedClient] invalidate];
+        }
+
+        if (killed_out != NULL) *killed_out = resultKilled;
+
+        if (errString == nil) {
+            return 0;
+        }
+        if (error_out != NULL) {
+            *error_out = aurestream_copy_cstring(errString);
+        }
+        return 1;
+    }
 }
 
 // ============================================================================

@@ -56,6 +56,8 @@
 
 - (void)stopSingBoxWithReply:(void (^)(NSString *error))reply;
 
+- (void)ensurePortFree:(int)port reply:(void (^)(int killedCount, NSString *error))reply;
+
 - (void)reloadSingBoxWithReply:(void (^)(NSString *error))reply;
 
 - (void)setIpForwarding:(BOOL)enable
@@ -602,26 +604,36 @@ static void reapSingBoxPid(pid_t pid) {
     }
 }
 
-// Kill any process holding a LISTEN socket on `port` (absolute lsof path because
-// launchd daemons run with a minimal PATH). Returns the number of pids killed.
+// Kill any process holding a socket on `port` in any TCP state (not just LISTEN).
+// Two-pass approach: first LISTEN (the primary server), then ALL states to catch
+// ESTABLISHED child connections that survive killpg of the parent.
+// Returns the number of pids killed.
 static int killListenersOnPort(int port) {
-    char cmd[160];
-    snprintf(cmd, sizeof(cmd),
-             "/usr/sbin/lsof -ti TCP:%d -sTCP:LISTEN 2>/dev/null", port);
-    FILE *fp = popen(cmd, "r");
-    if (!fp) return 0;
-    int killed = 0;
-    char line[32];
-    while (fgets(line, sizeof(line), fp)) {
-        pid_t pid = (pid_t)atoi(line);
-        if (pid > 0) {
-            NSLog(@"[helper] killing orphan listener pid=%d on :%d", pid, port);
-            reapSingBoxPid(pid);
-            killed++;
+    static const char *states[] = {"LISTEN", NULL};
+    int totalKilled = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        char cmd[192];
+        if (states[pass] != NULL) {
+            snprintf(cmd, sizeof(cmd),
+                     "/usr/sbin/lsof -ti TCP:%d -sTCP:%s 2>/dev/null", port, states[pass]);
+        } else {
+            snprintf(cmd, sizeof(cmd),
+                     "/usr/sbin/lsof -ti TCP:%d 2>/dev/null", port);
         }
+        FILE *fp = popen(cmd, "r");
+        if (!fp) continue;
+        char line[32];
+        while (fgets(line, sizeof(line), fp)) {
+            pid_t pid = (pid_t)atoi(line);
+            if (pid > 1) {
+                NSLog(@"[helper] pass %d: killing pid=%d on :%d", pass, pid, port);
+                reapSingBoxPid(pid);
+                totalKilled++;
+            }
+        }
+        pclose(fp);
     }
-    pclose(fp);
-    return killed;
+    return totalKilled;
 }
 
 - (void)stopSingBoxWithReply:(void (^)(NSString *))reply {
@@ -644,13 +656,25 @@ static int killListenersOnPort(int port) {
         });
     }
 
-    // Always sweep the proxy/controller ports afterwards. The tracked pid may be
-    // stale (helper restarted via launchctl kickstart orphans its sing-box), or a
-    // straggler from a previous session may still hold a port.
-    killListenersOnPort(2345);
-    killListenersOnPort(9191);
+    // Always sweep the proxy/controller ports afterwards. Delegate to
+    // ensurePortFree which kills processes in ALL TCP states (not just LISTEN).
+    [self ensurePortFree:2345 reply:^(int killed, NSString *error) {
+        NSLog(@"[helper] ensurePortFree(2345) killed=%d err=%@", killed, error ?: @"nil");
+    }];
+    [self ensurePortFree:9191 reply:^(int killed, NSString *error) {
+        NSLog(@"[helper] ensurePortFree(9191) killed=%d err=%@", killed, error ?: @"nil");
+    }];
 
     reply(nil);
+}
+
+- (void)ensurePortFree:(int)port reply:(void (^)(int killedCount, NSString *error))reply {
+    if (port <= 0 || port > 65535) {
+        reply(0, @"invalid port");
+        return;
+    }
+    int killed = killListenersOnPort(port);
+    reply(killed, nil);
 }
 
 // ------------------------------------------------------------------
