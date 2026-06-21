@@ -718,16 +718,14 @@ function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-[185px]">
             {/* Subscriptions & Data Usage */}
             <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-accent-yellow border border-white/50 flex items-center justify-center text-accent-yellow-text shadow-sm">
-                    <I.Crown />
-                  </div>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-secondary shrink-0"><I.Crown /></span>
                   <div>
                     <h3 className="font-bold font-heading text-text text-base leading-tight">
                       {subsLoading ? l("Loading...", "加载中...") : subs.length > 0 ? subs[0].name : l("No Subscription", "暂无订阅")}
                     </h3>
-                    <p className="text-xs text-text-muted">{subs.length > 0 ? l("Active", "已激活") : l("Add one in Plans", "前往套餐页添加")}</p>
+                    <p className="text-xs text-text-muted mt-0.5">{subs.length > 0 ? l("Active", "已激活") : l("Add one in Plans", "前往套餐页添加")}</p>
                   </div>
                 </div>
                 {subs.length > 0 && (
