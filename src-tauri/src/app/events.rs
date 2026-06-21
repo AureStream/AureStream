@@ -30,16 +30,21 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                         }
                     }
                 } else {
-                    log::info!("Window close request accepted, exiting application");
+                    // Prevent immediate window destruction and perform a graceful
+                    // async shutdown via quit() which does stop → cleanup → exit.
+                    // This avoids calling block_on from a sync event handler.
+                    api.prevent_close();
+                    let handle = window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        crate::commands::shell::quit(handle).await;
+                    });
                 }
             }
         }
         WindowEvent::Destroyed => {
             if window.label() == "main" {
-                log::info!("Main window destroyed, application will exit");
-                crate::commands::shell::sync_quit(window.app_handle().clone());
+                log::info!("Main window destroyed");
             }
-            log::info!("Destroyed");
         }
         _ => {}
     }

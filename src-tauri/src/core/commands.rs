@@ -9,11 +9,19 @@ use crate::engine::{
     config_check, perf, process, readiness, EngineManager, PlatformEngine, ProxyMode,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tokio::sync::broadcast;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
+
+/// Prevents concurrent `start()` invocations from piling up and corrupting engine state.
+/// Held from the beginning of `start()` until the engine is fully ready or failed.
+static START_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+/// Set to true while `stop()` is in progress, so concurrent `start()` calls can
+/// detect it and abort early with a clear error.
+static STOP_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 use tauri::Emitter;
 
@@ -98,11 +106,40 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
 #[tauri::command]
 pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Result<(), String> {
     let action = next_action_token();
+
+    // ── Concurrency guard: only one start() can proceed at a time. ──────
+    // Takes the lock BEFORE logging, so that concurrent callers queue up
+    // instead of interleaving their port-cleanup / state-transition steps.
+    let _start_guard = {
+        let lock = START_LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
+        lock.lock().await
+    };
+
+    // If another start() already succeeded while we were waiting, don't touch it.
+    {
+        let cur = app.state::<EngineStateCell>().snapshot();
+        if matches!(cur, EngineState::Running { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already running, skipping"
+            );
+            return Ok(());
+        }
+        if matches!(cur, EngineState::Starting { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already starting, skipping"
+            );
+            return Ok(());
+        }
+        if STOP_IN_PROGRESS.load(Ordering::Acquire) {
+            return Err("engine is currently stopping, please retry".into());
+        }
+    }
+
     let mode_name = match mode {
         ProxyMode::SystemProxy => "系统代理 (SystemProxy)",
         ProxyMode::IntoProxy => "TUN虚拟网卡 (IntoProxy)",
     };
-    ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
+    ::log::info!("[start] action={action} 启动代理服务，模式: {}", mode_name);
     let _ = app.emit(
         EVENT_TAURI_LOG,
         (0, format!("启动代理服务，模式: {}", mode_name)),
@@ -132,8 +169,22 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         ensure_proxy_ports_free(&app).await;
     }
 
+    // After the (potentially long) port cleanup, re-check that no concurrent
+    // start raced ahead and transitioned the state while we waited.
     {
         let cur = app.state::<EngineStateCell>().snapshot();
+        if matches!(cur, EngineState::Running { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already running after port cleanup, skipping"
+            );
+            return Ok(());
+        }
+        if matches!(cur, EngineState::Starting { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already starting after port cleanup, skipping"
+            );
+            return Ok(());
+        }
         if !matches!(cur, EngineState::Idle { .. } | EngineState::Failed { .. }) {
             ::log::warn!(
                 "[start] action={action} engine in {} state, forcing MarkIdle before restart",
@@ -237,6 +288,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
 #[tauri::command]
 pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
     let action = next_action_token();
+    STOP_IN_PROGRESS.store(true, Ordering::Release);
     let (pm_pid, pm_alive, pm_mode) = pm_snapshot();
     let is_stopping_before = ProcessManager::acquire().is_stopping;
     let cur_state_kind = app.state::<EngineStateCell>().snapshot().kind();
@@ -290,6 +342,7 @@ pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
         ::log::info!("[stop] action={action} returned, :{mixed_port} released");
     }
     app.emit(EVENT_STATUS_CHANGED, ()).ok();
+    STOP_IN_PROGRESS.store(false, Ordering::Release);
     Ok(())
 }
 

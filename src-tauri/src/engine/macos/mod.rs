@@ -179,6 +179,33 @@ impl EngineManager for MacOSEngine {
                 watchdog::cancel();
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
 
+                // Aggressive fallback: if ports are still held after the helper
+                // stop + 8 s wait, try SIGKILL-ing any remaining user-owned
+                // processes, then ask the helper one more time.
+                let mixed = crate::engine::ports::mixed_proxy_port(app);
+                let ctrl = crate::engine::ports::controller_port(app);
+                let mixed_still_up = crate::engine::ports::probe_port_listening(mixed);
+                let ctrl_still_up = ctrl != mixed && crate::engine::ports::probe_port_listening(ctrl);
+                if mixed_still_up || ctrl_still_up {
+                    log::warn!(
+                        "[stop] IntoProxy ports still occupied after 8 s wait (mixed={} ctrl={}), trying kill_orphans",
+                        mixed_still_up, ctrl_still_up
+                    );
+                    if mixed_still_up {
+                        let _ = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(mixed));
+                    }
+                    if ctrl_still_up {
+                        let _ = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(ctrl));
+                    }
+                    // Retry helper stop in case the root process survived the
+                    // first request (e.g. it was slow to react).
+                    let _ = tokio::task::spawn_blocking(|| {
+                        aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
+                    })
+                    .await;
+                    crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
+                }
+
                 let state = app.state::<EngineStateCell>().snapshot();
                 if matches!(
                     state,

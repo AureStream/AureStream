@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Routes, Route } from "react-router-dom"
 import Sidebar from "./Sidebar"
@@ -174,9 +174,27 @@ function HomePage() {
   const [proxyDns, setProxyDns] = useState<string>("8.8.8.8")
   const [connectionCount, setConnectionCount] = useState<number>(0)
 
+  // Guard against concurrent tray-triggered operations (prevents start/stop
+  // cascade when the user clicks a tray item multiple times in quick succession).
+  const trayOperationRef = useRef(false)
+
+  // Reset tray operation guard when the engine settles into a stable state.
+  useEffect(() => {
+    if (engineState.kind === "running" || engineState.kind === "idle" || engineState.kind === "failed") {
+      trayOperationRef.current = false
+    }
+  }, [engineState.kind])
+
   // 监听系统托盘发出的代理模式切换事件，执行完整关闭、配置合并及启动流程
   useEffect(() => {
     const unlistenPromise = listen<string>("tray-switch-mode", async (event) => {
+      // Prevent concurrent tray-triggered operations.
+      if (trayOperationRef.current) {
+        console.warn("[tray-switch] operation already in progress, ignoring")
+        return
+      }
+      trayOperationRef.current = true
+
       const targetMode = event.payload // "system" | "tun"
       const isTun = targetMode === "tun"
       const newModeStr = isTun ? "tun" : "rule"
@@ -213,6 +231,7 @@ function HomePage() {
           await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
         } catch (err) {
           console.error("Tray start engine failed:", err)
+          trayOperationRef.current = false
         }
       }
     })

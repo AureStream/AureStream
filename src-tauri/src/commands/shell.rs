@@ -1,4 +1,5 @@
 use crate::core::commands::stop;
+use crate::engine::cleanup_on_shutdown;
 use crate::state::{AppData, LogType};
 
 use tauri::AppHandle;
@@ -74,26 +75,28 @@ pub fn open_devtools(app: AppHandle) {
 
 #[tauri::command]
 pub async fn quit(app: AppHandle) {
-    log::info!("Quitting application...");
-    match timeout(Duration::from_secs(5), stop(app.clone())).await {
-        Ok(Ok(())) => {
-            log::info!("Proxy stopped successfully.");
-            log::info!("Application stopped successfully.");
-            app.exit(0);
-        }
-        Ok(Err(e)) => {
-            log::error!("Failed to stop proxy: {}", e);
-            app.exit(0);
-        }
-        Err(_) => {
-            log::error!("Timed out waiting for proxy to stop, exiting anyway");
-            app.exit(0);
-        }
-    }
-}
+    log::info!("[quit] starting graceful shutdown...");
 
-pub fn sync_quit(app: AppHandle) {
-    tauri::async_runtime::block_on(quit(app));
+    // TUN mode stop can involve helper IPC, DNS restore, port release polling,
+    // and aggressive fallback (kill_orphans + retry). The stop() implementation
+    // itself has internal timeouts; this outer timeout is a hard deadline to
+    // prevent the quit command from hanging indefinitely.
+    const STOP_TIMEOUT: Duration = Duration::from_secs(5);
+
+    match timeout(STOP_TIMEOUT, stop(app.clone())).await {
+        Ok(Ok(())) => log::info!("[quit] proxy stopped successfully"),
+        Ok(Err(e)) => log::error!("[quit] failed to stop proxy: {}", e),
+        Err(_) => log::error!("[quit] timed out after {:?} waiting for proxy to stop, exiting anyway", STOP_TIMEOUT),
+    }
+
+    // Belt-and-suspenders: after the stop attempt (regardless of outcome),
+    // run synchronous cleanup before exit. This ensures system proxy is
+    // cleared and the privileged helper is told to stop, even if the
+    // normal stop() path missed something.
+    cleanup_on_shutdown();
+
+    log::info!("[quit] exiting application");
+    app.exit(0);
 }
 
 #[tauri::command]
