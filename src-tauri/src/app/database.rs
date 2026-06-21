@@ -31,6 +31,11 @@ CREATE TABLE node_latencies (
 );
 "#;
 
+const SQL_3: &str = r#"
+ALTER TABLE subscriptions ADD COLUMN pending_upload INTEGER DEFAULT 0;
+ALTER TABLE subscriptions ADD COLUMN pending_download INTEGER DEFAULT 0;
+"#;
+
 pub fn get_migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -45,5 +50,12 @@ pub fn get_migrations() -> Vec<Migration> {
             sql: SQL_2,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add_pending_traffic_columns",
+            sql: SQL_3,
+            kind: MigrationKind::Up,
+        },
     ]
 }
+
