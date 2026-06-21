@@ -20,6 +20,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -110,12 +111,19 @@ export default function RegisterPage() {
             <div className="text-text-muted/80"><I.Lock /></div>
             <input
               className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold tracking-wider"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder={t("confirm_placeholder", "请再次输入密码以确认")}
               required
             />
+            <button
+              type="button"
+              className="text-text-muted/80 hover:text-text transition-colors"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              {showConfirmPassword ? <I.EyeOff /> : <I.Eye />}
+            </button>
           </div>
         </div>
 
