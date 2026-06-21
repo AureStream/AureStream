@@ -100,6 +100,8 @@ fn is_helper_disabled_in_launchd() -> bool {
     launchctl_print_disabled_marks_helper_disabled(&stdout)
 }
 
+/// Clear a persistent launchd disabled override and (re)start the helper.
+/// Requires root, so this prompts for an admin password via osascript.
 fn repair_disabled_helper_via_admin() -> Result<(), String> {
     use std::process::Command;
 
@@ -110,7 +112,7 @@ fn repair_disabled_helper_via_admin() -> Result<(), String> {
     );
     let script = format!("do shell script \"{shell}\" with administrator privileges");
 
-    log::info!("[mac] repairing disabled privileged helper via admin shell");
+    log::info!("[mac] clearing disabled override + starting helper via admin shell");
     let output = Command::new("osascript")
         .arg("-e")
         .arg(&script)
@@ -133,10 +135,36 @@ fn repair_disabled_helper_via_admin() -> Result<(), String> {
 
 fn install_helper_and_repair_disabled_state() -> Result<(), String> {
     helper::api::install().map_err(format_helper_install_error)?;
-    if is_helper_disabled_in_launchd() {
-        repair_disabled_helper_via_admin()?;
+
+    // Normal path: SMJobBless enables + bootstraps the daemon, so a few ping
+    // retries are all that's needed — one password total.
+    for attempt in 1..=12 {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if helper::api::ping().is_ok() {
+            return Ok(());
+        }
+        log::info!("[helper] post-install ping attempt {}/12 failed", attempt);
     }
-    Ok(())
+
+    // Last-resort recovery: only when launchd holds a PERSISTENT disabled
+    // override (left by an older uninstall that ran `launchctl disable` /
+    // `unload -w`). Clearing it requires root, so this prompts once more. This
+    // does NOT fire for clean installs, so the common case stays single-prompt.
+    if is_helper_disabled_in_launchd() {
+        log::warn!("[helper] daemon persistently disabled in launchd; clearing override (admin)");
+        repair_disabled_helper_via_admin()?;
+        for _ in 0..8 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if helper::api::ping().is_ok() {
+                return Ok(());
+            }
+        }
+    }
+
+    Err(
+        "Helper 已安装但暂时无响应。请退出并重新打开应用；若仍失败，请先在设置中卸载辅助服务后重装。"
+            .to_string(),
+    )
 }
 
 pub fn uninstall_privileged_helper() -> Result<(), String> {
@@ -144,6 +172,9 @@ pub fn uninstall_privileged_helper() -> Result<(), String> {
         log::info!("[mac] privileged helper not installed, nothing to uninstall");
         return Ok(());
     }
+
+    log::info!("[mac] stopping helper-managed sing-box before uninstall");
+    let _ = helper::api::stop_sing_box();
 
     log::info!("[mac] uninstalling privileged helper via XPC");
     if helper::api::uninstall().is_ok() {
@@ -207,10 +238,11 @@ pub fn ensure_helper_installed() -> Result<(), String> {
         }
     }
     if ping_result.is_err() && is_blessed_helper_on_disk() && is_helper_disabled_in_launchd() {
-        log::warn!("[helper] installed helper is disabled in launchd; attempting repair");
-        repair_disabled_helper_via_admin()?;
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        ping_result = helper::api::ping();
+        log::warn!("[helper] installed helper is disabled in launchd; clearing override (admin)");
+        if repair_disabled_helper_via_admin().is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            ping_result = helper::api::ping();
+        }
     }
     if ping_result.is_err() {
         log::info!("[helper] not responding, triggering SMJobBless install...");

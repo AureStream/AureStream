@@ -1,8 +1,7 @@
 {
   "name": "aurestream",
   "private": true,
-  "version": "0.2.5",
-  "packageManager": "pnpm@11.4.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +14,8 @@
     "sign-macos-bundle": "bash scripts/sign-macos-bundle.sh",
     "post-sign-macos": "bash scripts/post-sign-macos-bundle.sh",
     "release": "pnpm download-binaries && pnpm build-tun --release && pnpm build && pnpm tauri build",
+    "test:tun": "tsx scripts/test-tun.ts",
+    "uninstall-helper": "bash scripts/uninstall-macos-helper.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -43,6 +44,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.8",
+    "react-router-dom": "^7.17.0",
     "recharts": "3.8.0",
     "tailwind-merge": "^3.3.0",
     "tw-animate-css": "^1.3.0"
@@ -57,6 +59,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "@vitest/runner": "^4.1.8",
     "jsonc-parser": "^3.3.1",
+    "playwright": "^1.60.0",
     "tailwindcss": "^4.1.8",
     "tar": "^7.5.15",
     "tsx": "^4.19.0",

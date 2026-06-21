@@ -18,25 +18,22 @@ pub enum Readiness {
     Failed,
 }
 
-static READY_SENDER: std::sync::OnceLock<tokio::sync::Mutex<broadcast::Sender<Readiness>>> =
+static READY_SENDER: std::sync::OnceLock<broadcast::Sender<Readiness>> =
     std::sync::OnceLock::new();
 
 /// Subscribe to a readiness signal before spawning sing-box. The signal fires
 /// once when the readiness prober confirms ports are listening (or fails).
 pub fn subscribe_ready() -> broadcast::Receiver<Readiness> {
-    let slot = READY_SENDER.get_or_init(|| {
-        tokio::sync::Mutex::new(broadcast::channel(1).0)
+    let sender = READY_SENDER.get_or_init(|| {
+        broadcast::channel(1).0
     });
-    slot.blocking_lock().subscribe()
+    sender.subscribe()
 }
 
 pub fn spawn(app: AppHandle, start_epoch: u64) {
-    let sender = {
-        let slot = READY_SENDER.get_or_init(|| {
-            tokio::sync::Mutex::new(broadcast::channel(1).0)
-        });
-        slot.blocking_lock().clone()
-    };
+    let sender = READY_SENDER.get_or_init(|| {
+        broadcast::channel(1).0
+    }).clone();
 
     tokio::spawn(async move {
         let mixed_port = mixed_proxy_port(&app);
@@ -82,11 +79,11 @@ async fn probe_port_once(port: u16) -> bool {
 }
 
 async fn probe_ports_once(mixed_port: u16, controller_port: u16) -> bool {
-    if probe_port_once(mixed_port).await {
-        return true;
+    if !probe_port_once(mixed_port).await {
+        return false;
     }
-    if controller_port != mixed_port && probe_port_once(controller_port).await {
-        return true;
+    if controller_port != mixed_port && !probe_port_once(controller_port).await {
+        return false;
     }
-    false
+    true
 }

@@ -159,5 +159,8 @@ pub fn transition(app: &AppHandle, intent: Intent) -> Result<EngineState, String
 
     let _ = app.emit(EVENT_ENGINE_STATE, new_state.clone());
 
+    // 刷新托盘菜单与 tooltip
+    crate::app::tray::update_tray_menu(app);
+
     Ok(new_state)
 }

@@ -10,41 +10,53 @@ export async function subscribeTraffic(
   signal?: AbortSignal
 ): Promise<void> {
   const { baseUrl, secret } = await getControllerAuth()
-  const res = await fetch(`${baseUrl}/traffic`, {
-    headers: { Authorization: `Bearer ${secret}` },
-    signal,
-  })
-  if (!res.ok || !res.body) {
-    throw new Error(`traffic stream failed: HTTP ${res.status}`)
-  }
+  const wsUrl = baseUrl.replace(/^http/, 'ws') + `/traffic?token=${encodeURIComponent(secret)}`;
+  
+  let ws: WebSocket | null = null;
+  let retryTimer: any = null;
+  let isClosed = false;
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
+  const connect = () => {
+    if (isClosed || (signal && signal.aborted)) return;
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      while (true) {
-        const pos = buffer.indexOf("\n")
-        if (pos < 0) break
-        const line = buffer.slice(0, pos).trim()
-        buffer = buffer.slice(pos + 1)
-        if (!line) continue
-        try {
-          const data = JSON.parse(line) as { up?: number; down?: number }
-          onTick({
-            up: data.up ?? 0,
-            down: data.down ?? 0,
-          })
-        } catch {
-          // skip malformed line
-        }
+    ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as { up?: number; down?: number };
+        onTick({
+          up: data.up ?? 0,
+          down: data.down ?? 0,
+        });
+      } catch (e) {
+        // skip
       }
+    };
+
+    ws.onclose = () => {
+      ws = null;
+      if (!isClosed && !(signal && signal.aborted)) {
+        retryTimer = setTimeout(connect, 1000);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error("[WS Traffic] WebSocket error:", err);
+      ws?.close();
+    };
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      isClosed = true;
+      return;
     }
-  } finally {
-    reader.releaseLock()
+    signal.addEventListener("abort", () => {
+      isClosed = true;
+      if (ws) ws.close();
+      if (retryTimer) clearTimeout(retryTimer);
+    });
   }
+
+  connect();
 }

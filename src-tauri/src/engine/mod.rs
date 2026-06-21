@@ -57,6 +57,18 @@ pub trait EngineManager {
 }
 
 pub fn cleanup_on_shutdown() {
+    // macOS TUN mode runs sing-box as root via the privileged helper. If the app
+    // crashes/exits without a clean stop, that root process leaks and keeps
+    // holding the mixed/controller ports. Ask the helper to stop it (best effort).
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = aurestream_plugin_privilege::macos::helper::api::stop_sing_box() {
+            ::log::warn!("[shutdown] helper stop_sing_box failed (may be inactive): {}", e);
+        } else {
+            ::log::info!("[shutdown] helper-managed sing-box stopped");
+        }
+    }
+
     std::thread::spawn(|| {
         let mut sysproxy = match aurestream_plugin_proxy::Sysproxy::get_system_proxy() {
             Ok(proxy) => proxy,

@@ -31,11 +31,35 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
+/// Always ask the privileged helper to release sing-box (TUN mode runs as root).
+#[cfg(target_os = "macos")]
+async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
+    ::log::info!("[start] ensuring helper-managed sing-box is stopped");
+    let stop_result = tokio::task::spawn_blocking(|| {
+        aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
+    })
+    .await;
+    match stop_result {
+        Ok(Ok(())) => ::log::info!("[start] helper stop_sing_box ok"),
+        Ok(Err(e)) => ::log::warn!("[start] helper stop_sing_box failed: {}", e),
+        Err(e) => ::log::warn!("[start] helper stop_sing_box join error: {}", e),
+    }
+    let _ = wait_for_port_release(mixed_port, Duration::from_secs(5)).await;
+    if ctrl_port != mixed_port {
+        let _ = wait_for_port_release(ctrl_port, Duration::from_secs(5)).await;
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn stop_helper_managed_sing_box(_mixed_port: u16, _ctrl_port: u16) {}
+
 async fn ensure_proxy_ports_free(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
     let ctrl_port = controller_port(app);
 
-    // Kill any orphan holding either port, then wait for release.
+    stop_helper_managed_sing_box(mixed_port, ctrl_port).await;
+
+    // Kill any user-owned orphan holding either port, then wait for release.
     for &port in &[mixed_port, ctrl_port] {
         if probe_port_listening(port) {
             let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
@@ -101,6 +125,19 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         },
     ) {
         return Err(format!("state transition rejected: {}", e));
+    }
+
+    // 保存用户选择的模式，供托盘菜单恢复选中状态
+    let mode_key = match mode {
+        ProxyMode::IntoProxy => "tun",
+        ProxyMode::SystemProxy => "system",
+    };
+    {
+        use tauri_plugin_store::StoreExt;
+        if let Ok(store) = app.store("settings.json") {
+            let _ = store.set("last_proxy_mode", serde_json::Value::String(mode_key.to_string()));
+            store.save().ok();
+        }
     }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
 

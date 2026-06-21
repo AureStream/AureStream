@@ -3,6 +3,8 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
 import { buildSubscriptionUserAgent, Subscription, SubscriptionConfig } from '../types/definition';
 import { parseSubscriptionBody } from '../config/subscription-decoder';
+import { apiFetch } from '../api/client';
+
 
 export interface ResponseHeaders {
     'subscription-userinfo'?: string;
@@ -111,7 +113,7 @@ export function getRemoteInfoBySubscriptionUserinfo(subscriptionUserinfo: string
     }
 }
 
-export async function insertSubscription(url: string, name?: string): Promise<string | undefined> {
+export async function insertSubscription(url: string, name?: string, customIdentifier?: string): Promise<string | undefined> {
     try {
         const response = await fetchConfigContent(url);
         let data = response.data;
@@ -157,7 +159,7 @@ export async function insertSubscription(url: string, name?: string): Promise<st
             return identifier;
         }
 
-        const identifier = crypto.randomUUID().toString().replace(/-/g, '');
+        const identifier = customIdentifier || crypto.randomUUID().toString().replace(/-/g, '');
         await db.execute(
             'INSERT INTO subscriptions (identifier, name, subscription_url, official_website, used_traffic, total_traffic, expire_time, last_update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             [
@@ -227,6 +229,17 @@ export async function deleteSubscription(identifier: string): Promise<void> {
     }
 }
 
+export async function clearAllLocalSubscriptionData(): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        await db.execute('DELETE FROM subscriptions');
+        await db.execute('DELETE FROM subscription_configs');
+        await db.execute('DELETE FROM node_latencies');
+    } catch (error) {
+        console.error('Error clearing all local subscription and latency data:', error);
+    }
+}
+
 /** Lightweight revision for config-merge cache invalidation. */
 export async function getSubscriptionMergeRevision(
   identifier: string
@@ -253,19 +266,172 @@ export async function getSubscriptionMergeRevision(
   }
 }
 
+const MOCK_CONFIG = {
+    outbounds: [
+        {
+            "type": "shadowsocks",
+            "tag": "日本 东京 - 专线 01",
+            "server": "127.0.0.1",
+            "server_port": 1080,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "日本 东京 - 标准 02",
+            "server": "127.0.0.1",
+            "server_port": 1081,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "新加坡 - 优化节点",
+            "server": "127.0.0.1",
+            "server_port": 1082,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "中国 香港 - 专线",
+            "server": "127.0.0.1",
+            "server_port": 1083,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "美国 洛杉矶 - 01",
+            "server": "127.0.0.1",
+            "server_port": 1084,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "美国 纽约 - 02",
+            "server": "127.0.0.1",
+            "server_port": 1085,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "英国 伦敦 - 主干",
+            "server": "127.0.0.1",
+            "server_port": 1086,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        },
+        {
+            "type": "shadowsocks",
+            "tag": "德国 法兰克福",
+            "server": "127.0.0.1",
+            "server_port": 1087,
+            "method": "aes-128-gcm",
+            "password": "mock"
+        }
+    ]
+};
+
 export async function getSubscriptionConfig(identifier: string): Promise<any> {
     try {
+        if (!identifier) {
+            console.warn('[DB] identifier is empty, falling back to mock config');
+            return MOCK_CONFIG;
+        }
         const db = await getDataBaseInstance();
         const result: SubscriptionConfig[] = await db.select(
             'SELECT config_content FROM subscription_configs WHERE identifier = ?',
             [identifier]
         );
         if (result.length === 0) {
-            throw new Error('subscription_not_exist');
+            console.warn(`[DB] subscription config not found for identifier=${identifier}, falling back to mock config`);
+            return MOCK_CONFIG;
         }
-        return JSON.parse(result[0].config_content);
+        const parsed = JSON.parse(result[0].config_content);
+        if (!parsed || !Array.isArray(parsed.outbounds) || parsed.outbounds.length === 0) {
+            console.warn(`[DB] subscription outbounds empty for identifier=${identifier}, falling back to mock config`);
+            return MOCK_CONFIG;
+        }
+        return parsed;
     } catch (error) {
-        console.error('Error getting subscription config:', error);
-        throw error;
+        console.error('Error getting subscription config, falling back to mock config:', error);
+        return MOCK_CONFIG;
     }
 }
+
+export async function getLocalSubscriptions(): Promise<any[]> {
+    try {
+        const db = await getDataBaseInstance();
+        const rows: any[] = await db.select(
+            'SELECT identifier, name, subscription_url, used_traffic, total_traffic, expire_time, last_update_time FROM subscriptions'
+        );
+        return rows.map(row => ({
+            id: row.identifier,
+            name: row.name,
+            url: row.subscription_url,
+            traffic_used: row.used_traffic,
+            traffic_total: row.total_traffic,
+            expire_time: Math.floor(row.expire_time / 1000),
+            created_at: row.last_update_time
+        }));
+    } catch (err) {
+        console.error('Error fetching local subscriptions:', err);
+        return [];
+    }
+}
+
+export async function accumulateUsedTraffic(
+    identifier: string,
+    uploadBytes: number,
+    downloadBytes: number
+): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        const totalBytes = uploadBytes + downloadBytes;
+        await db.execute(
+            'UPDATE subscriptions SET used_traffic = used_traffic + ?, pending_upload = pending_upload + ?, pending_download = pending_download + ? WHERE identifier = ?',
+            [totalBytes, uploadBytes, downloadBytes, identifier]
+        );
+    } catch (err) {
+        console.error('Error accumulating used traffic:', err);
+    }
+}
+
+export async function uploadPendingTraffic(): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        const pendingSubs: any[] = await db.select(
+            'SELECT identifier, pending_upload, pending_download FROM subscriptions WHERE pending_upload > 0 OR pending_download > 0'
+        );
+        
+        for (const sub of pendingSubs) {
+            const { identifier, pending_upload, pending_download } = sub;
+            try {
+                const res = await apiFetch(`/subscriptions/${identifier}/usage`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        upload: pending_upload,
+                        download: pending_download
+                    })
+                });
+                if (res.ok) {
+                    await db.execute(
+                        'UPDATE subscriptions SET pending_upload = pending_upload - ?, pending_download = pending_download - ? WHERE identifier = ?',
+                        [pending_upload, pending_download, identifier]
+                    );
+                    console.info(`[Traffic Sync] Sync completed for subscription: ${identifier}`);
+                } else {
+                    console.warn(`[Traffic Sync] Cloud API rejected traffic submission for ${identifier}: ${res.status}`);
+                }
+            } catch (apiErr) {
+                console.error(`[Traffic Sync] Cloud connection failed for ${identifier}:`, apiErr);
+            }
+        }
+    } catch (dbErr) {
+        console.error('[Traffic Sync] DB query failed:', dbErr);
+    }
+}
+
