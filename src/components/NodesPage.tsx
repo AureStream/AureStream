@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { getSubscriptionConfig } from "../action/db"
 import { getStoreValue, setStoreValue } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
-import { hotReloadIfRunning } from "../lib/hot-reload-config"
+import { switchNodeActive } from "../lib/hot-reload-config"
 import { invoke } from "@tauri-apps/api/core"
 import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
 
@@ -232,7 +232,7 @@ export default function NodesPage() {
                   if (activeSubId) {
                     const key = selectedNodeTagStoreKey(activeSubId)
                     await setStoreValue(key, node.id, { immediate: true })
-                    await hotReloadIfRunning(activeSubId)
+                    await switchNodeActive(activeSubId, node.id)
                   }
                 }}
                 className={`glass-card group relative rounded-[20px] p-3.5 cursor-pointer transition-all duration-300 ${isConnected ? 'ring-1 ring-secondary/30 bg-surface-active/50' : 'hover:bg-surface-active/30'}`}
