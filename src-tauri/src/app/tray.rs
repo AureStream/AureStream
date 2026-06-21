@@ -1,4 +1,4 @@
-use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
+use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
@@ -46,7 +46,7 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
     };
 
     let show_item = MenuItemBuilder::with_id("tray_show", "显示主窗口").build(app_handle)?;
-    let sep1 = MenuItemBuilder::with_id("tray_sep1", "").enabled(false).build(app_handle)?;
+    let sep1 = PredefinedMenuItem::separator(app_handle)?;
     
     // 使用 CheckMenuItemBuilder 构建具有勾选框的菜单项
     let mode_system = CheckMenuItemBuilder::with_id("tray_mode_system", "智能分流模式")
@@ -56,7 +56,7 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
         .checked(current_mode == "tun")
         .build(app_handle)?;
         
-    let sep2 = MenuItemBuilder::with_id("tray_sep2", "").enabled(false).build(app_handle)?;
+    let sep2 = PredefinedMenuItem::separator(app_handle)?;
     let quit_item = MenuItemBuilder::with_id("tray_quit", "退出应用").build(app_handle)?;
 
     MenuBuilder::new(app_handle)
