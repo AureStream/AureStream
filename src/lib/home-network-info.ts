@@ -10,7 +10,7 @@ export function shouldRefreshNetworkInfoOnEngineState(
   previous: EngineState["kind"] | null,
   current: EngineState["kind"],
 ): boolean {
-  if (previous === null) return current === "running"
+  if (previous === null) return current === "idle" || current === "running"
   if (previous === current) return false
 
   const connected = previous !== "running" && current === "running"
