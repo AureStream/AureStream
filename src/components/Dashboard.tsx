@@ -696,18 +696,22 @@ function HomePage() {
               <div className="absolute inset-6 rounded-full border border-secondary/5" />
 
               {/* Gradient circular ring container */}
-              <div
-                className={`absolute w-36 h-36 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
-                  isConnected
-                    ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
-                    : isConnecting
-                    ? "from-secondary to-accent-purple animate-spin"
-                    : "shadow-sm"
-                }`}
-                style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
-              >
+              <div className="absolute w-36 h-36 rounded-full">
+                <div
+                  className={`absolute inset-0 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
+                    isConnected
+                      ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
+                      : isConnecting
+                      ? "from-secondary to-accent-purple animate-spin"
+                      : "shadow-sm"
+                  }`}
+                  style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
+                >
+                  <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt" />
+                </div>
+
                 {/* Central solid white / dark bg circle */}
-                <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner relative overflow-hidden">
+                <div className="absolute inset-[8px] rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner overflow-hidden">
 
                   {/* Button Click Core */}
                   <button

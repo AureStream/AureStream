@@ -15,8 +15,8 @@
  *   `src-tauri/binaries/<name>-<target-triple>.exe` at bundling time. Tauri
  *   strips the triple suffix when copying into the final installer, so the
  *   runtime-side lookup in the bundled app still finds `tun-service.exe` next
- *   to `aurestream.exe`. Detect the rustc host triple via `rustc -vV` and copy
- *   the freshly built release binary into that location.
+ *   to `aurestream.exe`. CI can pass `--target <triple>` so x64 and ARM64
+ *   Windows bundles stage the matching sidecar.
  *
  * Platform gating: non-Windows hosts exit silently. The Windows service
  * sub-crate is cfg-gated empty on macOS/Linux — there's nothing to build and
@@ -38,16 +38,22 @@ const repoRoot = join(scriptDir, "..");
 const srcTauri = join(repoRoot, "src-tauri");
 
 const releaseFlag = process.argv.includes("--release");
+const targetIndex = process.argv.indexOf("--target");
+const targetTriple =
+    targetIndex >= 0 && process.argv[targetIndex + 1]
+        ? process.argv[targetIndex + 1]
+        : undefined;
 const profileArgs = releaseFlag ? ["--release"] : [];
+const targetArgs = targetTriple ? ["--target", targetTriple] : [];
 const profileDir = releaseFlag ? "release" : "debug";
 
 console.log(
-    `[build-tun-service] cargo build -p aurestream-plugin-tun --bin tun-service (${releaseFlag ? "release" : "dev"})`,
+    `[build-tun-service] cargo build -p aurestream-plugin-tun --bin tun-service (${releaseFlag ? "release" : "dev"}${targetTriple ? `, target ${targetTriple}` : ""})`,
 );
 
 const build = spawnSync(
     "cargo",
-    ["build", "-p", "aurestream-plugin-tun", "--bin", "tun-service", ...profileArgs],
+    ["build", "-p", "aurestream-plugin-tun", "--bin", "tun-service", ...profileArgs, ...targetArgs],
     {
         cwd: srcTauri,
         stdio: "inherit",
@@ -62,7 +68,9 @@ if (build.status !== 0) {
     process.exit(build.status ?? 1);
 }
 
-const outPath = join(srcTauri, "target", profileDir, "tun-service.exe");
+const outPath = targetTriple
+    ? join(srcTauri, "target", targetTriple, profileDir, "tun-service.exe")
+    : join(srcTauri, "target", profileDir, "tun-service.exe");
 if (!existsSync(outPath)) {
     console.error(`[build-tun-service] expected binary not found: ${outPath}`);
     process.exit(1);
@@ -77,20 +85,23 @@ if (!releaseFlag) {
     process.exit(0);
 }
 
-// Detect the rustc host triple — required by Tauri externalBin naming.
-const rustc = spawnSync("rustc", ["-vV"], { encoding: "utf8", shell: true });
-if (rustc.status !== 0 || !rustc.stdout) {
-    console.error("[build-tun-service] failed to run `rustc -vV` to detect host triple");
-    process.exit(1);
-}
-const hostMatch = rustc.stdout.match(/^host:\s*(\S+)$/m);
-if (!hostMatch) {
-    console.error(
-        `[build-tun-service] could not parse host triple from rustc -vV output:\n${rustc.stdout}`,
-    );
-    process.exit(1);
-}
-const triple = hostMatch[1];
+const detectHostTriple = (): string => {
+    const rustc = spawnSync("rustc", ["-vV"], { encoding: "utf8", shell: true });
+    if (rustc.status !== 0 || !rustc.stdout) {
+        console.error("[build-tun-service] failed to run `rustc -vV` to detect host triple");
+        process.exit(1);
+    }
+    const hostMatch = rustc.stdout.match(/^host:\s*(\S+)$/m);
+    if (!hostMatch) {
+        console.error(
+            `[build-tun-service] could not parse host triple from rustc -vV output:\n${rustc.stdout}`,
+        );
+        process.exit(1);
+    }
+    return hostMatch[1];
+};
+
+const triple = targetTriple ?? detectHostTriple();
 
 const binariesDir = join(srcTauri, "binaries");
 mkdirSync(binariesDir, { recursive: true });

@@ -50,8 +50,8 @@ pnpm sign-macos-bundle
 
 `.github/workflows/build-desktop.yml` 在 `workflow_dispatch` 或 Release 发布时构建：
 
-- linux-x64 (ubuntu-24.04)
-- windows-x64
+- linux-x64 / linux-arm64
+- windows-x64 / windows-arm64
 - macos-aarch64 / macos-x64
 
 ## 5. 输出产物
@@ -60,7 +60,7 @@ pnpm sign-macos-bundle
 |------|------|------|
 | Windows | NSIS `.exe` / WiX `.msi` | `src-tauri/target/release/bundle/nsis|msi/` |
 | macOS | `.dmg` / `.app` | `src-tauri/target/release/bundle/dmg|macos/` |
-| Linux | `.deb` / `.AppImage` | `src-tauri/target/release/bundle/deb|appimage/` |
+| Linux | `.deb` / `.rpm` / `.AppImage` | `src-tauri/target/release/bundle/deb|rpm|appimage/` |
 
 ## 6. NPM 脚本
 

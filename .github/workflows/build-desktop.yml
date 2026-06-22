@@ -10,7 +10,9 @@ on:
         options:
           - all
           - linux-x64
+          - linux-arm64
           - windows-x64
+          - windows-arm64
           - macos-aarch64
           - macos-x64
   release:
@@ -35,7 +37,9 @@ jobs:
         run: |
           full='[
             {"name":"linux-x64","os":"ubuntu-24.04","rust_target":"x86_64-unknown-linux-gnu"},
+            {"name":"linux-arm64","os":"ubuntu-24.04-arm","rust_target":"aarch64-unknown-linux-gnu"},
             {"name":"windows-x64","os":"windows-2025","rust_target":"x86_64-pc-windows-msvc"},
+            {"name":"windows-arm64","os":"windows-11-arm","rust_target":"aarch64-pc-windows-msvc"},
             {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
             {"name":"macos-x64","os":"macos-15-intel","rust_target":"x86_64-apple-darwin"}
           ]'
@@ -81,7 +85,7 @@ jobs:
             libfuse2
 
       - name: Install NSIS and 7-Zip (Windows)
-        if: matrix.os == 'windows-2025'
+        if: runner.os == 'Windows'
         run: choco install nsis 7zip -y
 
       - name: Setup Node
@@ -126,8 +130,8 @@ jobs:
         run: pnpm download-binaries
 
       - name: Build Windows TUN service
-        if: matrix.os == 'windows-2025'
-        run: pnpm build-tun --release
+        if: runner.os == 'Windows'
+        run: pnpm build-tun --release --target ${{ matrix.rust_target }}
 
       - name: Build macOS privileged helper
         if: runner.os == 'macOS'
@@ -169,6 +173,7 @@ jobs:
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.rpm
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
           if-no-files-found: warn
 
@@ -179,7 +184,7 @@ jobs:
           mkdir -p release-files
           find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
-            -name '*.exe' -o -name '*.dmg' -o \
+            -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o \
             -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
           \) -exec cp {} release-files/ \;
           ls -la release-files/

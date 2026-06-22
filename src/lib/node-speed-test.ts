@@ -14,13 +14,25 @@ export async function testNodeTcpLatency(
 ): Promise<number> {
   if (!node.server || !node.port) return -1
 
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const deadlineMs = Math.max(1, timeoutMs)
+  const timeoutPromise = new Promise<number>((resolve) => {
+    timeoutId = setTimeout(() => resolve(-1), deadlineMs)
+  })
+
+  const latencyPromise = invoke("ping_tcp", {
+    host: node.server,
+    port: node.port,
+    timeoutMs,
+  })
+    .then((latency) => latency as number)
+    .catch(() => -1)
+
   try {
-    return (await invoke("ping_tcp", {
-      host: node.server,
-      port: node.port,
-      timeoutMs,
-    })) as number
-  } catch {
-    return -1
+    return await Promise.race([latencyPromise, timeoutPromise])
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
   }
 }

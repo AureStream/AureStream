@@ -35,6 +35,7 @@ const RUST_TARGET_TRIPLES = {
     },
     "windows": {
         "amd64": "x86_64-pc-windows-msvc",
+        "arm64": "aarch64-pc-windows-msvc",
     }
 } as const;
 
