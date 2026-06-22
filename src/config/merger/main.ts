@@ -244,14 +244,25 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         }
     }
 
-    // Always configure TUN inbound (present in all modes for fast mode-switching).
-    // auto_route controls whether TUN captures traffic: true for TUN mode, false for SystemProxy.
+    // Configure TUN inbound settings.
+    // On Windows, sing-box cannot create a TUN virtual adapter without admin
+    // privileges. So for SystemProxy mode (tun=false), the TUN inbound must be
+    // completely removed from the config — not just auto_route: false.
+    // For TUN mode (tun=true), configure auto_route and keep the inbound.
     await configureTunInbound(newConfig, bypassRouter, {
         proxyPort,
         tunStack,
         osType: getOsType(),
         enableAutoRoute: options.tun,
     });
+
+    if (!options.tun) {
+        // Remove TUN inbound entirely — unprivileged sing-box cannot create
+        // the virtual adapter on Windows (and it's unused in SystemProxy mode).
+        newConfig.inbounds = newConfig.inbounds.filter(
+            (ib: any) => !(ib.type === "tun" && ib.tag === "tun"),
+        );
+    }
 
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
     await updateDHCPSettings2Config(newConfig, { useDHCP, configuredDirectDNS });

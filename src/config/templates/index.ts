@@ -18,8 +18,9 @@ export function getBuiltInTemplate(mode: configType): string {
         throw new Error(`[template] failed to parse local JSONC template: ${JSON.stringify(errors)}`);
     }
 
-    // Both tun and mixed inbounds are always present in the template.
-    // auto_route is controlled by the merger (configureTunInbound), not here.
+    // The template contains both tun and mixed inbounds.
+    // The merger removes the TUN inbound when tun=false (SystemProxy mode),
+    // because sing-box cannot create a TUN adapter without admin privileges on Windows.
 
     if (mode === 'global') {
         // Rewrite route rules for global proxy mode
