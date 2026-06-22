@@ -475,7 +475,20 @@ function HomePage() {
     }
   }, [])
 
-  useTrafficAccumulator(loadSubs)
+  // Lightweight refresh for traffic accumulator: only reload local DB data,
+  // does NOT re-fetch remote subscription configs.
+  const refreshLocalSubs = useCallback(async () => {
+    try {
+      const localData = await getLocalSubscriptions()
+      if (localData && localData.length > 0) {
+        setSubs(localData)
+      }
+    } catch (err) {
+      // silent
+    }
+  }, [])
+
+  useTrafficAccumulator(refreshLocalSubs)
 
   const handleUpdateSubscription = async () => {
     if (subs.length === 0 || isUpdatingSub) return
