@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, useNavigate } from "react-router-dom"
 import Sidebar from "./Sidebar"
 import NodesPage from "./NodesPage"
 import ProfilePage from "./ProfilePage"
@@ -25,12 +25,20 @@ import {
   type TrayRequestedMode,
 } from "../lib/tray-mode"
 import { controllerFetch } from "../utils/singbox-api"
-import { testNodeDelay } from "../utils/singbox-api/proxies"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
-import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
+import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
+import { getNodeLatencyTone } from "../lib/node-latency-tone"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { message } from "@tauri-apps/plugin-dialog"
+import {
+  consumePendingNetworkInfoRefreshVersion,
+  requestNetworkInfoRefresh,
+  shouldAllowConnectionToggle,
+  shouldRefreshNetworkInfoOnEngineState,
+  subscribeNetworkInfoRefresh,
+} from "../lib/home-network-info"
+import type { EngineState } from "../types/engine-state"
 
 /* ── Icons ── */
 const I = {
@@ -67,9 +75,9 @@ const I = {
    ================================================================ */
 function HomePage() {
   const { i18n } = useTranslation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const {
-    isConnected: engineConnected,
     isStarting,
     isStopping,
     engineState
@@ -78,8 +86,9 @@ function HomePage() {
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineConnected || localConnecting
-  const isConnecting = isStarting || isStopping || localConnecting
+  const isConnected = engineState.kind === "running"
+  const isConnecting = isStarting || isStopping || (localConnecting && !isConnected)
+  const canToggleConnection = shouldAllowConnectionToggle(engineState.kind, localConnecting)
 
   useEffect(() => {
     const initMode = async () => {
@@ -112,52 +121,29 @@ function HomePage() {
   const [nodes, setNodes] = useState<any[]>([])
   const [activeNodePing, setActiveNodePing] = useState<number>(0)
 
-  // Node latency: when connected, use sing-box Clash API (accurate through-proxy
-  // RTT). When disconnected, use direct TCP ping (fastest, no TUN interference).
+  // Node latency is display-only on the dashboard. Measurements happen from the
+  // Nodes page and are shared through the in-memory/SQLite latency cache.
   useEffect(() => {
     let active = true
     if (!activeNodeId) {
       setActiveNodePing(0)
       return
     }
-    // Show the cached value instantly (survives page navigation), then refresh.
-    const cached = getNodeLatency(activeNodeId)
-    if (cached !== undefined) setActiveNodePing(cached)
 
-    const measure = async () => {
-      if (engineConnected) {
-        const delay = await testNodeDelay(activeNodeId)
-        if (active) {
-          setNodeLatency(activeNodeId, delay)
-          setActiveNodePing(delay)
-        }
-      } else {
-        const node = nodes.find((n) => n.id === activeNodeId)
-        if (!node?.server || !node?.port) return
-        try {
-          const d = await invoke("ping_tcp", { host: node.server, port: node.port }) as number
-          setNodeLatency(activeNodeId, d)
-          if (active) setActiveNodePing(d)
-        } catch {
-          setNodeLatency(activeNodeId, -1)
-          if (active) setActiveNodePing(-1)
-        }
+    setActiveNodePing(getNodeLatency(activeNodeId) ?? 0)
+    initNodeLatency().then(() => {
+      if (active) {
+        setActiveNodePing(getNodeLatency(activeNodeId) ?? 0)
       }
-    }
-    measure()
-    return () => { active = false }
-  }, [activeNodeId, nodes, engineConnected])
+    })
 
-  // Latency color tiers: ≤300ms green, 300–1000ms yellow, >1000ms red.
-  const pingTone = (p: number) =>
-    p <= 300 ? { text: "text-success", dot: "bg-success" }
-      : p <= 1000 ? { text: "text-warning", dot: "bg-warning" }
-        : { text: "text-danger", dot: "bg-danger" }
+    return () => { active = false }
+  }, [activeNodeId])
 
   const renderPing = (p: number) => {
     if (p < 0) return <span className="text-danger text-xs font-mono font-bold whitespace-nowrap">{l("Timeout", "超时")}</span>
     if (p === 0) return <span className="text-text-muted text-xs font-mono font-bold whitespace-nowrap">-- ms</span>
-    const tone = pingTone(p)
+    const tone = getNodeLatencyTone(p)
     return (
       <span className={`flex items-center gap-1.5 text-xs font-mono font-extrabold whitespace-nowrap ${tone.text}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>{p}ms
@@ -188,6 +174,7 @@ function HomePage() {
   // Guard against concurrent tray-triggered operations (prevents start/stop
   // cascade when the user clicks a tray item multiple times in quick succession).
   const trayOperationRef = useRef(false)
+  const connectionOperationRef = useRef(false)
   const engineStateRef = useRef(engineState)
   const subsRef = useRef(subs)
 
@@ -204,6 +191,18 @@ function HomePage() {
     if (engineState.kind === "running" || engineState.kind === "idle" || engineState.kind === "failed") {
       trayOperationRef.current = false
     }
+  }, [engineState.kind])
+
+  const previousNetworkInfoEngineKindRef = useRef<EngineState["kind"] | null>(null)
+  useEffect(() => {
+    const previous = previousNetworkInfoEngineKindRef.current
+    previousNetworkInfoEngineKindRef.current = engineState.kind
+
+    if (!shouldRefreshNetworkInfoOnEngineState(previous, engineState.kind)) {
+      return
+    }
+
+    requestNetworkInfoRefresh(engineState.kind === "running" ? "connected" : "disconnected")
   }, [engineState.kind])
 
   // 监听系统托盘发出的代理模式切换事件，执行完整关闭、配置合并及启动流程
@@ -306,8 +305,22 @@ function HomePage() {
 
   const [ipInfo, setIpInfo] = useState<{ region: string; isp: string } | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
+  const [networkInfoRefreshSeq, setNetworkInfoRefreshSeq] = useState(0)
 
   useEffect(() => {
+    const consumePendingRefresh = () => {
+      const pendingVersion = consumePendingNetworkInfoRefreshVersion()
+      if (pendingVersion !== null) {
+        setNetworkInfoRefreshSeq(pendingVersion)
+      }
+    }
+
+    consumePendingRefresh()
+    return subscribeNetworkInfoRefresh(consumePendingRefresh)
+  }, [])
+
+  useEffect(() => {
+    if (networkInfoRefreshSeq === 0) return
     let active = true
     // Query via the Rust backend (ip-api.com lang=zh-CN) — bypasses WKWebView's
     // plain-HTTP block and routes through the local mixed proxy when connected so
@@ -315,7 +328,8 @@ function HomePage() {
     const checkIp = async () => {
       setIpLoading(true)
       try {
-        const info = (await invoke("get_geoip_info", { useProxy: isConnected })) as {
+        const useProxy = engineStateRef.current.kind === "running"
+        const info = (await invoke("get_geoip_info", { useProxy })) as {
           region?: string
           isp?: string
         }
@@ -327,14 +341,14 @@ function HomePage() {
       }
     }
 
-    const delay = isConnected ? 1500 : 1000
+    const delay = engineStateRef.current.kind === "running" ? 1500 : 1000
     const timer = setTimeout(checkIp, delay)
 
     return () => {
       active = false
       clearTimeout(timer)
     }
-  }, [isConnected])
+  }, [networkInfoRefreshSeq])
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
@@ -372,12 +386,12 @@ function HomePage() {
   }
 
   const handleToggleConnection = async () => {
-    if (isConnecting) return
+    if (connectionOperationRef.current || !canToggleConnection) return
+    connectionOperationRef.current = true
     try {
       if (isConnected) {
         setLocalConnecting(true)
         await stopEngine()
-        setLocalConnecting(false)
       } else {
         const isTun = proxyMode === "tun"
         if (isTun) {
@@ -395,7 +409,9 @@ function HomePage() {
       }
     } catch (err) {
       console.error("Toggle connection failed:", err)
+    } finally {
       setLocalConnecting(false)
+      connectionOperationRef.current = false
     }
   }
 
@@ -696,7 +712,7 @@ function HomePage() {
                   {/* Button Click Core */}
                   <button
                     onClick={handleToggleConnection}
-                    disabled={isConnecting}
+                    disabled={!canToggleConnection}
                     className="w-full h-full rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 active:scale-95 z-10 focus:outline-none"
                   >
                     <div
@@ -750,7 +766,12 @@ function HomePage() {
 
 
             {/* Active Node Info row */}
-            <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/nodes")}
+              className="w-full flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors text-left cursor-pointer"
+              title={l("Open Nodes", "打开节点列表")}
+            >
               <div className="flex items-center gap-3 min-w-0 flex-[6]">
                 <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
                   <span className="text-base select-none">{currentNode ? currentNode.flag : "🌐"}</span>
@@ -768,7 +789,7 @@ function HomePage() {
                   <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
                 )}
               </div>
-            </div>
+            </button>
 
             {/* Tunnel Duration Info row */}
             <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">

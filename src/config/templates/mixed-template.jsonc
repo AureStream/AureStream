@@ -1,79 +1,246 @@
+// Synced from OneOhCloud/conf-template conf/1.13.8/zh-cn rules template.
 {
-    "$schema": "https://raw.githubusercontent.com/xmdhs/sing-box-generate-schema/refs/heads/master/schema.generated.json",
     "log": {
         "disabled": false,
-        "level": "info",
+        "level": "debug",
         "timestamp": false
     },
     "dns": {
         "servers": [
             {
-                "tag": "remote",
-                "type": "https",
-                "server": "8.8.8.8",
-                "detour": "ExitGateway"
-            },
-            {
                 "tag": "system",
                 "type": "udp",
-                "server": "223.5.5.5",
-                "server_port": 53
+                "server": "119.29.29.29",
+                "server_port": 53,
+                "connect_timeout": "5s"
             },
             {
-                "type": "fakeip",
-                "tag": "fakeip",
-                "inet4_range": "198.18.0.0/15",
-                "inet6_range": "fc00::/18"
+                "tag": "dns_proxy",
+                "type": "tcp",
+                "server": "1.0.0.1",
+                "server_port": 53,
+                "detour": "ExitGateway",
+                "connect_timeout": "5s"
             }
         ],
         "rules": [
             {
-                "rule_set": [
-                    "AdGuardSDNSFilter",
-                    "chrome-doh"
-                ],
-                "action": "predefined"
-            },
-            {
-                "query_type": "HTTPS",
-                "action": "predefined"
-            },
-            {
                 "query_type": [
-                    "A",
-                    "AAAA"
+                    "HTTPS",
+                    "SVCB",
+                    "PTR"
                 ],
-                "rewrite_ttl": 1,
-                "server": "fakeip"
+                "action": "reject"
             },
             {
-                "clash_mode": "global",
-                "server": "remote"
-            },
-            {
-                "clash_mode": "direct",
-                "server": "system"
-            },
-            {
-                "rule_set": "geosite-cn",
-                "server": "system"
-            },
-            {
-                "rule_set": "ext-cn-domain",
+                "domain": [
+                    "captive.oneoh.cloud",
+                    "captive.apple.com",
+                    "nmcheck.gnome.org",
+                    "www.msftconnecttest.com",
+                    "connectivitycheck.gstatic.com",
+                    "sequoia.apple.com",
+                    "seed-sequoia.siri.apple.com"
+                ],
+                "rule_set": [
+                    "geoip-cn",
+                    "geosite-cn",
+                    "geosite-apple",
+                    "geosite-microsoft-cn",
+                    "geosite-samsung",
+                    "geosite-private"
+                ],
+                "strategy": "prefer_ipv4",
                 "server": "system"
             }
         ],
-        "independent_cache": true
+        "final": "dns_proxy",
+        "strategy": "prefer_ipv4"
     },
     "inbounds": [
         {
-            "type": "mixed",
             "tag": "mixed",
+            "type": "mixed",
             "listen": "127.0.0.1",
             "listen_port": 6789,
             "set_system_proxy": false
         }
     ],
+    "route": {
+        "rules": [
+            {
+                "action": "sniff"
+            },
+            {
+                "type": "logical",
+                "mode": "or",
+                "rules": [
+                    {
+                        "protocol": "dns"
+                    },
+                    {
+                        "port": 53
+                    }
+                ],
+                "action": "hijack-dns"
+            },
+            {
+                "protocol": "quic",
+                "action": "reject"
+            },
+            {
+                "ip_is_private": true,
+                "outbound": "direct"
+            },
+            {
+                "domain": [
+                    "direct-tag.oneoh.cloud"
+                ],
+                "domain_suffix": [],
+                "ip_cidr": [],
+                "outbound": "direct"
+            },
+            {
+                "domain": [
+                    "proxy-tag.oneoh.cloud"
+                ],
+                "domain_suffix": [],
+                "ip_cidr": [],
+                "outbound": "ExitGateway"
+            },
+            {
+                "domain_suffix": [
+                    ".tiktok.com"
+                ],
+                "rule_set": [
+                    "geosite-tiktok",
+                    "geosite-linkedin",
+                    "geosite-linkedin-cn"
+                ],
+                "outbound": "ExitGateway"
+            },
+            {
+                "domain": [
+                    "captive.oneoh.cloud",
+                    "captive.apple.com",
+                    "nmcheck.gnome.org",
+                    "www.msftconnecttest.com",
+                    "connectivitycheck.gstatic.com",
+                    "sequoia.apple.com",
+                    "seed-sequoia.siri.apple.com"
+                ],
+                "domain_suffix": [
+                    "local",
+                    "lan",
+                    "localdomain",
+                    "localhost",
+                    "bypass.local",
+                    ".oneoh.cloud",
+                    ".ksjhaoka.com",
+                    ".mixcapp.com"
+                ],
+                "outbound": "direct",
+                "rule_set": [
+                    "geoip-cn",
+                    "geosite-cn",
+                    "geosite-apple",
+                    "geosite-microsoft-cn",
+                    "geosite-samsung",
+                    "geosite-private"
+                ]
+            },
+            {
+                "process_path": [
+                    "/Applications/WeChat.app/Contents/MacOS/WeChat"
+                ],
+                "process_path_regex": [
+                    "^/System/Applications/.+"
+                ],
+                "outbound": "direct"
+            }
+        ],
+        "final": "ExitGateway",
+        "default_domain_resolver": "system",
+        "auto_detect_interface": true,
+        "rule_set": [
+            {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
+            },
+            {
+                "tag": "geosite-geolocation-cn",
+                "type": "remote",
+                "format": "source",
+                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-cn.json"
+            },
+            {
+                "tag": "geosite-linkedin",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin.srs"
+            },
+            {
+                "tag": "geosite-linkedin-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin@cn.srs"
+            },
+            {
+                "tag": "geosite-geolocation-!cn",
+                "type": "remote",
+                "format": "source",
+                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.json"
+            },
+            {
+                "tag": "geosite-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
+            },
+            {
+                "tag": "geosite-apple",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-apple.srs"
+            },
+            {
+                "tag": "geosite-microsoft-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
+            },
+            {
+                "tag": "geosite-samsung",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-samsung.srs"
+            },
+            {
+                "tag": "geosite-telegram",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs"
+            },
+            {
+                "tag": "geosite-private",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs"
+            },
+            {
+                "tag": "geosite-tiktok",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-tiktok.srs"
+            }
+        ]
+    },
+    "experimental": {
+        "clash_api": {},
+        "cache_file": {}
+    },
     "outbounds": [
         {
             "tag": "direct",
@@ -85,7 +252,8 @@
             "type": "selector",
             "outbounds": [
                 "auto"
-            ]
+            ],
+            "interrupt_exist_connections": true
         },
         {
             "tag": "auto",
@@ -93,103 +261,5 @@
             "url": "https://www.google.com/generate_204",
             "outbounds": []
         }
-    ],
-    "route": {
-        "rules": [
-            {
-                "action": "sniff"
-            },
-            {
-                "protocol": "dns",
-                "action": "hijack-dns"
-            },
-            {
-                "clash_mode": "direct",
-                "outbound": "direct"
-            },
-            {
-                "clash_mode": "global",
-                "outbound": "ExitGateway"
-            },
-            {
-                "action": "resolve",
-                "strategy": "prefer_ipv4"
-            },
-            {
-                "domain": ["direct-tag.aurestream.local"],
-                "domain_suffix": [],
-                "ip_cidr": [],
-                "outbound": "direct"
-            },
-            {
-                "domain": ["proxy-tag.aurestream.local"],
-                "domain_suffix": [],
-                "ip_cidr": [],
-                "outbound": "ExitGateway"
-            },
-            {
-                "ip_is_private": true,
-                "outbound": "direct"
-            },
-            {
-                "rule_set": [
-                    "geosite-cn",
-                    "ext-cn-domain"
-                ],
-                "outbound": "direct"
-            },
-            {
-                "rule_set": "geoip-cn",
-                "outbound": "direct"
-            },
-            {
-                "outbound": "ExitGateway"
-            }
-        ],
-        "auto_detect_interface": true,
-        "default_domain_resolver": {
-            "server": "system"
-        },
-        "rule_set": [
-            {
-                "tag": "geoip-cn",
-                "type": "local",
-                "format": "binary",
-                "path": "resources/rules/geoip-cn.srs"
-            },
-            {
-                "tag": "geosite-cn",
-                "type": "local",
-                "format": "binary",
-                "path": "resources/rules/geosite-geolocation-cn.srs"
-            },
-            {
-                "tag": "AdGuardSDNSFilter",
-                "type": "local",
-                "format": "binary",
-                "path": "resources/rules/AdGuardSDNSFilterSingBox.srs"
-            },
-            {
-                "tag": "chrome-doh",
-                "type": "local",
-                "format": "source",
-                "path": "resources/rules/chrome-doh.json"
-            },
-            {
-                "tag": "ext-cn-domain",
-                "type": "local",
-                "format": "binary",
-                "path": "resources/rules/ext-cn-list.srs"
-            }
-        ]
-    },
-    "experimental": {
-        "cache_file": {
-            "enabled": true
-        },
-        "clash_api": {
-            "external_controller": "127.0.0.1:9191",
-            "secret": ""
-        }
-    }
+    ]
 }
