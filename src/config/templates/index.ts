@@ -24,7 +24,14 @@ export function getBuiltInTemplate(mode: configType): string {
         baseConfig.inbounds = baseConfig.inbounds.filter((ib: any) => ib.type !== 'tun');
     }
 
-    if (mode === 'mixed-global' || mode === 'tun-global') {
+    if (mode === 'resident' || mode === 'resident-global') {
+        const tunInbound = baseConfig.inbounds.find((ib: any) => ib.type === 'tun');
+        if (tunInbound) {
+            tunInbound.auto_route = false;
+        }
+    }
+
+    if (mode === 'mixed-global' || mode === 'tun-global' || mode === 'resident-global') {
         // Rewrite route rules for global proxy mode
         baseConfig.route.rules = [
             {

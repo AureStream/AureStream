@@ -1,7 +1,9 @@
 import setGlobalTunConfig, {
   computeMergeCacheKey,
   setGlobalMixedConfig,
+  setGlobalResidentConfig,
   setMixedConfig,
+  setResidentConfig,
   setTunConfig,
   type MergeProfile,
 } from "@/config/merger/main"
@@ -12,6 +14,7 @@ import {
 } from "@/lib/merge-cache"
 import type { RoutingMode } from "@/lib/routing-mode"
 import { isGlobalRouting } from "@/lib/routing-mode"
+import { resolveResidentMergeProfile } from "@/lib/connection-profile"
 
 export type MergeConnectionOptions = {
   /** Skip cache and always rewrite config.json */
@@ -76,6 +79,29 @@ export async function mergeConnectionConfig(
   } else {
     await (global ? setGlobalMixedConfig : setMixedConfig)(subscriptionIdentifier)
   }
+
+  setLastMergeCacheKey(cacheKey)
+  return true
+}
+
+/** Merge the stable resident sing-box config used by capture-mode switching. */
+export async function mergeResidentConnectionConfig(
+  subscriptionIdentifier: string,
+  routingMode: RoutingMode,
+  options: MergeConnectionOptions = {}
+): Promise<boolean> {
+  const profile = resolveResidentMergeProfile(routingMode)
+  const cacheKey = await computeMergeCacheKey(subscriptionIdentifier, profile)
+
+  if (!options.force && cacheKey === getLastMergeCacheKey()) {
+    console.info("[connection-config] resident merge skipped (inputs unchanged)")
+    return false
+  }
+
+  const global = isGlobalRouting(routingMode)
+  await (global ? setGlobalResidentConfig : setResidentConfig)(
+    subscriptionIdentifier
+  )
 
   setLastMergeCacheKey(cacheKey)
   return true

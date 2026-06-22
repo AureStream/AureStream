@@ -43,6 +43,14 @@ The resident profile will:
 
 Mode changes will not rewrite config solely to add or remove inbounds.
 
+For resident profiles, `tun.auto_route` is disabled in the generated template. This prevents the long-lived core from taking over routes while capture state is `off` or `system`; TUN capture must be enabled by platform route/DNS operations instead.
+
+## Reference Implementations Checked
+
+- Clash Verge Rev (`clash-verge-rev/clash-verge-rev` at `9b87cd53`) keeps system proxy and TUN as separate user-facing switches. Its TUN flow patches runtime config (`patch_base_config`) to change `tun.enable`, and its shutdown path disables TUN before stopping the core.
+- Hiddify (`hiddify/hiddify-app` at `276a7eff`) uses platform VPN/packet-tunnel service models for TUN-class capture on Apple/Android platforms. This reinforces keeping capture as an OS/service state instead of conflating it with the UI proxy mode.
+- GUI.for.SingBox (`GUI-for-Cores/GUI.for.SingBox` at `cd51ffd9`) models mixed and TUN inbounds in the profile data and exposes TUN enable/disable as configuration state. Some changes still restart the core, so only its inbound modeling pattern applies to AureStream; the no-restart requirement still needs separate capture operations.
+
 ## Capture State Semantics
 
 `off` means:

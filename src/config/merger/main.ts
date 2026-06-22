@@ -277,12 +277,32 @@ export function setTunConfig(identifier: string) {
     });
 }
 
+export function setResidentConfig(identifier: string) {
+    return mergeConfig(identifier, {
+        mode: 'resident',
+        cacheFileName: 'resident-cache-rule-v1.db',
+        label: "写入[规则]常驻代理配置文件",
+        tun: true,
+        customRules: true,
+    });
+}
+
 export function setGlobalMixedConfig(identifier: string) {
     return mergeConfig(identifier, {
         mode: 'mixed-global',
         cacheFileName: 'mixed-cache-global-v2.db',
         label: "写入[全局]系统代理配置文件",
         tun: false,
+        customRules: false,
+    });
+}
+
+export function setGlobalResidentConfig(identifier: string) {
+    return mergeConfig(identifier, {
+        mode: 'resident-global',
+        cacheFileName: 'resident-cache-global-v1.db',
+        label: "写入[全局]常驻代理配置文件",
+        tun: true,
         customRules: false,
     });
 }
