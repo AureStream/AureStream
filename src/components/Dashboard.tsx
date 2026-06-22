@@ -334,6 +334,7 @@ function HomePage() {
       if (isConnected) {
         setLocalConnecting(true)
         await stopEngine()
+        setLocalConnecting(false)
       } else {
         setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
