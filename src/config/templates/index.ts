@@ -1,40 +1,43 @@
 import type { configType } from '../common';
-import { parse as parseJsonc } from 'jsonc-parser';
-import mixedTemplate from './mixed-template.jsonc?raw';
-import tunTemplate from './tun-template.jsonc?raw';
+import {
+    BUILD_TIME_TEMPLATE_SOURCE,
+    BUILT_IN_TEMPLATE_OBJECTS,
+} from './generated';
 
-export const BUILD_TIME_TEMPLATE_SOURCE = {
-    repo: 'Local/config-templates',
-    branch: 'local',
-    commit: 'local',
-    versionPath: 'local',
-    singBoxVersion: 'v1.13.13',
-    generatedAt: new Date().toISOString(),
-} as const;
-
-function parseTemplate(raw: string): any {
-    const errors: any[] = [];
-    const config: any = parseJsonc(raw, errors, { allowTrailingComma: true });
-    if (errors.length > 0 || !config) {
-        throw new Error(`[template] failed to parse local JSONC template: ${JSON.stringify(errors)}`);
+function cloneTemplate(mode: configType): any {
+    const template = BUILT_IN_TEMPLATE_OBJECTS[mode];
+    if (!template) {
+        throw new Error(`[template] unsupported config mode: ${mode}`);
     }
-    return config;
+    return structuredClone(template);
+}
+
+export function normalizeTemplateConfig(config: any): boolean {
+    let changed = false;
+    const inbounds = Array.isArray(config?.inbounds) ? config.inbounds : [];
+
+    for (const inbound of inbounds) {
+        if (inbound?.type !== "tun") continue;
+        if (Array.isArray(inbound.inet4_bypass_address)) {
+            const existing = Array.isArray(inbound.route_exclude_address)
+                ? inbound.route_exclude_address
+                : [];
+            inbound.route_exclude_address = Array.from(new Set([
+                ...existing,
+                ...inbound.inet4_bypass_address,
+            ]));
+            delete inbound.inet4_bypass_address;
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 export function getBuiltInTemplate(mode: configType): string {
-    // Select the base template based on proxy mode (mixed = SystemProxy, tun = TUN)
-    const isTun = mode === 'tun' || mode === 'tun-global';
-    const baseConfig = parseTemplate(isTun ? tunTemplate : mixedTemplate);
-
-    if (mode === 'mixed-global' || mode === 'tun-global') {
-        // Rewrite route rules for global proxy mode
-        baseConfig.route.rules = [
-            { "action": "sniff" },
-            { "protocol": "dns", "action": "hijack-dns" },
-            { "action": "resolve", "strategy": "prefer_ipv4" },
-            { "outbound": "ExitGateway" }
-        ];
-    }
-
+    const baseConfig = cloneTemplate(mode);
+    normalizeTemplateConfig(baseConfig);
     return JSON.stringify(baseConfig);
 }
+
+export { BUILD_TIME_TEMPLATE_SOURCE };

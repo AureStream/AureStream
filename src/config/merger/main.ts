@@ -20,7 +20,7 @@ import { STAGE_VERSION_STORE_KEY, selectedNodeTagStoreKey, LEGACY_SELECTED_NODE_
 import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB, patchDnsProxyConfig } from './helper';
 
 import { configType, getConfigTemplateCacheKey } from '../common';
-import { getBuiltInTemplate } from '../templates';
+import { getBuiltInTemplate, normalizeTemplateConfig } from '../templates';
 
 const templateStringCache = new Map<string, string>();
 const templateObjectCache = new Map<string, object>();
@@ -52,6 +52,12 @@ async function getConfigTemplate(mode: configType): Promise<any> {
       templateStringCache.set(cacheKey, config);
       parsed = JSON.parse(config);
       await setStoreValue(cacheKey, config);
+    }
+
+    if (normalizeTemplateConfig(parsed)) {
+        config = JSON.stringify(parsed);
+        templateStringCache.set(cacheKey, config);
+        await setStoreValue(cacheKey, config);
     }
 
     templateObjectCache.set(cacheKey, parsed);

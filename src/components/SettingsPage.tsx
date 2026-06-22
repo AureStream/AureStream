@@ -11,6 +11,8 @@ import {
   setDirectDNS,
   getEnableTun,
   setEnableTun,
+  getCustomRuleSet,
+  setCustomRuleSet,
 } from "../single/store"
 import {
   probeEngineServiceState,
@@ -18,6 +20,13 @@ import {
   invalidateEngineProbeCache,
   type EngineServiceState,
 } from "../lib/engine-probe"
+import {
+  BYPASS_PLACEHOLDER,
+  parseBypassInputToRuleSet,
+  resolveBypassDisplayValue,
+  resolveBypassPersistValue,
+  ruleSetToBypassInput,
+} from "../lib/proxy-bypass"
 
 /* ── Icons ── */
 const I = {
@@ -94,13 +103,15 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [bypass, port, dns, tun] = await Promise.all([
+        const [bypass, directRules, port, dns, tun] = await Promise.all([
           getProxyBypass(),
+          getCustomRuleSet("direct"),
           getProxyPort(),
           getDirectDNS(),
           getEnableTun(),
         ])
-        setBypassDomains(bypass)
+        const directRuleText = ruleSetToBypassInput(directRules)
+        setBypassDomains(directRuleText || resolveBypassDisplayValue(bypass))
         setProxyPort(port)
         setDnsServer(dns)
         setAutoConnect(tun)
@@ -158,6 +169,17 @@ export default function SettingsPage() {
     } catch (e) {
       console.error("Failed to save setting:", e)
     }
+  }
+
+  const persistProxyBypass = async () => {
+    const normalized = resolveBypassPersistValue(bypassDomains)
+    setBypassDomains(normalized)
+    await persist(async () => {
+      await Promise.all([
+        setProxyBypass(normalized),
+        setCustomRuleSet("direct", parseBypassInputToRuleSet(normalized)),
+      ])
+    })
   }
 
   const toggleAutoConnect = () => {
@@ -322,9 +344,9 @@ export default function SettingsPage() {
           <textarea
             value={bypassDomains}
             onChange={(e) => setBypassDomains(e.target.value)}
-            onBlur={() => persist(() => setProxyBypass(bypassDomains))}
+            onBlur={persistProxyBypass}
             className="w-full flex-1 min-h-0 p-4 rounded-2xl bg-surface-active/15 focus:ring-1 focus:ring-secondary/30 outline-none transition-all text-xs font-mono text-text resize-none shadow-inner no-scrollbar"
-            placeholder="localhost, 127.0.0.1, ::1"
+            placeholder={BYPASS_PLACEHOLDER}
           />
         </div>
       </div>
