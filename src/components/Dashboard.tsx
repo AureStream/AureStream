@@ -77,7 +77,7 @@ function HomePage() {
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineConnected
+  const isConnected = engineConnected || localConnecting
   const isConnecting = isStarting || isStopping || localConnecting
 
   useEffect(() => {
@@ -89,7 +89,12 @@ function HomePage() {
   }, [])
 
   useEffect(() => {
-    setLocalConnecting(false)
+    // Only clear the local connecting flag on terminal states.
+    // During mode switching (Stopping → Idle → Starting), the flag
+    // is managed by the finally block of the switch/toggle handler.
+    if (engineState.kind === "running" || engineState.kind === "failed") {
+      setLocalConnecting(false)
+    }
   }, [engineState.kind])
 
   // 同步主界面与后台引擎/系统托盘切换后的代理模式状态
