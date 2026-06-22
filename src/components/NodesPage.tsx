@@ -5,7 +5,8 @@ import { getStoreValue, setStoreValue } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { switchNodeActive } from "../lib/hot-reload-config"
 import { invoke } from "@tauri-apps/api/core"
-import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
+import { getNodeLatency, initNodeLatency, setNodeLatency } from "../lib/node-latency"
+import { getNodeLatencyTone } from "../lib/node-latency-tone"
 import { useEngineState } from "../hooks/useEngineState"
 import { testNodeDelay } from "../utils/singbox-api/proxies"
 
@@ -35,12 +36,6 @@ export default function NodesPage() {
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
   const { isConnected } = useEngineState()
 
-  const getPingTone = (p: number) => {
-    if (p <= 500) return { text: "text-success", dot: "bg-success" }
-    if (p <= 1000) return { text: "text-warning", dot: "bg-warning" }
-    return { text: "text-danger", dot: "bg-danger" }
-  }
-  
   const [searchQuery, setSearchQuery] = useState("")
   const [activeRegion, setActiveRegion] = useState<"all" | "asia" | "america" | "europe">("all")
   const [connectedNodeId, setConnectedNodeId] = useState<string>("")
@@ -52,6 +47,7 @@ export default function NodesPage() {
 
   useEffect(() => {
     const loadNodes = async () => {
+      await initNodeLatency()
       const subId = await getStoreValue(SSI_STORE_KEY)
       if (!subId) return
       setActiveSubId(subId)
@@ -279,7 +275,7 @@ export default function NodesPage() {
                       <span className="text-text-muted">-- ms</span>
                     ) : (
                       (() => {
-                        const tone = getPingTone(node.ping);
+                        const tone = getNodeLatencyTone(node.ping);
                         return (
                           <>
                             <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-secondary animate-pulse' : tone.dot}`}></span>

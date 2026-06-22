@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, useNavigate } from "react-router-dom"
 import Sidebar from "./Sidebar"
 import NodesPage from "./NodesPage"
 import ProfilePage from "./ProfilePage"
@@ -25,10 +25,10 @@ import {
   type TrayRequestedMode,
 } from "../lib/tray-mode"
 import { controllerFetch } from "../utils/singbox-api"
-import { testNodeDelay } from "../utils/singbox-api/proxies"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
-import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
+import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
+import { getNodeLatencyTone } from "../lib/node-latency-tone"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { message } from "@tauri-apps/plugin-dialog"
 
@@ -67,6 +67,7 @@ const I = {
    ================================================================ */
 function HomePage() {
   const { i18n } = useTranslation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const {
     isConnected: engineConnected,
@@ -112,52 +113,29 @@ function HomePage() {
   const [nodes, setNodes] = useState<any[]>([])
   const [activeNodePing, setActiveNodePing] = useState<number>(0)
 
-  // Node latency: when connected, use sing-box Clash API (accurate through-proxy
-  // RTT). When disconnected, use direct TCP ping (fastest, no TUN interference).
+  // Node latency is display-only on the dashboard. Measurements happen from the
+  // Nodes page and are shared through the in-memory/SQLite latency cache.
   useEffect(() => {
     let active = true
     if (!activeNodeId) {
       setActiveNodePing(0)
       return
     }
-    // Show the cached value instantly (survives page navigation), then refresh.
-    const cached = getNodeLatency(activeNodeId)
-    if (cached !== undefined) setActiveNodePing(cached)
 
-    const measure = async () => {
-      if (engineConnected) {
-        const delay = await testNodeDelay(activeNodeId)
-        if (active) {
-          setNodeLatency(activeNodeId, delay)
-          setActiveNodePing(delay)
-        }
-      } else {
-        const node = nodes.find((n) => n.id === activeNodeId)
-        if (!node?.server || !node?.port) return
-        try {
-          const d = await invoke("ping_tcp", { host: node.server, port: node.port }) as number
-          setNodeLatency(activeNodeId, d)
-          if (active) setActiveNodePing(d)
-        } catch {
-          setNodeLatency(activeNodeId, -1)
-          if (active) setActiveNodePing(-1)
-        }
+    setActiveNodePing(getNodeLatency(activeNodeId) ?? 0)
+    initNodeLatency().then(() => {
+      if (active) {
+        setActiveNodePing(getNodeLatency(activeNodeId) ?? 0)
       }
-    }
-    measure()
-    return () => { active = false }
-  }, [activeNodeId, nodes, engineConnected])
+    })
 
-  // Latency color tiers: ≤300ms green, 300–1000ms yellow, >1000ms red.
-  const pingTone = (p: number) =>
-    p <= 300 ? { text: "text-success", dot: "bg-success" }
-      : p <= 1000 ? { text: "text-warning", dot: "bg-warning" }
-        : { text: "text-danger", dot: "bg-danger" }
+    return () => { active = false }
+  }, [activeNodeId])
 
   const renderPing = (p: number) => {
     if (p < 0) return <span className="text-danger text-xs font-mono font-bold whitespace-nowrap">{l("Timeout", "超时")}</span>
     if (p === 0) return <span className="text-text-muted text-xs font-mono font-bold whitespace-nowrap">-- ms</span>
-    const tone = pingTone(p)
+    const tone = getNodeLatencyTone(p)
     return (
       <span className={`flex items-center gap-1.5 text-xs font-mono font-extrabold whitespace-nowrap ${tone.text}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>{p}ms
@@ -750,7 +728,12 @@ function HomePage() {
 
 
             {/* Active Node Info row */}
-            <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/nodes")}
+              className="w-full flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors text-left cursor-pointer"
+              title={l("Open Nodes", "打开节点列表")}
+            >
               <div className="flex items-center gap-3 min-w-0 flex-[6]">
                 <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
                   <span className="text-base select-none">{currentNode ? currentNode.flag : "🌐"}</span>
@@ -768,7 +751,7 @@ function HomePage() {
                   <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
                 )}
               </div>
-            </div>
+            </button>
 
             {/* Tunnel Duration Info row */}
             <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
