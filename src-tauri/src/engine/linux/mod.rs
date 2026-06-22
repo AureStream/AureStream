@@ -49,7 +49,9 @@ impl EngineManager for LinuxEngine {
                     mgr.is_stopping = false;
                 }
                 if should_set_system_proxy {
-                    set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app))
+                    let port = crate::engine::ports::mixed_proxy_port(app);
+                    let bypass = crate::engine::resolve_proxy_bypass(app);
+                    set_system_proxy(port, bypass)
                         .await
                         .map_err(|e| e.to_string())?;
                 }
@@ -114,7 +116,7 @@ impl EngineManager for LinuxEngine {
                     mgr.child = Some(child);
                     mgr.is_stopping = false;
                 }
-                let _ = clear_system_proxy(app).await;
+                let _ = clear_system_proxy().await;
             }
         }
         Ok(())
@@ -124,23 +126,45 @@ impl EngineManager for LinuxEngine {
         let (mode, child) = {
             let mut mgr = ProcessManager::acquire();
             mgr.is_stopping = true;
-            (mgr.mode.clone(), mgr.child.take())
+            let m = mgr.mode.clone();
+            let c = mgr.child.take();
+            mgr.reset();
+            (m, c)
         };
         let Some(mode) = mode else {
             return Ok(());
         };
         match mode.as_ref() {
             ProxyMode::SystemProxy => {
-                let _ = clear_system_proxy(app).await;
+                let _ = clear_system_proxy().await;
                 if let Some(child) = child {
-                    use libc::{kill, SIGTERM};
+                    use libc::{kill, SIGKILL, SIGTERM};
                     let pid = child.pid();
+                    // Graceful shutdown first
                     if unsafe { kill(pid as i32, SIGTERM) } != 0 {
-                        log::error!(
-                            "[stop] Failed to send SIGTERM to PID {}: {}",
-                            pid,
-                            std::io::Error::last_os_error()
-                        );
+                        let err = std::io::Error::last_os_error();
+                        if err.raw_os_error() != Some(libc::ESRCH) {
+                            log::error!(
+                                "[stop] Failed to send SIGTERM to PID {}: {}",
+                                pid,
+                                err
+                            );
+                        }
+                    } else {
+                        // Wait briefly for graceful exit, then escalate to SIGKILL
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        if unsafe { kill(pid as i32, 0) } == 0 {
+                            log::warn!(
+                                "[stop] PID {} still alive after SIGTERM, sending SIGKILL",
+                                pid
+                            );
+                            if unsafe { kill(pid as i32, SIGKILL) } != 0 {
+                                let err = std::io::Error::last_os_error();
+                                if err.raw_os_error() != Some(libc::ESRCH) {
+                                    log::error!("[stop] SIGKILL PID {} failed: {}", pid, err);
+                                }
+                            }
+                        }
                     }
                 }
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
@@ -234,4 +258,5 @@ impl EngineManager for LinuxEngine {
     async fn restart(_app: &AppHandle) -> Result<(), String> {
         aurestream_plugin_privilege::linux::reload()
     }
+
 }

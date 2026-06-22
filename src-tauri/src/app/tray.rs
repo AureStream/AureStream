@@ -6,14 +6,6 @@ use crate::engine::state_machine::EngineState;
 use crate::state::AppData;
 use crate::utils::show_main_window;
 
-/// 获取当前 sing-box 配置文件路径（跨平台）。
-fn config_path(app_handle: &AppHandle) -> Option<String> {
-    app_handle
-        .path()
-        .app_config_dir()
-        .ok()
-        .map(|dir| dir.join("config.json").to_string_lossy().into_owned())
-}
 
 /// 根据引擎状态与当前代理模式构建托盘右键菜单。
 fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, tauri::Error> {
@@ -78,44 +70,14 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
         .on_menu_event(|app_handle, event| match event.id.as_ref() {
             "tray_show" => show_main_window(app_handle),
             "tray_mode_system" => {
-                let handle = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    let state = handle
-                        .state::<crate::engine::state_machine::EngineStateCell>()
-                        .snapshot();
-                    // 判断是否已经在运行或启动该模式（非 tun 即 system）
-                    let is_running_system = match &state {
-                        EngineState::Starting { mode, .. } | EngineState::Running { mode, .. } => mode != "tun",
-                        _ => false,
-                    };
-                    if !is_running_system {
-                        if let Some(path) = config_path(&handle) {
-                            let _ =
-                                crate::core::commands::start(handle, path, crate::engine::ProxyMode::SystemProxy)
-                                    .await;
-                        }
-                    }
-                });
+                use tauri::Emitter;
+                let _ = app_handle.emit("tray-switch-mode", "system");
+                update_tray_menu(app_handle);
             }
             "tray_mode_tun" => {
-                let handle = app_handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    let state = handle
-                        .state::<crate::engine::state_machine::EngineStateCell>()
-                        .snapshot();
-                    // 判断是否已经在运行或启动 tun 模式
-                    let is_running_tun = match &state {
-                        EngineState::Starting { mode, .. } | EngineState::Running { mode, .. } => mode == "tun",
-                        _ => false,
-                    };
-                    if !is_running_tun {
-                        if let Some(path) = config_path(&handle) {
-                            let _ =
-                                crate::core::commands::start(handle, path, crate::engine::ProxyMode::IntoProxy)
-                                    .await;
-                        }
-                    }
-                });
+                use tauri::Emitter;
+                let _ = app_handle.emit("tray-switch-mode", "tun");
+                update_tray_menu(app_handle);
             }
             "tray_quit" => {
                 let handle = app_handle.clone();

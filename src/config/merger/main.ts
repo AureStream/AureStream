@@ -48,35 +48,31 @@ async function getConfigTemplate(mode: configType): Promise<any> {
       parsed = JSON.parse(config);
     } catch (e) {
       console.error(`[template] corrupt config for mode=${mode}, clearing cache:`, e);
-      templateStringCache.delete(cacheKey);
-      templateObjectCache.delete(cacheKey);
-      await setStoreValue(cacheKey, '');
       config = getBuiltInTemplate(mode);
-      await setStoreValue(cacheKey, config);
       templateStringCache.set(cacheKey, config);
       parsed = JSON.parse(config);
+      await setStoreValue(cacheKey, config);
     }
+
     templateObjectCache.set(cacheKey, parsed);
     return structuredClone(parsed);
 }
 
-async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
-    const [port, secret] = await Promise.all([
-        getControllerPort(),
-        getControllerSecret(),
-    ]);
-    newConfig["experimental"] = newConfig["experimental"] || {};
-    newConfig["experimental"]["clash_api"] = {
-        "external_controller": `127.0.0.1:${port}`,
-        "secret": secret,
-    };
+export function clearTemplateResolvedCache() {
+    templateObjectCache.clear();
+}
 
-    newConfig["experimental"]["cache_file"] = {
-        "enabled": true,
-        "store_fakeip": true,
-        "store_rdrc": true,
-        "path": dbCacheFilePath
-    };
+async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
+    // TODO: needs refine
+    newConfig.experimental.cache_file.path = dbCacheFilePath;
+    newConfig.experimental.cache_file.store_fakeip = true;
+
+    newConfig.experimental.clash_api.external_controller =
+        `127.0.0.1:${await getControllerPort()}`;
+    const secret = await getControllerSecret();
+    if (secret) {
+        newConfig.experimental.clash_api.secret = secret;
+    }
 }
 
 async function getSavedDefaultNode(identifier: string): Promise<string> {
@@ -95,15 +91,26 @@ type CustomRuleSet = {
     ip_cidr: string[];
 }
 
+/** Routing mode dimension (without proxy mode). */
+export type RoutingMode = 'rule' | 'global';
+
+/** Merge profile: encodes both routing mode and proxy mode. */
 export type MergeProfile = {
     mode: configType;
-    cacheFileName: string;
-    tun: boolean;
     customRules: boolean;
+}
+
+/** Convenience: build MergeProfile from routing mode + TUN boolean. */
+export function makeProfile(routing: RoutingMode, tun: boolean): MergeProfile {
+    if (routing === 'global') {
+        return { mode: tun ? 'tun-global' : 'mixed-global', customRules: false };
+    }
+    return { mode: tun ? 'tun' : 'mixed', customRules: true };
 }
 
 type MergeConfigOptions = MergeProfile & {
     label: string;
+    cacheFileName: string;
 }
 
 /** Fingerprint of all inputs that affect generated config.json (for merge skip cache). */
@@ -138,7 +145,7 @@ export async function computeMergeCacheKey(
         getAllowLan(),
         isBypassRouterEnabled(),
         getProxyPort(),
-        profile.tun ? getTunStack() : Promise.resolve(null),
+        profile.mode.startsWith('tun') ? getTunStack() : Promise.resolve(null),
         getUseDHCP(),
         getConfiguredDirectDNS(),
         getConfiguredProxyDNS(),
@@ -187,6 +194,7 @@ function applyCustomRuleSet(
 }
 
 async function mergeConfig(identifier: string, options: MergeConfigOptions) {
+    const isTun = options.mode === 'tun' || options.mode === 'tun-global';
     const customRulePromises = options.customRules
         ? [getCustomRuleSet('direct'), getCustomRuleSet('proxy')] as const
         : [Promise.resolve(null), Promise.resolve(null)] as const;
@@ -213,7 +221,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         getAllowLan(),
         isBypassRouterEnabled(),
         getProxyPort(),
-        options.tun ? getTunStack() : Promise.resolve(undefined),
+        getTunStack(),
         getUseDHCP(),
         getConfiguredDirectDNS(),
         getSavedDefaultNode(identifier),
@@ -244,11 +252,14 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         }
     }
 
-    if (options.tun) {
+    // TUN mode: configure the TUN inbound (stack, gateway, auto_route, etc.)
+    // SystemProxy mode: the template already has no TUN inbound — nothing to remove.
+    if (isTun) {
         await configureTunInbound(newConfig, bypassRouter, {
             proxyPort,
             tunStack,
             osType: getOsType(),
+            enableAutoRoute: true,
         });
     }
 
@@ -257,42 +268,22 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
     await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
 }
 
-export function setMixedConfig(identifier: string) {
+export function setRuleConfig(identifier: string, tun: boolean) {
+    const mode: configType = tun ? 'tun' : 'mixed';
     return mergeConfig(identifier, {
-        mode: 'mixed',
-        cacheFileName: 'mixed-cache-rule-v2.db',
-        label: "写入[规则]系统代理配置文件",
-        tun: false,
+        mode,
         customRules: true,
+        cacheFileName: 'rule-cache-v2.db',
+        label: `写入[规则]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }
 
-export function setTunConfig(identifier: string) {
+export function setGlobalConfig(identifier: string, tun: boolean) {
+    const mode: configType = tun ? 'tun-global' : 'mixed-global';
     return mergeConfig(identifier, {
-        mode: 'tun',
-        cacheFileName: 'tun-cache-rule-v2.db',
-        label: "写入[规则]TUN代理配置文件",
-        tun: true,
-        customRules: true,
-    });
-}
-
-export function setGlobalMixedConfig(identifier: string) {
-    return mergeConfig(identifier, {
-        mode: 'mixed-global',
-        cacheFileName: 'mixed-cache-global-v2.db',
-        label: "写入[全局]系统代理配置文件",
-        tun: false,
+        mode,
         customRules: false,
-    });
-}
-
-export default function setGlobalTunConfig(identifier: string) {
-    return mergeConfig(identifier, {
-        mode: 'tun-global',
-        cacheFileName: 'tun-cache-global-v2.db',
-        label: "写入[全局]TUN代理配置文件",
-        tun: true,
-        customRules: false,
+        cacheFileName: 'global-cache-v2.db',
+        label: `写入[全局]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }

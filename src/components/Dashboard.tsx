@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Routes, Route } from "react-router-dom"
 import Sidebar from "./Sidebar"
@@ -17,12 +17,20 @@ import { getConfigJsonPath } from "../lib/app-paths"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsServer } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
-import { syncActiveConnectionConfig } from "../lib/config-sync"
+import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
+import { switchProxyMode } from "../lib/mode-switch"
+import {
+  planTrayModeAction,
+  uiModeFromEngineState,
+  type TrayRequestedMode,
+} from "../lib/tray-mode"
 import { controllerFetch } from "../utils/singbox-api"
+import { testNodeDelay } from "../utils/singbox-api/proxies"
 import { invoke } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event"
 import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
-import { ask, message } from "@tauri-apps/plugin-dialog"
+import { message } from "@tauri-apps/plugin-dialog"
 
 /* ── Icons ── */
 const I = {
@@ -69,10 +77,9 @@ function HomePage() {
 
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
-  const [isSwitchingMode, setIsSwitchingMode] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineConnected || isSwitchingMode
-  const isConnecting = (isStarting || isStopping || localConnecting) && !isSwitchingMode
+  const isConnected = engineConnected || localConnecting
+  const isConnecting = isStarting || isStopping || localConnecting
 
   useEffect(() => {
     const initMode = async () => {
@@ -83,15 +90,30 @@ function HomePage() {
   }, [])
 
   useEffect(() => {
-    setLocalConnecting(false)
+    // Only clear the local connecting flag on terminal states.
+    // During mode switching (Stopping → Idle → Starting), the flag
+    // is managed by the finally block of the switch/toggle handler.
+    if (engineState.kind === "running" || engineState.kind === "failed") {
+      setLocalConnecting(false)
+    }
   }, [engineState.kind])
+
+  // 同步主界面与后台引擎/系统托盘切换后的代理模式状态
+  useEffect(() => {
+    const engineUiMode = uiModeFromEngineState(engineState)
+    if (engineUiMode && proxyMode !== engineUiMode) {
+      setProxyMode(engineUiMode)
+      void withScheduledConfigSyncSuspended(() => setEnableTun(engineUiMode === "tun"))
+    }
+  }, [engineState, proxyMode])
+
 
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
-  // Real TCP latency of the active node (0 = unknown, -1 = timeout) via the
-  // backend `ping_tcp` command (independent of sing-box).
   const [activeNodePing, setActiveNodePing] = useState<number>(0)
 
+  // Node latency: when connected, use sing-box Clash API (accurate through-proxy
+  // RTT). When disconnected, use direct TCP ping (fastest, no TUN interference).
   useEffect(() => {
     let active = true
     if (!activeNodeId) {
@@ -102,20 +124,29 @@ function HomePage() {
     const cached = getNodeLatency(activeNodeId)
     if (cached !== undefined) setActiveNodePing(cached)
 
-    const node = nodes.find((n) => n.id === activeNodeId)
-    if (!node?.server || !node?.port) return
-
-    invoke("ping_tcp", { host: node.server, port: node.port })
-      .then((d) => {
-        setNodeLatency(activeNodeId, d as number)
-        if (active) setActiveNodePing(d as number)
-      })
-      .catch(() => {
-        setNodeLatency(activeNodeId, -1)
-        if (active) setActiveNodePing(-1)
-      })
+    const measure = async () => {
+      if (engineConnected) {
+        const delay = await testNodeDelay(activeNodeId)
+        if (active) {
+          setNodeLatency(activeNodeId, delay)
+          setActiveNodePing(delay)
+        }
+      } else {
+        const node = nodes.find((n) => n.id === activeNodeId)
+        if (!node?.server || !node?.port) return
+        try {
+          const d = await invoke("ping_tcp", { host: node.server, port: node.port }) as number
+          setNodeLatency(activeNodeId, d)
+          if (active) setActiveNodePing(d)
+        } catch {
+          setNodeLatency(activeNodeId, -1)
+          if (active) setActiveNodePing(-1)
+        }
+      }
+    }
+    measure()
     return () => { active = false }
-  }, [activeNodeId, nodes])
+  }, [activeNodeId, nodes, engineConnected])
 
   // Latency color tiers: ≤300ms green, 300–1000ms yellow, >1000ms red.
   const pingTone = (p: number) =>
@@ -153,6 +184,84 @@ function HomePage() {
 
   const [proxyDns, setProxyDns] = useState<string>("8.8.8.8")
   const [connectionCount, setConnectionCount] = useState<number>(0)
+
+  // Guard against concurrent tray-triggered operations (prevents start/stop
+  // cascade when the user clicks a tray item multiple times in quick succession).
+  const trayOperationRef = useRef(false)
+  const engineStateRef = useRef(engineState)
+  const subsRef = useRef(subs)
+
+  useEffect(() => {
+    engineStateRef.current = engineState
+  }, [engineState])
+
+  useEffect(() => {
+    subsRef.current = subs
+  }, [subs])
+
+  // Reset tray operation guard when the engine settles into a stable state.
+  useEffect(() => {
+    if (engineState.kind === "running" || engineState.kind === "idle" || engineState.kind === "failed") {
+      trayOperationRef.current = false
+    }
+  }, [engineState.kind])
+
+  // 监听系统托盘发出的代理模式切换事件，执行完整关闭、配置合并及启动流程
+  useEffect(() => {
+    const unlistenPromise = listen<string>("tray-switch-mode", async (event) => {
+      // Prevent concurrent tray-triggered operations.
+      if (trayOperationRef.current) {
+        console.warn("[tray-switch] operation already in progress, ignoring")
+        return
+      }
+      trayOperationRef.current = true
+
+      const targetMode = event.payload
+      if (targetMode !== "system" && targetMode !== "tun") {
+        console.warn("[tray-switch] invalid mode:", targetMode)
+        trayOperationRef.current = false
+        return
+      }
+
+      const plan = planTrayModeAction(engineStateRef.current, targetMode as TrayRequestedMode)
+
+      try {
+        if (plan.action === "disconnect") {
+          // Clicking the active mode in tray: disconnect
+          setLocalConnecting(true)
+          await stopEngine()
+        } else {
+          setLocalConnecting(plan.action === "connect")
+          await withScheduledConfigSyncSuspended(async () => {
+            const isTun = plan.targetUiMode === "tun"
+            setProxyMode(plan.targetUiMode)
+            await setEnableTun(isTun)
+
+            if (plan.action === "switch") {
+              // Mode switch via stop() + start()
+              const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
+              await switchProxyMode(subId, "rule", isTun)
+            } else if (plan.action === "connect") {
+              // Engine not running: generate config and start
+              const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
+              await mergeConnectionConfig(subId, "rule", isTun, { force: true })
+              const configPath = await getConfigJsonPath()
+              await startEngine(configPath, plan.targetEngineMode)
+            }
+          })
+        }
+      } catch (err) {
+        console.error("Tray switch engine failed:", err)
+      } finally {
+        setLocalConnecting(false)
+        trayOperationRef.current = false
+      }
+    })
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten())
+    }
+  }, [])
 
   const memoryMB = isConnected 
     ? (12.4 + (connectionCount * 0.12) + Math.sin(now / 10000) * 0.2).toFixed(1) 
@@ -229,20 +338,59 @@ function HomePage() {
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
+  // Shared helper: ensure the TUN helper service is installed before starting/switching.
+  // Returns true when the service is ready (or was just installed), false when
+  // installation fails.
+  const ensureTunServiceReady = async (): Promise<boolean> => {
+    try {
+      const serviceState = await probeEngineServiceState(true)
+      if (serviceState === "ready") return true
+
+      // Missing or unreachable — install without asking.
+      try {
+        setIsInstallingService(true)
+        await ensureEngineServiceInstalled()
+        invalidateEngineProbeCache()
+        return true
+      } catch (installErr) {
+        console.error("Service installation failed:", installErr)
+        await message(
+          l(
+            `Failed to install helper service: ${installErr}`,
+            `辅助服务安装失败：${installErr}`
+          ),
+          { title: l("Installation Failed", "安装失败"), kind: "error" }
+        )
+        return false
+      } finally {
+        setIsInstallingService(false)
+      }
+    } catch (probeErr) {
+      console.error("Service probe failed:", probeErr)
+      return false
+    }
+  }
+
   const handleToggleConnection = async () => {
-    if (isConnecting || isSwitchingMode) return
+    if (isConnecting) return
     try {
       if (isConnected) {
         setLocalConnecting(true)
         await stopEngine()
+        setLocalConnecting(false)
       } else {
+        const isTun = proxyMode === "tun"
+        if (isTun) {
+          const ready = await ensureTunServiceReady()
+          if (!ready) return
+        }
+
         setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-        const isTun = proxyMode === "tun"
-        
+
         await mergeConnectionConfig(subId, "rule", isTun, { force: true })
         const configPath = await getConfigJsonPath()
-        
+
         await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
       }
     } catch (err) {
@@ -252,76 +400,32 @@ function HomePage() {
   }
 
   const handleSwitchMode = async (newMode: "rule" | "tun") => {
-    if (isConnecting || isSwitchingMode || isInstallingService) return
+    if (isConnecting || isInstallingService) return
+    if (proxyMode === newMode) return
     const isTun = newMode === "tun"
 
-    // When switching to TUN mode, check if the privileged helper service is installed
     if (isTun) {
-      try {
-        const serviceState = await probeEngineServiceState(true)
-        if (serviceState !== "ready") {
-          const dialogMessage = serviceState === "missing"
-            ? l(
-                "Virtual TUN mode requires a privileged helper service to be installed. This will prompt for your system password once. Do you want to install it now?",
-                "虚拟网关模式需要安装特权辅助服务才能运行。安装过程中需要输入一次系统密码进行授权。是否立即安装？"
-              )
-            : l(
-                "The privileged helper service is installed but not responding. It needs to be reinstalled to work properly. This will prompt for your system password once. Do you want to reinstall it now?",
-                "特权辅助服务已安装但无法响应，需要重新安装才能正常运行。安装过程中需要输入一次系统密码进行授权。是否立即重新安装？"
-              )
-          const dialogTitle = serviceState === "missing"
-            ? l("Install Required Service", "安装所需服务")
-            : l("Repair Required Service", "修复所需服务")
-          const confirmed = await ask(dialogMessage, {
-              title: dialogTitle,
-              kind: "warning",
-              okLabel: l("Install", "安装"),
-              cancelLabel: l("Cancel", "取消"),
-            }
-          )
-          if (!confirmed) return
-
-          try {
-            setIsInstallingService(true)
-            await ensureEngineServiceInstalled()
-            invalidateEngineProbeCache()
-          } catch (installErr) {
-            console.error("Service installation failed:", installErr)
-            await message(
-              l(
-                `Failed to install helper service: ${installErr}`,
-                `辅助服务安装失败：${installErr}`
-              ),
-              { title: l("Installation Failed", "安装失败"), kind: "error" }
-            )
-            return
-          } finally {
-            setIsInstallingService(false)
-          }
-        }
-      } catch (probeErr) {
-        console.error("Service probe failed:", probeErr)
-      }
+      const ready = await ensureTunServiceReady()
+      if (!ready) return
     }
 
-    setProxyMode(newMode)
-    await setEnableTun(isTun)
+    try {
+      await withScheduledConfigSyncSuspended(async () => {
+        setProxyMode(newMode)
+        await setEnableTun(isTun)
 
-    if (isConnected) {
-      try {
-        setIsSwitchingMode(true)
-        await stopEngine()
-        
+        if (!isConnected) {
+          return
+        }
+
+        setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-        await mergeConnectionConfig(subId, "rule", isTun, { force: true })
-        const configPath = await getConfigJsonPath()
-        
-        await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
-      } catch (err) {
-        console.error("Switch mode failed:", err)
-      } finally {
-        setIsSwitchingMode(false)
-      }
+        await switchProxyMode(subId, "rule", isTun)
+      })
+    } catch (err) {
+      console.error("Switch mode failed:", err)
+    } finally {
+      setLocalConnecting(false)
     }
   }
 
@@ -376,7 +480,20 @@ function HomePage() {
     }
   }, [])
 
-  useTrafficAccumulator(loadSubs)
+  // Lightweight refresh for traffic accumulator: only reload local DB data,
+  // does NOT re-fetch remote subscription configs.
+  const refreshLocalSubs = useCallback(async () => {
+    try {
+      const localData = await getLocalSubscriptions()
+      if (localData && localData.length > 0) {
+        setSubs(localData)
+      }
+    } catch (err) {
+      // silent
+    }
+  }, [])
+
+  useTrafficAccumulator(refreshLocalSubs)
 
   const handleUpdateSubscription = async () => {
     if (subs.length === 0 || isUpdatingSub) return
@@ -402,7 +519,13 @@ function HomePage() {
     }
   }
 
-  useEffect(() => { loadSubs() }, [loadSubs])
+  // Run initial subscription sync exactly once on app startup.
+  const hasInitiallyLoadedRef = useRef(false)
+  useEffect(() => {
+    if (hasInitiallyLoadedRef.current) return
+    hasInitiallyLoadedRef.current = true
+    loadSubs()
+  }, [loadSubs])
 
   // Load nodes dynamically from active subscription in SQLite
   useEffect(() => {
@@ -557,44 +680,37 @@ function HomePage() {
               <div className="absolute inset-6 rounded-full border border-secondary/5" />
 
               {/* Gradient circular ring container */}
-              <div 
+              <div
                 className={`absolute w-36 h-36 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
-                  isConnected 
-                    ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15" 
+                  isConnected
+                    ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
+                    : isConnecting
+                    ? "from-secondary to-accent-purple animate-spin"
                     : "shadow-sm"
                 }`}
-                style={isConnected ? undefined : { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' }}
+                style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
               >
                 {/* Central solid white / dark bg circle */}
                 <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner relative overflow-hidden">
-                  
+
                   {/* Button Click Core */}
                   <button
                     onClick={handleToggleConnection}
                     disabled={isConnecting}
                     className="w-full h-full rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 active:scale-95 z-10 focus:outline-none"
                   >
-                    <div 
+                    <div
                        className={`transition-all duration-300 ${
-                        isConnected 
-                          ? "text-secondary scale-105" 
-                          : isConnecting 
-                            ? "text-secondary/50 animate-pulse scale-95" 
-                            : "hover:text-secondary hover:scale-105"
+                        isConnected
+                          ? "text-secondary scale-105"
+                          : "hover:text-secondary hover:scale-105"
                       }`}
-                      style={(!isConnected && !isConnecting) ? { color: 'var(--power-icon-color)' } : undefined}
+                      style={!isConnected ? { color: 'var(--power-icon-color)' } : undefined}
                     >
-                      {isConnecting ? (
-                        <svg className="h-10 w-10 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      ) : (
-                        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-                          <line x1="12" y1="2" x2="12" y2="12" />
-                        </svg>
-                      )}
+                      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                        <line x1="12" y1="2" x2="12" y2="12" />
+                      </svg>
                     </div>
                   </button>
                 </div>

@@ -56,7 +56,8 @@ impl EngineManager for MacOSEngine {
                 }
                 if should_set_system_proxy {
                     let port = crate::engine::ports::mixed_proxy_port(app);
-                    set_system_proxy(app, port)
+                    let bypass = crate::engine::resolve_proxy_bypass(app);
+                    set_system_proxy(port, bypass)
                         .await
                         .map_err(|e| e.to_string())?;
                 }
@@ -132,7 +133,7 @@ impl EngineManager for MacOSEngine {
                     watchdog::spawn(app.clone(), Arc::clone(&config_path_arc));
                 }
 
-                let _ = clear_system_proxy(app).await;
+                let _ = clear_system_proxy().await;
             }
         }
         Ok(())
@@ -152,7 +153,7 @@ impl EngineManager for MacOSEngine {
         };
         match mode.as_ref() {
             ProxyMode::SystemProxy => {
-                let _ = clear_system_proxy(app).await;
+                let _ = clear_system_proxy().await;
                 if let Some(child) = child {
                     use libc::{kill, SIGTERM};
                     let pid = child.pid();
@@ -171,13 +172,32 @@ impl EngineManager for MacOSEngine {
                     log::error!("Failed to stop TUN process: {}", e);
                     e
                 });
-                // Belt-and-suspenders: helper may have lost track of the pid.
-                let _ = tokio::task::spawn_blocking(|| {
-                    aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
-                })
-                .await;
+
                 watchdog::cancel();
-                crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
+
+                // Centralized port cleanup: ask the root helper to kill all port
+                // holders (any TCP state), then poll TcpListener::bind until ports
+                // are truly free.
+                let mixed = crate::engine::ports::mixed_proxy_port(app);
+                let ctrl = crate::engine::ports::controller_port(app);
+                if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+                    mixed,
+                    std::time::Duration::from_secs(10),
+                )
+                .await
+                {
+                    log::error!("[stop] mixed :{mixed} still blocked after cleanup: {e}");
+                }
+                if ctrl != mixed {
+                    if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+                        ctrl,
+                        std::time::Duration::from_secs(10),
+                    )
+                    .await
+                    {
+                        log::error!("[stop] controller :{ctrl} still blocked after cleanup: {e}");
+                    }
+                }
 
                 let state = app.state::<EngineStateCell>().snapshot();
                 if matches!(

@@ -8,9 +8,9 @@ use tokio::time::{sleep, timeout, Instant};
 use crate::engine::ports::{controller_port, mixed_proxy_port};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 
-const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
-const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
-const POLL_INTERVAL: Duration = Duration::from_millis(100);
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
+const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(50);
+const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Readiness {
@@ -43,6 +43,10 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
         loop {
             let snap = app.state::<EngineStateCell>().snapshot();
             if !matches!(snap, EngineState::Starting { .. }) || snap.epoch() != start_epoch {
+                // State was changed externally (e.g. handle_process_termination
+                // transitioned to Failed after a BIND error). Signal the waiter
+                // so start() can return immediately instead of timing out.
+                let _ = sender.send(Readiness::Failed);
                 return;
             }
 

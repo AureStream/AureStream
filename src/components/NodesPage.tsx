@@ -6,6 +6,8 @@ import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { switchNodeActive } from "../lib/hot-reload-config"
 import { invoke } from "@tauri-apps/api/core"
 import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
+import { useEngineState } from "../hooks/useEngineState"
+import { testNodeDelay } from "../utils/singbox-api/proxies"
 
 /* ── Icons ── */
 const I = {
@@ -31,6 +33,7 @@ interface NodeData {
 export default function NodesPage() {
   const { i18n } = useTranslation()
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
+  const { isConnected } = useEngineState()
 
   const getPingTone = (p: number) => {
     if (p <= 500) return { text: "text-success", dot: "bg-success" }
@@ -113,15 +116,17 @@ export default function NodesPage() {
   const handleSpeedTest = async () => {
     if (isTestingSpeed || nodes.length === 0) return;
     setIsTestingSpeed(true);
-    // Reset to "testing" state, then measure real TCP latency to each node's
-    // server via the backend `ping_tcp` command (independent of sing-box).
     setNodes(prev => prev.map(n => ({ ...n, ping: 0 })));
 
     try {
       await Promise.all(
         nodes.map(async (n) => {
           let delay = -1
-          if (n.server && n.port) {
+          if (isConnected) {
+            // Connected: use sing-box Clash API (accurate through-proxy RTT)
+            delay = await testNodeDelay(n.id)
+          } else if (n.server && n.port) {
+            // Not connected: direct TCP ping (fast, no TUN interference)
             try {
               delay = (await invoke("ping_tcp", { host: n.server, port: n.port })) as number
             } catch {

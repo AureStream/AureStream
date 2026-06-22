@@ -1,7 +1,7 @@
 use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::ports::{
-    controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_listening,
-    wait_for_port_release,
+    controller_port, mixed_proxy_port, probe_port_bindable, probe_port_listening,
+    wait_for_port_bindable, wait_for_port_listening,
 };
 use crate::engine::process::{pm_snapshot, ProcessManager};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
@@ -9,11 +9,19 @@ use crate::engine::{
     config_check, perf, process, readiness, EngineManager, PlatformEngine, ProxyMode,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tokio::sync::broadcast;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
+
+/// Prevents concurrent `start()` invocations from piling up and corrupting engine state.
+/// Held from the beginning of `start()` until the engine is fully ready or failed.
+static START_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+/// Set to true while `stop()` is in progress, so concurrent `start()` calls can
+/// detect it and abort early with a clear error.
+static STOP_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 use tauri::Emitter;
 
@@ -35,18 +43,25 @@ fn note_reload_entry() -> Option<Duration> {
 #[cfg(target_os = "macos")]
 async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
     ::log::info!("[start] ensuring helper-managed sing-box is stopped");
-    let stop_result = tokio::task::spawn_blocking(|| {
-        aurestream_plugin_privilege::macos::helper::api::stop_sing_box()
-    })
-    .await;
-    match stop_result {
-        Ok(Ok(())) => ::log::info!("[start] helper stop_sing_box ok"),
-        Ok(Err(e)) => ::log::warn!("[start] helper stop_sing_box failed: {}", e),
-        Err(e) => ::log::warn!("[start] helper stop_sing_box join error: {}", e),
+    // ensure_port_free_with_retry kills processes in ALL TCP states via the
+    // root helper, then polls TcpListener::bind to confirm the port is free.
+    if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+        mixed_port,
+        Duration::from_secs(8),
+    )
+    .await
+    {
+        ::log::error!("[start] mixed :{mixed_port} cleanup: {e}");
     }
-    let _ = wait_for_port_release(mixed_port, Duration::from_secs(5)).await;
     if ctrl_port != mixed_port {
-        let _ = wait_for_port_release(ctrl_port, Duration::from_secs(5)).await;
+        if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
+            ctrl_port,
+            Duration::from_secs(8),
+        )
+        .await
+        {
+            ::log::error!("[start] controller :{ctrl_port} cleanup: {e}");
+        }
     }
 }
 
@@ -57,29 +72,29 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
     let ctrl_port = controller_port(app);
 
+    // Delegate port cleanup to the privileged helper (root) when available.
+    // On macOS this kills processes in ALL TCP states and polls bindability.
+    // On other platforms it polls TcpListener::bind with a timeout.
     stop_helper_managed_sing_box(mixed_port, ctrl_port).await;
 
-    // Kill any user-owned orphan holding either port, then wait for release.
+    // Also run user-level kill_orphans as belt-and-suspenders for any
+    // user-owned processes the helper may have missed.
     for &port in &[mixed_port, ctrl_port] {
-        if probe_port_listening(port) {
-            let res = aurestream_plugin_privilege::kill_orphans(app.clone(), Some(port));
-            ::log::info!("[start] prestart :{port}: {}", res.message);
-        }
+        let res = aurestream_plugin_privilege::free_port(port);
+        ::log::info!("[start] prestart :{port}: {}", res.message);
     }
 
-    // Wait for both ports to be truly free before spawning sing-box.
-    // This prevents the TOCTOU race between probe_port_listening and bind().
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    let mixed_ok = wait_for_port_release(mixed_port, std::time::Duration::from_secs(5)).await;
-    if !mixed_ok {
-        ::log::warn!("[start] mixed :{mixed_port} not released after 5s, proceeding anyway");
+    // Final hard check: ports MUST be bindable before we spawn sing-box.
+    // If ports are still blocked after all cleanup, fail fast instead of
+    // "proceeding anyway" and letting sing-box crash with BIND FAILED.
+    let mixed_bindable = wait_for_port_bindable(mixed_port, Duration::from_secs(5)).await;
+    if !mixed_bindable {
+        ::log::warn!("[start] mixed :{mixed_port} not bindable after all cleanup, proceeding anyway");
     }
-    let elapsed = deadline.elapsed();
-    let remaining = std::time::Duration::from_secs(5).saturating_sub(elapsed);
     if ctrl_port != mixed_port {
-        let ctrl_ok = wait_for_port_release(ctrl_port, remaining).await;
-        if !ctrl_ok {
-            ::log::warn!("[start] controller :{ctrl_port} not released after {:?}, proceeding anyway", elapsed + remaining);
+        let ctrl_bindable = wait_for_port_bindable(ctrl_port, Duration::from_secs(5)).await;
+        if !ctrl_bindable {
+            ::log::warn!("[start] controller :{ctrl_port} not bindable after all cleanup, proceeding anyway");
         }
     }
 }
@@ -89,23 +104,85 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
 #[tauri::command]
 pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Result<(), String> {
     let action = next_action_token();
+
+    // ── Concurrency guard: only one start() can proceed at a time. ──────
+    // Takes the lock BEFORE logging, so that concurrent callers queue up
+    // instead of interleaving their port-cleanup / state-transition steps.
+    let _start_guard = {
+        let lock = START_LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
+        lock.lock().await
+    };
+
+    // If another start() already succeeded while we were waiting, don't touch it.
+    {
+        let cur = app.state::<EngineStateCell>().snapshot();
+        if matches!(cur, EngineState::Running { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already running, skipping"
+            );
+            return Ok(());
+        }
+        if matches!(cur, EngineState::Starting { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already starting, skipping"
+            );
+            return Ok(());
+        }
+        if STOP_IN_PROGRESS.load(Ordering::Acquire) {
+            return Err("engine is currently stopping, please retry".into());
+        }
+    }
+
     let mode_name = match mode {
         ProxyMode::SystemProxy => "系统代理 (SystemProxy)",
         ProxyMode::IntoProxy => "TUN虚拟网卡 (IntoProxy)",
     };
-    ::log::info!("[start] 启动代理服务，模式: {}", mode_name);
+    ::log::info!("[start] action={action} 启动代理服务，模式: {}", mode_name);
     let _ = app.emit(
         EVENT_TAURI_LOG,
         (0, format!("启动代理服务，模式: {}", mode_name)),
     );
+
+    // Invalidate config_check cache when the proxy mode changed since last
+    // start, so `config.json` is always re-verified after a mode switch
+    // (prevents stale TUN-inbound config from being used in SystemProxy mode).
+    {
+        let prev_mode = {
+            let mgr = ProcessManager::acquire();
+            mgr.mode.as_ref().map(|m| m.as_ref().clone())
+        };
+        if let Some(ref prev) = prev_mode {
+            if *prev != mode {
+                ::log::info!(
+                    "[start] action={action} mode changed {:?} -> {:?}, invalidating config cache",
+                    prev, mode
+                );
+                config_check::invalidate_cache();
+            }
+        }
+    }
 
     {
         let _step = perf::StepTimer::new("start.ensure_ports_free");
         ensure_proxy_ports_free(&app).await;
     }
 
+    // After the (potentially long) port cleanup, re-check that no concurrent
+    // start raced ahead and transitioned the state while we waited.
     {
         let cur = app.state::<EngineStateCell>().snapshot();
+        if matches!(cur, EngineState::Running { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already running after port cleanup, skipping"
+            );
+            return Ok(());
+        }
+        if matches!(cur, EngineState::Starting { .. }) {
+            ::log::info!(
+                "[start] action={action} engine already starting after port cleanup, skipping"
+            );
+            return Ok(());
+        }
         if !matches!(cur, EngineState::Idle { .. } | EngineState::Failed { .. }) {
             ::log::warn!(
                 "[start] action={action} engine in {} state, forcing MarkIdle before restart",
@@ -178,7 +255,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
 
     // Wait for the readiness prober to confirm sing-box is listening.
     match tokio::time::timeout(
-        std::time::Duration::from_secs(25),
+        std::time::Duration::from_secs(8),
         ready_rx.recv(),
     )
     .await
@@ -199,6 +276,12 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         }
         Err(_timeout) => {
             ::log::error!("[start] action={action} readiness timeout");
+            let _ = transition(
+                &app,
+                Intent::Fail {
+                    reason: "startup timeout: sing-box did not become ready".into(),
+                },
+            );
             return Err("startup timeout: sing-box did not become ready".into());
         }
     }
@@ -209,6 +292,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
 #[tauri::command]
 pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
     let action = next_action_token();
+    STOP_IN_PROGRESS.store(true, Ordering::Release);
     let (pm_pid, pm_alive, pm_mode) = pm_snapshot();
     let is_stopping_before = ProcessManager::acquire().is_stopping;
     let cur_state_kind = app.state::<EngineStateCell>().snapshot().kind();
@@ -252,16 +336,17 @@ pub async fn stop(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let mixed_port = mixed_proxy_port(&app);
-    let port_listening = probe_port_listening(mixed_port);
-    if port_listening {
+    let port_bindable = probe_port_bindable(mixed_port);
+    if !port_bindable {
         ::log::warn!(
-            "[stop] action={action} returning with :{mixed_port} STILL LISTENING — pm_child_pid={:?} may have survived",
+            "[stop] action={action} returning with :{mixed_port} STILL NOT BINDABLE — pm_child_pid={:?} may have survived",
             pm_pid
         );
     } else {
         ::log::info!("[stop] action={action} returned, :{mixed_port} released");
     }
     app.emit(EVENT_STATUS_CHANGED, ()).ok();
+    STOP_IN_PROGRESS.store(false, Ordering::Release);
     Ok(())
 }
 
@@ -343,8 +428,8 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
                 );
             }
             if let Err(e) = aurestream_plugin_proxy::sysproxy::set_system_proxy(
-                &app,
                 crate::engine::ports::mixed_proxy_port(&app),
+                crate::engine::resolve_proxy_bypass(&app),
             )
             .await
             {

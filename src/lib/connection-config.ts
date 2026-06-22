@@ -1,8 +1,8 @@
-import setGlobalTunConfig, {
+import {
   computeMergeCacheKey,
-  setGlobalMixedConfig,
-  setMixedConfig,
-  setTunConfig,
+  setGlobalConfig,
+  setRuleConfig,
+  makeProfile,
   type MergeProfile,
 } from "@/config/merger/main"
 import {
@@ -24,35 +24,7 @@ function resolveMergeProfile(
   routingMode: RoutingMode,
   enableTun: boolean
 ): MergeProfile {
-  const global = isGlobalRouting(routingMode)
-  if (enableTun) {
-    return global
-      ? {
-          mode: "tun-global",
-          cacheFileName: "tun-cache-global-v2.db",
-          tun: true,
-          customRules: false,
-        }
-      : {
-          mode: "tun",
-          cacheFileName: "tun-cache-rule-v2.db",
-          tun: true,
-          customRules: true,
-        }
-  }
-  return global
-    ? {
-        mode: "mixed-global",
-        cacheFileName: "mixed-cache-global-v2.db",
-        tun: false,
-        customRules: false,
-      }
-    : {
-        mode: "mixed",
-        cacheFileName: "mixed-cache-rule-v2.db",
-        tun: false,
-        customRules: true,
-      }
+  return makeProfile(routingMode, enableTun)
 }
 
 /** Merge sing-box config.json for the active subscription and routing/TUN choice. */
@@ -71,11 +43,7 @@ export async function mergeConnectionConfig(
   }
 
   const global = isGlobalRouting(routingMode)
-  if (enableTun) {
-    await (global ? setGlobalTunConfig : setTunConfig)(subscriptionIdentifier)
-  } else {
-    await (global ? setGlobalMixedConfig : setMixedConfig)(subscriptionIdentifier)
-  }
+  await (global ? setGlobalConfig : setRuleConfig)(subscriptionIdentifier, enableTun)
 
   setLastMergeCacheKey(cacheKey)
   return true

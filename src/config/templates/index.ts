@@ -1,6 +1,7 @@
 import type { configType } from '../common';
 import { parse as parseJsonc } from 'jsonc-parser';
-import rawTemplate from './config-template.jsonc?raw';
+import mixedTemplate from './mixed-template.jsonc?raw';
+import tunTemplate from './tun-template.jsonc?raw';
 
 export const BUILD_TIME_TEMPLATE_SOURCE = {
     repo: 'Local/config-templates',
@@ -11,36 +12,27 @@ export const BUILD_TIME_TEMPLATE_SOURCE = {
     generatedAt: new Date().toISOString(),
 } as const;
 
-export function getBuiltInTemplate(mode: configType): string {
+function parseTemplate(raw: string): any {
     const errors: any[] = [];
-    const baseConfig: any = parseJsonc(rawTemplate, errors, { allowTrailingComma: true });
-    if (errors.length > 0 || !baseConfig) {
+    const config: any = parseJsonc(raw, errors, { allowTrailingComma: true });
+    if (errors.length > 0 || !config) {
         throw new Error(`[template] failed to parse local JSONC template: ${JSON.stringify(errors)}`);
     }
+    return config;
+}
 
-    // Adapt base template based on selected mode dynamically
-    if (mode === 'mixed' || mode === 'mixed-global') {
-        // Remove TUN inbound for Mixed mode
-        baseConfig.inbounds = baseConfig.inbounds.filter((ib: any) => ib.type !== 'tun');
-    }
+export function getBuiltInTemplate(mode: configType): string {
+    // Select the base template based on proxy mode (mixed = SystemProxy, tun = TUN)
+    const isTun = mode === 'tun' || mode === 'tun-global';
+    const baseConfig = parseTemplate(isTun ? tunTemplate : mixedTemplate);
 
     if (mode === 'mixed-global' || mode === 'tun-global') {
         // Rewrite route rules for global proxy mode
         baseConfig.route.rules = [
-            {
-                "action": "sniff"
-            },
-            {
-                "protocol": "dns",
-                "action": "hijack-dns"
-            },
-            {
-                "action": "resolve",
-                "strategy": "prefer_ipv4"
-            },
-            {
-                "outbound": "ExitGateway"
-            }
+            { "action": "sniff" },
+            { "protocol": "dns", "action": "hijack-dns" },
+            { "action": "resolve", "strategy": "prefer_ipv4" },
+            { "outbound": "ExitGateway" }
         ];
     }
 

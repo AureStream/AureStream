@@ -77,19 +77,29 @@ fn find_pids_windows(port: u16) -> Vec<u32> {
 #[cfg(target_os = "macos")]
 fn find_pids_macos(port: u16) -> Vec<u32> {
     let port_arg = format!("TCP:{port}");
-    let output = Command::new("lsof")
-        .args(["-ti", &port_arg, "-sTCP:LISTEN"])
-        .output();
-
-    match output {
-        Ok(out) => {
-            let text = String::from_utf8_lossy(&out.stdout);
-            text.lines()
-                .filter_map(|l| l.trim().parse::<u32>().ok())
-                .collect()
+    // Two-pass scan: LISTEN (primary server), then ALL TCP states to catch
+    // ESTABLISHED/CLOSE_WAIT child connections that hold the port after the
+    // listening socket closes.
+    let mut pids = Vec::new();
+    for state in &["LISTEN", ""] {
+        let mut cmd = Command::new("lsof");
+        cmd.arg("-ti").arg(&port_arg);
+        if !state.is_empty() {
+            cmd.arg(format!("-sTCP:{state}"));
         }
-        Err(_) => vec![],
+        cmd.stderr(std::process::Stdio::null());
+        if let Ok(out) = cmd.output() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            for line in text.lines() {
+                if let Ok(pid) = line.trim().parse::<u32>() {
+                    if pid > 1 && !pids.contains(&pid) {
+                        pids.push(pid);
+                    }
+                }
+            }
+        }
     }
+    pids
 }
 
 #[cfg(target_os = "linux")]
@@ -127,56 +137,69 @@ fn kill_pid(pid: u32) -> bool {
     }
 }
 
-fn probe_port_listening(port: u16) -> bool {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+fn probe_port_bindable(port: u16) -> bool {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
+    TcpListener::bind(addr).is_ok()
 }
 
 pub fn prestart_check(port: Option<u16>) -> PrestartCheckResult {
     let port = port.unwrap_or(DEFAULT_MIXED_PROXY_PORT);
-    let port_occupied = probe_port_listening(port);
-    let orphan_pids = if port_occupied {
+    // Use bind-based probe instead of connect-based. A port can be blocked even
+    // when nothing is LISTENING (ESTABLISHED child connections, TIME_WAIT).
+    let port_blocked = !probe_port_bindable(port);
+    let orphan_pids = if port_blocked {
         find_pids_on_port(port)
     } else {
         vec![]
     };
     log::info!(
-        "[prestart] check: port={} port_occupied={} orphan_pids={:?}",
+        "[prestart] check: port={} port_blocked={} orphan_pids={:?}",
         port,
-        port_occupied,
+        port_blocked,
         orphan_pids
     );
     PrestartCheckResult {
-        port_occupied,
+        port_occupied: port_blocked,
         orphan_pids,
     }
 }
 
-pub fn kill_orphans(_app: tauri::AppHandle, port: Option<u16>) -> KillOrphansResult {
-    let port = port.unwrap_or(DEFAULT_MIXED_PROXY_PORT);
-    let check = prestart_check(Some(port));
-
-    if !check.port_occupied || check.orphan_pids.is_empty() {
+pub fn free_port(port: u16) -> KillOrphansResult {
+    // Bypass prestart_check and probe directly — we want to kill orphans even
+    // when the port is blocked by ESTABLISHED connections that connect() won't see.
+    let orphan_pids = if !probe_port_bindable(port) {
+        find_pids_on_port(port)
+    } else {
         return KillOrphansResult {
             success: true,
             killed_pids: vec![],
             port_released: true,
-            message: String::from("no orphans found"),
+            message: String::from("port already free"),
+        };
+    };
+
+    if orphan_pids.is_empty() {
+        return KillOrphansResult {
+            success: true,
+            killed_pids: vec![],
+            port_released: false,
+            message: String::from("port blocked but no pids found (kernel-level hold)"),
         };
     }
 
     let mut killed_pids = Vec::new();
-    for pid in &check.orphan_pids {
+    for pid in &orphan_pids {
         if kill_pid(*pid) {
             killed_pids.push(*pid);
         }
     }
 
+    // Poll for bindability (not listening), since ESTABLISHED/TIME_WAIT won't accept.
     let deadline = Instant::now() + Duration::from_secs(3);
     let port_released = loop {
-        if !probe_port_listening(port) {
+        if probe_port_bindable(port) {
             break true;
         }
         if Instant::now() >= deadline {
@@ -188,7 +211,7 @@ pub fn kill_orphans(_app: tauri::AppHandle, port: Option<u16>) -> KillOrphansRes
     let message = if port_released {
         format!("killed {:?}, port released", killed_pids)
     } else {
-        format!("killed {:?}, port still occupied", killed_pids)
+        format!("killed {:?}, port still blocked", killed_pids)
     };
 
     log::info!(

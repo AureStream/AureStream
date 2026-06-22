@@ -161,7 +161,7 @@ pub(crate) async fn handle_process_termination(
 
     if should_cleanup && !is_stale && !is_watchdog_restart {
         if matches!(**process_mode, ProxyMode::SystemProxy) {
-            if let Err(e) = aurestream_plugin_proxy::sysproxy::clear_system_proxy(app_handle).await
+            if let Err(e) = aurestream_plugin_proxy::sysproxy::clear_system_proxy().await
             {
                 log::error!("Failed to unset proxy after process termination: {}", e);
             }

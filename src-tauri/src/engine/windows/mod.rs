@@ -20,7 +20,13 @@ impl EngineManager for WindowsEngine {
 
         if matches!(mode, ProxyMode::IntoProxy) {
             // Frontend pre-checks helper installation before switching to TUN mode.
-            // If somehow we reach here without the service, the TUN service call will fail with a clear error.
+            // If somehow we reach here without the service, give a clear user-facing error.
+
+            use aurestream_plugin_tun::scm::{self, QueriedState};
+            let svc_state = scm::query_state();
+            if matches!(svc_state, QueriedState::NotInstalled) {
+                return Err("TUN 服务未安装，请先点击安装虚拟网卡服务".into());
+            }
 
             // Resolve the paths using the standard Tauri v2 sidecar layout
             let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
@@ -76,7 +82,7 @@ impl EngineManager for WindowsEngine {
 
             if should_set_system_proxy {
                 if let Err(e) =
-                    set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app)).await
+                    set_system_proxy(crate::engine::ports::mixed_proxy_port(app), crate::engine::resolve_proxy_bypass(app)).await
                 {
                     let _ = app.emit(EVENT_TAURI_LOG, (2, format!("Failed to set proxy: {}", e)));
                     return Err(e.to_string());
@@ -91,7 +97,10 @@ impl EngineManager for WindowsEngine {
         let (mode, child) = {
             let mut mgr = ProcessManager::acquire();
             mgr.is_stopping = true;
-            (mgr.mode.clone(), mgr.child.take())
+            let m = mgr.mode.clone();
+            let c = mgr.child.take();
+            mgr.reset();
+            (m, c)
         };
         let Some(mode) = mode else {
             return Ok(());
@@ -104,7 +113,7 @@ impl EngineManager for WindowsEngine {
         );
 
         if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
-            if let Err(e) = clear_system_proxy(app).await {
+            if let Err(e) = clear_system_proxy().await {
                 log::warn!("Failed to unset proxy: {}", e);
                 let _ = app.emit(
                     EVENT_TAURI_LOG,
@@ -160,7 +169,7 @@ impl EngineManager for WindowsEngine {
 
         let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while std::time::Instant::now() < release_deadline
-            && crate::engine::ports::probe_port_listening(mixed_port)
+            && !crate::engine::ports::probe_port_bindable(mixed_port)
         {
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
@@ -168,11 +177,10 @@ impl EngineManager for WindowsEngine {
         Self::start(app, mode, config_path, start_epoch).await
     }
 
-    fn on_process_terminated(app: &AppHandle, _was_user_stop: bool) {
+    fn on_process_terminated(_app: &AppHandle, _was_user_stop: bool) {
         log::info!("[win] process terminated, clearing system proxy");
-        let app = app.clone();
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = clear_system_proxy(&app).await {
+            if let Err(e) = clear_system_proxy().await {
                 log::warn!("[win] failed to clear system proxy on termination: {}", e);
             }
         });

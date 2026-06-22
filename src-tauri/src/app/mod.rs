@@ -4,3 +4,5 @@ pub mod plugins;
 pub mod setup;
 pub mod single_instance;
 pub mod tray;
+#[cfg(test)]
+pub mod tray_test;

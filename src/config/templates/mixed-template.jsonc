@@ -67,18 +67,6 @@
     },
     "inbounds": [
         {
-            "type": "tun",
-            "tag": "tun",
-            "address": [
-                "172.19.0.1/30",
-                "fdfe:dcba:9876::1/126"
-            ],
-            "strict_route": true,
-            "mtu": 9000,
-            "endpoint_independent_nat": true,
-            "auto_route": true
-        },
-        {
             "type": "mixed",
             "tag": "mixed",
             "listen": "127.0.0.1",
