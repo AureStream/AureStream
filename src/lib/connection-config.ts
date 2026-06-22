@@ -1,10 +1,7 @@
-import setGlobalTunConfig, {
+import {
   computeMergeCacheKey,
-  setGlobalMixedConfig,
-  setGlobalResidentConfig,
-  setMixedConfig,
-  setResidentConfig,
-  setTunConfig,
+  setGlobalConfig,
+  setRuleConfig,
   type MergeProfile,
 } from "@/config/merger/main"
 import {
@@ -14,7 +11,6 @@ import {
 } from "@/lib/merge-cache"
 import type { RoutingMode } from "@/lib/routing-mode"
 import { isGlobalRouting } from "@/lib/routing-mode"
-import { resolveResidentMergeProfile } from "@/lib/connection-profile"
 
 export type MergeConnectionOptions = {
   /** Skip cache and always rewrite config.json */
@@ -27,35 +23,11 @@ function resolveMergeProfile(
   routingMode: RoutingMode,
   enableTun: boolean
 ): MergeProfile {
-  const global = isGlobalRouting(routingMode)
-  if (enableTun) {
-    return global
-      ? {
-          mode: "tun-global",
-          cacheFileName: "tun-cache-global-v2.db",
-          tun: true,
-          customRules: false,
-        }
-      : {
-          mode: "tun",
-          cacheFileName: "tun-cache-rule-v2.db",
-          tun: true,
-          customRules: true,
-        }
+  return {
+    mode: isGlobalRouting(routingMode) ? "global" : "rule",
+    tun: enableTun,
+    customRules: !isGlobalRouting(routingMode),
   }
-  return global
-    ? {
-        mode: "mixed-global",
-        cacheFileName: "mixed-cache-global-v2.db",
-        tun: false,
-        customRules: false,
-      }
-    : {
-        mode: "mixed",
-        cacheFileName: "mixed-cache-rule-v2.db",
-        tun: false,
-        customRules: true,
-      }
 }
 
 /** Merge sing-box config.json for the active subscription and routing/TUN choice. */
@@ -74,34 +46,7 @@ export async function mergeConnectionConfig(
   }
 
   const global = isGlobalRouting(routingMode)
-  if (enableTun) {
-    await (global ? setGlobalTunConfig : setTunConfig)(subscriptionIdentifier)
-  } else {
-    await (global ? setGlobalMixedConfig : setMixedConfig)(subscriptionIdentifier)
-  }
-
-  setLastMergeCacheKey(cacheKey)
-  return true
-}
-
-/** Merge the stable resident sing-box config used by capture-mode switching. */
-export async function mergeResidentConnectionConfig(
-  subscriptionIdentifier: string,
-  routingMode: RoutingMode,
-  options: MergeConnectionOptions = {}
-): Promise<boolean> {
-  const profile = resolveResidentMergeProfile(routingMode)
-  const cacheKey = await computeMergeCacheKey(subscriptionIdentifier, profile)
-
-  if (!options.force && cacheKey === getLastMergeCacheKey()) {
-    console.info("[connection-config] resident merge skipped (inputs unchanged)")
-    return false
-  }
-
-  const global = isGlobalRouting(routingMode)
-  await (global ? setGlobalResidentConfig : setResidentConfig)(
-    subscriptionIdentifier
-  )
+  await (global ? setGlobalConfig : setRuleConfig)(subscriptionIdentifier, enableTun)
 
   setLastMergeCacheKey(cacheKey)
   return true

@@ -97,13 +97,13 @@ type CustomRuleSet = {
 
 export type MergeProfile = {
     mode: configType;
-    cacheFileName: string;
     tun: boolean;
     customRules: boolean;
 }
 
 type MergeConfigOptions = MergeProfile & {
     label: string;
+    cacheFileName: string;
 }
 
 /** Fingerprint of all inputs that affect generated config.json (for merge skip cache). */
@@ -258,62 +258,22 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
     await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
 }
 
-export function setMixedConfig(identifier: string) {
+export function setRuleConfig(identifier: string, tun: boolean) {
     return mergeConfig(identifier, {
-        mode: 'mixed',
-        cacheFileName: 'mixed-cache-rule-v2.db',
-        label: "写入[规则]系统代理配置文件",
-        tun: false,
+        mode: 'rule',
+        tun,
         customRules: true,
+        cacheFileName: 'rule-cache-v2.db',
+        label: `写入[规则]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }
 
-export function setTunConfig(identifier: string) {
+export function setGlobalConfig(identifier: string, tun: boolean) {
     return mergeConfig(identifier, {
-        mode: 'tun',
-        cacheFileName: 'tun-cache-rule-v2.db',
-        label: "写入[规则]TUN代理配置文件",
-        tun: true,
-        customRules: true,
-    });
-}
-
-export function setResidentConfig(identifier: string) {
-    return mergeConfig(identifier, {
-        mode: 'resident',
-        cacheFileName: 'resident-cache-rule-v1.db',
-        label: "写入[规则]常驻代理配置文件",
-        tun: true,
-        customRules: true,
-    });
-}
-
-export function setGlobalMixedConfig(identifier: string) {
-    return mergeConfig(identifier, {
-        mode: 'mixed-global',
-        cacheFileName: 'mixed-cache-global-v2.db',
-        label: "写入[全局]系统代理配置文件",
-        tun: false,
+        mode: 'global',
+        tun,
         customRules: false,
-    });
-}
-
-export function setGlobalResidentConfig(identifier: string) {
-    return mergeConfig(identifier, {
-        mode: 'resident-global',
-        cacheFileName: 'resident-cache-global-v1.db',
-        label: "写入[全局]常驻代理配置文件",
-        tun: true,
-        customRules: false,
-    });
-}
-
-export default function setGlobalTunConfig(identifier: string) {
-    return mergeConfig(identifier, {
-        mode: 'tun-global',
-        cacheFileName: 'tun-cache-global-v2.db',
-        label: "写入[全局]TUN代理配置文件",
-        tun: true,
-        customRules: false,
+        cacheFileName: 'global-cache-v2.db',
+        label: `写入[全局]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }

@@ -18,18 +18,10 @@ export function getBuiltInTemplate(mode: configType): string {
         throw new Error(`[template] failed to parse local JSONC template: ${JSON.stringify(errors)}`);
     }
 
-    // Adapt base template based on selected mode dynamically
-    if (mode === 'mixed' || mode === 'mixed-global' || mode === 'resident' || mode === 'resident-global') {
-        // Keep TUN inbound but disable auto_route so it doesn't capture traffic.
-        // This enables fast mode-switching: config always has both inbounds,
-        // only auto_route toggles when switching between TUN and SystemProxy.
-        const tunInbound = baseConfig.inbounds.find((ib: any) => ib.type === 'tun');
-        if (tunInbound) {
-            tunInbound.auto_route = false;
-        }
-    }
+    // Both tun and mixed inbounds are always present in the template.
+    // auto_route is controlled by the merger (configureTunInbound), not here.
 
-    if (mode === 'mixed-global' || mode === 'tun-global' || mode === 'resident-global') {
+    if (mode === 'global') {
         // Rewrite route rules for global proxy mode
         baseConfig.route.rules = [
             {
