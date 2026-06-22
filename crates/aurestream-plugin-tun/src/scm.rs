@@ -114,8 +114,16 @@ fn open_scm(access: u32) -> Result<ScHandle, String> {
 
 fn open_service(scm: &ScHandle, access: u32) -> Result<ScHandle, String> {
     let name = to_wide_z(SERVICE_NAME);
-    let h = unsafe { OpenServiceW(scm.0, PCWSTR(name.as_ptr()), access) }
-        .map_err(|e| format!("OpenServiceW({:#x}) failed: {}", access, e))?;
+    let h = match unsafe { OpenServiceW(scm.0, PCWSTR(name.as_ptr()), access) } {
+        Ok(h) => h,
+        Err(e) => {
+            // ERROR_SERVICE_DOES_NOT_EXIST = 0x424 = 1060
+            if e.code().0 as u32 == 0x424 {
+                return Err("TUN 服务未安装，请先点击安装虚拟网卡服务".into());
+            }
+            return Err(format!("OpenServiceW({:#x}) failed: {}", access, e));
+        }
+    };
     if h.is_invalid() {
         return Err("OpenServiceW returned invalid handle".into());
     }

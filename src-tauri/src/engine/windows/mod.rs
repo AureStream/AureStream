@@ -20,7 +20,13 @@ impl EngineManager for WindowsEngine {
 
         if matches!(mode, ProxyMode::IntoProxy) {
             // Frontend pre-checks helper installation before switching to TUN mode.
-            // If somehow we reach here without the service, the TUN service call will fail with a clear error.
+            // If somehow we reach here without the service, give a clear user-facing error.
+
+            use aurestream_plugin_tun::scm::{self, QueriedState};
+            let svc_state = scm::query_state();
+            if matches!(svc_state, QueriedState::NotInstalled) {
+                return Err("TUN 服务未安装，请先点击安装虚拟网卡服务".into());
+            }
 
             // Resolve the paths using the standard Tauri v2 sidecar layout
             let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)

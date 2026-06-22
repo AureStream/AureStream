@@ -25,11 +25,12 @@ import {
   type TrayRequestedMode,
 } from "../lib/tray-mode"
 import { controllerFetch } from "../utils/singbox-api"
+import { testNodeDelay } from "../utils/singbox-api/proxies"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getNodeLatency, setNodeLatency } from "../lib/node-latency"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
-import { ask, message } from "@tauri-apps/plugin-dialog"
+import { message } from "@tauri-apps/plugin-dialog"
 
 /* ── Icons ── */
 const I = {
@@ -109,10 +110,10 @@ function HomePage() {
 
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
-  // Real TCP latency of the active node (0 = unknown, -1 = timeout) via the
-  // backend `ping_tcp` command (independent of sing-box).
   const [activeNodePing, setActiveNodePing] = useState<number>(0)
 
+  // Node latency: when connected, use sing-box Clash API (accurate through-proxy
+  // RTT). When disconnected, use direct TCP ping (fastest, no TUN interference).
   useEffect(() => {
     let active = true
     if (!activeNodeId) {
@@ -123,20 +124,29 @@ function HomePage() {
     const cached = getNodeLatency(activeNodeId)
     if (cached !== undefined) setActiveNodePing(cached)
 
-    const node = nodes.find((n) => n.id === activeNodeId)
-    if (!node?.server || !node?.port) return
-
-    invoke("ping_tcp", { host: node.server, port: node.port })
-      .then((d) => {
-        setNodeLatency(activeNodeId, d as number)
-        if (active) setActiveNodePing(d as number)
-      })
-      .catch(() => {
-        setNodeLatency(activeNodeId, -1)
-        if (active) setActiveNodePing(-1)
-      })
+    const measure = async () => {
+      if (engineConnected) {
+        const delay = await testNodeDelay(activeNodeId)
+        if (active) {
+          setNodeLatency(activeNodeId, delay)
+          setActiveNodePing(delay)
+        }
+      } else {
+        const node = nodes.find((n) => n.id === activeNodeId)
+        if (!node?.server || !node?.port) return
+        try {
+          const d = await invoke("ping_tcp", { host: node.server, port: node.port }) as number
+          setNodeLatency(activeNodeId, d)
+          if (active) setActiveNodePing(d)
+        } catch {
+          setNodeLatency(activeNodeId, -1)
+          if (active) setActiveNodePing(-1)
+        }
+      }
+    }
+    measure()
     return () => { active = false }
-  }, [activeNodeId, nodes])
+  }, [activeNodeId, nodes, engineConnected])
 
   // Latency color tiers: ≤300ms green, 300–1000ms yellow, >1000ms red.
   const pingTone = (p: number) =>
@@ -328,6 +338,39 @@ function HomePage() {
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
+  // Shared helper: ensure the TUN helper service is installed before starting/switching.
+  // Returns true when the service is ready (or was just installed), false when
+  // installation fails.
+  const ensureTunServiceReady = async (): Promise<boolean> => {
+    try {
+      const serviceState = await probeEngineServiceState(true)
+      if (serviceState === "ready") return true
+
+      // Missing or unreachable — install without asking.
+      try {
+        setIsInstallingService(true)
+        await ensureEngineServiceInstalled()
+        invalidateEngineProbeCache()
+        return true
+      } catch (installErr) {
+        console.error("Service installation failed:", installErr)
+        await message(
+          l(
+            `Failed to install helper service: ${installErr}`,
+            `辅助服务安装失败：${installErr}`
+          ),
+          { title: l("Installation Failed", "安装失败"), kind: "error" }
+        )
+        return false
+      } finally {
+        setIsInstallingService(false)
+      }
+    } catch (probeErr) {
+      console.error("Service probe failed:", probeErr)
+      return false
+    }
+  }
+
   const handleToggleConnection = async () => {
     if (isConnecting) return
     try {
@@ -336,13 +379,18 @@ function HomePage() {
         await stopEngine()
         setLocalConnecting(false)
       } else {
+        const isTun = proxyMode === "tun"
+        if (isTun) {
+          const ready = await ensureTunServiceReady()
+          if (!ready) return
+        }
+
         setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-        const isTun = proxyMode === "tun"
-        
+
         await mergeConnectionConfig(subId, "rule", isTun, { force: true })
         const configPath = await getConfigJsonPath()
-        
+
         await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
       }
     } catch (err) {
@@ -356,53 +404,9 @@ function HomePage() {
     if (proxyMode === newMode) return
     const isTun = newMode === "tun"
 
-    // When switching to TUN mode, check if the privileged helper service is installed
     if (isTun) {
-      try {
-        const serviceState = await probeEngineServiceState(true)
-        if (serviceState !== "ready") {
-          const dialogMessage = serviceState === "missing"
-            ? l(
-                "Virtual TUN mode requires a privileged helper service to be installed. This will prompt for your system password once. Do you want to install it now?",
-                "虚拟网关模式需要安装特权辅助服务才能运行。安装过程中需要输入一次系统密码进行授权。是否立即安装？"
-              )
-            : l(
-                "The privileged helper service is installed but not responding. It needs to be reinstalled to work properly. This will prompt for your system password once. Do you want to reinstall it now?",
-                "特权辅助服务已安装但无法响应，需要重新安装才能正常运行。安装过程中需要输入一次系统密码进行授权。是否立即重新安装？"
-              )
-          const dialogTitle = serviceState === "missing"
-            ? l("Install Required Service", "安装所需服务")
-            : l("Repair Required Service", "修复所需服务")
-          const confirmed = await ask(dialogMessage, {
-              title: dialogTitle,
-              kind: "warning",
-              okLabel: l("Install", "安装"),
-              cancelLabel: l("Cancel", "取消"),
-            }
-          )
-          if (!confirmed) return
-
-          try {
-            setIsInstallingService(true)
-            await ensureEngineServiceInstalled()
-            invalidateEngineProbeCache()
-          } catch (installErr) {
-            console.error("Service installation failed:", installErr)
-            await message(
-              l(
-                `Failed to install helper service: ${installErr}`,
-                `辅助服务安装失败：${installErr}`
-              ),
-              { title: l("Installation Failed", "安装失败"), kind: "error" }
-            )
-            return
-          } finally {
-            setIsInstallingService(false)
-          }
-        }
-      } catch (probeErr) {
-        console.error("Service probe failed:", probeErr)
-      }
+      const ready = await ensureTunServiceReady()
+      if (!ready) return
     }
 
     try {
