@@ -8,7 +8,7 @@ use tokio::time::{sleep, timeout, Instant};
 use crate::engine::ports::{controller_port, mixed_proxy_port};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 
-const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(50);
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 

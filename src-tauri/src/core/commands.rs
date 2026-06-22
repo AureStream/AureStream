@@ -255,7 +255,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
 
     // Wait for the readiness prober to confirm sing-box is listening.
     match tokio::time::timeout(
-        std::time::Duration::from_secs(25),
+        std::time::Duration::from_secs(8),
         ready_rx.recv(),
     )
     .await
