@@ -9,7 +9,7 @@ export type TrayEngineState =
   | Pick<Extract<EngineState, { kind: "switching" }>, "kind" | "to_mode">
   | Pick<Extract<EngineState, { kind: "idle" | "stopping" | "failed" }>, "kind">
 
-export type TrayModeAction = "noop" | "connect" | "switch" | "disconnect"
+export type TrayModeAction = "connect" | "switch" | "disconnect"
 
 export type TrayModePlan = {
   action: TrayModeAction
@@ -44,28 +44,16 @@ export function planTrayModeAction(
   const targetEngineMode = trayModeToEngineMode(requestedMode)
   const currentUiMode = uiModeFromEngineState(state)
 
+  // Engine not running: connect to requested mode
+  if (currentUiMode === null) {
+    return { action: "connect", targetUiMode, targetEngineMode }
+  }
+
+  // Clicking the already-active mode: disconnect (turn off proxy)
   if (currentUiMode === targetUiMode) {
-    // Clicking the already-active mode: disconnect (turn off proxy)
-    if (currentUiMode !== null) {
-      return { action: "disconnect", targetUiMode, targetEngineMode }
-    }
-    return { action: "noop", targetUiMode, targetEngineMode }
+    return { action: "disconnect", targetUiMode, targetEngineMode }
   }
 
-  return {
-    action: currentUiMode === null ? "connect" : "switch",
-    targetUiMode,
-    targetEngineMode,
-  }
-}
-
-export function getCheckedTrayMode(state: TrayEngineState): {
-  system: boolean
-  tun: boolean
-} {
-  const mode = uiModeFromEngineState(state)
-  return {
-    system: mode === "rule",
-    tun: mode === "tun",
-  }
+  // Clicking the other mode while connected: fast switch
+  return { action: "switch", targetUiMode, targetEngineMode }
 }

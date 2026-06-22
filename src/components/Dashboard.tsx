@@ -211,10 +211,6 @@ function HomePage() {
       }
 
       const plan = planTrayModeAction(engineStateRef.current, targetMode as TrayRequestedMode)
-      if (plan.action === "noop") {
-        trayOperationRef.current = false
-        return
-      }
 
       try {
         if (plan.action === "disconnect") {

@@ -1,19 +1,28 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  getCheckedTrayMode,
   planTrayModeAction,
   type TrayEngineState,
 } from "./tray-mode"
 
-describe("tray mode state", () => {
-  it("keeps the current running mode connected when clicking the same tray item", () => {
+describe("tray mode action planning", () => {
+  it("disconnects when clicking the already-active mode (system proxy)", () => {
     const state: TrayEngineState = { kind: "running", mode: "mixed" }
 
     expect(planTrayModeAction(state, "system")).toEqual({
-      action: "noop",
+      action: "disconnect",
       targetUiMode: "rule",
       targetEngineMode: "SystemProxy",
+    })
+  })
+
+  it("disconnects when clicking the already-active mode (TUN)", () => {
+    const state: TrayEngineState = { kind: "running", mode: "tun" }
+
+    expect(planTrayModeAction(state, "tun")).toEqual({
+      action: "disconnect",
+      targetUiMode: "tun",
+      targetEngineMode: "IntoProxy",
     })
   })
 
@@ -34,24 +43,6 @@ describe("tray mode state", () => {
       action: "connect",
       targetUiMode: "tun",
       targetEngineMode: "IntoProxy",
-    })
-  })
-
-  it("returns exactly one checked tray item for active engine modes", () => {
-    expect(getCheckedTrayMode({ kind: "running", mode: "mixed" })).toEqual({
-      system: true,
-      tun: false,
-    })
-    expect(getCheckedTrayMode({ kind: "starting", mode: "tun" })).toEqual({
-      system: false,
-      tun: true,
-    })
-  })
-
-  it("does not check any tray item while disconnected", () => {
-    expect(getCheckedTrayMode({ kind: "idle" })).toEqual({
-      system: false,
-      tun: false,
     })
   })
 })
