@@ -515,7 +515,13 @@ function HomePage() {
     }
   }
 
-  useEffect(() => { loadSubs() }, [loadSubs])
+  // Run initial subscription sync exactly once on app startup.
+  const hasInitiallyLoadedRef = useRef(false)
+  useEffect(() => {
+    if (hasInitiallyLoadedRef.current) return
+    hasInitiallyLoadedRef.current = true
+    loadSubs()
+  }, [loadSubs])
 
   // Load nodes dynamically from active subscription in SQLite
   useEffect(() => {
