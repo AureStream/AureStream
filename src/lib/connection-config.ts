@@ -2,6 +2,7 @@ import {
   computeMergeCacheKey,
   setGlobalConfig,
   setRuleConfig,
+  makeProfile,
   type MergeProfile,
 } from "@/config/merger/main"
 import {
@@ -23,11 +24,7 @@ function resolveMergeProfile(
   routingMode: RoutingMode,
   enableTun: boolean
 ): MergeProfile {
-  return {
-    mode: isGlobalRouting(routingMode) ? "global" : "rule",
-    tun: enableTun,
-    customRules: !isGlobalRouting(routingMode),
-  }
+  return makeProfile(routingMode, enableTun)
 }
 
 /** Merge sing-box config.json for the active subscription and routing/TUN choice. */

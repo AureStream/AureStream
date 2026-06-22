@@ -1,0 +1,195 @@
+{
+    "$schema": "https://raw.githubusercontent.com/xmdhs/sing-box-generate-schema/refs/heads/master/schema.generated.json",
+    "log": {
+        "disabled": false,
+        "level": "info",
+        "timestamp": false
+    },
+    "dns": {
+        "servers": [
+            {
+                "tag": "remote",
+                "type": "https",
+                "server": "8.8.8.8",
+                "detour": "ExitGateway"
+            },
+            {
+                "tag": "system",
+                "type": "udp",
+                "server": "223.5.5.5",
+                "server_port": 53
+            },
+            {
+                "type": "fakeip",
+                "tag": "fakeip",
+                "inet4_range": "198.18.0.0/15",
+                "inet6_range": "fc00::/18"
+            }
+        ],
+        "rules": [
+            {
+                "rule_set": [
+                    "AdGuardSDNSFilter",
+                    "chrome-doh"
+                ],
+                "action": "predefined"
+            },
+            {
+                "query_type": "HTTPS",
+                "action": "predefined"
+            },
+            {
+                "query_type": [
+                    "A",
+                    "AAAA"
+                ],
+                "rewrite_ttl": 1,
+                "server": "fakeip"
+            },
+            {
+                "clash_mode": "global",
+                "server": "remote"
+            },
+            {
+                "clash_mode": "direct",
+                "server": "system"
+            },
+            {
+                "rule_set": "geosite-cn",
+                "server": "system"
+            },
+            {
+                "rule_set": "ext-cn-domain",
+                "server": "system"
+            }
+        ],
+        "independent_cache": true
+    },
+    "inbounds": [
+        {
+            "type": "mixed",
+            "tag": "mixed",
+            "listen": "127.0.0.1",
+            "listen_port": 6789,
+            "set_system_proxy": false
+        }
+    ],
+    "outbounds": [
+        {
+            "tag": "direct",
+            "type": "direct",
+            "domain_resolver": "system"
+        },
+        {
+            "tag": "ExitGateway",
+            "type": "selector",
+            "outbounds": [
+                "auto"
+            ]
+        },
+        {
+            "tag": "auto",
+            "type": "urltest",
+            "url": "https://www.google.com/generate_204",
+            "outbounds": []
+        }
+    ],
+    "route": {
+        "rules": [
+            {
+                "action": "sniff"
+            },
+            {
+                "protocol": "dns",
+                "action": "hijack-dns"
+            },
+            {
+                "clash_mode": "direct",
+                "outbound": "direct"
+            },
+            {
+                "clash_mode": "global",
+                "outbound": "ExitGateway"
+            },
+            {
+                "action": "resolve",
+                "strategy": "prefer_ipv4"
+            },
+            {
+                "domain": ["direct-tag.aurestream.local"],
+                "domain_suffix": [],
+                "ip_cidr": [],
+                "outbound": "direct"
+            },
+            {
+                "domain": ["proxy-tag.aurestream.local"],
+                "domain_suffix": [],
+                "ip_cidr": [],
+                "outbound": "ExitGateway"
+            },
+            {
+                "ip_is_private": true,
+                "outbound": "direct"
+            },
+            {
+                "rule_set": [
+                    "geosite-cn",
+                    "ext-cn-domain"
+                ],
+                "outbound": "direct"
+            },
+            {
+                "rule_set": "geoip-cn",
+                "outbound": "direct"
+            },
+            {
+                "outbound": "ExitGateway"
+            }
+        ],
+        "auto_detect_interface": true,
+        "default_domain_resolver": {
+            "server": "system"
+        },
+        "rule_set": [
+            {
+                "tag": "geoip-cn",
+                "type": "local",
+                "format": "binary",
+                "path": "resources/rules/geoip-cn.srs"
+            },
+            {
+                "tag": "geosite-cn",
+                "type": "local",
+                "format": "binary",
+                "path": "resources/rules/geosite-geolocation-cn.srs"
+            },
+            {
+                "tag": "AdGuardSDNSFilter",
+                "type": "local",
+                "format": "binary",
+                "path": "resources/rules/AdGuardSDNSFilterSingBox.srs"
+            },
+            {
+                "tag": "chrome-doh",
+                "type": "local",
+                "format": "source",
+                "path": "resources/rules/chrome-doh.json"
+            },
+            {
+                "tag": "ext-cn-domain",
+                "type": "local",
+                "format": "binary",
+                "path": "resources/rules/ext-cn-list.srs"
+            }
+        ]
+    },
+    "experimental": {
+        "cache_file": {
+            "enabled": true
+        },
+        "clash_api": {
+            "external_controller": "127.0.0.1:9191",
+            "secret": ""
+        }
+    }
+}
