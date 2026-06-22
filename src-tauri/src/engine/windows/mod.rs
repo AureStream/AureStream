@@ -76,7 +76,7 @@ impl EngineManager for WindowsEngine {
 
             if should_set_system_proxy {
                 if let Err(e) =
-                    set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app)).await
+                    set_system_proxy(crate::engine::ports::mixed_proxy_port(app), crate::engine::resolve_proxy_bypass(app)).await
                 {
                     let _ = app.emit(EVENT_TAURI_LOG, (2, format!("Failed to set proxy: {}", e)));
                     return Err(e.to_string());
@@ -107,7 +107,7 @@ impl EngineManager for WindowsEngine {
         );
 
         if matches!(mode.as_ref(), ProxyMode::SystemProxy) {
-            if let Err(e) = clear_system_proxy(app).await {
+            if let Err(e) = clear_system_proxy().await {
                 log::warn!("Failed to unset proxy: {}", e);
                 let _ = app.emit(
                     EVENT_TAURI_LOG,
@@ -171,11 +171,10 @@ impl EngineManager for WindowsEngine {
         Self::start(app, mode, config_path, start_epoch).await
     }
 
-    fn on_process_terminated(app: &AppHandle, _was_user_stop: bool) {
+    fn on_process_terminated(_app: &AppHandle, _was_user_stop: bool) {
         log::info!("[win] process terminated, clearing system proxy");
-        let app = app.clone();
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = clear_system_proxy(&app).await {
+            if let Err(e) = clear_system_proxy().await {
                 log::warn!("[win] failed to clear system proxy on termination: {}", e);
             }
         });

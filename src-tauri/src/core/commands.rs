@@ -369,140 +369,6 @@ pub fn get_running_config() -> Option<(ProxyMode, String)> {
 }
 
 #[tauri::command]
-pub async fn switch_proxy_mode(
-    app: tauri::AppHandle,
-    path: String,
-    mode: ProxyMode,
-) -> Result<(), String> {
-    let action = next_action_token();
-
-    // ── Concurrency guard ───────────────────────────────────────────────
-    let _start_guard = {
-        let lock = START_LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
-        lock.lock().await
-    };
-
-    // Engine must be running to switch modes
-    {
-        let cur = app.state::<EngineStateCell>().snapshot();
-        if !matches!(cur, EngineState::Running { .. }) {
-            return Err(format!(
-                "switch_proxy_mode requires engine to be running, current state: {}",
-                cur.kind()
-            ));
-        }
-    }
-
-    let mode_label = match mode {
-        ProxyMode::IntoProxy => "tun",
-        ProxyMode::SystemProxy => "mixed",
-    };
-    let old_mode_label = {
-        let mgr = ProcessManager::acquire();
-        match mgr.mode.as_ref().map(|m| m.as_ref()) {
-            Some(ProxyMode::IntoProxy) => "tun",
-            Some(ProxyMode::SystemProxy) => "mixed",
-            None => "unknown",
-        }.to_string()
-    };
-
-    ::log::info!(
-        "[switch_mode] action={action} {} -> {}",
-        old_mode_label,
-        mode_label
-    );
-
-    // Save the new mode choice
-    let mode_key = match mode {
-        ProxyMode::IntoProxy => "tun",
-        ProxyMode::SystemProxy => "system",
-    };
-    {
-        use tauri_plugin_store::StoreExt;
-        if let Ok(store) = app.store("settings.json") {
-            let _ = store.set("last_proxy_mode", serde_json::Value::String(mode_key.to_string()));
-            store.save().ok();
-        }
-    }
-
-    // Transition Running -> Switching
-    if let Err(e) = transition(
-        &app,
-        Intent::SwitchMode {
-            from: old_mode_label.clone(),
-            to: mode_label.to_string(),
-        },
-    ) {
-        return Err(format!("state transition rejected: {}", e));
-    }
-
-    // Subscribe to readiness BEFORE starting the new engine
-    let mut ready_rx = crate::engine::readiness::subscribe_ready();
-    let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
-
-    // Execute the platform-specific fast switch
-    if let Err(e) = PlatformEngine::switch_mode(&app, mode.clone(), path, start_epoch).await {
-        ::log::error!(
-            "[switch_mode] action={action} PlatformEngine::switch_mode failed: {}",
-            e
-        );
-        // Try to recover: stop anything partially started, transition to Failed
-        let _ = PlatformEngine::stop(&app).await;
-        ProcessManager::acquire().reset();
-        let _ = transition(&app, Intent::Fail { reason: e.clone() });
-        return Err(e);
-    }
-
-    // Transition Switching -> Starting so the readiness prober accepts this epoch
-    let _ = transition(
-        &app,
-        Intent::Start {
-            mode: mode_label.to_string(),
-        },
-    );
-    // Re-snap epoch after the Starting transition
-    let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
-
-    // Launch readiness prober
-    readiness::spawn(app.clone(), start_epoch);
-
-    // Wait for readiness confirmation
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(20),
-        ready_rx.recv(),
-    )
-    .await
-    {
-        Ok(Ok(readiness::Readiness::Ready)) => {
-            ::log::info!("[switch_mode] action={action} readiness confirmed");
-        }
-        Ok(Ok(readiness::Readiness::Failed)) => {
-            ::log::error!("[switch_mode] action={action} readiness prober reported failure");
-            return Err("mode switch failed: ports not reachable".into());
-        }
-        Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
-            ::log::info!("[switch_mode] action={action} readiness signal lagged, assuming ready");
-        }
-        Ok(Err(broadcast::error::RecvError::Closed)) => {
-            ::log::warn!("[switch_mode] action={action} readiness channel closed");
-            return Err("readiness channel closed".into());
-        }
-        Err(_timeout) => {
-            ::log::error!("[switch_mode] action={action} readiness timeout");
-            let _ = transition(
-                &app,
-                Intent::Fail {
-                    reason: "mode switch timeout: sing-box did not become ready".into(),
-                },
-            );
-            return Err("mode switch timeout: sing-box did not become ready".into());
-        }
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
     let action = next_action_token();
     let since_last = note_reload_entry();
@@ -562,8 +428,8 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
                 );
             }
             if let Err(e) = aurestream_plugin_proxy::sysproxy::set_system_proxy(
-                &app,
                 crate::engine::ports::mixed_proxy_port(&app),
+                crate::engine::resolve_proxy_bypass(&app),
             )
             .await
             {

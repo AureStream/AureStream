@@ -71,16 +71,14 @@ function HomePage() {
     isConnected: engineConnected,
     isStarting,
     isStopping,
-    isSwitching: engineSwitching,
     engineState
   } = useEngineState()
 
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
-  const [isSwitchingMode, setIsSwitchingMode] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineConnected || isSwitchingMode
-  const isConnecting = (isStarting || isStopping || localConnecting || engineSwitching) && !isSwitchingMode
+  const isConnected = engineConnected
+  const isConnecting = isStarting || isStopping || localConnecting
 
   useEffect(() => {
     const initMode = async () => {
@@ -219,14 +217,13 @@ function HomePage() {
           await stopEngine()
         } else {
           setLocalConnecting(plan.action === "connect")
-          setIsSwitchingMode(plan.action === "switch")
           await withScheduledConfigSyncSuspended(async () => {
             const isTun = plan.targetUiMode === "tun"
             setProxyMode(plan.targetUiMode)
             await setEnableTun(isTun)
 
             if (plan.action === "switch") {
-              // Use fast-restart path for mode switching
+              // Mode switch via stop() + start()
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
               await switchProxyMode(subId, "rule", isTun)
             } else if (plan.action === "connect") {
@@ -242,7 +239,6 @@ function HomePage() {
         console.error("Tray switch engine failed:", err)
       } finally {
         setLocalConnecting(false)
-        setIsSwitchingMode(false)
         trayOperationRef.current = false
       }
     })
@@ -328,7 +324,7 @@ function HomePage() {
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
   const handleToggleConnection = async () => {
-    if (isConnecting || isSwitchingMode) return
+    if (isConnecting) return
     try {
       if (isConnected) {
         setLocalConnecting(true)
@@ -350,7 +346,7 @@ function HomePage() {
   }
 
   const handleSwitchMode = async (newMode: "rule" | "tun") => {
-    if (isConnecting || isSwitchingMode || isInstallingService) return
+    if (isConnecting || isInstallingService) return
     if (proxyMode === newMode) return
     const isTun = newMode === "tun"
 
@@ -412,14 +408,14 @@ function HomePage() {
           return
         }
 
-        setIsSwitchingMode(true)
+        setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
         await switchProxyMode(subId, "rule", isTun)
       })
     } catch (err) {
       console.error("Switch mode failed:", err)
     } finally {
-      setIsSwitchingMode(false)
+      setLocalConnecting(false)
     }
   }
 

@@ -21,10 +21,3 @@ export async function getEngineState(): Promise<EngineState> {
 export async function clearEngineError(): Promise<void> {
   return invoke("clear_engine_error")
 }
-
-export async function switchProxyMode(
-  path: string,
-  mode: ProxyMode
-): Promise<void> {
-  return invoke("switch_proxy_mode", { path, mode })
-}

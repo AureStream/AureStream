@@ -78,10 +78,9 @@ export function useEngineState() {
   const isRunning = engineState.kind === "running"
   const isStarting = engineState.kind === "starting"
   const isStopping = engineState.kind === "stopping"
-  const isSwitching = engineState.kind === "switching"
   const isFailed = engineState.kind === "failed"
   const isIdle = engineState.kind === "idle"
-  const isConnected = isRunning || isStopping || isSwitching
+  const isConnected = isRunning || isStopping || isStarting
 
   return {
     engineState,
@@ -89,7 +88,6 @@ export function useEngineState() {
     isRunning,
     isStarting,
     isStopping,
-    isSwitching,
     isFailed,
     isIdle,
     isConnected,

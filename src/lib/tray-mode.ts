@@ -6,7 +6,6 @@ export type TrayRequestedMode = "system" | "tun"
 
 export type TrayEngineState =
   | Pick<Extract<EngineState, { kind: "starting" | "running" }>, "kind" | "mode">
-  | Pick<Extract<EngineState, { kind: "switching" }>, "kind" | "to_mode">
   | Pick<Extract<EngineState, { kind: "idle" | "stopping" | "failed" }>, "kind">
 
 export type TrayModeAction = "connect" | "switch" | "disconnect"

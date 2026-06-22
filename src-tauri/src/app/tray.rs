@@ -22,14 +22,6 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
                 (true, false)
             }
         }
-        EngineState::Switching { to_mode, .. } => {
-            // Show the target mode as checked during switching
-            if to_mode == "tun" {
-                (false, true)
-            } else {
-                (true, false)
-            }
-        }
         _ => (false, false),
     };
 
@@ -140,7 +132,6 @@ impl EngineState {
             EngineState::Starting { .. } => "启动中",
             EngineState::Running { .. } => "运行中",
             EngineState::Stopping { .. } => "停止中",
-            EngineState::Switching { .. } => "切换中",
             EngineState::Failed { .. } => "已失败",
         }
     }

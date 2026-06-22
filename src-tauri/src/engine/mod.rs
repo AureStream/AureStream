@@ -45,20 +45,6 @@ pub trait EngineManager {
 
     async fn restart(app: &tauri::AppHandle) -> Result<(), String>;
 
-    /// Fast mode-switch: stop the current engine and restart with a new mode/config.
-    /// Default implementation delegates to stop() + start(); platforms may optimize.
-    async fn switch_mode(
-        app: &tauri::AppHandle,
-        new_mode: ProxyMode,
-        config_path: String,
-        start_epoch: u64,
-    ) -> Result<(), String> {
-        Self::stop(app).await?;
-        // Brief pause to allow port release
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        Self::start(app, new_mode, config_path, start_epoch).await
-    }
-
     #[allow(dead_code)]
     fn on_network_up(_app: &tauri::AppHandle) {}
     #[allow(dead_code)]
@@ -101,4 +87,15 @@ pub fn cleanup_on_shutdown() {
             ::log::error!("[shutdown] Sysproxy::get_system_proxy failed: {}", e);
         }
     }
+}
+
+/// Resolve the proxy bypass list from the store, falling back to the
+/// platform-specific default when no custom value is set.
+pub fn resolve_proxy_bypass(app: &tauri::AppHandle) -> String {
+    use tauri_plugin_store::StoreExt;
+    let raw = app
+        .get_store("settings.json")
+        .and_then(|s| s.get(aurestream_plugin_proxy::bypass::PROXY_BYPASS_STORE_KEY))
+        .and_then(|v| v.as_str().map(String::from));
+    aurestream_plugin_proxy::bypass::bypass_from_store_value(raw)
 }

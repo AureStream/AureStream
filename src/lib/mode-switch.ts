@@ -8,9 +8,9 @@ import type { ProxyMode } from "@/utils/vpn-service"
 import { invalidateControllerClientCache } from "@/utils/singbox-api/controller-cache"
 
 /**
- * Atomic mode switch: pre-generate target config, then invoke the fast-restart
- * backend command. The sing-box process is restarted with the new config in
- * an optimized path (skip full port cleanup, skip config validation).
+ * Mode switch: stop the current engine, generate new config, then restart.
+ * Uses the standard stop() + start() backend commands (same path as manual
+ * stop/start, just automated in sequence with no extra delays).
  *
  * Requires the engine to be currently running. For disconnected state,
  * just generate the config and let the next connect use it.
@@ -21,22 +21,24 @@ export async function switchProxyMode(
   targetEnableTun: boolean
 ): Promise<void> {
   await perf.run("mode-switch.total", async () => {
-    // 1. Pre-generate the target mode config
+    // 1. Stop the current engine
+    await perf.run("mode-switch.stop", () => invoke("stop"))
+
+    // 2. Pre-generate the target mode config
     await perf.run("mode-switch.merge", () =>
       mergeConnectionConfig(subscriptionIdentifier, routingMode, targetEnableTun, {
         force: true,
       })
     )
     const configPath = await getConfigJsonPath()
-    await invoke("mark_config_verified", { configPath })
 
-    // 2. Invoke the fast-switch backend command
+    // 3. Start the engine with the new mode
     const mode: ProxyMode = targetEnableTun ? "IntoProxy" : "SystemProxy"
-    await perf.run("mode-switch.invoke", () =>
-      invoke("switch_proxy_mode", { path: configPath, mode })
+    await perf.run("mode-switch.start", () =>
+      invoke("start", { path: configPath, mode })
     )
 
-    // 3. Invalidate controller client cache (controller port may change)
+    // 4. Invalidate controller client cache (controller port may change)
     invalidateControllerClientCache()
   })
 }

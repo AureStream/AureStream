@@ -49,7 +49,9 @@ impl EngineManager for LinuxEngine {
                     mgr.is_stopping = false;
                 }
                 if should_set_system_proxy {
-                    set_system_proxy(app, crate::engine::ports::mixed_proxy_port(app))
+                    let port = crate::engine::ports::mixed_proxy_port(app);
+                    let bypass = crate::engine::resolve_proxy_bypass(app);
+                    set_system_proxy(port, bypass)
                         .await
                         .map_err(|e| e.to_string())?;
                 }
@@ -114,7 +116,7 @@ impl EngineManager for LinuxEngine {
                     mgr.child = Some(child);
                     mgr.is_stopping = false;
                 }
-                let _ = clear_system_proxy(app).await;
+                let _ = clear_system_proxy().await;
             }
         }
         Ok(())
@@ -134,7 +136,7 @@ impl EngineManager for LinuxEngine {
         };
         match mode.as_ref() {
             ProxyMode::SystemProxy => {
-                let _ = clear_system_proxy(app).await;
+                let _ = clear_system_proxy().await;
                 if let Some(child) = child {
                     use libc::{kill, SIGKILL, SIGTERM};
                     let pid = child.pid();
@@ -256,4 +258,5 @@ impl EngineManager for LinuxEngine {
     async fn restart(_app: &AppHandle) -> Result<(), String> {
         aurestream_plugin_privilege::linux::reload()
     }
+
 }
