@@ -6,9 +6,10 @@ export type TrayRequestedMode = "system" | "tun"
 
 export type TrayEngineState =
   | Pick<Extract<EngineState, { kind: "starting" | "running" }>, "kind" | "mode">
+  | Pick<Extract<EngineState, { kind: "switching" }>, "kind" | "to_mode">
   | Pick<Extract<EngineState, { kind: "idle" | "stopping" | "failed" }>, "kind">
 
-export type TrayModeAction = "noop" | "connect" | "switch"
+export type TrayModeAction = "noop" | "connect" | "switch" | "disconnect"
 
 export type TrayModePlan = {
   action: TrayModeAction
@@ -44,6 +45,10 @@ export function planTrayModeAction(
   const currentUiMode = uiModeFromEngineState(state)
 
   if (currentUiMode === targetUiMode) {
+    // Clicking the already-active mode: disconnect (turn off proxy)
+    if (currentUiMode !== null) {
+      return { action: "disconnect", targetUiMode, targetEngineMode }
+    }
     return { action: "noop", targetUiMode, targetEngineMode }
   }
 

@@ -26,6 +26,14 @@ pub enum EngineState {
         since: i64,
         epoch: u64,
     },
+    /// Transient state while switching between TUN and SystemProxy modes.
+    /// The sing-box process is being restarted with a new config.
+    Switching {
+        since: i64,
+        epoch: u64,
+        from_mode: String,
+        to_mode: String,
+    },
     Failed {
         reason: String,
         at: i64,
@@ -40,6 +48,7 @@ impl EngineState {
             EngineState::Starting { .. } => "starting",
             EngineState::Running { .. } => "running",
             EngineState::Stopping { .. } => "stopping",
+            EngineState::Switching { .. } => "switching",
             EngineState::Failed { .. } => "failed",
         }
     }
@@ -50,6 +59,7 @@ impl EngineState {
             | EngineState::Starting { epoch, .. }
             | EngineState::Running { epoch, .. }
             | EngineState::Stopping { epoch, .. }
+            | EngineState::Switching { epoch, .. }
             | EngineState::Failed { epoch, .. } => *epoch,
         }
     }
@@ -85,6 +95,8 @@ pub enum Intent {
     MarkRunning,
     Stop,
     MarkIdle,
+    /// Mode switch while engine is running (fast restart path).
+    SwitchMode { from: String, to: String },
     Fail { reason: String },
     ClearFailure,
 }
@@ -127,10 +139,29 @@ pub fn transition(app: &AppHandle, intent: Intent) -> Result<EngineState, String
                 epoch,
             }
         }
+        (EngineState::Running { .. }, Intent::SwitchMode { from, to }) => {
+            let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;
+            EngineState::Switching {
+                since: now_secs(),
+                epoch,
+                from_mode: from,
+                to_mode: to,
+            }
+        }
+        (EngineState::Switching { .. }, Intent::Start { mode }) => {
+            // After switching stop phase, transition to Starting with the new mode.
+            let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;
+            EngineState::Starting {
+                since: now_secs(),
+                epoch,
+                mode,
+            }
+        }
         (
             EngineState::Stopping { .. }
             | EngineState::Starting { .. }
-            | EngineState::Running { .. },
+            | EngineState::Running { .. }
+            | EngineState::Switching { .. },
             Intent::MarkIdle,
         ) => {
             let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;

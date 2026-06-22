@@ -19,12 +19,10 @@ export function getBuiltInTemplate(mode: configType): string {
     }
 
     // Adapt base template based on selected mode dynamically
-    if (mode === 'mixed' || mode === 'mixed-global') {
-        // Remove TUN inbound for Mixed mode
-        baseConfig.inbounds = baseConfig.inbounds.filter((ib: any) => ib.type !== 'tun');
-    }
-
-    if (mode === 'resident' || mode === 'resident-global') {
+    if (mode === 'mixed' || mode === 'mixed-global' || mode === 'resident' || mode === 'resident-global') {
+        // Keep TUN inbound but disable auto_route so it doesn't capture traffic.
+        // This enables fast mode-switching: config always has both inbounds,
+        // only auto_route toggles when switching between TUN and SystemProxy.
         const tunInbound = baseConfig.inbounds.find((ib: any) => ib.type === 'tun');
         if (tunInbound) {
             tunInbound.auto_route = false;

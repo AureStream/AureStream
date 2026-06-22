@@ -45,6 +45,20 @@ pub trait EngineManager {
 
     async fn restart(app: &tauri::AppHandle) -> Result<(), String>;
 
+    /// Fast mode-switch: stop the current engine and restart with a new mode/config.
+    /// Default implementation delegates to stop() + start(); platforms may optimize.
+    async fn switch_mode(
+        app: &tauri::AppHandle,
+        new_mode: ProxyMode,
+        config_path: String,
+        start_epoch: u64,
+    ) -> Result<(), String> {
+        Self::stop(app).await?;
+        // Brief pause to allow port release
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        Self::start(app, new_mode, config_path, start_epoch).await
+    }
+
     #[allow(dead_code)]
     fn on_network_up(_app: &tauri::AppHandle) {}
     #[allow(dead_code)]

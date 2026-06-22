@@ -273,6 +273,175 @@ impl EngineManager for MacOSEngine {
             .map_err(|e| format!("helper_probe join error: {}", e))?
     }
 
+    async fn switch_mode(
+        app: &AppHandle,
+        new_mode: ProxyMode,
+        config_path: String,
+        start_epoch: u64,
+    ) -> Result<(), String> {
+        use std::sync::Arc;
+        use tauri_plugin_shell::ShellExt;
+
+        let old_mode = {
+            let mgr = ProcessManager::acquire();
+            mgr.mode.as_ref().map(|m| (**m).clone())
+        };
+        log::info!(
+            "[switch_mode] old={:?} new={:?}",
+            old_mode,
+            new_mode
+        );
+
+        // ── Stop phase (optimized: skip full port cleanup) ──────────────
+        match old_mode.as_ref() {
+            Some(ProxyMode::SystemProxy) => {
+                // Clear system proxy first so new connections don't route to dying process
+                let _ = clear_system_proxy(app).await;
+                // Kill child process
+                let child = {
+                    let mut mgr = ProcessManager::acquire();
+                    mgr.is_stopping = true;
+                    mgr.child.take()
+                };
+                if let Some(child) = child {
+                    let pid = child.pid();
+                    unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                }
+                // Quick port release poll (we know exactly which process held them)
+                let mixed = crate::engine::ports::mixed_proxy_port(app);
+                let ctrl = crate::engine::ports::controller_port(app);
+                let _ = crate::engine::ports::wait_for_port_bindable(
+                    mixed,
+                    std::time::Duration::from_secs(3),
+                ).await;
+                if ctrl != mixed {
+                    let _ = crate::engine::ports::wait_for_port_bindable(
+                        ctrl,
+                        std::time::Duration::from_secs(3),
+                    ).await;
+                }
+                ProcessManager::acquire().reset();
+            }
+            Some(ProxyMode::IntoProxy) => {
+                // Stop TUN process via helper
+                let _ = stop_tun_process().await;
+                watchdog::cancel();
+                // Quick port release via helper
+                let mixed = crate::engine::ports::mixed_proxy_port(app);
+                let ctrl = crate::engine::ports::controller_port(app);
+                let _ = crate::engine::ports::ensure_port_free_with_retry(
+                    mixed,
+                    std::time::Duration::from_secs(5),
+                ).await;
+                if ctrl != mixed {
+                    let _ = crate::engine::ports::ensure_port_free_with_retry(
+                        ctrl,
+                        std::time::Duration::from_secs(5),
+                    ).await;
+                }
+                ProcessManager::acquire().reset();
+            }
+            None => {
+                return Err("No running engine to switch from".into());
+            }
+        }
+
+        // ── Start phase (same as start() but without full port cleanup) ────
+        match new_mode {
+            ProxyMode::SystemProxy => {
+                let cmd = app
+                    .shell()
+                    .sidecar("aurestream-core")
+                    .map_err(|e| format!("sidecar lookup failed: {}", e))?
+                    .args(["run", "-c", &config_path, "--disable-color"]);
+                let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
+                let child_pid = child.pid();
+                log::info!("[switch_mode] spawned pid={} mode=SystemProxy", child_pid);
+                crate::engine::monitor::spawn_process_monitor(
+                    app.clone(),
+                    rx,
+                    Arc::new(new_mode.clone()),
+                    child_pid,
+                    start_epoch,
+                );
+                {
+                    let mut mgr = ProcessManager::acquire();
+                    mgr.mode = Some(Arc::new(new_mode));
+                    mgr.config_path = Some(Arc::new(config_path));
+                    mgr.child = Some(child);
+                    mgr.is_stopping = false;
+                }
+                let port = crate::engine::ports::mixed_proxy_port(app);
+                set_system_proxy(app, port)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            ProxyMode::IntoProxy => {
+                let bypass_router_enabled = app
+                    .get_store("settings.json")
+                    .and_then(|store| store.get("enable_bypass_router_key"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let log_path_str = crate::engine::log::resolve_singbox_log_path(app)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
+                    .unwrap_or_default();
+
+                let path_c = config_path.clone();
+                tokio::task::spawn_blocking(move || {
+                    start_tun_via_helper(&path_c, &log_path_str, bypass_router_enabled, &gateway)
+                })
+                .await
+                .map_err(|e| format!("start_tun join error: {}", e))?
+                .map_err(|e| format!("start_tun_via_helper failed: {}", e))?;
+
+                let mut exit_rx = macos_helper::subscribe_sing_box_exits();
+                let exit_app = app.clone();
+                let mode_arc = Arc::new(ProxyMode::IntoProxy);
+                let exit_mode = Arc::clone(&mode_arc);
+                let exit_spawn_epoch = start_epoch;
+                tokio::spawn(async move {
+                    match exit_rx.recv().await {
+                        Ok(exit) => {
+                            log::info!(
+                                "[helper-bridge] switch-mode sing-box exit pid={} code={}",
+                                exit.pid, exit.exit_code
+                            );
+                            let payload = tauri_plugin_shell::process::TerminatedPayload {
+                                code: Some(exit.exit_code),
+                                signal: None,
+                            };
+                            crate::engine::monitor::handle_process_termination(
+                                &exit_app, &exit_mode, payload, exit_spawn_epoch,
+                            ).await;
+                        }
+                        Err(_) => {
+                            log::warn!("[helper-bridge] exit broadcast channel closed");
+                        }
+                    }
+                });
+
+                let config_path_arc = Arc::new(config_path);
+                {
+                    let mut mgr = ProcessManager::acquire();
+                    mgr.mode = Some(Arc::clone(&mode_arc));
+                    mgr.config_path = Some(Arc::clone(&config_path_arc));
+                    mgr.child = None;
+                    mgr.is_stopping = false;
+                }
+
+                if bypass_router_enabled {
+                    watchdog::spawn(app.clone(), Arc::clone(&config_path_arc));
+                }
+
+                let _ = clear_system_proxy(app).await;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn restart(_app: &AppHandle) -> Result<(), String> {
         let is_tun = {
             let manager = ProcessManager::acquire();

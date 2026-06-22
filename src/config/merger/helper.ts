@@ -21,6 +21,7 @@ type TunInboundSettings = {
     proxyPort?: number;
     tunStack?: string;
     osType?: string;
+    enableAutoRoute?: boolean;
 }
 
 export async function updateDHCPSettings2Config(newConfig: any, settings: DnsSettings = {}) {
@@ -154,7 +155,14 @@ export async function configureTunInbound(
         }
     }
 
-    console.log("当前 TUN Stack:", tunInbound.stack);
+    // Control whether TUN captures system traffic via auto_route.
+    // When false, TUN inbound exists but doesn't set up routes — used for
+    // fast mode-switching (config always has both inbounds).
+    if (settings.enableAutoRoute !== undefined) {
+        tunInbound.auto_route = settings.enableAutoRoute;
+    }
+
+    console.log("当前 TUN Stack:", tunInbound.stack, "auto_route:", tunInbound.auto_route);
 }
 
 export async function configureMixedInbound(

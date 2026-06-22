@@ -213,7 +213,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         getAllowLan(),
         isBypassRouterEnabled(),
         getProxyPort(),
-        options.tun ? getTunStack() : Promise.resolve(undefined),
+        getTunStack(),
         getUseDHCP(),
         getConfiguredDirectDNS(),
         getSavedDefaultNode(identifier),
@@ -244,13 +244,14 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         }
     }
 
-    if (options.tun) {
-        await configureTunInbound(newConfig, bypassRouter, {
-            proxyPort,
-            tunStack,
-            osType: getOsType(),
-        });
-    }
+    // Always configure TUN inbound (present in all modes for fast mode-switching).
+    // auto_route controls whether TUN captures traffic: true for TUN mode, false for SystemProxy.
+    await configureTunInbound(newConfig, bypassRouter, {
+        proxyPort,
+        tunStack,
+        osType: getOsType(),
+        enableAutoRoute: options.tun,
+    });
 
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
     await updateDHCPSettings2Config(newConfig, { useDHCP, configuredDirectDNS });

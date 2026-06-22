@@ -18,6 +18,7 @@ import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsSe
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
 import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
+import { switchProxyMode } from "../lib/mode-switch"
 import {
   planTrayModeAction,
   uiModeFromEngineState,
@@ -70,6 +71,7 @@ function HomePage() {
     isConnected: engineConnected,
     isStarting,
     isStopping,
+    isSwitching: engineSwitching,
     engineState
   } = useEngineState()
 
@@ -78,7 +80,7 @@ function HomePage() {
   const [isSwitchingMode, setIsSwitchingMode] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
   const isConnected = engineConnected || isSwitchingMode
-  const isConnecting = (isStarting || isStopping || localConnecting) && !isSwitchingMode
+  const isConnecting = (isStarting || isStopping || localConnecting || engineSwitching) && !isSwitchingMode
 
   useEffect(() => {
     const initMode = async () => {
@@ -215,23 +217,31 @@ function HomePage() {
       }
 
       try {
-        setLocalConnecting(plan.action === "connect")
-        setIsSwitchingMode(plan.action === "switch")
-        await withScheduledConfigSyncSuspended(async () => {
-          const isTun = plan.targetUiMode === "tun"
-          setProxyMode(plan.targetUiMode)
-          await setEnableTun(isTun)
+        if (plan.action === "disconnect") {
+          // Clicking the active mode in tray: disconnect
+          setLocalConnecting(true)
+          await stopEngine()
+        } else {
+          setLocalConnecting(plan.action === "connect")
+          setIsSwitchingMode(plan.action === "switch")
+          await withScheduledConfigSyncSuspended(async () => {
+            const isTun = plan.targetUiMode === "tun"
+            setProxyMode(plan.targetUiMode)
+            await setEnableTun(isTun)
 
-          if (plan.action === "switch") {
-            await stopEngine()
-          }
-
-          const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
-          await mergeConnectionConfig(subId, "rule", isTun, { force: true })
-          const configPath = await getConfigJsonPath()
-
-          await startEngine(configPath, plan.targetEngineMode)
-        })
+            if (plan.action === "switch") {
+              // Use fast-restart path for mode switching
+              const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
+              await switchProxyMode(subId, "rule", isTun)
+            } else if (plan.action === "connect") {
+              // Engine not running: generate config and start
+              const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
+              await mergeConnectionConfig(subId, "rule", isTun, { force: true })
+              const configPath = await getConfigJsonPath()
+              await startEngine(configPath, plan.targetEngineMode)
+            }
+          })
+        }
       } catch (err) {
         console.error("Tray switch engine failed:", err)
       } finally {
@@ -407,13 +417,8 @@ function HomePage() {
         }
 
         setIsSwitchingMode(true)
-        await stopEngine()
-
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-        await mergeConnectionConfig(subId, "rule", isTun, { force: true })
-        const configPath = await getConfigJsonPath()
-
-        await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
+        await switchProxyMode(subId, "rule", isTun)
       })
     } catch (err) {
       console.error("Switch mode failed:", err)
