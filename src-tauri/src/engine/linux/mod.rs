@@ -144,11 +144,7 @@ impl EngineManager for LinuxEngine {
                     if unsafe { kill(pid as i32, SIGTERM) } != 0 {
                         let err = std::io::Error::last_os_error();
                         if err.raw_os_error() != Some(libc::ESRCH) {
-                            log::error!(
-                                "[stop] Failed to send SIGTERM to PID {}: {}",
-                                pid,
-                                err
-                            );
+                            log::error!("[stop] Failed to send SIGTERM to PID {}: {}", pid, err);
                         }
                     } else {
                         // Wait briefly for graceful exit, then escalate to SIGKILL
@@ -258,5 +254,4 @@ impl EngineManager for LinuxEngine {
     async fn restart(_app: &AppHandle) -> Result<(), String> {
         aurestream_plugin_privilege::linux::reload()
     }
-
 }

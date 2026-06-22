@@ -1,5 +1,6 @@
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
+import type { configType, StageVersionType } from '@/config/common';
 import { invalidateConnectionConfigCache } from '@/lib/merge-cache';
 import { invalidateControllerClientCache } from '@/utils/singbox-api/controller-cache';
 import {
@@ -21,7 +22,10 @@ import {
     AUTO_START_STORE_KEY,
     HIDE_ON_LAUNCH_STORE_KEY,
     MINIMIZE_TO_TRAY_STORE_KEY,
+    SING_BOX_MAJOR_VERSION,
+    SING_BOX_VERSION,
     SSI_STORE_KEY,
+    STAGE_VERSION_STORE_KEY,
     SELECTED_NODE_TAG_STORE_PREFIX,
 } from '../types/definition';
 
@@ -357,6 +361,45 @@ export async function setControllerPort(port: number): Promise<void> {
 export const getClashApiPort = getControllerPort;
 /** @deprecated Use setControllerPort */
 export const setClashApiPort = setControllerPort;
+
+export async function getConfigTemplateURLKey(mode: configType): Promise<string> {
+    return `key-sing-box-${SING_BOX_MAJOR_VERSION}-${mode}-template-path`;
+}
+
+export async function getConfigTemplateURL(mode: configType): Promise<string> {
+    const cacheKey = await getConfigTemplateURLKey(mode);
+    const defaultTemplatePath = await getDefaultConfigTemplateURL(mode);
+    return getStoreValue(cacheKey, defaultTemplatePath);
+}
+
+export async function setConfigTemplateURL(mode: configType, url: string) {
+    const cacheKey = await getConfigTemplateURLKey(mode);
+    await setStoreValue(cacheKey, url, { immediate: true });
+}
+
+export async function getDefaultConfigTemplateURL(mode: configType): Promise<string> {
+    const remoteUrl = "https://onebox-updater.oneoh.cloud/conf-template";
+    const stageVersion: StageVersionType = await getStoreValue(STAGE_VERSION_STORE_KEY, "stable");
+    const versionNumber = SING_BOX_VERSION.replace('v', '').split('.');
+    const major = versionNumber[0];
+    const minor = versionNumber[1];
+    const patch = parseInt(versionNumber[2] || '0', 10);
+    let ver = `${major}.${minor}`;
+    if (major === '1' && minor === '13' && patch >= 8) {
+        ver = '1.13.8';
+    }
+
+    switch (mode) {
+        case 'mixed':
+            return `${remoteUrl}/raw/refs/heads/${stageVersion}/conf/${ver}/zh-cn/mixed-rules.jsonc`;
+        case 'tun':
+            return `${remoteUrl}/raw/refs/heads/${stageVersion}/conf/${ver}/zh-cn/tun-rules.jsonc`;
+        case 'mixed-global':
+            return `${remoteUrl}/raw/refs/heads/${stageVersion}/conf/${ver}/zh-cn/mixed-global.jsonc`;
+        case 'tun-global':
+            return `${remoteUrl}/raw/refs/heads/${stageVersion}/conf/${ver}/zh-cn/tun-global.jsonc`;
+    }
+}
 
 export type TunStack = 'system' | 'gvisor' | 'mixed';
 

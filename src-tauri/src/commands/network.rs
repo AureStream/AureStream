@@ -201,7 +201,10 @@ mod tests {
 
     #[test]
     fn ping_tcp_defaults_to_five_seconds() {
-        assert_eq!(normalize_ping_tcp_timeout_ms(None), PING_TCP_DEFAULT_TIMEOUT_MS);
+        assert_eq!(
+            normalize_ping_tcp_timeout_ms(None),
+            PING_TCP_DEFAULT_TIMEOUT_MS
+        );
         assert_eq!(PING_TCP_DEFAULT_TIMEOUT_MS, 5000);
     }
 

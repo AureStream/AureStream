@@ -6,7 +6,6 @@ use crate::engine::state_machine::EngineState;
 use crate::state::AppData;
 use crate::utils::show_main_window;
 
-
 /// 根据引擎状态与当前代理模式构建托盘右键菜单。
 fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, tauri::Error> {
     let state = app_handle
@@ -27,7 +26,7 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
 
     let show_item = MenuItemBuilder::with_id("tray_show", "显示主窗口").build(app_handle)?;
     let sep1 = PredefinedMenuItem::separator(app_handle)?;
-    
+
     // 使用 CheckMenuItemBuilder 构建具有勾选框的菜单项
     let mode_system = CheckMenuItemBuilder::with_id("tray_mode_system", "系统代理")
         .checked(is_system_checked)
@@ -35,7 +34,7 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
     let mode_tun = CheckMenuItemBuilder::with_id("tray_mode_tun", "虚拟网关")
         .checked(is_tun_checked)
         .build(app_handle)?;
-        
+
     let sep2 = PredefinedMenuItem::separator(app_handle)?;
     let quit_item = MenuItemBuilder::with_id("tray_quit", "退出应用").build(app_handle)?;
 
@@ -56,10 +55,9 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
     #[cfg(target_os = "macos")]
     let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png"))?;
     #[cfg(not(target_os = "macos"))]
-    let tray_icon = app
-        .default_window_icon()
-        .cloned()
-        .unwrap_or_else(|| tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png")).unwrap());
+    let tray_icon = app.default_window_icon().cloned().unwrap_or_else(|| {
+        tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png")).unwrap()
+    });
 
     let menu = build_tray_menu(app.handle())?;
 

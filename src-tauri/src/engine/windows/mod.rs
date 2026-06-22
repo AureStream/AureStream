@@ -81,8 +81,11 @@ impl EngineManager for WindowsEngine {
             }
 
             if should_set_system_proxy {
-                if let Err(e) =
-                    set_system_proxy(crate::engine::ports::mixed_proxy_port(app), crate::engine::resolve_proxy_bypass(app)).await
+                if let Err(e) = set_system_proxy(
+                    crate::engine::ports::mixed_proxy_port(app),
+                    crate::engine::resolve_proxy_bypass(app),
+                )
+                .await
                 {
                     let _ = app.emit(EVENT_TAURI_LOG, (2, format!("Failed to set proxy: {}", e)));
                     return Err(e.to_string());
