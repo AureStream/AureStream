@@ -4,11 +4,10 @@ import { getSubscriptionConfig } from "../action/db"
 import { getStoreValue, setStoreValue } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { switchNodeActive } from "../lib/hot-reload-config"
-import { invoke } from "@tauri-apps/api/core"
 import { getNodeLatency, initNodeLatency, setNodeLatency } from "../lib/node-latency"
 import { getNodeLatencyTone } from "../lib/node-latency-tone"
-import { useEngineState } from "../hooks/useEngineState"
-import { testNodeDelay } from "../utils/singbox-api/proxies"
+import { requestNetworkInfoRefresh } from "../lib/home-network-info"
+import { testNodeTcpLatency } from "../lib/node-speed-test"
 
 /* ── Icons ── */
 const I = {
@@ -34,7 +33,6 @@ interface NodeData {
 export default function NodesPage() {
   const { i18n } = useTranslation()
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
-  const { isConnected } = useEngineState()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [activeRegion, setActiveRegion] = useState<"all" | "asia" | "america" | "europe">("all")
@@ -117,18 +115,7 @@ export default function NodesPage() {
     try {
       await Promise.all(
         nodes.map(async (n) => {
-          let delay = -1
-          if (isConnected) {
-            // Connected: use sing-box Clash API (accurate through-proxy RTT)
-            delay = await testNodeDelay(n.id)
-          } else if (n.server && n.port) {
-            // Not connected: direct TCP ping (fast, no TUN interference)
-            try {
-              delay = (await invoke("ping_tcp", { host: n.server, port: n.port })) as number
-            } catch {
-              delay = -1
-            }
-          }
+          const delay = await testNodeTcpLatency(n)
           setNodeLatency(n.id, delay)
           setNodes(prev => prev.map(p => (p.id === n.id ? { ...p, ping: delay } : p)))
         })
@@ -233,7 +220,10 @@ export default function NodesPage() {
                   if (activeSubId) {
                     const key = selectedNodeTagStoreKey(activeSubId)
                     await setStoreValue(key, node.id, { immediate: true })
-                    await switchNodeActive(activeSubId, node.id)
+                    const changedWhileRunning = await switchNodeActive(activeSubId, node.id)
+                    if (changedWhileRunning) {
+                      requestNetworkInfoRefresh("node-switched")
+                    }
                   }
                 }}
                 className={`glass-card group relative rounded-[20px] p-3.5 cursor-pointer transition-all duration-300 ${isConnected ? 'ring-1 ring-secondary/30 bg-surface-active/50' : 'hover:bg-surface-active/30'}`}

@@ -31,6 +31,14 @@ import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
 import { getNodeLatencyTone } from "../lib/node-latency-tone"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { message } from "@tauri-apps/plugin-dialog"
+import {
+  consumePendingNetworkInfoRefreshVersion,
+  requestNetworkInfoRefresh,
+  shouldAllowConnectionToggle,
+  shouldRefreshNetworkInfoOnEngineState,
+  subscribeNetworkInfoRefresh,
+} from "../lib/home-network-info"
+import type { EngineState } from "../types/engine-state"
 
 /* ── Icons ── */
 const I = {
@@ -70,7 +78,6 @@ function HomePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const {
-    isConnected: engineConnected,
     isStarting,
     isStopping,
     engineState
@@ -79,8 +86,9 @@ function HomePage() {
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineConnected || localConnecting
-  const isConnecting = isStarting || isStopping || localConnecting
+  const isConnected = engineState.kind === "running"
+  const isConnecting = isStarting || isStopping || (localConnecting && !isConnected)
+  const canToggleConnection = shouldAllowConnectionToggle(engineState.kind, localConnecting)
 
   useEffect(() => {
     const initMode = async () => {
@@ -166,6 +174,7 @@ function HomePage() {
   // Guard against concurrent tray-triggered operations (prevents start/stop
   // cascade when the user clicks a tray item multiple times in quick succession).
   const trayOperationRef = useRef(false)
+  const connectionOperationRef = useRef(false)
   const engineStateRef = useRef(engineState)
   const subsRef = useRef(subs)
 
@@ -182,6 +191,18 @@ function HomePage() {
     if (engineState.kind === "running" || engineState.kind === "idle" || engineState.kind === "failed") {
       trayOperationRef.current = false
     }
+  }, [engineState.kind])
+
+  const previousNetworkInfoEngineKindRef = useRef<EngineState["kind"] | null>(null)
+  useEffect(() => {
+    const previous = previousNetworkInfoEngineKindRef.current
+    previousNetworkInfoEngineKindRef.current = engineState.kind
+
+    if (!shouldRefreshNetworkInfoOnEngineState(previous, engineState.kind)) {
+      return
+    }
+
+    requestNetworkInfoRefresh(engineState.kind === "running" ? "connected" : "disconnected")
   }, [engineState.kind])
 
   // 监听系统托盘发出的代理模式切换事件，执行完整关闭、配置合并及启动流程
@@ -284,8 +305,22 @@ function HomePage() {
 
   const [ipInfo, setIpInfo] = useState<{ region: string; isp: string } | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
+  const [networkInfoRefreshSeq, setNetworkInfoRefreshSeq] = useState(0)
 
   useEffect(() => {
+    const consumePendingRefresh = () => {
+      const pendingVersion = consumePendingNetworkInfoRefreshVersion()
+      if (pendingVersion !== null) {
+        setNetworkInfoRefreshSeq(pendingVersion)
+      }
+    }
+
+    consumePendingRefresh()
+    return subscribeNetworkInfoRefresh(consumePendingRefresh)
+  }, [])
+
+  useEffect(() => {
+    if (networkInfoRefreshSeq === 0) return
     let active = true
     // Query via the Rust backend (ip-api.com lang=zh-CN) — bypasses WKWebView's
     // plain-HTTP block and routes through the local mixed proxy when connected so
@@ -293,7 +328,8 @@ function HomePage() {
     const checkIp = async () => {
       setIpLoading(true)
       try {
-        const info = (await invoke("get_geoip_info", { useProxy: isConnected })) as {
+        const useProxy = engineStateRef.current.kind === "running"
+        const info = (await invoke("get_geoip_info", { useProxy })) as {
           region?: string
           isp?: string
         }
@@ -305,14 +341,14 @@ function HomePage() {
       }
     }
 
-    const delay = isConnected ? 1500 : 1000
+    const delay = engineStateRef.current.kind === "running" ? 1500 : 1000
     const timer = setTimeout(checkIp, delay)
 
     return () => {
       active = false
       clearTimeout(timer)
     }
-  }, [isConnected])
+  }, [networkInfoRefreshSeq])
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
@@ -350,12 +386,12 @@ function HomePage() {
   }
 
   const handleToggleConnection = async () => {
-    if (isConnecting) return
+    if (connectionOperationRef.current || !canToggleConnection) return
+    connectionOperationRef.current = true
     try {
       if (isConnected) {
         setLocalConnecting(true)
         await stopEngine()
-        setLocalConnecting(false)
       } else {
         const isTun = proxyMode === "tun"
         if (isTun) {
@@ -373,7 +409,9 @@ function HomePage() {
       }
     } catch (err) {
       console.error("Toggle connection failed:", err)
+    } finally {
       setLocalConnecting(false)
+      connectionOperationRef.current = false
     }
   }
 
@@ -674,7 +712,7 @@ function HomePage() {
                   {/* Button Click Core */}
                   <button
                     onClick={handleToggleConnection}
-                    disabled={isConnecting}
+                    disabled={!canToggleConnection}
                     className="w-full h-full rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 active:scale-95 z-10 focus:outline-none"
                   >
                     <div

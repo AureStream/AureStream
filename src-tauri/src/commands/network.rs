@@ -1,14 +1,15 @@
 use tauri_plugin_http::reqwest;
 
 #[tauri::command]
-pub async fn ping_tcp(host: String, port: u16) -> Result<u64, String> {
+pub async fn ping_tcp(host: String, port: u16, timeout_ms: Option<u64>) -> Result<u64, String> {
     use std::time::{Duration, Instant};
     use tokio::net::TcpStream;
     use tokio::time::timeout;
 
+    let timeout_ms = timeout_ms.unwrap_or(5000).clamp(1, 30000);
     let addr = format!("{}:{}", host, port);
     let start = Instant::now();
-    match timeout(Duration::from_millis(3000), TcpStream::connect(&addr)).await {
+    match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&addr)).await {
         Ok(Ok(_)) => {
             let duration = start.elapsed().as_millis() as u64;
             Ok(duration)
