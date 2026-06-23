@@ -71,31 +71,22 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
         setUpdateAvailable(false)
         setNewVersion(null)
         setUpdateObject(null)
-        if (!silent) {
-          await message("当前已是最新版本。", {
-            title: "未发现更新",
-            kind: "info",
-            okLabel: "确定",
-          })
-        }
+        // User requested no popup when update is not found
       }
     } catch (err) {
       console.error("Failed to check for updates:", err)
-      if (!silent) {
-        const errMsg = String(err)
-        if (errMsg.includes("None of the fallback platforms") || errMsg.includes("were found in the response")) {
-          await message("暂无匹配您当前系统架构的更新版本。", {
-            title: "未发现可用更新",
-            kind: "info",
-            okLabel: "确定",
-          })
-        } else {
-          await message(`检查更新失败: ${err}`, {
-            title: "错误",
-            kind: "error",
-            okLabel: "确定",
-          })
-        }
+      const errMsg = String(err)
+      if (errMsg.includes("None of the fallback platforms") || errMsg.includes("were found in the response")) {
+        // Treat as "not found", do not show popup
+        setUpdateAvailable(false)
+        setNewVersion(null)
+        setUpdateObject(null)
+      } else if (!silent) {
+        await message(`检查更新失败: ${err}`, {
+          title: "错误",
+          kind: "error",
+          okLabel: "确定",
+        })
       }
     } finally {
       setChecking(false)
@@ -110,11 +101,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         const errMsg = String(err)
         if (errMsg.includes("None of the fallback platforms") || errMsg.includes("were found in the response")) {
-          await message("暂无匹配您当前系统架构的更新包。", {
-            title: "更新失败",
-            kind: "warning",
-            okLabel: "确定",
-          })
+          // Treat as not found, no popup needed
         } else {
           await message(`获取更新包失败: ${err}`, {
             title: "更新失败",
