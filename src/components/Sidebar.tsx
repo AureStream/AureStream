@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { NavLink, useNavigate } from "react-router-dom"
+import { useUpdate } from "../contexts/UpdateContext"
 import { useTheme } from "./ThemeProvider"
 
 /* Icons */
@@ -23,6 +24,7 @@ const I = {
 export default function Sidebar() {
   const { i18n } = useTranslation()
   const { theme, toggleTheme } = useTheme()
+  const { updateAvailable, performUpdate } = useUpdate()
   const navigate = useNavigate()
 
   const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
@@ -40,13 +42,25 @@ export default function Sidebar() {
     <aside className="glass-sidebar w-[72px] shrink-0 flex flex-col z-40 h-full border-r border-border-glass items-center">
       {/* Brand / User Avatar */}
       <div className="flex flex-col items-center justify-center py-6">
-        <img
-          src={avatarUrl}
-          alt="Avatar"
-          className="w-10 h-10 aspect-square shrink-0 rounded-full object-cover shadow-glow-primary border border-border-glass cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200"
-          onClick={() => navigate("/dashboard/profile")}
-          title={l("Profile", "个人中心")}
-        />
+        {updateAvailable ? (
+          <button
+            onClick={performUpdate}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-success text-white shadow-lg shadow-success/30 cursor-pointer hover:scale-110 active:scale-95 transition-all duration-200 border border-success/40 animate-pulse"
+            title={l("Update Available! Click to Install", "发现新版本！点击进行更新")}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m18 15-6-6-6 6"/>
+            </svg>
+          </button>
+        ) : (
+          <img
+            src={avatarUrl}
+            alt="Avatar"
+            className="w-10 h-10 aspect-square shrink-0 rounded-full object-cover shadow-glow-primary border border-border-glass cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200"
+            onClick={() => navigate("/dashboard/profile")}
+            title={l("Profile", "个人中心")}
+          />
+        )}
       </div>
 
       {/* Main navigation */}
