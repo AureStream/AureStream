@@ -48,8 +48,8 @@ jobs:
         shell: bash
         run: |
           full='[
-            {"name":"linux-x64","os":"ubuntu-24.04","rust_target":"x86_64-unknown-linux-gnu"},
-            {"name":"linux-arm64","os":"ubuntu-24.04-arm","rust_target":"aarch64-unknown-linux-gnu"},
+            {"name":"linux-x64","os":"ubuntu-22.04","rust_target":"x86_64-unknown-linux-gnu"},
+            {"name":"linux-arm64","os":"ubuntu-22.04-arm","rust_target":"aarch64-unknown-linux-gnu"},
             {"name":"windows-x64","os":"windows-2025","rust_target":"x86_64-pc-windows-msvc"},
             {"name":"windows-arm64","os":"windows-11-arm","rust_target":"aarch64-pc-windows-msvc"},
             {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
@@ -109,7 +109,7 @@ jobs:
             patchelf \
             rpm \
             xdg-utils
-          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
 
       - name: Install NSIS and 7-Zip (Windows)
         if: runner.os == 'Windows'
