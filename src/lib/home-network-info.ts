@@ -22,8 +22,8 @@ export function shouldAllowConnectionToggle(
   engineKind: EngineState["kind"],
   localConnecting: boolean,
 ): boolean {
-  if (engineKind === "running") return true
-  return !localConnecting && engineKind !== "starting" && engineKind !== "stopping"
+  if (engineKind === "running" || engineKind === "starting") return true
+  return !localConnecting && engineKind !== "stopping"
 }
 
 export function requestNetworkInfoRefresh(_reason: NetworkInfoRefreshReason): void {

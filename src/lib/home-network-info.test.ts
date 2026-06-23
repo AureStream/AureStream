@@ -29,7 +29,7 @@ describe("home connection toggle policy", () => {
   })
 
   it("blocks transitional states and local connect operations", () => {
-    expect(shouldAllowConnectionToggle("starting", false)).toBe(false)
+    expect(shouldAllowConnectionToggle("starting", false)).toBe(true)
     expect(shouldAllowConnectionToggle("stopping", false)).toBe(false)
     expect(shouldAllowConnectionToggle("idle", true)).toBe(false)
   })

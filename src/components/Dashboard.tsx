@@ -86,8 +86,8 @@ function HomePage() {
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineState.kind === "running"
-  const isConnecting = isStarting || isStopping || (localConnecting && !isConnected)
+  const isConnected = engineState.kind === "running" || engineState.kind === "starting"
+  const isConnecting = isStopping || (localConnecting && !isConnected)
   const canToggleConnection = shouldAllowConnectionToggle(engineState.kind, localConnecting)
 
   useEffect(() => {
@@ -102,7 +102,7 @@ function HomePage() {
     // Only clear the local connecting flag on terminal states.
     // During mode switching (Stopping → Idle → Starting), the flag
     // is managed by the finally block of the switch/toggle handler.
-    if (engineState.kind === "running" || engineState.kind === "failed") {
+    if (engineState.kind === "running" || engineState.kind === "starting" || engineState.kind === "failed") {
       setLocalConnecting(false)
     }
   }, [engineState.kind])
@@ -157,7 +157,7 @@ function HomePage() {
 
   // Set start time reactively based on engineState
   useEffect(() => {
-    if (engineState.kind === "running" && engineState.since) {
+    if ((engineState.kind === "running" || engineState.kind === "starting") && engineState.since) {
       setStartTime(engineState.since * 1000)
     } else {
       setStartTime(null)
@@ -702,7 +702,7 @@ function HomePage() {
                     isConnected
                       ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
                       : isConnecting
-                      ? "from-secondary to-accent-purple animate-spin"
+                      ? "from-secondary to-accent-purple animate-spin-slow"
                       : "shadow-sm"
                   }`}
                   style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
