@@ -85,8 +85,8 @@ function HomePage() {
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
-  const isConnected = engineState.kind === "running" || engineState.kind === "starting"
-  const isConnecting = isStopping || (localConnecting && !isConnected)
+  const isConnected = engineState.kind === "running"
+  const isConnecting = isStopping || engineState.kind === "starting" || (localConnecting && !isConnected)
   const canToggleConnection = shouldAllowConnectionToggle(engineState.kind, localConnecting)
 
   useEffect(() => {
