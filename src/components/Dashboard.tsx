@@ -78,7 +78,6 @@ function HomePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const {
-    isStarting,
     isStopping,
     engineState
   } = useEngineState()
