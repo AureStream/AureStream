@@ -78,7 +78,6 @@ function HomePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const {
-    isStarting,
     isStopping,
     engineState
   } = useEngineState()
@@ -87,7 +86,7 @@ function HomePage() {
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
   const isConnected = engineState.kind === "running"
-  const isConnecting = isStarting || isStopping || (localConnecting && !isConnected)
+  const isConnecting = isStopping || engineState.kind === "starting" || (localConnecting && !isConnected)
   const canToggleConnection = shouldAllowConnectionToggle(engineState.kind, localConnecting)
 
   useEffect(() => {
@@ -102,7 +101,7 @@ function HomePage() {
     // Only clear the local connecting flag on terminal states.
     // During mode switching (Stopping → Idle → Starting), the flag
     // is managed by the finally block of the switch/toggle handler.
-    if (engineState.kind === "running" || engineState.kind === "failed") {
+    if (engineState.kind === "running" || engineState.kind === "starting" || engineState.kind === "failed") {
       setLocalConnecting(false)
     }
   }, [engineState.kind])
@@ -157,7 +156,7 @@ function HomePage() {
 
   // Set start time reactively based on engineState
   useEffect(() => {
-    if (engineState.kind === "running" && engineState.since) {
+    if ((engineState.kind === "running" || engineState.kind === "starting") && engineState.since) {
       setStartTime(engineState.since * 1000)
     } else {
       setStartTime(null)
@@ -696,18 +695,22 @@ function HomePage() {
               <div className="absolute inset-6 rounded-full border border-secondary/5" />
 
               {/* Gradient circular ring container */}
-              <div
-                className={`absolute w-36 h-36 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
-                  isConnected
-                    ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
-                    : isConnecting
-                    ? "from-secondary to-accent-purple animate-spin"
-                    : "shadow-sm"
-                }`}
-                style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
-              >
+              <div className="absolute w-36 h-36 rounded-full">
+                <div
+                  className={`absolute inset-0 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
+                    isConnected
+                      ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
+                      : isConnecting
+                      ? "from-secondary to-accent-purple animate-spin-slow"
+                      : "shadow-sm"
+                  }`}
+                  style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
+                >
+                  <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt" />
+                </div>
+
                 {/* Central solid white / dark bg circle */}
-                <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner relative overflow-hidden">
+                <div className="absolute inset-[8px] rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner overflow-hidden">
 
                   {/* Button Click Core */}
                   <button

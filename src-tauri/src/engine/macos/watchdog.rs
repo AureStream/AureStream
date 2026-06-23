@@ -215,16 +215,16 @@ async fn restart_tun_send_safe(app: AppHandle, path: Arc<String>) -> Result<(), 
     tokio::spawn(async move {
         match exit_rx.recv().await {
             Ok(exit) => {
-            log::info!(
-                "[helper-bridge] sing-box exit (watchdog restart) pid={} code={}",
-                exit.pid,
-                exit.exit_code
-            );
-            let payload = tauri_plugin_shell::process::TerminatedPayload {
-                code: Some(exit.exit_code),
-                signal: None,
-            };
-            handle_process_termination(&exit_app, &exit_mode, payload, epoch_snap).await;
+                log::info!(
+                    "[helper-bridge] sing-box exit (watchdog restart) pid={} code={}",
+                    exit.pid,
+                    exit.exit_code
+                );
+                let payload = tauri_plugin_shell::process::TerminatedPayload {
+                    code: Some(exit.exit_code),
+                    signal: None,
+                };
+                handle_process_termination(&exit_app, &exit_mode, payload, epoch_snap).await;
             }
             Err(_) => {
                 log::warn!("[helper-bridge] exit broadcast closed during watchdog restart");

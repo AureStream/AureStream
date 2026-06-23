@@ -54,6 +54,16 @@ pub trait EngineManager {
     async fn ensure_installed(app: &tauri::AppHandle) -> Result<(), String>;
     async fn uninstall_service(app: &tauri::AppHandle) -> Result<(), String>;
     async fn probe(app: &tauri::AppHandle) -> Result<String, String>;
+
+    fn start_settle_delay(mode: &ProxyMode) -> std::time::Duration {
+        match mode {
+            // SCM service startup has inherent latency, but the readiness prober
+            // polls immediately so a long blind sleep is unnecessary.
+            ProxyMode::IntoProxy => std::time::Duration::from_millis(200),
+            // Direct child process — probe starts right away.
+            ProxyMode::SystemProxy => std::time::Duration::ZERO,
+        }
+    }
 }
 
 pub fn cleanup_on_shutdown() {
@@ -63,7 +73,10 @@ pub fn cleanup_on_shutdown() {
     #[cfg(target_os = "macos")]
     {
         if let Err(e) = aurestream_plugin_privilege::macos::helper::api::stop_sing_box() {
-            ::log::warn!("[shutdown] helper stop_sing_box failed (may be inactive): {}", e);
+            ::log::warn!(
+                "[shutdown] helper stop_sing_box failed (may be inactive): {}",
+                e
+            );
         } else {
             ::log::info!("[shutdown] helper-managed sing-box stopped");
         }
@@ -98,4 +111,54 @@ pub fn resolve_proxy_bypass(app: &tauri::AppHandle) -> String {
         .and_then(|s| s.get(aurestream_plugin_proxy::bypass::PROXY_BYPASS_STORE_KEY))
         .and_then(|v| v.as_str().map(String::from));
     aurestream_plugin_proxy::bypass::bypass_from_store_value(raw)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestEngine;
+
+    impl EngineManager for TestEngine {
+        async fn start(
+            _app: &tauri::AppHandle,
+            _mode: ProxyMode,
+            _config_path: String,
+            _start_epoch: u64,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn stop(_app: &tauri::AppHandle) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn restart(_app: &tauri::AppHandle) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn ensure_installed(_app: &tauri::AppHandle) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn uninstall_service(_app: &tauri::AppHandle) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn probe(_app: &tauri::AppHandle) -> Result<String, String> {
+            Ok("ok".into())
+        }
+    }
+
+    #[test]
+    fn start_settle_delay_matches_onebox_flow() {
+        assert_eq!(
+            TestEngine::start_settle_delay(&ProxyMode::SystemProxy),
+            std::time::Duration::ZERO
+        );
+        assert_eq!(
+            TestEngine::start_settle_delay(&ProxyMode::IntoProxy),
+            std::time::Duration::from_millis(200)
+        );
+    }
 }

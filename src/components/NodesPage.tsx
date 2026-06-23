@@ -8,6 +8,7 @@ import { getNodeLatency, initNodeLatency, setNodeLatency } from "../lib/node-lat
 import { getNodeLatencyTone } from "../lib/node-latency-tone"
 import { requestNetworkInfoRefresh } from "../lib/home-network-info"
 import { testNodeTcpLatency } from "../lib/node-speed-test"
+import { buildNodeList, type NodeData } from "../lib/nodes-page-model"
 
 /* ── Icons ── */
 const I = {
@@ -17,17 +18,6 @@ const I = {
   Wifi: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>),
   Zap: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>),
   Sort: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 4-8 8h14L15 4zM9 20l8-8H3l6 8z"/></svg>),
-}
-
-interface NodeData {
-  id: string
-  name: string
-  flag: string
-  ping: number
-  protocol: string
-  region: "asia" | "america" | "europe"
-  server: string
-  port: number
 }
 
 export default function NodesPage() {
@@ -59,45 +49,7 @@ export default function NodesPage() {
       try {
         const config = await getSubscriptionConfig(subId)
         if (config && Array.isArray(config.outbounds)) {
-          const filtered = config.outbounds.filter((item: any) => {
-            return item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block" && item.type !== "dns";
-          });
-          const mapped = filtered.map((n: any) => {
-            const tag = n.tag || "";
-            let flag = "🌐";
-            let region: "asia" | "america" | "europe" = "asia";
-            
-            if (tag.includes("日本") || tag.toLowerCase().includes("jp") || tag.toLowerCase().includes("tokyo")) {
-              flag = "🇯🇵";
-              region = "asia";
-            } else if (tag.includes("新加坡") || tag.toLowerCase().includes("sg") || tag.toLowerCase().includes("singapore")) {
-              flag = "🇸🇬";
-              region = "asia";
-            } else if (tag.includes("香港") || tag.toLowerCase().includes("hk") || tag.toLowerCase().includes("hong kong")) {
-              flag = "🇭🇰";
-              region = "asia";
-            } else if (tag.includes("美国") || tag.toLowerCase().includes("us") || tag.toLowerCase().includes("america") || tag.toLowerCase().includes("los angeles") || tag.toLowerCase().includes("new york")) {
-              flag = "🇺🇸";
-              region = "america";
-            } else if (tag.includes("英国") || tag.toLowerCase().includes("uk") || tag.toLowerCase().includes("london") || tag.toLowerCase().includes("gb")) {
-              flag = "🇬🇧";
-              region = "europe";
-            } else if (tag.toLowerCase().includes("de") || tag.includes("德国") || tag.toLowerCase().includes("frankfurt")) {
-              flag = "🇩🇪";
-              region = "europe";
-            }
-            
-            return {
-              id: tag,
-              name: tag,
-              ping: getNodeLatency(tag) ?? 0,
-              flag,
-              protocol: n.type ? n.type.toUpperCase() : "SHADOWSOCKS",
-              region,
-              server: n.server || "",
-              port: Number(n.server_port) || 0,
-            };
-          });
+          const mapped = buildNodeList(config.outbounds, getNodeLatency);
           setNodes(mapped);
         }
       } catch (err) {
@@ -214,7 +166,7 @@ export default function NodesPage() {
             
             return (
               <div 
-                key={node.id}
+                key={node.key}
                 onClick={async () => {
                   setConnectedNodeId(node.id)
                   if (activeSubId) {

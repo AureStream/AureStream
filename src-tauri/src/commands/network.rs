@@ -1,12 +1,21 @@
 use tauri_plugin_http::reqwest;
 
+const PING_TCP_DEFAULT_TIMEOUT_MS: u64 = 5000;
+const PING_TCP_MAX_TIMEOUT_MS: u64 = 30000;
+
+fn normalize_ping_tcp_timeout_ms(timeout_ms: Option<u64>) -> u64 {
+    timeout_ms
+        .unwrap_or(PING_TCP_DEFAULT_TIMEOUT_MS)
+        .clamp(1, PING_TCP_MAX_TIMEOUT_MS)
+}
+
 #[tauri::command]
 pub async fn ping_tcp(host: String, port: u16, timeout_ms: Option<u64>) -> Result<u64, String> {
     use std::time::{Duration, Instant};
     use tokio::net::TcpStream;
     use tokio::time::timeout;
 
-    let timeout_ms = timeout_ms.unwrap_or(5000).clamp(1, 30000);
+    let timeout_ms = normalize_ping_tcp_timeout_ms(timeout_ms);
     let addr = format!("{}:{}", host, port);
     let start = Instant::now();
     match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&addr)).await {
@@ -182,4 +191,29 @@ pub async fn get_geoip_info(app: tauri::AppHandle, use_proxy: bool) -> Result<Ge
     }
 
     Err("Failed to query GeoIP info".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        normalize_ping_tcp_timeout_ms, PING_TCP_DEFAULT_TIMEOUT_MS, PING_TCP_MAX_TIMEOUT_MS,
+    };
+
+    #[test]
+    fn ping_tcp_defaults_to_five_seconds() {
+        assert_eq!(
+            normalize_ping_tcp_timeout_ms(None),
+            PING_TCP_DEFAULT_TIMEOUT_MS
+        );
+        assert_eq!(PING_TCP_DEFAULT_TIMEOUT_MS, 5000);
+    }
+
+    #[test]
+    fn ping_tcp_clamps_explicit_timeout() {
+        assert_eq!(normalize_ping_tcp_timeout_ms(Some(0)), 1);
+        assert_eq!(
+            normalize_ping_tcp_timeout_ms(Some(PING_TCP_MAX_TIMEOUT_MS + 1)),
+            PING_TCP_MAX_TIMEOUT_MS
+        );
+    }
 }

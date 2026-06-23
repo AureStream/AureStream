@@ -20,7 +20,8 @@ import { STAGE_VERSION_STORE_KEY, selectedNodeTagStoreKey, LEGACY_SELECTED_NODE_
 import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB, patchDnsProxyConfig } from './helper';
 
 import { configType, getConfigTemplateCacheKey } from '../common';
-import { getBuiltInTemplate, normalizeTemplateConfig } from '../templates';
+import { cacheFileNameForProfile } from '../rule-cache';
+import { getBuiltInTemplate } from '../templates';
 
 const templateStringCache = new Map<string, string>();
 const templateObjectCache = new Map<string, object>();
@@ -54,12 +55,6 @@ async function getConfigTemplate(mode: configType): Promise<any> {
       await setStoreValue(cacheKey, config);
     }
 
-    if (normalizeTemplateConfig(parsed)) {
-        config = JSON.stringify(parsed);
-        templateStringCache.set(cacheKey, config);
-        await setStoreValue(cacheKey, config);
-    }
-
     templateObjectCache.set(cacheKey, parsed);
     return structuredClone(parsed);
 }
@@ -69,9 +64,12 @@ export function clearTemplateResolvedCache() {
 }
 
 async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
-    // TODO: needs refine
-    newConfig.experimental.cache_file.path = dbCacheFilePath;
-    newConfig.experimental.cache_file.store_fakeip = true;
+    newConfig.experimental.cache_file = {
+        enabled: true,
+        path: dbCacheFilePath,
+        store_fakeip: true,
+        store_rdrc: true,
+    };
 
     newConfig.experimental.clash_api.external_controller =
         `127.0.0.1:${await getControllerPort()}`;
@@ -116,7 +114,6 @@ export function makeProfile(routing: RoutingMode, tun: boolean): MergeProfile {
 
 type MergeConfigOptions = MergeProfile & {
     label: string;
-    cacheFileName: string;
 }
 
 /** Fingerprint of all inputs that affect generated config.json (for merge skip cache). */
@@ -243,17 +240,21 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         applyCustomRuleSet(newConfig, PROXY_RULE_SLOT, LEGACY_PROXY_RULE_SLOT, proxyCustomRuleSet);
     }
 
-    const dbCacheFilePath = await path.join(appConfigPath, options.cacheFileName);
+    const dbCacheFilePath = await path.join(appConfigPath, cacheFileNameForProfile(options.mode));
     await Promise.all([
         patchDnsProxyConfig(newConfig),
         updateExperimentalConfig(newConfig, dbCacheFilePath),
     ]);
 
-    // Resolve local rule_set paths to absolute paths using Tauri's resource resolver
+    // Resolve local rule_set paths, and force remote rule_sets to download
+    // through the direct outbound so they don't compete with proxy setup.
     if (newConfig.route?.rule_set) {
         for (const ruleSet of newConfig.route.rule_set) {
             if (ruleSet.type === "local" && ruleSet.path) {
                 ruleSet.path = await path.resolveResource(ruleSet.path);
+            }
+            if (ruleSet.type === "remote" && !ruleSet.download_detour) {
+                ruleSet.download_detour = "direct";
             }
         }
     }
@@ -279,7 +280,6 @@ export function setRuleConfig(identifier: string, tun: boolean) {
     return mergeConfig(identifier, {
         mode,
         customRules: true,
-        cacheFileName: 'rule-cache-v2.db',
         label: `写入[规则]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }
@@ -289,7 +289,6 @@ export function setGlobalConfig(identifier: string, tun: boolean) {
     return mergeConfig(identifier, {
         mode,
         customRules: false,
-        cacheFileName: 'global-cache-v2.db',
         label: `写入[全局]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }

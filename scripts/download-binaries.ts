@@ -35,6 +35,7 @@ const RUST_TARGET_TRIPLES = {
     },
     "windows": {
         "amd64": "x86_64-pc-windows-msvc",
+        "arm64": "aarch64-pc-windows-msvc",
     }
 } as const;
 
@@ -246,45 +247,6 @@ async function downloadDatabaseFiles(): Promise<void> {
     await Promise.all(downloadTasks);
 }
 
-async function downloadRuleSets(): Promise<void> {
-    const rules = [
-        {
-            name: 'geoip-cn.srs',
-            url: 'https://github.com/SagerNet/sing-geoip/raw/rule-set/geoip-cn.srs',
-        },
-        {
-            name: 'geosite-geolocation-cn.srs',
-            url: 'https://github.com/SagerNet/sing-geosite/raw/rule-set/geosite-geolocation-cn.srs',
-        },
-        {
-            name: 'AdGuardSDNSFilterSingBox.srs',
-            url: 'https://github.com/xmdhs/sing-box-ruleset/raw/rule-set/AdGuardSDNSFilterSingBox.srs',
-        },
-        {
-            name: 'chrome-doh.json',
-            url: 'https://gist.githubusercontent.com/xmdhs/71fc5ff6ef29f5ecaf2c52b8de5c3172/raw/chrome-doh.json',
-        },
-        {
-            name: 'ext-cn-list.srs',
-            url: 'https://github.com/xmdhs/cn-domain-list/raw/rule-set/ext-cn-list.srs',
-        }
-    ];
-
-    const rulesDir = 'src-tauri/resources/rules';
-    !fs.existsSync(rulesDir) && fs.mkdirSync(rulesDir, { recursive: true });
-
-    const downloadTasks = rules.map(async (rule) => {
-        const startTime = Date.now();
-        const destPath = path.join(rulesDir, rule.name);
-        console.log(`Downloading rule set: ${rule.name}...`);
-        await downloadFile(rule.url, destPath);
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`Downloaded rule set to: ${destPath} (${elapsed}s)`);
-    });
-
-    await Promise.all(downloadTasks);
-}
-
 // 并行执行所有下载任务
 if (SkipVersionList.includes(SING_BOX_VERSION)) {
     console.log(`Skipping download for version ${SING_BOX_VERSION}`);
@@ -296,7 +258,6 @@ if (SkipVersionList.includes(SING_BOX_VERSION)) {
     Promise.all([
         downloadEmbeddingExternalBinaries(),
         downloadDatabaseFiles(),
-        downloadRuleSets(),
         // downloadCronetLibraries()
     ]).then(() => {
         const totalElapsed = ((Date.now() - scriptStartTime) / 1000).toFixed(2);

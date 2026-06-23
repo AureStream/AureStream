@@ -10,7 +10,7 @@ export function shouldRefreshNetworkInfoOnEngineState(
   previous: EngineState["kind"] | null,
   current: EngineState["kind"],
 ): boolean {
-  if (previous === null) return current === "running"
+  if (previous === null) return current === "idle" || current === "running"
   if (previous === current) return false
 
   const connected = previous !== "running" && current === "running"
@@ -22,8 +22,8 @@ export function shouldAllowConnectionToggle(
   engineKind: EngineState["kind"],
   localConnecting: boolean,
 ): boolean {
-  if (engineKind === "running") return true
-  return !localConnecting && engineKind !== "starting" && engineKind !== "stopping"
+  if (engineKind === "running" || engineKind === "starting") return true
+  return !localConnecting && engineKind !== "stopping"
 }
 
 export function requestNetworkInfoRefresh(_reason: NetworkInfoRefreshReason): void {

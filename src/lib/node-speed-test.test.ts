@@ -45,4 +45,28 @@ describe("node TCP speed test", () => {
 
     expect(invokeMock).not.toHaveBeenCalled()
   })
+
+  it("returns timeout after the configured deadline even when the backend call is still pending", async () => {
+    vi.useFakeTimers()
+    try {
+      invokeMock.mockReturnValue(new Promise(() => {}))
+
+      const latencyPromise = testNodeTcpLatency(
+        {
+          id: "node-a",
+          server: "example.com",
+          port: 443,
+        },
+        5000,
+      )
+
+      await vi.advanceTimersByTimeAsync(4999)
+      await expect(Promise.race([latencyPromise, Promise.resolve("pending")])).resolves.toBe("pending")
+
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(latencyPromise).resolves.toBe(-1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

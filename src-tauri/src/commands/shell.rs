@@ -86,7 +86,10 @@ pub async fn quit(app: AppHandle) {
     match timeout(STOP_TIMEOUT, stop(app.clone())).await {
         Ok(Ok(())) => log::info!("[quit] proxy stopped successfully"),
         Ok(Err(e)) => log::error!("[quit] failed to stop proxy: {}", e),
-        Err(_) => log::error!("[quit] timed out after {:?} waiting for proxy to stop, exiting anyway", STOP_TIMEOUT),
+        Err(_) => log::error!(
+            "[quit] timed out after {:?} waiting for proxy to stop, exiting anyway",
+            STOP_TIMEOUT
+        ),
     }
 
     // Belt-and-suspenders: after the stop attempt (regardless of outcome),

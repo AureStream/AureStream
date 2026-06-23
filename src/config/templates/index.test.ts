@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { getBuiltInTemplate } from "./index"
+import { MIXED_GLOBAL_TEMPLATE } from "./generated"
 
 function inboundTypes(mode: Parameters<typeof getBuiltInTemplate>[0]) {
   const config = JSON.parse(getBuiltInTemplate(mode))
@@ -76,5 +77,9 @@ describe("built-in sing-box templates", () => {
         Array.isArray(rule.domain) && rule.domain.includes("proxy-tag.oneoh.cloud")
       )
     ).toBe(true)
+  })
+
+  it("uses the generated build-time snapshot for global templates", () => {
+    expect(JSON.parse(getBuiltInTemplate("mixed-global"))).toEqual(MIXED_GLOBAL_TEMPLATE)
   })
 })

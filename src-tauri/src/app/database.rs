@@ -58,4 +58,3 @@ pub fn get_migrations() -> Vec<Migration> {
         },
     ]
 }
-

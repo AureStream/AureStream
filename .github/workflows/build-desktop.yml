@@ -3,16 +3,30 @@ name: Build desktop bundles
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        description: "Platform to build"
-        type: choice
-        default: all
-        options:
-          - all
-          - linux-x64
-          - windows-x64
-          - macos-aarch64
-          - macos-x64
+      linux-x64:
+        description: "Build Linux x64"
+        type: boolean
+        default: true
+      linux-arm64:
+        description: "Build Linux arm64"
+        type: boolean
+        default: true
+      windows-x64:
+        description: "Build Windows x64"
+        type: boolean
+        default: true
+      windows-arm64:
+        description: "Build Windows arm64"
+        type: boolean
+        default: true
+      macos-aarch64:
+        description: "Build macOS ARM64"
+        type: boolean
+        default: true
+      macos-x64:
+        description: "Build macOS x64"
+        type: boolean
+        default: true
   release:
     types: [published]
 
@@ -34,18 +48,32 @@ jobs:
         shell: bash
         run: |
           full='[
-            {"name":"linux-x64","os":"ubuntu-24.04","rust_target":"x86_64-unknown-linux-gnu"},
+            {"name":"linux-x64","os":"ubuntu-22.04","rust_target":"x86_64-unknown-linux-gnu"},
+            {"name":"linux-arm64","os":"ubuntu-22.04-arm","rust_target":"aarch64-unknown-linux-gnu"},
             {"name":"windows-x64","os":"windows-2025","rust_target":"x86_64-pc-windows-msvc"},
+            {"name":"windows-arm64","os":"windows-11-arm","rust_target":"aarch64-pc-windows-msvc"},
             {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
             {"name":"macos-x64","os":"macos-15-intel","rust_target":"x86_64-apple-darwin"}
           ]'
-          sel='${{ github.event.inputs.platform }}'
-          if [[ -z "$sel" || "$sel" == "all" ]]; then
-            matrix=$(echo "$full" | jq -c '{include: .}')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            matrix=$(echo "$full" | jq -c \
+              --arg linux_x64 "${{ github.event.inputs.linux-x64 }}" \
+              --arg linux_arm64 "${{ github.event.inputs.linux-arm64 }}" \
+              --arg windows_x64 "${{ github.event.inputs.windows-x64 }}" \
+              --arg windows_arm64 "${{ github.event.inputs.windows-arm64 }}" \
+              --arg macos_aarch64 "${{ github.event.inputs.macos-aarch64 }}" \
+              --arg macos_x64 "${{ github.event.inputs.macos-x64 }}" \
+              '{include: [.[] | select(
+                (.name == "linux-x64" and $linux_x64 == "true") or
+                (.name == "linux-arm64" and $linux_arm64 == "true") or
+                (.name == "windows-x64" and $windows_x64 == "true") or
+                (.name == "windows-arm64" and $windows_arm64 == "true") or
+                (.name == "macos-aarch64" and $macos_aarch64 == "true") or
+                (.name == "macos-x64" and $macos_x64 == "true")
+              )]}')
           else
-            matrix=$(echo "$full" | jq -c --arg s "$sel" '{include: [.[] | select(.name == $s)]}')
+            matrix=$(echo "$full" | jq -c '{include: .}')
           fi
-          echo "Selected platform: ${sel:-all}"
           echo "matrix=$matrix"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -59,6 +87,8 @@ jobs:
 
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+      NO_STRIP: "true"
 
     steps:
       - name: Checkout
@@ -69,6 +99,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            binutils \
             libwebkit2gtk-4.1-dev \
             build-essential \
             curl wget file \
@@ -78,10 +109,11 @@ jobs:
             librsvg2-dev \
             patchelf \
             rpm \
-            libfuse2
+            xdg-utils
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
 
       - name: Install NSIS and 7-Zip (Windows)
-        if: matrix.os == 'windows-2025'
+        if: runner.os == 'Windows'
         run: choco install nsis 7zip -y
 
       - name: Setup Node
@@ -126,8 +158,8 @@ jobs:
         run: pnpm download-binaries
 
       - name: Build Windows TUN service
-        if: matrix.os == 'windows-2025'
-        run: pnpm build-tun --release
+        if: runner.os == 'Windows'
+        run: pnpm build-tun --release --target ${{ matrix.rust_target }}
 
       - name: Build macOS privileged helper
         if: runner.os == 'macOS'
@@ -138,16 +170,32 @@ jobs:
           fi
           pnpm pre-bundle
 
+      - name: Work around ldd crash on static sing-box binary (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          # sing-box (aurestream-core) is a statically-linked Go binary.
+          # linuxdeploy runs `ldd` on every ELF in the AppDir to discover
+          # shared libraries; ldd exits 1 on static binaries, and the C++
+          # runtime inside linuxdeploy throws std::runtime_error instead
+          # of handling it gracefully.  Replace ldd with a wrapper that
+          # returns success for static ELFs.
+          sudo cp /usr/bin/ldd /usr/bin/ldd.orig
+          sudo cp scripts/ldd-static-safe.sh /usr/bin/ldd
+          sudo chmod +x /usr/bin/ldd
+
       - name: Build Tauri bundle
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "true"
         with:
           args: >-
             --target ${{ matrix.rust_target }}
             ${{ startsWith(matrix.os, 'ubuntu') && '--config src-tauri/tauri.linux.conf.json' || '' }}
+            --verbose
 
       - name: Sign macOS app bundle for SMJobBless
         if: runner.os == 'macOS'
@@ -169,6 +217,7 @@ jobs:
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.rpm
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/msi/*.msi
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
           if-no-files-found: warn
 
@@ -179,7 +228,7 @@ jobs:
           mkdir -p release-files
           find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
-            -name '*.exe' -o -name '*.dmg' -o \
+            -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o \
             -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
           \) -exec cp {} release-files/ \;
           ls -la release-files/
