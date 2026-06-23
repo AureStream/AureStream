@@ -3,18 +3,30 @@ name: Build desktop bundles
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        description: "Platform to build"
-        type: choice
-        default: all
-        options:
-          - all
-          - linux-x64
-          - linux-arm64
-          - windows-x64
-          - windows-arm64
-          - macos-aarch64
-          - macos-x64
+      linux-x64:
+        description: "Build Linux x64"
+        type: boolean
+        default: true
+      linux-arm64:
+        description: "Build Linux arm64"
+        type: boolean
+        default: true
+      windows-x64:
+        description: "Build Windows x64"
+        type: boolean
+        default: true
+      windows-arm64:
+        description: "Build Windows arm64"
+        type: boolean
+        default: true
+      macos-aarch64:
+        description: "Build macOS ARM64"
+        type: boolean
+        default: true
+      macos-x64:
+        description: "Build macOS x64"
+        type: boolean
+        default: true
   release:
     types: [published]
 
@@ -43,13 +55,25 @@ jobs:
             {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
             {"name":"macos-x64","os":"macos-15-intel","rust_target":"x86_64-apple-darwin"}
           ]'
-          sel='${{ github.event.inputs.platform }}'
-          if [[ -z "$sel" || "$sel" == "all" ]]; then
-            matrix=$(echo "$full" | jq -c '{include: .}')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            matrix=$(echo "$full" | jq -c \
+              --arg linux_x64 "${{ github.event.inputs.linux-x64 }}" \
+              --arg linux_arm64 "${{ github.event.inputs.linux-arm64 }}" \
+              --arg windows_x64 "${{ github.event.inputs.windows-x64 }}" \
+              --arg windows_arm64 "${{ github.event.inputs.windows-arm64 }}" \
+              --arg macos_aarch64 "${{ github.event.inputs.macos-aarch64 }}" \
+              --arg macos_x64 "${{ github.event.inputs.macos-x64 }}" \
+              '{include: [.[] | select(
+                (.name == "linux-x64" and $linux_x64 == "true") or
+                (.name == "linux-arm64" and $linux_arm64 == "true") or
+                (.name == "windows-x64" and $windows_x64 == "true") or
+                (.name == "windows-arm64" and $windows_arm64 == "true") or
+                (.name == "macos-aarch64" and $macos_aarch64 == "true") or
+                (.name == "macos-x64" and $macos_x64 == "true")
+              )]}')
           else
-            matrix=$(echo "$full" | jq -c --arg s "$sel" '{include: [.[] | select(.name == $s)]}')
+            matrix=$(echo "$full" | jq -c '{include: .}')
           fi
-          echo "Selected platform: ${sel:-all}"
           echo "matrix=$matrix"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
