@@ -87,7 +87,7 @@ jobs:
 
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
-      APPIMAGE_EXTRACT_AND_RUN: 1
+      APPIMAGE_EXTRACT_AND_RUN: "1"
 
     steps:
       - name: Checkout
@@ -107,8 +107,8 @@ jobs:
             librsvg2-dev \
             patchelf \
             rpm \
-            libfuse2 \
             xdg-utils
+          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
 
       - name: Install NSIS and 7-Zip (Windows)
         if: runner.os == 'Windows'
@@ -174,6 +174,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           args: >-
             --target ${{ matrix.rust_target }}
