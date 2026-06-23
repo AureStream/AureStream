@@ -63,6 +63,7 @@ jobs:
 
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+      APPIMAGE_EXTRACT_AND_RUN: 1
 
     steps:
       - name: Checkout

@@ -6,8 +6,11 @@ use crate::engine::ports::{
 use crate::engine::process::{pm_snapshot, ProcessManager};
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 use crate::engine::{
-    config_check, perf, process, readiness, EngineManager, PlatformEngine, ProxyMode,
+    config_check, perf, readiness, EngineManager, PlatformEngine, ProxyMode,
 };
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use crate::engine::process;
+
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
