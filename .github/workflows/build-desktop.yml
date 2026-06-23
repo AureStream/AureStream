@@ -170,6 +170,19 @@ jobs:
           fi
           pnpm pre-bundle
 
+      - name: Work around ldd crash on static sing-box binary (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          # sing-box (aurestream-core) is a statically-linked Go binary.
+          # linuxdeploy runs `ldd` on every ELF in the AppDir to discover
+          # shared libraries; ldd exits 1 on static binaries, and the C++
+          # runtime inside linuxdeploy throws std::runtime_error instead
+          # of handling it gracefully.  Replace ldd with a wrapper that
+          # returns success for static ELFs.
+          sudo cp /usr/bin/ldd /usr/bin/ldd.orig
+          sudo cp scripts/ldd-static-safe.sh /usr/bin/ldd
+          sudo chmod +x /usr/bin/ldd
+
       - name: Build Tauri bundle
         uses: tauri-apps/tauri-action@v0
         env:

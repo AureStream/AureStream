@@ -57,8 +57,11 @@ pub trait EngineManager {
 
     fn start_settle_delay(mode: &ProxyMode) -> std::time::Duration {
         match mode {
-            ProxyMode::IntoProxy => std::time::Duration::from_millis(1500),
-            ProxyMode::SystemProxy => std::time::Duration::from_millis(1000),
+            // SCM service startup has inherent latency, but the readiness prober
+            // polls immediately so a long blind sleep is unnecessary.
+            ProxyMode::IntoProxy => std::time::Duration::from_millis(200),
+            // Direct child process — probe starts right away.
+            ProxyMode::SystemProxy => std::time::Duration::ZERO,
         }
     }
 }
@@ -151,11 +154,11 @@ mod tests {
     fn start_settle_delay_matches_onebox_flow() {
         assert_eq!(
             TestEngine::start_settle_delay(&ProxyMode::SystemProxy),
-            std::time::Duration::from_millis(1000)
+            std::time::Duration::ZERO
         );
         assert_eq!(
             TestEngine::start_settle_delay(&ProxyMode::IntoProxy),
-            std::time::Duration::from_millis(1500)
+            std::time::Duration::from_millis(200)
         );
     }
 }

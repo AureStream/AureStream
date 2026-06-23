@@ -101,6 +101,7 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
 #[tauri::command]
 pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Result<(), String> {
     let action = next_action_token();
+    let total_start = std::time::Instant::now();
 
     // ── Concurrency guard: only one start() can proceed at a time. ──────
     // Takes the lock BEFORE logging, so that concurrent callers queue up
@@ -225,7 +226,10 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
                 "last_proxy_mode",
                 serde_json::Value::String(mode_key.to_string()),
             );
-            store.save().ok();
+            // fire-and-forget — don't block the start path on store I/O
+            tokio::spawn(async move {
+                store.save().ok();
+            });
         }
     }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
@@ -262,6 +266,10 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
         post_pid, post_alive
     );
     readiness::spawn(app.clone(), start_epoch);
+    ::log::info!(
+        "[start] action={action} done in {}ms (total elapsed from entry)",
+        total_start.elapsed().as_millis()
+    );
     Ok(())
 }
 

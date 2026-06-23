@@ -64,9 +64,12 @@ export function clearTemplateResolvedCache() {
 }
 
 async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
-    // TODO: needs refine
-    newConfig.experimental.cache_file.path = dbCacheFilePath;
-    newConfig.experimental.cache_file.store_fakeip = true;
+    newConfig.experimental.cache_file = {
+        enabled: true,
+        path: dbCacheFilePath,
+        store_fakeip: true,
+        store_rdrc: true,
+    };
 
     newConfig.experimental.clash_api.external_controller =
         `127.0.0.1:${await getControllerPort()}`;
@@ -243,11 +246,15 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         updateExperimentalConfig(newConfig, dbCacheFilePath),
     ]);
 
-    // Resolve local rule_set paths to absolute paths using Tauri's resource resolver
+    // Resolve local rule_set paths, and force remote rule_sets to download
+    // through the direct outbound so they don't compete with proxy setup.
     if (newConfig.route?.rule_set) {
         for (const ruleSet of newConfig.route.rule_set) {
             if (ruleSet.type === "local" && ruleSet.path) {
                 ruleSet.path = await path.resolveResource(ruleSet.path);
+            }
+            if (ruleSet.type === "remote" && !ruleSet.download_detour) {
+                ruleSet.download_detour = "direct";
             }
         }
     }

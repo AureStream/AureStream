@@ -8,8 +8,8 @@ use crate::engine::ports::controller_port;
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 
 pub(crate) const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
-const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(150);
-const POLL_INTERVAL: Duration = Duration::from_millis(200);
+const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
+const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 pub fn spawn(app: AppHandle, start_epoch: u64) {
     tokio::spawn(async move {
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn startup_timeout_covers_slow_rule_set_updates() {
         assert_eq!(STARTUP_TIMEOUT, Duration::from_secs(20));
-        assert_eq!(POLL_INTERVAL, Duration::from_millis(200));
-        assert_eq!(PROBE_CONNECT_TIMEOUT, Duration::from_millis(150));
+        assert_eq!(POLL_INTERVAL, Duration::from_millis(100));
+        assert_eq!(PROBE_CONNECT_TIMEOUT, Duration::from_millis(100));
     }
 }
