@@ -168,37 +168,36 @@ impl EngineManager for MacOSEngine {
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
             }
             ProxyMode::IntoProxy => {
+                // Step 1: Stop TUN process (includes two-phase DNS restore)
                 let stop_result = stop_tun_process().await.map_err(|e| {
                     log::error!("Failed to stop TUN process: {}", e);
                     e
                 });
 
+                // Step 2: Cancel watchdog
                 watchdog::cancel();
 
-                // Centralized port cleanup: ask the root helper to kill all port
-                // holders (any TCP state), then poll TcpListener::bind until ports
-                // are truly free.
+                // Step 3: Parallel port cleanup (optimized from serial)
                 let mixed = crate::engine::ports::mixed_proxy_port(app);
                 let ctrl = crate::engine::ports::controller_port(app);
-                if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
-                    mixed,
-                    std::time::Duration::from_secs(10),
+
+                let ports = if ctrl != mixed {
+                    vec![mixed, ctrl]
+                } else {
+                    vec![mixed]
+                };
+
+                // Parallel cleanup with 5 second timeout per port (reduced from 10)
+                if let Err(e) = crate::engine::ports::ensure_all_ports_free_parallel(
+                    &ports,
+                    std::time::Duration::from_secs(5),
                 )
                 .await
                 {
-                    log::error!("[stop] mixed :{mixed} still blocked after cleanup: {e}");
-                }
-                if ctrl != mixed {
-                    if let Err(e) = crate::engine::ports::ensure_port_free_with_retry(
-                        ctrl,
-                        std::time::Duration::from_secs(10),
-                    )
-                    .await
-                    {
-                        log::error!("[stop] controller :{ctrl} still blocked after cleanup: {e}");
-                    }
+                    log::error!("[stop] port cleanup failed: {}", e);
                 }
 
+                // Step 4: State transition
                 let state = app.state::<EngineStateCell>().snapshot();
                 if matches!(
                     state,
