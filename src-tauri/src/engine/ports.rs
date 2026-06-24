@@ -205,6 +205,7 @@ pub(crate) async fn ensure_port_free_with_retry(
 ///
 /// This is significantly faster than cleaning ports sequentially when multiple
 /// ports need to be freed (e.g., mixed proxy port + controller port).
+#[cfg(target_os = "macos")]
 pub(crate) async fn ensure_all_ports_free_parallel(
     ports: &[u16],
     timeout_per_port: Duration,

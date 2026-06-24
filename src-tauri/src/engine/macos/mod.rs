@@ -124,11 +124,6 @@ impl EngineManager for MacOSEngine {
                     mgr.is_stopping = false;
                 }
 
-                let bypass_router_enabled = app
-                    .get_store("settings.json")
-                    .and_then(|store| store.get("enable_bypass_router_key"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
                 if bypass_router_enabled {
                     watchdog::spawn(app.clone(), Arc::clone(&config_path_arc));
                 }
