@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { getSubscriptionConfig } from "../action/db"
-import { getStoreValue, setStoreValue } from "../single/store"
+import { getStoreValue, setStoreValue, getAutoFailoverEnabled, setAutoFailoverEnabled, setLastManualNodeTag } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { switchNodeActive } from "../lib/hot-reload-config"
 import { getNodeLatency, initNodeLatency, setNodeLatency } from "../lib/node-latency"
@@ -172,6 +172,12 @@ export default function NodesPage() {
                   if (activeSubId) {
                     const key = selectedNodeTagStoreKey(activeSubId)
                     await setStoreValue(key, node.id, { immediate: true })
+                    // Track manual node selection for auto-failover
+                    await setLastManualNodeTag(node.id)
+                    const failoverEnabled = await getAutoFailoverEnabled()
+                    if (failoverEnabled) {
+                      await setAutoFailoverEnabled(false)
+                    }
                     const changedWhileRunning = await switchNodeActive(activeSubId, node.id)
                     if (changedWhileRunning) {
                       requestNetworkInfoRefresh("node-switched")

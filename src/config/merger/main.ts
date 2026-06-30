@@ -191,6 +191,9 @@ function applyCustomRuleSet(
         ruleSlotMatches(item, slot, legacySlot)
     );
     if (!rule) return;
+    rule.domain = rule.domain ?? [];
+    rule.domain_suffix = rule.domain_suffix ?? [];
+    rule.ip_cidr = rule.ip_cidr ?? [];
     rule.domain.push(...ruleSet.domain);
     rule.domain_suffix.push(...ruleSet.domain_suffix);
     rule.ip_cidr.push(...ruleSet.ip_cidr);

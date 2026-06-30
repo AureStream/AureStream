@@ -22,6 +22,8 @@ import {
     AUTO_START_STORE_KEY,
     HIDE_ON_LAUNCH_STORE_KEY,
     MINIMIZE_TO_TRAY_STORE_KEY,
+    AUTO_FAILOVER_ENABLED_KEY,
+    LAST_MANUAL_NODE_TAG_KEY,
     SING_BOX_MAJOR_VERSION,
     SING_BOX_VERSION,
     SSI_STORE_KEY,
@@ -448,4 +450,21 @@ export async function getMinimizeToTray(): Promise<boolean> {
 
 export async function setMinimizeToTrayStore(value: boolean): Promise<void> {
     await persistStoreKey(MINIMIZE_TO_TRAY_STORE_KEY, value);
+}
+
+export async function getAutoFailoverEnabled(): Promise<boolean> {
+    const raw = await readStoreKey(AUTO_FAILOVER_ENABLED_KEY);
+    return raw === undefined ? false : Boolean(raw);
+}
+
+export async function setAutoFailoverEnabled(value: boolean): Promise<void> {
+    await persistStoreKey(AUTO_FAILOVER_ENABLED_KEY, value);
+}
+
+export async function getLastManualNodeTag(): Promise<string> {
+    return (await readStoreKey<string>(LAST_MANUAL_NODE_TAG_KEY)) ?? "";
+}
+
+export async function setLastManualNodeTag(value: string): Promise<void> {
+    await persistStoreKey(LAST_MANUAL_NODE_TAG_KEY, value);
 }
