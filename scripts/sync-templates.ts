@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SING_BOX_MAJOR_VERSION, SING_BOX_MINOR_VERSION, SING_BOX_VERSION } from '../src/types/definition';
 
-const REPO = process.env.CONF_TEMPLATE_REPO ?? 'BadKid90s/conf-template';
+const REPO = process.env.CONF_TEMPLATE_REPO ?? 'BadKid90s/AureStream-Config';
 const BRANCH = process.env.CONF_TEMPLATE_BRANCH ?? 'main';
 
 const MODE_TO_FILE: Record<string, string> = {
@@ -26,7 +26,7 @@ function resolveVersionPath(): string {
             `invalid SING_BOX_VERSION: cannot parse "${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION}"`,
         );
     }
-    if (majorStr === '1' && minorStr === '13' && patch >= 8) return '1.13.8';
+    if (majorStr === '1' && minorStr === '13' && patch >= 8) return '1.13';
     if (majorStr === '1' && minorStr === '13') return '1.13';
     if (majorStr === '1' && minorStr === '12') return '1.12';
     throw new Error(
@@ -100,7 +100,7 @@ function emitGeneratedFile(
 // Keep this file committed as the offline build-time fallback.
 // Regenerate before release: pnpm run sync-templates
 //
-// Source:  https://github.com/${REPO}/tree/${BRANCH}/conf/${versionPath}/zh-cn
+// Source:  https://github.com/${REPO}/tree/${BRANCH}/${versionPath}/zh-cn
 // Branch:  ${BRANCH}
 // Commit:  ${commitSha}
 // Built:   ${builtAt}
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     const versionPath = resolveVersionPath();
     const modes = Object.keys(MODE_TO_FILE);
 
-    console.log(`[sync-templates] ${SING_BOX_VERSION} -> conf/${versionPath}/zh-cn/  (branch: ${BRANCH})`);
+    console.log(`[sync-templates] ${SING_BOX_VERSION} -> ${versionPath}/zh-cn/  (branch: ${BRANCH})`);
 
     let commitSha: string;
     let fetched: FetchedMode[];
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
             fetchLatestSha(),
             ...modes.map(async (mode): Promise<FetchedMode> => {
                 const file = MODE_TO_FILE[mode];
-                const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/conf/${versionPath}/zh-cn/${file}`;
+                const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${versionPath}/zh-cn/${file}`;
                 const text = await fetchText(url, file);
                 const errors: any[] = [];
                 const parsed = parseJsonc(text, errors, { allowTrailingComma: true });

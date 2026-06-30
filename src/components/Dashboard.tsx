@@ -776,7 +776,7 @@ function HomePage() {
                     {ipLoading ? l("Detecting...", "正在检测...") : ipInfo ? ipInfo.region : l("Offline / LAN", "未连通 / 局域网")}
                   </h3>
                   {ipInfo && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-text-muted/10 text-text-muted shrink-0">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-text-muted/10 text-text-muted truncate max-w-[100px]" title={ipInfo.isp}>
                       {ipInfo.isp}
                     </span>
                   )}
