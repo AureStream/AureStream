@@ -5,8 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SING_BOX_MAJOR_VERSION, SING_BOX_MINOR_VERSION, SING_BOX_VERSION } from '../src/types/definition';
 
-const REPO = 'OneOhCloud/conf-template';
-const BRANCH = process.env.CONF_TEMPLATE_BRANCH ?? 'stable';
+const REPO = process.env.CONF_TEMPLATE_REPO ?? 'BadKid90s/conf-template';
+const BRANCH = process.env.CONF_TEMPLATE_BRANCH ?? 'main';
 
 const MODE_TO_FILE: Record<string, string> = {
     'mixed': 'mixed-rules.jsonc',
