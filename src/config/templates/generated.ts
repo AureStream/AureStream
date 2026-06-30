@@ -13,13 +13,14 @@ export const MIXED_TEMPLATE = {
         "servers": [
             {
                 "tag": "remote",
-                "address": "https://8.8.8.8/dns-query",
+                "type": "https",
+                "server": "8.8.8.8",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "address": "https://223.5.5.5/dns-query",
-                "detour": "direct"
+                "type": "https",
+                "server": "223.5.5.5"
             }
         ],
         "rules": [
@@ -142,17 +143,20 @@ export const TUN_TEMPLATE = {
         "servers": [
             {
                 "tag": "remote",
-                "address": "https://8.8.8.8/dns-query",
+                "type": "https",
+                "server": "8.8.8.8",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "address": "https://223.5.5.5/dns-query",
-                "detour": "direct"
+                "type": "https",
+                "server": "223.5.5.5"
             },
             {
                 "tag": "fakeip",
-                "address": "fakeip"
+                "type": "fakeip",
+                "inet4_range": "198.18.0.0/15",
+                "inet6_range": "2001:0470:f9da:fdfa::1/64"
             }
         ],
         "rules": [
@@ -174,12 +178,7 @@ export const TUN_TEMPLATE = {
             }
         ],
         "strategy": "prefer_ipv4",
-        "independent_cache": true,
-        "fakeip": {
-            "enabled": true,
-            "inet4_range": "198.18.0.0/15",
-            "inet6_range": "2001:0470:f9da:fdfa::1/64"
-        }
+        "independent_cache": true
     },
     "inbounds": [
         {
@@ -325,13 +324,14 @@ export const MIXED_GLOBAL_TEMPLATE = {
         "servers": [
             {
                 "tag": "remote",
-                "address": "https://8.8.8.8/dns-query",
+                "type": "https",
+                "server": "8.8.8.8",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "address": "https://223.5.5.5/dns-query",
-                "detour": "direct"
+                "type": "https",
+                "server": "223.5.5.5"
             }
         ],
         "rules": [],
@@ -404,17 +404,20 @@ export const TUN_GLOBAL_TEMPLATE = {
         "servers": [
             {
                 "tag": "remote",
-                "address": "https://8.8.8.8/dns-query",
+                "type": "https",
+                "server": "8.8.8.8",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "address": "https://223.5.5.5/dns-query",
-                "detour": "direct"
+                "type": "https",
+                "server": "223.5.5.5"
             },
             {
                 "tag": "fakeip",
-                "address": "fakeip"
+                "type": "fakeip",
+                "inet4_range": "198.18.0.0/15",
+                "inet6_range": "2001:0470:f9da:fdfa::1/64"
             }
         ],
         "rules": [
@@ -428,12 +431,7 @@ export const TUN_GLOBAL_TEMPLATE = {
             }
         ],
         "strategy": "prefer_ipv4",
-        "independent_cache": true,
-        "fakeip": {
-            "enabled": true,
-            "inet4_range": "198.18.0.0/15",
-            "inet6_range": "2001:0470:f9da:fdfa::1/64"
-        }
+        "independent_cache": true
     },
     "inbounds": [
         {
