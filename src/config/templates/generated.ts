@@ -1,33 +1,23 @@
 // AUTO-GENERATED
 import type { configType } from '../common';
 
-export const BUILD_TIME_TEMPLATE_SOURCE = { repo: 'BadKid90s/conf-template', branch: 'main', versionPath: '1.13', singBoxVersion: 'v1.13.13' } as const;
+export const BUILD_TIME_TEMPLATE_SOURCE = { repo: 'BadKid90s/AureStream-Config', branch: 'main', versionPath: '1.13', singBoxVersion: 'v1.13.13' } as const;
 
 export const MIXED_TEMPLATE = {
-    "log": {
-        "disabled": false,
-        "level": "debug",
-        "timestamp": false
-    },
     "dns": {
         "servers": [
             {
                 "tag": "remote",
-                "type": "https",
-                "server": "8.8.8.8",
+                "address": "https://8.8.8.8/dns-query",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5"
+                "address": "https://223.5.5.5/dns-query",
+                "detour": "direct"
             }
         ],
         "rules": [
-            {
-                "query_type": "HTTPS",
-                "action": "predefined"
-            },
             {
                 "rule_set": "geosite-cn",
                 "server": "local"
@@ -52,9 +42,6 @@ export const MIXED_TEMPLATE = {
     ],
     "route": {
         "rules": [
-            {
-                "action": "sniff"
-            },
             {
                 "protocol": "dns",
                 "action": "hijack-dns"
@@ -91,9 +78,7 @@ export const MIXED_TEMPLATE = {
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": {
-            "server": "local"
-        },
+        "default_domain_resolver": "local",
         "auto_detect_interface": true,
         "rule_set": [
             {
@@ -143,35 +128,31 @@ export const MIXED_TEMPLATE = {
 } as const;
 
 export const TUN_TEMPLATE = {
-    "log": {
-        "disabled": false,
-        "level": "debug",
-        "timestamp": false
-    },
     "dns": {
         "servers": [
             {
                 "tag": "remote",
-                "type": "https",
-                "server": "8.8.8.8",
+                "address": "https://8.8.8.8/dns-query",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5"
+                "address": "https://223.5.5.5/dns-query",
+                "detour": "direct"
             },
             {
                 "tag": "fakeip",
-                "type": "fakeip",
-                "inet4_range": "198.18.0.0/15",
-                "inet6_range": "2001:0470:f9da:fdfa::1/64"
+                "address": "fakeip"
             }
         ],
         "rules": [
             {
-                "query_type": "HTTPS",
-                "action": "predefined"
+                "rule_set": "geosite-cn",
+                "server": "local"
+            },
+            {
+                "rule_set": "geosite-microsoft-cn",
+                "server": "local"
             },
             {
                 "query_type": [
@@ -180,18 +161,15 @@ export const TUN_TEMPLATE = {
                 ],
                 "rewrite_ttl": 1,
                 "server": "fakeip"
-            },
-            {
-                "rule_set": "geosite-cn",
-                "server": "local"
-            },
-            {
-                "rule_set": "geosite-microsoft-cn",
-                "server": "local"
             }
         ],
         "strategy": "prefer_ipv4",
-        "independent_cache": true
+        "independent_cache": true,
+        "fakeip": {
+            "enabled": true,
+            "inet4_range": "198.18.0.0/15",
+            "inet6_range": "2001:0470:f9da:fdfa::1/64"
+        }
     },
     "inbounds": [
         {
@@ -243,9 +221,6 @@ export const TUN_TEMPLATE = {
     "route": {
         "rules": [
             {
-                "action": "sniff"
-            },
-            {
                 "protocol": "dns",
                 "action": "hijack-dns"
             },
@@ -281,9 +256,7 @@ export const TUN_TEMPLATE = {
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": {
-            "server": "local"
-        },
+        "default_domain_resolver": "local",
         "auto_detect_interface": true,
         "rule_set": [
             {
@@ -333,31 +306,20 @@ export const TUN_TEMPLATE = {
 } as const;
 
 export const MIXED_GLOBAL_TEMPLATE = {
-    "log": {
-        "disabled": false,
-        "level": "debug",
-        "timestamp": false
-    },
     "dns": {
         "servers": [
             {
                 "tag": "remote",
-                "type": "https",
-                "server": "8.8.8.8",
+                "address": "https://8.8.8.8/dns-query",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5"
+                "address": "https://223.5.5.5/dns-query",
+                "detour": "direct"
             }
         ],
-        "rules": [
-            {
-                "query_type": "HTTPS",
-                "action": "predefined"
-            }
-        ],
+        "rules": [],
         "final": "remote",
         "strategy": "prefer_ipv4",
         "independent_cache": true
@@ -374,9 +336,6 @@ export const MIXED_GLOBAL_TEMPLATE = {
     "route": {
         "rules": [
             {
-                "action": "sniff"
-            },
-            {
                 "protocol": "dns",
                 "action": "hijack-dns"
             },
@@ -390,9 +349,7 @@ export const MIXED_GLOBAL_TEMPLATE = {
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": {
-            "server": "local"
-        },
+        "default_domain_resolver": "local",
         "auto_detect_interface": true,
         "rule_set": []
     },
@@ -423,36 +380,24 @@ export const MIXED_GLOBAL_TEMPLATE = {
 } as const;
 
 export const TUN_GLOBAL_TEMPLATE = {
-    "log": {
-        "disabled": false,
-        "level": "debug",
-        "timestamp": false
-    },
     "dns": {
         "servers": [
             {
                 "tag": "remote",
-                "type": "https",
-                "server": "8.8.8.8",
+                "address": "https://8.8.8.8/dns-query",
                 "detour": "ExitGateway"
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5"
+                "address": "https://223.5.5.5/dns-query",
+                "detour": "direct"
             },
             {
                 "tag": "fakeip",
-                "type": "fakeip",
-                "inet4_range": "198.18.0.0/15",
-                "inet6_range": "2001:0470:f9da:fdfa::1/64"
+                "address": "fakeip"
             }
         ],
         "rules": [
-            {
-                "query_type": "HTTPS",
-                "action": "predefined"
-            },
             {
                 "query_type": [
                     "A",
@@ -463,7 +408,12 @@ export const TUN_GLOBAL_TEMPLATE = {
             }
         ],
         "strategy": "prefer_ipv4",
-        "independent_cache": true
+        "independent_cache": true,
+        "fakeip": {
+            "enabled": true,
+            "inet4_range": "198.18.0.0/15",
+            "inet6_range": "2001:0470:f9da:fdfa::1/64"
+        }
     },
     "inbounds": [
         {
@@ -515,9 +465,6 @@ export const TUN_GLOBAL_TEMPLATE = {
     "route": {
         "rules": [
             {
-                "action": "sniff"
-            },
-            {
                 "protocol": "dns",
                 "action": "hijack-dns"
             },
@@ -531,9 +478,7 @@ export const TUN_GLOBAL_TEMPLATE = {
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": {
-            "server": "local"
-        },
+        "default_domain_resolver": "local",
         "auto_detect_interface": true,
         "rule_set": []
     },
