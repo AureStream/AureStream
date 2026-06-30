@@ -92,7 +92,7 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
     });
 
     for (let i = 0; i < vpnServerList.length; i++) {
-        vpnServerList[i]["domain_resolver"] = "system";
+        vpnServerList[i]["domain_resolver"] = "local";
         outboundsSelector.push(vpnServerList[i].tag);
     }
 
