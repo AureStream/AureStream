@@ -19,9 +19,8 @@ export const MIXED_TEMPLATE = {
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5",
-                "detour": "direct"
+                "type": "udp",
+                "server": "223.5.5.5"
             }
         ],
         "rules": [
@@ -150,9 +149,8 @@ export const TUN_TEMPLATE = {
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5",
-                "detour": "direct"
+                "type": "udp",
+                "server": "223.5.5.5"
             },
             {
                 "tag": "fakeip",
@@ -332,9 +330,8 @@ export const MIXED_GLOBAL_TEMPLATE = {
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5",
-                "detour": "direct"
+                "type": "udp",
+                "server": "223.5.5.5"
             }
         ],
         "rules": [],
@@ -413,9 +410,8 @@ export const TUN_GLOBAL_TEMPLATE = {
             },
             {
                 "tag": "local",
-                "type": "https",
-                "server": "223.5.5.5",
-                "detour": "direct"
+                "type": "udp",
+                "server": "223.5.5.5"
             },
             {
                 "tag": "fakeip",
