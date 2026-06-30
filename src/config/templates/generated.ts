@@ -51,7 +51,7 @@ export const MIXED_TEMPLATE = {
                     "geosite-cn",
                     "geosite-microsoft-cn"
                 ],
-                "strategy": "ipv4_only",
+                "strategy": "prefer_ipv4",
                 "server": "system"
             }
         ],
@@ -185,7 +185,6 @@ export const MIXED_TEMPLATE = {
             "tag": "auto",
             "type": "urltest",
             "url": "https://www.google.com/generate_204",
-            "domain_strategy": "prefer_ipv4",
             "outbounds": []
         }
     ]
@@ -245,7 +244,7 @@ export const TUN_TEMPLATE = {
                     "geosite-cn",
                     "geosite-microsoft-cn"
                 ],
-                "strategy": "ipv4_only",
+                "strategy": "prefer_ipv4",
                 "server": "system"
             },
             {
@@ -430,7 +429,6 @@ export const TUN_TEMPLATE = {
             "tag": "auto",
             "type": "urltest",
             "url": "https://www.google.com/generate_204",
-            "domain_strategy": "prefer_ipv4",
             "outbounds": []
         }
     ]
@@ -571,7 +569,6 @@ export const MIXED_GLOBAL_TEMPLATE = {
             "tag": "auto",
             "type": "urltest",
             "url": "https://www.google.com/generate_204",
-            "domain_strategy": "prefer_ipv4",
             "outbounds": []
         }
     ]
@@ -769,7 +766,6 @@ export const TUN_GLOBAL_TEMPLATE = {
             "tag": "auto",
             "type": "urltest",
             "url": "https://www.google.com/generate_204",
-            "domain_strategy": "prefer_ipv4",
             "outbounds": []
         }
     ]
