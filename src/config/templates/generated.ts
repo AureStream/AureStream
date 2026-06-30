@@ -4,8 +4,8 @@
 //
 // Source:  https://github.com/BadKid90s/conf-template/tree/main/conf/1.13.8/zh-cn
 // Branch:  main
-// Commit:  b5e4d3de60b0afb04f66a6d2114ad540ae18b701
-// Built:   2026-06-30T01:32:14.440Z
+// Commit:  unknown
+// Built:   2026-06-30T03:24:39.887Z
 // sing-box: v1.13.13
 
 import type { configType } from '../common';
@@ -13,10 +13,10 @@ import type { configType } from '../common';
 export const BUILD_TIME_TEMPLATE_SOURCE = {
     repo: 'BadKid90s/conf-template',
     branch: 'main',
-    commit: 'b5e4d3de60b0afb04f66a6d2114ad540ae18b701',
+    commit: 'unknown',
     versionPath: '1.13.8',
     singBoxVersion: 'v1.13.13',
-    generatedAt: '2026-06-30T01:32:14.440Z',
+    generatedAt: '2026-06-30T03:24:39.887Z',
 } as const;
 
 export const MIXED_TEMPLATE = {
@@ -306,7 +306,7 @@ export const TUN_TEMPLATE = {
                 "240.0.0.0/4",
                 "255.255.255.255/32",
                 "fe80::/10",
-                "fc00::/7",
+                "fd00::/8",
                 "ff01::/16",
                 "ff02::/16",
                 "ff03::/16",
@@ -685,7 +685,7 @@ export const TUN_GLOBAL_TEMPLATE = {
                 "240.0.0.0/4",
                 "255.255.255.255/32",
                 "fe80::/10",
-                "fc00::/7",
+                "fd00::/8",
                 "ff01::/16",
                 "ff02::/16",
                 "ff03::/16",
