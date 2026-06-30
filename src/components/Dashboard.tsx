@@ -14,7 +14,7 @@ import { useEngineState } from "../hooks/useEngineState"
 import { useTrafficAccumulator } from "../hooks/useTrafficAccumulator"
 import { mergeConnectionConfig } from "../lib/connection-config"
 import { getConfigJsonPath } from "../lib/app-paths"
-import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsServer } from "../single/store"
+import { getEnableTun, setEnableTun, getStoreValue, setStoreValue, getProxyDnsServer, getAutoFailoverEnabled, setAutoFailoverEnabled, getLastManualNodeTag } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
 import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
@@ -25,6 +25,7 @@ import {
   type TrayRequestedMode,
 } from "../lib/tray-mode"
 import { controllerFetch } from "../utils/singbox-api"
+import { selectProxyNode } from "../utils/singbox-api/proxies"
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
@@ -83,6 +84,7 @@ function HomePage() {
   } = useEngineState()
 
   const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
+  const [autoFailoverEnabled, setAutoFailoverEnabledState] = useState(false)
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
   const isConnected = engineState.kind === "running"
@@ -95,6 +97,10 @@ function HomePage() {
       setProxyMode(tun ? "tun" : "rule")
     }
     initMode()
+  }, [])
+
+  useEffect(() => {
+    getAutoFailoverEnabled().then(setAutoFailoverEnabledState)
   }, [])
 
   useEffect(() => {
@@ -444,6 +450,23 @@ function HomePage() {
     }
   }
 
+  const handleToggleAutoFailover = async () => {
+    const newState = !autoFailoverEnabled
+    setAutoFailoverEnabledState(newState)
+    await setAutoFailoverEnabled(newState)
+
+    if (!isConnected) return
+
+    if (newState) {
+      await selectProxyNode("auto")
+    } else {
+      const lastNode = await getLastManualNodeTag()
+      if (lastNode) {
+        await selectProxyNode(lastNode)
+      }
+    }
+  }
+
   const loadSubs = useCallback(async () => {
     try {
       // 1. Load from SQLite database first for instant UI response
@@ -742,31 +765,33 @@ function HomePage() {
           {/* Connection status panels */}
           <div className="flex flex-col gap-2.5 w-full mt-auto">
 
-            {/* Outbound IP / Real Network Info row */}
+            {/* Region + Duration merged row */}
             <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0 flex-[6]">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
                   <span className="text-base select-none">🌐</span>
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex items-center gap-2">
                   <h3 className="text-xs font-bold text-text truncate">
-                    {ipLoading ? l("Detecting...", "正在检测物理区域...") : ipInfo ? ipInfo.region : l("Offline / LAN", "未连通 / 局域网")}
+                    {ipLoading ? l("Detecting...", "正在检测...") : ipInfo ? ipInfo.region : l("Offline / LAN", "未连通 / 局域网")}
                   </h3>
+                  {ipInfo && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-text-muted/10 text-text-muted shrink-0">
+                      {ipInfo.isp}
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center justify-end flex-[4] min-w-0">
-                {ipInfo ? (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-full ${
-                    isConnected ? "bg-success/15 text-success" : "bg-text-muted/10 text-text-muted"
-                  }`}>
-                    {ipInfo.isp}
+              <div className="shrink-0">
+                {isConnected && startTime ? (
+                  <span className="text-xs text-secondary font-mono font-extrabold whitespace-nowrap">
+                    {formatTime(now - startTime)}
                   </span>
                 ) : (
                   <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
                 )}
               </div>
             </div>
-
 
             {/* Active Node Info row */}
             <button
@@ -794,27 +819,44 @@ function HomePage() {
               </div>
             </button>
 
-            {/* Tunnel Duration Info row */}
-            <div className="flex items-center justify-between gap-2 bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3.5 shadow-sm hover:bg-surface-active/50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0 flex-[6]">
-                <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
-                  <I.Activity />
+            {/* Auto Failover Toggle */}
+            <div className="flex items-center justify-between bg-surface-active/30 backdrop-blur-md border border-border-glass rounded-2xl px-4 py-3 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center border shrink-0 transition-colors ${
+                  autoFailoverEnabled
+                    ? "bg-secondary/10 border-secondary/20 text-secondary"
+                    : "bg-surface-active border-border-glass/40 text-text-muted"
+                }`}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 16h5v5"/>
+                  </svg>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-xs font-bold text-text truncate">
-                    {l("Active Connection Time", "持续守护时长")}
+                <div>
+                  <h3 className="text-sm font-bold text-text leading-tight">
+                    {l("Auto Failover", "自动故障切换")}
                   </h3>
+                  <p className="text-[10px] text-text-muted mt-0.5">
+                    {l("Auto-switch to a working node on failure", "节点故障时自动切换至可用节点")}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center justify-end flex-[4] min-w-0">
-                {isConnected && startTime ? (
-                  <span className="text-xs text-secondary font-mono font-extrabold whitespace-nowrap">
-                    {formatTime(now - startTime)}
-                  </span>
-                ) : (
-                  <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
-                )}
-              </div>
+              <button
+                onClick={handleToggleAutoFailover}
+                role="switch"
+                aria-checked={autoFailoverEnabled}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer border-none focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary/50 ${
+                  autoFailoverEnabled ? "bg-secondary" : "bg-text-muted/25"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                    autoFailoverEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Smart Mode Selector (Sleek Glass Segment tabs) */}
