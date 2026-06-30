@@ -47,7 +47,6 @@ export const MIXED_TEMPLATE = {
                     "seed-sequoia.siri.apple.com"
                 ],
                 "rule_set": [
-                    "geoip-cn",
                     "geosite-cn",
                     "geosite-microsoft-cn"
                 ],
@@ -129,7 +128,6 @@ export const MIXED_TEMPLATE = {
                 ],
                 "outbound": "direct",
                 "rule_set": [
-                    "geoip-cn",
                     "geosite-cn",
                     "geosite-microsoft-cn"
                 ]
@@ -139,12 +137,6 @@ export const MIXED_TEMPLATE = {
         "default_domain_resolver": "system",
         "auto_detect_interface": true,
         "rule_set": [
-            {
-                "tag": "geoip-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
-            },
             {
                 "tag": "geosite-cn",
                 "type": "remote",
@@ -236,7 +228,6 @@ export const TUN_TEMPLATE = {
                     "seed-sequoia.siri.apple.com"
                 ],
                 "rule_set": [
-                    "geoip-cn",
                     "geosite-cn",
                     "geosite-microsoft-cn"
                 ],
@@ -369,7 +360,6 @@ export const TUN_TEMPLATE = {
                 ],
                 "outbound": "direct",
                 "rule_set": [
-                    "geoip-cn",
                     "geosite-cn",
                     "geosite-microsoft-cn"
                 ]
@@ -379,12 +369,6 @@ export const TUN_TEMPLATE = {
         "default_domain_resolver": "system",
         "auto_detect_interface": true,
         "rule_set": [
-            {
-                "tag": "geoip-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
-            },
             {
                 "tag": "geosite-cn",
                 "type": "remote",
