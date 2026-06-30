@@ -72,7 +72,12 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
 
     // Also run user-level kill_orphans as belt-and-suspenders for any
     // user-owned processes the helper may have missed.
-    for &port in &[mixed_port, ctrl_port] {
+    let unique_ports = if mixed_port == ctrl_port {
+        vec![mixed_port]
+    } else {
+        vec![mixed_port, ctrl_port]
+    };
+    for port in unique_ports {
         let res = aurestream_plugin_privilege::free_port(port);
         ::log::info!("[start] prestart :{port}: {}", res.message);
     }
@@ -226,10 +231,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
                 "last_proxy_mode",
                 serde_json::Value::String(mode_key.to_string()),
             );
-            // fire-and-forget — don't block the start path on store I/O
-            tokio::spawn(async move {
-                store.save().ok();
-            });
+            let _ = store.save();
         }
     }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();

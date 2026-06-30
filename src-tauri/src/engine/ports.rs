@@ -200,3 +200,38 @@ pub(crate) async fn ensure_port_free_with_retry(
         sleep(backoff).await;
     }
 }
+
+/// Clean up multiple ports in parallel.
+///
+/// This is significantly faster than cleaning ports sequentially when multiple
+/// ports need to be freed (e.g., mixed proxy port + controller port).
+#[cfg(target_os = "macos")]
+pub(crate) async fn ensure_all_ports_free_parallel(
+    ports: &[u16],
+    timeout_per_port: Duration,
+) -> Result<(), String> {
+    use futures::future::join_all;
+
+    let futures = ports.iter().map(|&port| {
+        let timeout = timeout_per_port;
+        async move {
+            ensure_port_free_with_retry(port, timeout).await
+        }
+    });
+
+    let results = join_all(futures).await;
+
+    let errors: Vec<String> = results
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, result)| {
+            result.err().map(|e| format!("port {}: {}", ports[idx], e))
+        })
+        .collect();
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("Port cleanup failed: {}", errors.join("; ")))
+    }
+}

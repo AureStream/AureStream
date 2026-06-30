@@ -3,7 +3,6 @@ pub mod dns_watcher;
 use aurestream_plugin_privilege::macos::helper as macos_helper;
 use std::process::Command;
 use std::sync::Mutex;
-use tokio::sync::broadcast;
 pub const TUN_INTERFACE_NAME: &str = "utun233";
 
 // ----------------------------------------------------------------------------
@@ -47,18 +46,54 @@ pub fn start_tun_via_helper(
     enable_bypass_router: bool,
     gateway: &str,
 ) -> Result<i32, String> {
+    // IP forwarding is required for TUN bypass-router mode.
+    // Add retry mechanism (up to 3 times) to handle transient failures.
     if enable_bypass_router {
-        if let Err(e) = macos_helper::api::set_ip_forwarding(true) {
-            log::warn!("[helper] set_ip_forwarding(true) failed: {}", e);
+        let mut retry_count = 0;
+        let max_retries = 3;
+
+        loop {
+            match macos_helper::api::set_ip_forwarding(true) {
+                Ok(()) => {
+                    log::info!("[helper] IP forwarding enabled successfully");
+                    break;
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= max_retries {
+                        log::error!(
+                            "[helper] set_ip_forwarding(true) failed after {} retries: {}",
+                            max_retries,
+                            e
+                        );
+                        return Err(format!(
+                            "IP forwarding setup failed (required for TUN mode): {}. Please run with administrator privileges.",
+                            e
+                        ));
+                    }
+                    log::warn!(
+                        "[helper] set_ip_forwarding(true) failed, retry {}/{}: {}",
+                        retry_count,
+                        max_retries,
+                        e
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            }
         }
     }
 
+    // DNS override — non-fatal, mirrors the old create_privileged_command behavior.
     if let Err(e) = apply_system_dns_override(gateway) {
         log::warn!("[dns] apply_system_dns_override failed: {}", e);
     }
 
+    // Start the SCDynamicStore watcher once per app lifetime. It's a no-op
+    // when ACTIVE_OVERRIDE is None, so it's safe to leave running after TUN
+    // stops. See `dns_watcher` for the callback contract.
     dns_watcher::ensure_started();
 
+    // Start sing-box via privileged helper
     let pid = macos_helper::api::start_sing_box(config_path, &log_path_str)?;
     log::info!(
         "[helper] sing-box started, pid={} log={}",
@@ -68,61 +103,41 @@ pub fn start_tun_via_helper(
     Ok(pid)
 }
 
+/// Stop TUN mode: restore DNS, kill sing-box, disable IP forwarding, clean
+/// routes, flush DNS cache. All operations go through the privileged helper.
+///
+/// Split into two restore phases so verification probes don't leak through
+/// the still-live TUN:
+///   1. **pre-kill** — synchronously write captured originals back. This must
+///      run before sing-box is killed so the physical NIC's default route
+///      inherits a working DNS the instant TUN tears down.
+///   2. **post-kill** — probe each restored DNS for reachability; if all fail
+///      swap in the best public resolver. Probing earlier is useless: while
+///      sing-box is alive, every UDP/53 packet from this process gets routed
+///      through TUN → through the proxy → every server looks reachable and
+///      the fallback never fires.
 pub async fn stop_tun_process() -> Result<(), String> {
     log::info!("[dns] user-stop: beginning DNS restore sequence");
+
+    // Phase 1: Pre-kill restore (synchronous, before kill)
+    // This must execute before sing-box is killed so the physical NIC
+    // inherits working DNS the moment TUN tears down.
     let taken = take_active_override();
     let applied = apply_captured_originals_sync(taken.as_ref());
 
-    // Subscribe to exit events BEFORE sending SIGTERM so we don't miss it.
-    let mut exit_rx = macos_helper::subscribe_sing_box_exits();
-
     log::info!("[helper] sending SIGTERM to sing-box");
-    let stop_error = match macos_helper::api::stop_sing_box() {
-        Ok(()) => {
-            log::info!("[helper] SIGTERM sent, waiting for sing-box to exit");
-            None
-        }
-        Err(e) => {
-            log::warn!(
-                "[helper] stop_sing_box failed, continuing best-effort TUN cleanup: {}",
-                e
-            );
-            Some(e)
-        }
-    };
+    macos_helper::api::stop_sing_box()?;
 
-    // Wait for the helper to confirm sing-box is dead (broadcast exit event).
-    // This avoids the TOCTOU race where ports appear free but the process
-    // hasn't fully exited.
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        exit_rx.recv(),
-    )
-    .await
-    {
-        Ok(Ok(exit)) => {
-            log::info!(
-                "[helper] sing-box confirmed dead pid={} code={}",
-                exit.pid,
-                exit.exit_code
-            );
-        }
-        Ok(Err(broadcast::error::RecvError::Lagged(n))) => {
-            log::warn!("[helper] exit broadcast lagged by {} messages", n);
-        }
-        Ok(Err(broadcast::error::RecvError::Closed)) => {
-            log::warn!("[helper] exit broadcast channel closed unexpectedly");
-        }
-        Err(_timeout) => {
-            log::warn!("[helper] timed out waiting for sing-box exit event; forcing helper stop");
-            let _ = macos_helper::api::stop_sing_box();
-        }
-    }
+    // Explicitly wait 500ms for TUN teardown to complete
+    log::info!("[helper] SIGTERM sent to sing-box, waiting 500ms for TUN teardown");
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
+    // Disable IP forwarding
     if let Err(e) = macos_helper::api::set_ip_forwarding(false) {
         log::warn!("[helper] set_ip_forwarding(false) failed: {}", e);
     }
 
+    // Remove TUN routes
     if let Err(e) = macos_helper::api::remove_tun_routes(TUN_INTERFACE_NAME) {
         log::warn!(
             "[helper] remove_tun_routes({}) failed: {}",
@@ -133,15 +148,16 @@ pub async fn stop_tun_process() -> Result<(), String> {
         log::info!("[helper] TUN routes removed on {}", TUN_INTERFACE_NAME);
     }
 
+    // Phase 2: Post-kill verification (asynchronous, after kill)
+    // Probing while sing-box is alive is useless: all UDP/53 packets
+    // get routed through TUN → proxy → every server looks reachable.
     verify_and_fallback(applied.as_ref()).await;
 
+    // Flush DNS cache
     macos_helper::api::flush_dns_cache().ok();
+
     log::info!("[dns] user-stop: restore sequence complete");
-    if let Some(e) = stop_error {
-        Err(e)
-    } else {
-        Ok(())
-    }
+    Ok(())
 }
 
 // ============================================================================
@@ -413,8 +429,43 @@ async fn verify_and_fallback(applied: Option<&(String, String)>) {
         log::info!("[dns] phase 2 [{}] kept DHCP default (no probe)", service);
         return;
     }
+
+    // Probe DNS reachability - if all servers are unreachable, fall back to DHCP
+    let servers: Vec<&str> = original.split_whitespace().collect();
+    let mut any_reachable = false;
+    let probe_timeout = std::time::Duration::from_secs(2);
+
+    for server in &servers {
+        if probe_dns_reachable(server, probe_timeout).await {
+            any_reachable = true;
+            break;
+        }
+    }
+
+    if !any_reachable {
+        log::warn!(
+            "[dns] all captured DNS servers unreachable, falling back to DHCP for [{}]",
+            service
+        );
+        // Write "empty" to let the system fall back to DHCP
+        let _ = macos_helper::api::set_dns_servers(service, "empty");
+    } else {
+        log::info!("[dns] DNS reachability verified for [{}]", service);
+    }
+
     macos_helper::api::flush_dns_cache().ok();
-    log::info!("[dns] phase 2 done without DNS reachability probe");
+    log::info!("[dns] phase 2 done");
+}
+
+/// Probe if a DNS server is reachable by attempting a TCP connection to port 53.
+async fn probe_dns_reachable(server: &str, probe_timeout: std::time::Duration) -> bool {
+    use tokio::time::timeout;
+    let addr = format!("{}:53", server);
+
+    match timeout(probe_timeout, tokio::net::TcpStream::connect(&addr)).await {
+        Ok(Ok(_)) => true,
+        _ => false,
+    }
 }
 
 pub fn release_dns_on_network_down() -> Result<(), String> {

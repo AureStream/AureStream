@@ -2,21 +2,21 @@
 // Keep this file committed as the offline build-time fallback.
 // Regenerate before release: pnpm run sync-templates
 //
-// Source:  https://github.com/OneOhCloud/conf-template/tree/stable/conf/1.13.8/zh-cn
-// Branch:  stable
-// Commit:  94c5447eb5f80b70c26e9d0969213c7b620566f3
-// Built:   2026-06-22T23:52:23.689Z
+// Source:  https://github.com/BadKid90s/conf-template/tree/main/conf/1.13.8/zh-cn
+// Branch:  main
+// Commit:  b5e4d3de60b0afb04f66a6d2114ad540ae18b701
+// Built:   2026-06-30T00:56:14.402Z
 // sing-box: v1.13.13
 
 import type { configType } from '../common';
 
 export const BUILD_TIME_TEMPLATE_SOURCE = {
-    repo: 'OneOhCloud/conf-template',
-    branch: 'stable',
-    commit: '94c5447eb5f80b70c26e9d0969213c7b620566f3',
+    repo: 'BadKid90s/conf-template',
+    branch: 'main',
+    commit: 'b5e4d3de60b0afb04f66a6d2114ad540ae18b701',
     versionPath: '1.13.8',
     singBoxVersion: 'v1.13.13',
-    generatedAt: '2026-06-22T23:52:23.689Z',
+    generatedAt: '2026-06-30T00:56:14.402Z',
 } as const;
 
 export const MIXED_TEMPLATE = {
@@ -64,11 +64,7 @@ export const MIXED_TEMPLATE = {
                 ],
                 "rule_set": [
                     "geoip-cn",
-                    "geosite-cn",
-                    "geosite-apple",
-                    "geosite-microsoft-cn",
-                    "geosite-samsung",
-                    "geosite-private"
+                    "geosite-cn"
                 ],
                 "strategy": "prefer_ipv4",
                 "server": "system"
@@ -114,28 +110,19 @@ export const MIXED_TEMPLATE = {
             },
             {
                 "domain": [
+                    "reject-tag.oneoh.cloud"
+                ],
+                "action": "reject"
+            },
+            {
+                "domain": [
                     "direct-tag.oneoh.cloud"
                 ],
-                "domain_suffix": [],
-                "ip_cidr": [],
                 "outbound": "direct"
             },
             {
                 "domain": [
                     "proxy-tag.oneoh.cloud"
-                ],
-                "domain_suffix": [],
-                "ip_cidr": [],
-                "outbound": "ExitGateway"
-            },
-            {
-                "domain_suffix": [
-                    ".tiktok.com"
-                ],
-                "rule_set": [
-                    "geosite-tiktok",
-                    "geosite-linkedin",
-                    "geosite-linkedin-cn"
                 ],
                 "outbound": "ExitGateway"
             },
@@ -162,21 +149,8 @@ export const MIXED_TEMPLATE = {
                 "outbound": "direct",
                 "rule_set": [
                     "geoip-cn",
-                    "geosite-cn",
-                    "geosite-apple",
-                    "geosite-microsoft-cn",
-                    "geosite-samsung",
-                    "geosite-private"
+                    "geosite-cn"
                 ]
-            },
-            {
-                "process_path": [
-                    "/Applications/WeChat.app/Contents/MacOS/WeChat"
-                ],
-                "process_path_regex": [
-                    "^/System/Applications/.+"
-                ],
-                "outbound": "direct"
             }
         ],
         "final": "ExitGateway",
@@ -190,70 +164,10 @@ export const MIXED_TEMPLATE = {
                 "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
             },
             {
-                "tag": "geosite-geolocation-cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-cn.json"
-            },
-            {
-                "tag": "geosite-linkedin",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin.srs"
-            },
-            {
-                "tag": "geosite-linkedin-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin@cn.srs"
-            },
-            {
-                "tag": "geosite-geolocation-!cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.json"
-            },
-            {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
-            },
-            {
-                "tag": "geosite-apple",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-apple.srs"
-            },
-            {
-                "tag": "geosite-microsoft-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
-            },
-            {
-                "tag": "geosite-samsung",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-samsung.srs"
-            },
-            {
-                "tag": "geosite-telegram",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs"
-            },
-            {
-                "tag": "geosite-private",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs"
-            },
-            {
-                "tag": "geosite-tiktok",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-tiktok.srs"
             }
         ]
     },
@@ -324,17 +238,6 @@ export const TUN_TEMPLATE = {
                 "action": "reject"
             },
             {
-                "domain_suffix": [
-                    ".tiktok.com"
-                ],
-                "rule_set": [
-                    "geosite-tiktok",
-                    "geosite-linkedin",
-                    "geosite-linkedin-cn"
-                ],
-                "server": "remote"
-            },
-            {
                 "domain": [
                     "captive.oneoh.cloud",
                     "captive.apple.com",
@@ -346,11 +249,7 @@ export const TUN_TEMPLATE = {
                 ],
                 "rule_set": [
                     "geoip-cn",
-                    "geosite-cn",
-                    "geosite-apple",
-                    "geosite-microsoft-cn",
-                    "geosite-samsung",
-                    "geosite-private"
+                    "geosite-cn"
                 ],
                 "strategy": "prefer_ipv4",
                 "server": "system"
@@ -383,13 +282,12 @@ export const TUN_TEMPLATE = {
                     "server_port": 6789
                 }
             },
-            "mtu": 9000,
+            "mtu": 1500,
             "stack": "gvisor",
             "auto_route": true,
             "strict_route": true,
             "route_exclude_address": [
                 "10.0.0.0/8",
-                "100.64.0.0/10",
                 "127.0.0.0/8",
                 "169.254.0.0/16",
                 "172.16.0.0/12",
@@ -448,28 +346,19 @@ export const TUN_TEMPLATE = {
             },
             {
                 "domain": [
+                    "reject-tag.oneoh.cloud"
+                ],
+                "action": "reject"
+            },
+            {
+                "domain": [
                     "direct-tag.oneoh.cloud"
                 ],
-                "domain_suffix": [],
-                "ip_cidr": [],
                 "outbound": "direct"
             },
             {
                 "domain": [
                     "proxy-tag.oneoh.cloud"
-                ],
-                "domain_suffix": [],
-                "ip_cidr": [],
-                "outbound": "ExitGateway"
-            },
-            {
-                "domain_suffix": [
-                    ".tiktok.com"
-                ],
-                "rule_set": [
-                    "geosite-tiktok",
-                    "geosite-linkedin",
-                    "geosite-linkedin-cn"
                 ],
                 "outbound": "ExitGateway"
             },
@@ -496,21 +385,8 @@ export const TUN_TEMPLATE = {
                 "outbound": "direct",
                 "rule_set": [
                     "geoip-cn",
-                    "geosite-cn",
-                    "geosite-apple",
-                    "geosite-microsoft-cn",
-                    "geosite-samsung",
-                    "geosite-private"
+                    "geosite-cn"
                 ]
-            },
-            {
-                "process_path": [
-                    "/Applications/WeChat.app/Contents/MacOS/WeChat"
-                ],
-                "process_path_regex": [
-                    "^/System/Applications/.+"
-                ],
-                "outbound": "direct"
             }
         ],
         "final": "ExitGateway",
@@ -524,70 +400,10 @@ export const TUN_TEMPLATE = {
                 "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
             },
             {
-                "tag": "geosite-geolocation-cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-cn.json"
-            },
-            {
-                "tag": "geosite-linkedin",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin.srs"
-            },
-            {
-                "tag": "geosite-linkedin-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin@cn.srs"
-            },
-            {
-                "tag": "geosite-geolocation-!cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.json"
-            },
-            {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
                 "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
-            },
-            {
-                "tag": "geosite-apple",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-apple.srs"
-            },
-            {
-                "tag": "geosite-microsoft-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
-            },
-            {
-                "tag": "geosite-samsung",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-samsung.srs"
-            },
-            {
-                "tag": "geosite-telegram",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs"
-            },
-            {
-                "tag": "geosite-private",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs"
-            },
-            {
-                "tag": "geosite-tiktok",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-tiktok.srs"
             }
         ]
     },
@@ -729,80 +545,7 @@ export const MIXED_GLOBAL_TEMPLATE = {
         "final": "ExitGateway",
         "default_domain_resolver": "system",
         "auto_detect_interface": true,
-        "rule_set": [
-            {
-                "tag": "geoip-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
-            },
-            {
-                "tag": "geosite-geolocation-cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-cn.json"
-            },
-            {
-                "tag": "geosite-linkedin",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin.srs"
-            },
-            {
-                "tag": "geosite-linkedin-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin@cn.srs"
-            },
-            {
-                "tag": "geosite-geolocation-!cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.json"
-            },
-            {
-                "tag": "geosite-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
-            },
-            {
-                "tag": "geosite-apple",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-apple.srs"
-            },
-            {
-                "tag": "geosite-microsoft-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
-            },
-            {
-                "tag": "geosite-samsung",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-samsung.srs"
-            },
-            {
-                "tag": "geosite-telegram",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs"
-            },
-            {
-                "tag": "geosite-private",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs"
-            },
-            {
-                "tag": "geosite-tiktok",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-tiktok.srs"
-            }
-        ]
+        "rule_set": []
     },
     "experimental": {
         "clash_api": {},
@@ -911,13 +654,12 @@ export const TUN_GLOBAL_TEMPLATE = {
                     "server_port": 6789
                 }
             },
-            "mtu": 9000,
+            "mtu": 1500,
             "stack": "gvisor",
             "auto_route": true,
             "strict_route": true,
             "route_exclude_address": [
                 "10.0.0.0/8",
-                "100.64.0.0/10",
                 "127.0.0.0/8",
                 "169.254.0.0/16",
                 "172.16.0.0/12",
@@ -1000,80 +742,7 @@ export const TUN_GLOBAL_TEMPLATE = {
         "final": "ExitGateway",
         "default_domain_resolver": "system",
         "auto_detect_interface": true,
-        "rule_set": [
-            {
-                "tag": "geoip-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs"
-            },
-            {
-                "tag": "geosite-geolocation-cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-cn.json"
-            },
-            {
-                "tag": "geosite-linkedin",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin.srs"
-            },
-            {
-                "tag": "geosite-linkedin-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-linkedin@cn.srs"
-            },
-            {
-                "tag": "geosite-geolocation-!cn",
-                "type": "remote",
-                "format": "source",
-                "url": "https://jsdelivr.oneoh.cloud/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.json"
-            },
-            {
-                "tag": "geosite-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
-            },
-            {
-                "tag": "geosite-apple",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-apple.srs"
-            },
-            {
-                "tag": "geosite-microsoft-cn",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
-            },
-            {
-                "tag": "geosite-samsung",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-samsung.srs"
-            },
-            {
-                "tag": "geosite-telegram",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs"
-            },
-            {
-                "tag": "geosite-private",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-private.srs"
-            },
-            {
-                "tag": "geosite-tiktok",
-                "type": "remote",
-                "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-tiktok.srs"
-            }
-        ]
+        "rule_set": []
     },
     "experimental": {
         "clash_api": {},
