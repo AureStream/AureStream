@@ -190,7 +190,7 @@ export const TUN_TEMPLATE = {
             ],
             "platform": {
                 "http_proxy": {
-                    "enabled": true,
+                    "enabled": false,
                     "server": "127.0.0.1",
                     "server_port": 6789
                 }
@@ -443,7 +443,7 @@ export const TUN_GLOBAL_TEMPLATE = {
             ],
             "platform": {
                 "http_proxy": {
-                    "enabled": true,
+                    "enabled": false,
                     "server": "127.0.0.1",
                     "server_port": 6789
                 }
