@@ -12,50 +12,34 @@ export const MIXED_TEMPLATE = {
     "dns": {
         "servers": [
             {
-                "tag": "system",
-                "type": "udp",
-                "server": "119.29.29.29",
-                "server_port": 53,
-                "connect_timeout": "5s"
+                "tag": "remote",
+                "type": "https",
+                "server": "8.8.8.8",
+                "detour": "ExitGateway"
             },
             {
-                "tag": "dns_proxy",
-                "type": "tcp",
-                "server": "1.0.0.1",
-                "server_port": 53,
-                "detour": "ExitGateway",
-                "connect_timeout": "5s"
+                "tag": "local",
+                "type": "https",
+                "server": "223.5.5.5"
             }
         ],
         "rules": [
             {
-                "query_type": [
-                    "HTTPS",
-                    "SVCB",
-                    "PTR"
-                ],
-                "action": "reject"
+                "query_type": "HTTPS",
+                "action": "predefined"
             },
             {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "rule_set": [
-                    "geosite-cn",
-                    "geosite-microsoft-cn"
-                ],
-                "strategy": "prefer_ipv4",
-                "server": "system"
+                "rule_set": "geosite-cn",
+                "server": "local"
+            },
+            {
+                "rule_set": "geosite-microsoft-cn",
+                "server": "local"
             }
         ],
-        "final": "dns_proxy",
-        "strategy": "prefer_ipv4"
+        "final": "remote",
+        "strategy": "prefer_ipv4",
+        "independent_cache": true
     },
     "inbounds": [
         {
@@ -72,21 +56,12 @@ export const MIXED_TEMPLATE = {
                 "action": "sniff"
             },
             {
-                "type": "logical",
-                "mode": "or",
-                "rules": [
-                    {
-                        "protocol": "dns"
-                    },
-                    {
-                        "port": 53
-                    }
-                ],
+                "protocol": "dns",
                 "action": "hijack-dns"
             },
             {
-                "ip_is_private": true,
-                "outbound": "direct"
+                "action": "resolve",
+                "strategy": "prefer_ipv4"
             },
             {
                 "domain": [
@@ -107,47 +82,37 @@ export const MIXED_TEMPLATE = {
                 "outbound": "ExitGateway"
             },
             {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "domain_suffix": [
-                    "local",
-                    "lan",
-                    "localdomain",
-                    "localhost",
-                    "bypass.local",
-                    ".oneoh.cloud",
-                    ".ksjhaoka.com",
-                    ".mixcapp.com"
-                ],
-                "outbound": "direct",
-                "rule_set": [
-                    "geosite-cn",
-                    "geosite-microsoft-cn"
-                ]
+                "ip_is_private": true,
+                "outbound": "direct"
+            },
+            {
+                "rule_set": "geoip-cn",
+                "outbound": "direct"
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": "system",
+        "default_domain_resolver": {
+            "server": "local"
+        },
         "auto_detect_interface": true,
         "rule_set": [
+            {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+            },
             {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs"
             },
             {
                 "tag": "geosite-microsoft-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-microsoft@cn.srs"
             }
         ]
     },
@@ -158,8 +123,7 @@ export const MIXED_TEMPLATE = {
     "outbounds": [
         {
             "tag": "direct",
-            "type": "direct",
-            "domain_resolver": "system"
+            "type": "direct"
         },
         {
             "tag": "ExitGateway",
@@ -187,65 +151,47 @@ export const TUN_TEMPLATE = {
     "dns": {
         "servers": [
             {
-                "tag": "system",
-                "type": "udp",
-                "server": "119.29.29.29",
-                "server_port": 53,
-                "connect_timeout": "5s"
-            },
-            {
-                "tag": "dns_proxy",
-                "type": "tcp",
-                "server": "1.0.0.1",
-                "server_port": 53,
-                "detour": "ExitGateway",
-                "connect_timeout": "5s"
-            },
-            {
                 "tag": "remote",
+                "type": "https",
+                "server": "8.8.8.8",
+                "detour": "ExitGateway"
+            },
+            {
+                "tag": "local",
+                "type": "https",
+                "server": "223.5.5.5"
+            },
+            {
+                "tag": "fakeip",
                 "type": "fakeip",
                 "inet4_range": "198.18.0.0/15",
-                "inet6_range": "fc00::/18"
+                "inet6_range": "2001:0470:f9da:fdfa::1/64"
             }
         ],
         "rules": [
             {
-                "query_type": [
-                    "HTTPS",
-                    "SVCB",
-                    "PTR"
-                ],
-                "action": "reject"
-            },
-            {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "rule_set": [
-                    "geosite-cn",
-                    "geosite-microsoft-cn"
-                ],
-                "strategy": "prefer_ipv4",
-                "server": "system"
+                "query_type": "HTTPS",
+                "action": "predefined"
             },
             {
                 "query_type": [
                     "A",
-                    "AAAA",
-                    "CNAME"
+                    "AAAA"
                 ],
-                "server": "remote",
-                "strategy": "prefer_ipv4"
+                "rewrite_ttl": 1,
+                "server": "fakeip"
+            },
+            {
+                "rule_set": "geosite-cn",
+                "server": "local"
+            },
+            {
+                "rule_set": "geosite-microsoft-cn",
+                "server": "local"
             }
         ],
-        "final": "dns_proxy",
-        "strategy": "prefer_ipv4"
+        "strategy": "prefer_ipv4",
+        "independent_cache": true
     },
     "inbounds": [
         {
@@ -266,6 +212,7 @@ export const TUN_TEMPLATE = {
             "stack": "gvisor",
             "auto_route": true,
             "strict_route": true,
+            "endpoint_independent_nat": true,
             "route_exclude_address": [
                 "10.0.0.0/8",
                 "127.0.0.0/8",
@@ -299,26 +246,12 @@ export const TUN_TEMPLATE = {
                 "action": "sniff"
             },
             {
-                "type": "logical",
-                "mode": "or",
-                "rules": [
-                    {
-                        "protocol": "dns"
-                    },
-                    {
-                        "port": 53
-                    }
-                ],
+                "protocol": "dns",
                 "action": "hijack-dns"
             },
             {
-                "ip_is_private": true,
-                "outbound": "direct"
-            },
-            {
-                "network": "icmp",
-                "action": "route",
-                "outbound": "direct"
+                "action": "resolve",
+                "strategy": "prefer_ipv4"
             },
             {
                 "domain": [
@@ -339,47 +272,37 @@ export const TUN_TEMPLATE = {
                 "outbound": "ExitGateway"
             },
             {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "domain_suffix": [
-                    "local",
-                    "lan",
-                    "localdomain",
-                    "localhost",
-                    "bypass.local",
-                    ".oneoh.cloud",
-                    ".ksjhaoka.com",
-                    ".mixcapp.com"
-                ],
-                "outbound": "direct",
-                "rule_set": [
-                    "geosite-cn",
-                    "geosite-microsoft-cn"
-                ]
+                "ip_is_private": true,
+                "outbound": "direct"
+            },
+            {
+                "rule_set": "geoip-cn",
+                "outbound": "direct"
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": "system",
+        "default_domain_resolver": {
+            "server": "local"
+        },
         "auto_detect_interface": true,
         "rule_set": [
+            {
+                "tag": "geoip-cn",
+                "type": "remote",
+                "format": "binary",
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
+            },
             {
                 "tag": "geosite-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/OneOhCloud/one-geosite@rules/geosite-one-cn.srs"
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs"
             },
             {
                 "tag": "geosite-microsoft-cn",
                 "type": "remote",
                 "format": "binary",
-                "url": "https://jsdelivr.oneoh.cloud/gh/SagerNet/sing-geosite@rule-set/geosite-microsoft@cn.srs"
+                "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-microsoft@cn.srs"
             }
         ]
     },
@@ -390,8 +313,7 @@ export const TUN_TEMPLATE = {
     "outbounds": [
         {
             "tag": "direct",
-            "type": "direct",
-            "domain_resolver": "system"
+            "type": "direct"
         },
         {
             "tag": "ExitGateway",
@@ -419,46 +341,26 @@ export const MIXED_GLOBAL_TEMPLATE = {
     "dns": {
         "servers": [
             {
-                "tag": "system",
-                "type": "udp",
-                "server": "119.29.29.29",
-                "server_port": 53,
-                "connect_timeout": "5s"
+                "tag": "remote",
+                "type": "https",
+                "server": "8.8.8.8",
+                "detour": "ExitGateway"
             },
             {
-                "tag": "dns_proxy",
-                "type": "tcp",
-                "server": "1.0.0.1",
-                "server_port": 53,
-                "detour": "ExitGateway",
-                "connect_timeout": "5s"
+                "tag": "local",
+                "type": "https",
+                "server": "223.5.5.5"
             }
         ],
         "rules": [
             {
-                "query_type": [
-                    "HTTPS",
-                    "SVCB",
-                    "PTR"
-                ],
-                "action": "reject"
-            },
-            {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "strategy": "prefer_ipv4",
-                "server": "system"
+                "query_type": "HTTPS",
+                "action": "predefined"
             }
         ],
-        "final": "dns_proxy",
-        "strategy": "prefer_ipv4"
+        "final": "remote",
+        "strategy": "prefer_ipv4",
+        "independent_cache": true
     },
     "inbounds": [
         {
@@ -475,47 +377,22 @@ export const MIXED_GLOBAL_TEMPLATE = {
                 "action": "sniff"
             },
             {
-                "type": "logical",
-                "mode": "or",
-                "rules": [
-                    {
-                        "protocol": "dns"
-                    },
-                    {
-                        "port": 53
-                    }
-                ],
+                "protocol": "dns",
                 "action": "hijack-dns"
+            },
+            {
+                "action": "resolve",
+                "strategy": "prefer_ipv4"
             },
             {
                 "ip_is_private": true,
                 "outbound": "direct"
-            },
-            {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "domain_suffix": [
-                    "local",
-                    "lan",
-                    "localdomain",
-                    "localhost",
-                    "bypass.local",
-                    ".oneoh.cloud",
-                    ".ksjhaoka.com",
-                    ".mixcapp.com"
-                ],
-                "outbound": "direct"
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": "system",
+        "default_domain_resolver": {
+            "server": "local"
+        },
         "auto_detect_interface": true,
         "rule_set": []
     },
@@ -526,8 +403,7 @@ export const MIXED_GLOBAL_TEMPLATE = {
     "outbounds": [
         {
             "tag": "direct",
-            "type": "direct",
-            "domain_resolver": "system"
+            "type": "direct"
         },
         {
             "tag": "ExitGateway",
@@ -555,61 +431,39 @@ export const TUN_GLOBAL_TEMPLATE = {
     "dns": {
         "servers": [
             {
-                "tag": "system",
-                "type": "udp",
-                "server": "119.29.29.29",
-                "server_port": 53,
-                "connect_timeout": "5s"
-            },
-            {
-                "tag": "dns_proxy",
-                "type": "tcp",
-                "server": "1.0.0.1",
-                "server_port": 53,
-                "detour": "ExitGateway",
-                "connect_timeout": "5s"
-            },
-            {
                 "tag": "remote",
+                "type": "https",
+                "server": "8.8.8.8",
+                "detour": "ExitGateway"
+            },
+            {
+                "tag": "local",
+                "type": "https",
+                "server": "223.5.5.5"
+            },
+            {
+                "tag": "fakeip",
                 "type": "fakeip",
                 "inet4_range": "198.18.0.0/15",
-                "inet6_range": "fc00::/18"
+                "inet6_range": "2001:0470:f9da:fdfa::1/64"
             }
         ],
         "rules": [
             {
-                "query_type": [
-                    "HTTPS",
-                    "SVCB",
-                    "PTR"
-                ],
-                "action": "reject"
-            },
-            {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "strategy": "prefer_ipv4",
-                "server": "system"
+                "query_type": "HTTPS",
+                "action": "predefined"
             },
             {
                 "query_type": [
                     "A",
-                    "AAAA",
-                    "CNAME"
+                    "AAAA"
                 ],
-                "server": "remote",
-                "strategy": "prefer_ipv4"
+                "rewrite_ttl": 1,
+                "server": "fakeip"
             }
         ],
-        "final": "dns_proxy",
-        "strategy": "prefer_ipv4"
+        "strategy": "prefer_ipv4",
+        "independent_cache": true
     },
     "inbounds": [
         {
@@ -630,6 +484,7 @@ export const TUN_GLOBAL_TEMPLATE = {
             "stack": "gvisor",
             "auto_route": true,
             "strict_route": true,
+            "endpoint_independent_nat": true,
             "route_exclude_address": [
                 "10.0.0.0/8",
                 "127.0.0.0/8",
@@ -663,52 +518,22 @@ export const TUN_GLOBAL_TEMPLATE = {
                 "action": "sniff"
             },
             {
-                "type": "logical",
-                "mode": "or",
-                "rules": [
-                    {
-                        "protocol": "dns"
-                    },
-                    {
-                        "port": 53
-                    }
-                ],
+                "protocol": "dns",
                 "action": "hijack-dns"
+            },
+            {
+                "action": "resolve",
+                "strategy": "prefer_ipv4"
             },
             {
                 "ip_is_private": true,
                 "outbound": "direct"
-            },
-            {
-                "network": "icmp",
-                "action": "route",
-                "outbound": "direct"
-            },
-            {
-                "domain": [
-                    "captive.oneoh.cloud",
-                    "captive.apple.com",
-                    "nmcheck.gnome.org",
-                    "www.msftconnecttest.com",
-                    "connectivitycheck.gstatic.com",
-                    "sequoia.apple.com",
-                    "seed-sequoia.siri.apple.com"
-                ],
-                "domain_suffix": [
-                    "local",
-                    "lan",
-                    "localdomain",
-                    "localhost",
-                    "bypass.local",
-                    ".oneoh.cloud",
-                    ".ksjhaoka.com",
-                    ".mixcapp.com"
-                ],
-                "outbound": "direct"
             }
         ],
         "final": "ExitGateway",
-        "default_domain_resolver": "system",
+        "default_domain_resolver": {
+            "server": "local"
+        },
         "auto_detect_interface": true,
         "rule_set": []
     },
@@ -719,8 +544,7 @@ export const TUN_GLOBAL_TEMPLATE = {
     "outbounds": [
         {
             "tag": "direct",
-            "type": "direct",
-            "domain_resolver": "system"
+            "type": "direct"
         },
         {
             "tag": "ExitGateway",
