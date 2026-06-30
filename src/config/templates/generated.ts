@@ -4,6 +4,11 @@ import type { configType } from '../common';
 export const BUILD_TIME_TEMPLATE_SOURCE = { repo: 'BadKid90s/AureStream-Config', branch: 'main', versionPath: '1.13', singBoxVersion: 'v1.13.13' } as const;
 
 export const MIXED_TEMPLATE = {
+    "log": {
+        "disabled": false,
+        "level": "debug",
+        "timestamp": false
+    },
     "dns": {
         "servers": [
             {
@@ -128,6 +133,11 @@ export const MIXED_TEMPLATE = {
 } as const;
 
 export const TUN_TEMPLATE = {
+    "log": {
+        "disabled": false,
+        "level": "debug",
+        "timestamp": false
+    },
     "dns": {
         "servers": [
             {
@@ -306,6 +316,11 @@ export const TUN_TEMPLATE = {
 } as const;
 
 export const MIXED_GLOBAL_TEMPLATE = {
+    "log": {
+        "disabled": false,
+        "level": "debug",
+        "timestamp": false
+    },
     "dns": {
         "servers": [
             {
@@ -380,6 +395,11 @@ export const MIXED_GLOBAL_TEMPLATE = {
 } as const;
 
 export const TUN_GLOBAL_TEMPLATE = {
+    "log": {
+        "disabled": false,
+        "level": "debug",
+        "timestamp": false
+    },
     "dns": {
         "servers": [
             {
