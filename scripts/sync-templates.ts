@@ -26,7 +26,7 @@ function resolveVersionPath(): string {
             `invalid SING_BOX_VERSION: cannot parse "${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION}"`,
         );
     }
-    if (majorStr === '1' && minorStr === '13' && patch >= 8) return '1.13.8';
+    if (majorStr === '1' && minorStr === '13' && patch >= 8) return '1.13';
     if (majorStr === '1' && minorStr === '13') return '1.13';
     if (majorStr === '1' && minorStr === '12') return '1.12';
     throw new Error(
