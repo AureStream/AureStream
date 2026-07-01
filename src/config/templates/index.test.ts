@@ -19,6 +19,27 @@ describe("built-in sing-box templates", () => {
     expect(inboundTypes("tun")).toEqual(expect.arrayContaining(["mixed", "tun"]))
   })
 
+  it("tun templates sniff TUN DNS before hijacking it", () => {
+    for (const mode of ["tun", "tun-global"] as const) {
+      const config = JSON.parse(getBuiltInTemplate(mode))
+      const rules = config.route.rules
+
+      expect(rules[0]).toMatchObject({
+        inbound: "tun",
+        action: "sniff",
+      })
+      expect(rules[1]).toMatchObject({
+        inbound: "tun",
+        port: 53,
+        action: "hijack-dns",
+      })
+      expect(rules[2]).toMatchObject({
+        protocol: "dns",
+        action: "hijack-dns",
+      })
+    }
+  })
+
   it("tun template uses sing-box 1.13 route_exclude_address for route bypasses", () => {
     const config = JSON.parse(getBuiltInTemplate("tun"))
     const tunInbound = config.inbounds.find((inbound: { type: string }) => inbound.type === "tun")

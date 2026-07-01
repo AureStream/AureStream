@@ -5,7 +5,7 @@ export type StageVersionType = "stable" | "beta" | "dev";
 /** Config template type — encodes both routing mode and proxy mode. */
 export type configType = 'mixed' | 'tun' | 'mixed-global' | 'tun-global';
 
-export const TEMPLATE_CACHE_SCHEMA_VERSION = 16;
+export const TEMPLATE_CACHE_SCHEMA_VERSION = 17;
 
 export const ALL_CONFIG_MODES: configType[] = ['mixed', 'tun', 'mixed-global', 'tun-global'];
 
