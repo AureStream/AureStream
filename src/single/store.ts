@@ -379,7 +379,7 @@ export async function setConfigTemplateURL(mode: configType, url: string) {
 }
 
 export async function getDefaultConfigTemplateURL(mode: configType): Promise<string> {
-    const remoteUrl = "https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
+    const remoteUrl = "https://testingcf.jsdelivr.net/gh/BadKid90s/AureStream-Config@main";
     const versionNumber = SING_BOX_VERSION.replace('v', '').split('.');
     const major = versionNumber[0];
     const minor = versionNumber[1];
