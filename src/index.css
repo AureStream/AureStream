@@ -242,6 +242,15 @@ code, pre, .font-mono { font-family: var(--font-mono); }
   to { transform: rotate(360deg); }
 }
 
+/* ── Water-flow comet-tail ring for connect button ── */
+@keyframes water-flow-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.animate-water-flow-spin {
+  animation: water-flow-spin 10s linear infinite;
+}
+
 .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
 .animate-fade-in-scale { animation: fadeInScale 0.35s ease-out forwards; }
 .animate-slide-left { animation: slideInLeft 0.35s ease-out forwards; }
@@ -494,7 +503,6 @@ code, pre, .font-mono { font-family: var(--font-mono); }
     radial-gradient(ellipse 55% 35% at 50% 45%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
     radial-gradient(ellipse 45% 40% at 70% 12%, rgba(6, 182, 212, 0.07) 0%, transparent 50%),
     radial-gradient(ellipse 35% 30% at 25% 70%, rgba(236, 72, 153, 0.05) 0%, transparent 50%);
-  animation: gradient-mesh 15s ease-in-out infinite;
 }
 [data-theme="dark"] .bg-mesh-vibrant::before {
   background:

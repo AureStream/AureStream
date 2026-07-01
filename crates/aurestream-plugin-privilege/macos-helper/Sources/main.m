@@ -92,8 +92,9 @@ static NSString *const kBlessedPlistPath =
 // ============================================================================
 
 // Simplified requirement to check bundle identifier only, which works for
-// local development without needing a specific Developer ID Team certificate.
+// local development and ad-hoc signing without a Developer ID certificate.
 static NSString *const kClientRequirement = @"identifier \"com.root.aurestream\"";
+static NSString *const kExpectedBundleId = @"com.root.aurestream";
 
 static SecCodeRef copyClientSecCode(NSXPCConnection *connection) {
     audit_token_t token = connection.auditToken;
@@ -125,6 +126,63 @@ static SecCodeRef copyClientSecCode(NSXPCConnection *connection) {
     return code;
 }
 
+// Fallback: validate caller by reading CFBundleIdentifier from its Info.plist.
+// Used when the caller has no code signature (e.g. tauri dev, unsigned builds).
+static BOOL validateClientByBundleId(NSXPCConnection *connection) {
+    SecCodeRef code = copyClientSecCode(connection);
+    if (code == NULL) {
+        return NO;
+    }
+
+    SecStaticCodeRef staticCode = NULL;
+    OSStatus status = SecCodeCopyStaticCode(code, kSecCSDefaultFlags, &staticCode);
+    CFRelease(code);
+    if (status != errSecSuccess || staticCode == NULL) {
+        return NO;
+    }
+
+    CFURLRef bundleURL = NULL;
+    status = SecCodeCopyPath(staticCode, kSecCSDefaultFlags, &bundleURL);
+    CFRelease(staticCode);
+    if (status != errSecSuccess || bundleURL == NULL) {
+        if (bundleURL) CFRelease(bundleURL);
+        return NO;
+    }
+
+    // Walk up from the executable to find the .app bundle's Info.plist
+    NSURL *url = (__bridge_transfer NSURL *)bundleURL;
+    NSURL *appBundle = url;
+    while (appBundle != nil && ![[appBundle pathExtension] isEqualToString:@"app"]) {
+        appBundle = [appBundle URLByDeletingLastPathComponent];
+    }
+
+    if (appBundle == nil) {
+        NSLog(@"[helper] reject: could not find .app bundle for caller at %@", url.path);
+        return NO;
+    }
+
+    NSURL *infoPlistURL = [appBundle URLByAppendingPathComponent:@"Contents/Info.plist"];
+    NSDictionary *infoPlist = [NSDictionary dictionaryWithContentsOfURL:infoPlistURL];
+    if (infoPlist == nil) {
+        NSLog(@"[helper] reject: could not read Info.plist at %@", infoPlistURL.path);
+        return NO;
+    }
+
+    NSString *bundleId = infoPlist[@"CFBundleIdentifier"];
+    if (![bundleId isKindOfClass:[NSString class]]) {
+        NSLog(@"[helper] reject: no CFBundleIdentifier in caller Info.plist");
+        return NO;
+    }
+
+    if (![bundleId isEqualToString:kExpectedBundleId]) {
+        NSLog(@"[helper] reject: caller bundle id '%@' != expected '%@'", bundleId, kExpectedBundleId);
+        return NO;
+    }
+
+    NSLog(@"[helper] fallback validation passed: bundle id match for %@", url.path);
+    return YES;
+}
+
 static BOOL validateClient(NSXPCConnection *connection) {
     SecCodeRef code = copyClientSecCode(connection);
     if (code == NULL) {
@@ -143,15 +201,18 @@ static BOOL validateClient(NSXPCConnection *connection) {
     }
 
     status = SecCodeCheckValidity(code, kSecCSDefaultFlags, requirement);
-    CFRelease(code);
     CFRelease(requirement);
 
-    if (status != errSecSuccess) {
-        NSLog(@"[helper] reject: SecCodeCheckValidity failed: %d", (int)status);
-        return NO;
+    if (status == errSecSuccess) {
+        CFRelease(code);
+        return YES;
     }
 
-    return YES;
+    NSLog(@"[helper] SecCodeCheckValidity failed: %d, attempting fallback validation", (int)status);
+    CFRelease(code);
+
+    // Fallback: validate by bundle ID from Info.plist for unsigned / ad-hoc callers
+    return validateClientByBundleId(connection);
 }
 
 static BOOL copyCallerUser(NSXPCConnection *connection, uid_t *uidOut, gid_t *gidOut) {

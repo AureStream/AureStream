@@ -7,7 +7,7 @@ use tokio::time::{sleep, timeout, Instant};
 use crate::engine::ports::controller_port;
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 
-pub(crate) const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
+pub(crate) const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn startup_timeout_covers_slow_rule_set_updates() {
-        assert_eq!(STARTUP_TIMEOUT, Duration::from_secs(20));
+        assert_eq!(STARTUP_TIMEOUT, Duration::from_secs(10));
         assert_eq!(POLL_INTERVAL, Duration::from_millis(100));
         assert_eq!(PROBE_CONNECT_TIMEOUT, Duration::from_millis(100));
     }

@@ -70,14 +70,6 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
         throw new Error('subscription_config_missing');
     }
 
-    const outboundsSelectorIndex = 1;
-    const outboundsUrltestIndex = 2;
-
-    const outbound_groups = newConfig["outbounds"];
-    const selectorGroup = outbound_groups[outboundsSelectorIndex];
-    const outboundsSelector = selectorGroup["outbounds"];
-    const outboundsUrltest = outbound_groups[outboundsUrltestIndex]["outbounds"];
-
     const seenTags = new Set<string>();
     const vpnServerList = dbConfigData.outbounds.filter((item: any) => {
         let flag = item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block";
@@ -93,20 +85,38 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
 
     for (let i = 0; i < vpnServerList.length; i++) {
         vpnServerList[i]["domain_resolver"] = "local";
-        outboundsSelector.push(vpnServerList[i].tag);
     }
 
-    // Set default selected node for the selector group if valid
-    if (defaultNodeTag && selectorGroup.type === "selector") {
-        const hasNode = vpnServerList.some((n: any) => n.tag === defaultNodeTag);
-        if (hasNode) {
-            selectorGroup["default"] = defaultNodeTag;
-        }
+    const serverTags = vpnServerList.map((item: any) => item.tag);
+
+    const selectorGroup: any = {
+        tag: "ExitGateway",
+        type: "selector",
+        outbounds: ["auto", ...serverTags],
+        interrupt_exist_connections: true,
+    };
+    if (defaultNodeTag && vpnServerList.some((n: any) => n.tag === defaultNodeTag)) {
+        selectorGroup["default"] = defaultNodeTag;
     }
 
-    const urltestNameList: string[] = vpnServerList.map((item: any) => item.tag);
-    outboundsUrltest.push(...urltestNameList);
-    outbound_groups.push(...vpnServerList);
+    const autoGroup = {
+        tag: "auto",
+        type: "urltest",
+        url: "https://www.gstatic.com/generate_204",
+        interval: "1m",
+        tolerance: 50,
+        outbounds: serverTags,
+    };
+
+    // Global mode uses dns_proxy for direct outbound; rule mode uses system
+    const isGlobal = newConfig.route?.final === "ExitGateway";
+    const direct = {
+        tag: "direct",
+        type: "direct",
+        domain_resolver: isGlobal ? "dns_proxy" : "system",
+    };
+
+    newConfig.outbounds = [direct, selectorGroup, autoGroup, ...vpnServerList];
 
     await writeConfigFile(fileName, new TextEncoder().encode(JSON.stringify(newConfig)));
 }

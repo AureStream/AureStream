@@ -719,12 +719,16 @@ function HomePage() {
 
               {/* Gradient circular ring container */}
               <div className="absolute w-36 h-36 rounded-full">
+                {/* Shadcn-style spinner ring during connecting */}
+                {isConnecting && (
+                  <div className="absolute inset-0 rounded-full border-[6px] border-[#8E99FF]/20 border-t-[#8E99FF] animate-spin" />
+                )}
                 <div
                   className={`absolute inset-0 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
                     isConnected
                       ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
                       : isConnecting
-                      ? "from-secondary to-accent-purple animate-spin-slow"
+                      ? "from-secondary/10 to-accent-purple/10"
                       : "shadow-sm"
                   }`}
                   style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
