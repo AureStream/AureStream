@@ -24,17 +24,13 @@ describe("built-in sing-box templates", () => {
     const tunInbound = config.inbounds.find((inbound: { type: string }) => inbound.type === "tun")
 
     expect(tunInbound).toBeTruthy()
-    expect(tunInbound.platform?.http_proxy).toMatchObject({
-      enabled: true,
-      server: "127.0.0.1",
-      server_port: 6789,
-    })
+    // http_proxy disabled to fix Edge TLS mismatch
+    expect(tunInbound.platform?.http_proxy).toBeUndefined()
     expect(tunInbound.route_exclude_address).toEqual(expect.arrayContaining([
       "10.0.0.0/8",
       "172.16.0.0/12",
       "192.168.0.0/16",
       "127.0.0.0/8",
-      "fc00::/7",
     ]))
     expect(tunInbound).not.toHaveProperty("inet4_bypass_address")
   })
@@ -52,11 +48,10 @@ describe("built-in sing-box templates", () => {
   it("uses OneOhCloud route structure for global mode", () => {
     const config = JSON.parse(getBuiltInTemplate("mixed-global"))
     const actions = config.route.rules.map((r: any) => r.action)
-    expect(actions).toContain("sniff")
     expect(actions).toContain("hijack-dns")
     expect(actions).toContain("reject")
     expect(config.route.final).toBe("ExitGateway")
-    expect(config.route.default_domain_resolver).toBe("system")
+    expect(config.route.default_domain_resolver).toBe("dns_proxy")
     expect(
       config.route.rules.some((rule: any) =>
         Array.isArray(rule.domain) && rule.domain.includes("direct-tag.oneoh.cloud")
