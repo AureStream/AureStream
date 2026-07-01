@@ -10,6 +10,8 @@ pub mod macos;
 pub mod windows;
 
 const DEFAULT_MIXED_PROXY_PORT: u16 = 2345;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Serialize)]
 pub struct PrestartCheckResult {
@@ -41,8 +43,22 @@ fn find_pids_on_port(port: u16) -> Vec<u32> {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_command_creation_flags(_program: &str) -> u32 {
+    CREATE_NO_WINDOW
+}
+
+#[cfg(target_os = "windows")]
+fn hidden_windows_command(program: &str) -> Command {
+    use std::os::windows::process::CommandExt;
+
+    let mut command = Command::new(program);
+    command.creation_flags(windows_command_creation_flags(program));
+    command
+}
+
+#[cfg(target_os = "windows")]
 fn find_pids_windows(port: u16) -> Vec<u32> {
-    let output = Command::new("netstat")
+    let output = hidden_windows_command("netstat")
         .args(["-ano"])
         .output()
         .unwrap_or_else(|_| std::process::Output {
@@ -124,7 +140,7 @@ fn find_pids_linux(port: u16) -> Vec<u32> {
 fn kill_pid(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
-        Command::new("taskkill")
+        hidden_windows_command("taskkill")
             .args(["/F", "/PID", &pid.to_string()])
             .output()
             .map(|o| o.status.success())
@@ -242,4 +258,15 @@ pub fn reload_via_pkexec(helper_path: &str) -> Result<(), String> {
     }
     log::info!("[reload] SIGHUP + flush-caches via helper");
     Ok(())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_port_cleanup_commands_are_hidden() {
+        assert_eq!(windows_command_creation_flags("netstat"), CREATE_NO_WINDOW);
+        assert_eq!(windows_command_creation_flags("taskkill"), CREATE_NO_WINDOW);
+    }
 }
