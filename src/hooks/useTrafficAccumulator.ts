@@ -5,30 +5,35 @@ import { getStoreValue } from "@/single/store"
 import { SSI_STORE_KEY } from "@/types/definition"
 import { accumulateUsedTraffic, getLocalSubscriptions, uploadPendingTraffic } from "@/action/db"
 
+const CONNECTED_UPLOAD_DELAY_MS = 5000
+
 export function useTrafficAccumulator(onTrafficUpdated?: () => void) {
   const { isConnected } = useEngineState()
   const accumulatedUploadRef = useRef<number>(0)
   const accumulatedDownloadRef = useRef<number>(0)
   const activeSubIdRef = useRef<string>("")
+
+  const persistAccumulatedTraffic = async () => {
+    const up = accumulatedUploadRef.current
+    const down = accumulatedDownloadRef.current
+    const subId = activeSubIdRef.current || (await getStoreValue(SSI_STORE_KEY))
+
+    if (subId && (up > 0 || down > 0)) {
+      await accumulateUsedTraffic(subId, up, down)
+      accumulatedUploadRef.current -= up
+      accumulatedDownloadRef.current -= down
+      if (onTrafficUpdated) {
+        onTrafficUpdated()
+      }
+    }
+  }
   
   // Save traffic to DB every 5 seconds
   useEffect(() => {
     if (!isConnected) return
 
     const persistInterval = setInterval(async () => {
-      const up = accumulatedUploadRef.current
-      const down = accumulatedDownloadRef.current
-      if (up <= 0 && down <= 0) return
-      
-      const subId = activeSubIdRef.current || (await getStoreValue(SSI_STORE_KEY))
-      if (subId) {
-        await accumulateUsedTraffic(subId, up, down)
-        accumulatedUploadRef.current -= up
-        accumulatedDownloadRef.current -= down
-        if (onTrafficUpdated) {
-          onTrafficUpdated()
-        }
-      }
+      await persistAccumulatedTraffic()
     }, 5000)
 
     return () => {
@@ -40,37 +45,23 @@ export function useTrafficAccumulator(onTrafficUpdated?: () => void) {
   useEffect(() => {
     if (!isConnected) return
 
+    const initialUploadTimeout = setTimeout(() => {
+      void uploadPendingTraffic()
+    }, CONNECTED_UPLOAD_DELAY_MS)
     const uploadInterval = setInterval(async () => {
       await uploadPendingTraffic()
     }, 60000)
 
     return () => {
+      clearTimeout(initialUploadTimeout)
       clearInterval(uploadInterval)
     }
   }, [isConnected])
 
   // Subscribe to WebSocket traffic ticks
   useEffect(() => {
-    // Force database persist and upload on state change/disconnect
-    const flushRemaining = async () => {
-      const up = accumulatedUploadRef.current
-      const down = accumulatedDownloadRef.current
-      const subId = activeSubIdRef.current || (await getStoreValue(SSI_STORE_KEY))
-      
-      if (subId && (up > 0 || down > 0)) {
-        await accumulateUsedTraffic(subId, up, down)
-        accumulatedUploadRef.current -= up
-        accumulatedDownloadRef.current -= down
-        if (onTrafficUpdated) {
-          onTrafficUpdated()
-        }
-      }
-      // Sync with API
-      await uploadPendingTraffic()
-    }
-
     if (!isConnected) {
-      flushRemaining()
+      void persistAccumulatedTraffic()
       return
     }
 
@@ -100,7 +91,7 @@ export function useTrafficAccumulator(onTrafficUpdated?: () => void) {
 
     return () => {
       abort.abort()
-      flushRemaining()
+      void persistAccumulatedTraffic()
     }
   }, [isConnected, onTrafficUpdated])
 }

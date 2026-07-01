@@ -64,6 +64,9 @@ export function clearTemplateResolvedCache() {
 }
 
 async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
+    newConfig.experimental = newConfig.experimental ?? {};
+    newConfig.experimental.clash_api = newConfig.experimental.clash_api ?? {};
+
     newConfig.experimental.cache_file = {
         enabled: true,
         path: dbCacheFilePath,
