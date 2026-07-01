@@ -137,7 +137,9 @@ export async function configureTunInbound(
     const osType = settings.osType ?? type();
     if (osType === "linux") {
         tunInbound.stack = "system";
-    } else {
+    } else if (osType !== "macos") {
+        // macOS 上保留模板默认的 stack（通常为 gvisor），
+        // system stack 在 macOS 上有已知的路由表/IPv6 兼容性问题。
         tunInbound.stack = settings.tunStack ?? (await getTunStack());
     }
     if (osType === "macos") {

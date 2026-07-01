@@ -55,6 +55,7 @@ impl EngineManager for WindowsEngine {
                 .shell()
                 .sidecar("aurestream-core")
                 .map_err(|e| format!("sidecar lookup failed: {}", e))?
+                .env("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true")
                 .args(["run", "-c", &config_path, "--disable-color"]);
             let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
             let child_pid = child.pid();

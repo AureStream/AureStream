@@ -403,7 +403,7 @@ export async function getDefaultConfigTemplateURL(mode: configType): Promise<str
 
 export type TunStack = 'system' | 'gvisor' | 'mixed';
 
-export const DEFAULT_TUN_STACK: TunStack = 'system';
+export const DEFAULT_TUN_STACK: TunStack = 'gvisor';
 
 const TUN_STACK_VALUES: TunStack[] = ['system', 'gvisor', 'mixed'];
 
