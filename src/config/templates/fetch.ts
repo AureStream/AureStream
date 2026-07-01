@@ -9,7 +9,7 @@ export async function fetchRemoteTemplate(mode: configType): Promise<string> {
         throw new Error(`[fetchRemoteTemplate] Template URL for mode=${mode} is not HTTPS: ${url}`);
     }
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
     try {
         const response = await fetch(`${url}?_=${Date.now()}`, {
             signal: controller.signal,
@@ -25,7 +25,8 @@ export async function fetchRemoteTemplate(mode: configType): Promise<string> {
         }
         return JSON.stringify(jsonRes);
     } catch (e: any) {
-        throw new Error(`Network error or timeout while fetching template: ${e.message}`);
+        const errMsg = e instanceof Error ? e.message : String(e);
+        throw new Error(`Network error or timeout while fetching template: ${errMsg}`);
     } finally {
         clearTimeout(timeoutId);
     }
