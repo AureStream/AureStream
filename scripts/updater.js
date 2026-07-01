@@ -53,24 +53,26 @@ async function run() {
     const sigName = sigAsset.name;
     const bundleName = sigName.slice(0, -4); // remove .sig
 
-    let platformKey = null;
-    if (bundleName.includes('aarch64.app.tar.gz')) {
-      platformKey = 'darwin-aarch64';
+    let platformKeys = [];
+    if (bundleName === 'AureStream.app.tar.gz') {
+      platformKeys = ['darwin-aarch64', 'darwin-x86_64'];
+    } else if (bundleName.includes('aarch64.app.tar.gz')) {
+      platformKeys = ['darwin-aarch64'];
     } else if (bundleName.includes('x64.app.tar.gz')) {
-      platformKey = 'darwin-x86_64';
+      platformKeys = ['darwin-x86_64'];
     } else if ((bundleName.endsWith('.zip') || bundleName.endsWith('.exe')) && !bundleName.includes('portable')) {
-      platformKey = 'windows-x86_64';
+      platformKeys = ['windows-x86_64'];
     } else if (bundleName.includes('AppImage.tar.gz')) {
-      platformKey = 'linux-x86_64';
+      platformKeys = ['linux-x86_64'];
     }
 
-    if (!platformKey) {
+    if (platformKeys.length === 0) {
       console.warn(`Could not determine platform for bundle: ${bundleName}`);
       continue;
     }
 
     let bundleAsset = otherAssets.find(a => a.name === bundleName);
-    if (!bundleAsset && platformKey === 'windows-x86_64') {
+    if (!bundleAsset && platformKeys.includes('windows-x86_64')) {
       // Fallback for renamed windows installer (e.g. aurestream_0.2.2_windows_x64_setup.exe)
       bundleAsset = otherAssets.find(a => a.name.includes('windows_x64_setup.exe') || a.name.endsWith('_setup.exe'));
     }
@@ -88,10 +90,12 @@ async function run() {
     }
     const signature = await sigRes.text();
 
-    updateData.platforms[platformKey] = {
-      signature: signature.trim(),
-      url: bundleAsset.browser_download_url
-    };
+    for (const key of platformKeys) {
+      updateData.platforms[key] = {
+        signature: signature.trim(),
+        url: bundleAsset.browser_download_url
+      };
+    }
   }
 
   const manifestContent = JSON.stringify(updateData, null, 2);

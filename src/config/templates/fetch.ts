@@ -1,4 +1,4 @@
-import { fetch } from '@tauri-apps/plugin-http';
+// Use native browser fetch instead of Tauri's plugin-http to bypass scope restrictions
 import { parse } from "jsonc-parser";
 import { configType } from "@/config/common";
 import { getConfigTemplateURL } from "@/single/store";
