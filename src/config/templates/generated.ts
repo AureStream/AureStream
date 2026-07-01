@@ -4,8 +4,8 @@
 //
 // Source:  https://github.com/BadKid90s/AureStream-Config/tree/main/1.13/zh-cn
 // Branch:  main
-// Commit:  cf6e2a119e9388c9b89e6c2f1161f287f2d8e857
-// Built:   2026-07-01T02:32:16.202Z
+// Commit:  c400005b77a81bc4b47924c3275e651a251f957f
+// Built:   2026-07-01T05:46:15.857Z
 // sing-box: v1.13.13
 
 import type { configType } from '../common';
@@ -13,10 +13,10 @@ import type { configType } from '../common';
 export const BUILD_TIME_TEMPLATE_SOURCE = {
     repo: 'BadKid90s/AureStream-Config',
     branch: 'main',
-    commit: 'cf6e2a119e9388c9b89e6c2f1161f287f2d8e857',
+    commit: 'c400005b77a81bc4b47924c3275e651a251f957f',
     versionPath: '1.13',
     singBoxVersion: 'v1.13.13',
-    generatedAt: '2026-07-01T02:32:16.202Z',
+    generatedAt: '2026-07-01T05:46:15.857Z',
 } as const;
 
 export const MIXED_TEMPLATE = {
@@ -260,6 +260,15 @@ export const TUN_TEMPLATE = {
     ],
     "route": {
         "rules": [
+            {
+                "inbound": "tun",
+                "action": "sniff"
+            },
+            {
+                "inbound": "tun",
+                "port": 53,
+                "action": "hijack-dns"
+            },
             {
                 "protocol": "dns",
                 "action": "hijack-dns"
@@ -510,6 +519,15 @@ export const TUN_GLOBAL_TEMPLATE = {
     ],
     "route": {
         "rules": [
+            {
+                "inbound": "tun",
+                "action": "sniff"
+            },
+            {
+                "inbound": "tun",
+                "port": 53,
+                "action": "hijack-dns"
+            },
             {
                 "protocol": "dns",
                 "action": "hijack-dns"
