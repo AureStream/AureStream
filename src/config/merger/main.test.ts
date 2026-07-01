@@ -9,6 +9,7 @@ const createMock = vi.hoisted(() => vi.fn())
 const getSubscriptionConfigMock = vi.hoisted(() => vi.fn())
 const getSubscriptionMergeRevisionMock = vi.hoisted(() => vi.fn())
 const storeValues = vi.hoisted(() => new Map<string, unknown>())
+const fetchRemoteTemplateMock = vi.hoisted(() => vi.fn())
 
 vi.mock("@tauri-apps/api/path", () => ({
   appConfigDir: appConfigDirMock,
@@ -33,7 +34,6 @@ vi.mock("../../action/db", () => ({
 }))
 
 vi.mock("../../single/store", async () => {
-  const definition = await import("../../types/definition")
   return {
     getAllowLan: vi.fn(async () => false),
     getConfiguredDirectDNS: vi.fn(async () => undefined),
@@ -42,18 +42,23 @@ vi.mock("../../single/store", async () => {
     getControllerPort: vi.fn(async () => 9191),
     getCustomRuleSet: vi.fn(async () => ({ domain: [], domain_suffix: [], ip_cidr: [] })),
     getProxyPort: vi.fn(async () => 2345),
-    getStoreValue: vi.fn(async (key: string, defaultValue?: unknown) => (
-      storeValues.has(key) ? storeValues.get(key) : defaultValue
-    )),
+    getStoreValue: vi.fn(async (key: string, def: unknown) => {
+      if (key === "AppSecretToken") return "secret-token"
+      if (key === "AppApiPort") return 9191
+      return storeValues.get(key) ?? def
+    }),
     getTunStack: vi.fn(async () => "system"),
     getUseDHCP: vi.fn(async () => false),
-    isBypassRouterEnabled: vi.fn(async () => false),
+    isBypassRouterEnabled: vi.fn(async () => true),
     setStoreValue: vi.fn(async (key: string, value: unknown) => {
       storeValues.set(key, value)
     }),
-    selectedNodeTagStoreKey: definition.selectedNodeTagStoreKey,
   }
 })
+
+vi.mock("../templates/fetch", () => ({
+  fetchRemoteTemplate: fetchRemoteTemplateMock,
+}))
 
 const legacyTemplateWithoutClashApi = {
   log: { level: "info" },
@@ -105,12 +110,8 @@ describe("config merger", () => {
   })
 
   it("normalizes legacy templates that do not include experimental.clash_api", async () => {
-    const { getConfigTemplateCacheKey } = await import("../common")
-    const { clearTemplateResolvedCache, setRuleConfig } = await import("./main")
-    const templateCacheKey = await getConfigTemplateCacheKey("mixed")
-    storeValues.set(templateCacheKey, JSON.stringify(legacyTemplateWithoutClashApi))
-
-    clearTemplateResolvedCache()
+    const { setRuleConfig } = await import("./main")
+    fetchRemoteTemplateMock.mockResolvedValue(JSON.stringify(legacyTemplateWithoutClashApi))
 
     await expect(setRuleConfig("sub-a", false)).resolves.toBeUndefined()
 
