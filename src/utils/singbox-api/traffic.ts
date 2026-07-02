@@ -40,8 +40,8 @@ export async function subscribeTraffic(
       }
     };
 
-    ws.onerror = (err) => {
-      console.error("[WS Traffic] WebSocket error:", err);
+    ws.onerror = () => {
+      // Suppress noisy error logs when the core exits and the connection is reset
       ws?.close();
     };
   };

@@ -145,7 +145,8 @@ pub async fn version(app: tauri::AppHandle) -> Result<String, String> {
     let sidecar_command = app
         .shell()
         .sidecar("aurestream-core")
-        .map_err(|e| e.to_string())?;
+        .unwrap()
+        .env("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true");
     let output = sidecar_command
         .arg("version")
         .output()
