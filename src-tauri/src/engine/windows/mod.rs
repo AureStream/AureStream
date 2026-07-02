@@ -7,6 +7,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
+pub(crate) mod watchdog;
+
 pub struct WindowsEngine;
 
 impl EngineManager for WindowsEngine {
@@ -43,12 +45,23 @@ impl EngineManager for WindowsEngine {
             scm::start_service_with_args(&args)
                 .map_err(|e| format!("Failed to start AureStream TUN Service: {}", e))?;
 
+            let mode_arc = Arc::new(mode);
             {
                 let mut mgr = ProcessManager::acquire();
-                mgr.mode = Some(Arc::new(mode));
+                mgr.mode = Some(Arc::clone(&mode_arc));
                 mgr.config_path = Some(Arc::new(config_path));
                 mgr.child = None;
                 mgr.is_stopping = false;
+            }
+
+            watchdog::spawn(app.clone(), mode_arc, start_epoch);
+
+            if let Err(e) = clear_system_proxy().await {
+                log::warn!("Failed to unset proxy on TUN start: {}", e);
+                let _ = app.emit(
+                    EVENT_TAURI_LOG,
+                    (2, format!("Failed to unset proxy: {}", e)),
+                );
             }
         } else {
             let cmd = app
