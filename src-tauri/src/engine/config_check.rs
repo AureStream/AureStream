@@ -78,6 +78,7 @@ async fn verify_inner(app: &AppHandle, config_path: &str) -> Result<(), String> 
         .shell()
         .sidecar("aurestream-core")
         .map_err(|e| format!("sidecar lookup failed: {}", e))?
+        .env("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true")
         .args(["check", "-c", config_path, "--disable-color"])
         .spawn()
         .map_err(|e| format!("config check spawn failed: {}", e))?;

@@ -370,7 +370,12 @@ export async function getConfigTemplateURLKey(mode: configType): Promise<string>
 export async function getConfigTemplateURL(mode: configType): Promise<string> {
     const cacheKey = await getConfigTemplateURLKey(mode);
     const defaultTemplatePath = await getDefaultConfigTemplateURL(mode);
-    return getStoreValue(cacheKey, defaultTemplatePath);
+    let url = await getStoreValue(cacheKey, defaultTemplatePath) as string;
+    if (url.includes('testingcf.jsdelivr.net') || url.includes('jsdelivr') || (url.includes('raw.githubusercontent.com') && !url.includes('gh-proxy.org'))) {
+        url = defaultTemplatePath;
+        await setStoreValue(cacheKey, url, { immediate: true });
+    }
+    return url;
 }
 
 export async function setConfigTemplateURL(mode: configType, url: string) {
@@ -379,7 +384,7 @@ export async function setConfigTemplateURL(mode: configType, url: string) {
 }
 
 export async function getDefaultConfigTemplateURL(mode: configType): Promise<string> {
-    const remoteUrl = "https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
+    const remoteUrl = "https://gh-proxy.org/https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
     const versionNumber = SING_BOX_VERSION.replace('v', '').split('.');
     const major = versionNumber[0];
     const minor = versionNumber[1];
@@ -403,7 +408,7 @@ export async function getDefaultConfigTemplateURL(mode: configType): Promise<str
 
 export type TunStack = 'system' | 'gvisor' | 'mixed';
 
-export const DEFAULT_TUN_STACK: TunStack = 'system';
+export const DEFAULT_TUN_STACK: TunStack = 'gvisor';
 
 const TUN_STACK_VALUES: TunStack[] = ['system', 'gvisor', 'mixed'];
 

@@ -1,5 +1,5 @@
 import { type } from '@tauri-apps/plugin-os';
-import { getConfiguredDirectDNS, getConfiguredProxyDNS, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
+import { getConfiguredDirectDNS, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
 import { TUN_INTERFACE_NAME } from "../../types/definition";
 import { writeConfigFile } from "../helper";
 
@@ -48,31 +48,35 @@ export async function updateDHCPSettings2Config(newConfig: any, settings: DnsSet
     }
 }
 
-/** Patch the proxy DNS only when the user explicitly configured one. */
-export async function patchDnsProxyConfig(newConfig: any) {
-    if (!newConfig?.dns?.servers) return;
-
-    const dnsProxy = newConfig.dns.servers.find((server: Item) =>
-        server.tag === "dns_proxy" || server.tag === "remote"
-    );
-    if (!dnsProxy) return;
-
-    const configuredProxyDns = await getConfiguredProxyDNS();
-    if (!configuredProxyDns) return;
-
-    dnsProxy.type = "udp";
-    dnsProxy.server = configuredProxyDns;
-    console.log(`[CONFIG] dns_proxy configured by user: udp/${configuredProxyDns}`);
-}
-
-export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData: any, newConfig: any, defaultNodeTag?: string) {
+/**
+ * 只提取 VPN 服务器节点配置合并到配置文件中
+ */
+export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData: any, newConfig: any) {
     if (!dbConfigData?.outbounds) {
         throw new Error('subscription_config_missing');
     }
 
+    if (!newConfig["outbounds"] || !Array.isArray(newConfig["outbounds"])) {
+        throw new Error('remote_template_missing_outbounds_array');
+    }
+
+    let outboundsSelectorIndex = newConfig["outbounds"].findIndex((o: any) => o.tag === "ExitGateway" && o.type === "selector");
+    let outboundsUrltestIndex = newConfig["outbounds"].findIndex((o: any) => o.tag === "auto" && o.type === "urltest");
+
+    if (outboundsSelectorIndex === -1 || outboundsUrltestIndex === -1) {
+        throw new Error('remote_template_missing_routing_groups');
+    }
+
+    const outbound_groups = newConfig["outbounds"];
+    const outboundsSelector = outbound_groups[outboundsSelectorIndex]["outbounds"];
+    const outboundsUrltest = outbound_groups[outboundsUrltestIndex]["outbounds"];
+
     const seenTags = new Set<string>();
-    const vpnServerList = dbConfigData.outbounds.filter((item: any) => {
+    const vpnServerList = dbConfigData.outbounds.filter((item: Item) => {
+        // 只找VPN服务器的节点配置
         let flag = item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block";
+
+        // sing-box 1.12 版本开始，dns 类型的节点不再需要
         flag = flag && item.type !== "dns";
 
         if (flag && seenTags.has(item.tag)) {
@@ -84,39 +88,14 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
     });
 
     for (let i = 0; i < vpnServerList.length; i++) {
-        vpnServerList[i]["domain_resolver"] = "local";
+        vpnServerList[i]["domain_resolver"] = "system";
+        outboundsSelector.push(vpnServerList[i].tag);
     }
 
-    const serverTags = vpnServerList.map((item: any) => item.tag);
+    const urltestNameList: string[] = vpnServerList.map((item: any) => item.tag);
 
-    const selectorGroup: any = {
-        tag: "ExitGateway",
-        type: "selector",
-        outbounds: ["auto", ...serverTags],
-        interrupt_exist_connections: true,
-    };
-    if (defaultNodeTag && vpnServerList.some((n: any) => n.tag === defaultNodeTag)) {
-        selectorGroup["default"] = defaultNodeTag;
-    }
-
-    const autoGroup = {
-        tag: "auto",
-        type: "urltest",
-        url: "https://www.gstatic.com/generate_204",
-        interval: "1m",
-        tolerance: 50,
-        outbounds: serverTags,
-    };
-
-    // Global mode uses dns_proxy for direct outbound; rule mode uses system
-    const isGlobal = newConfig.route?.final === "ExitGateway";
-    const direct = {
-        tag: "direct",
-        type: "direct",
-        domain_resolver: isGlobal ? "dns_proxy" : "system",
-    };
-
-    newConfig.outbounds = [direct, selectorGroup, autoGroup, ...vpnServerList];
+    outboundsUrltest.push(...urltestNameList);
+    outbound_groups.push(...vpnServerList);
 
     await writeConfigFile(fileName, new TextEncoder().encode(JSON.stringify(newConfig)));
 }
@@ -137,7 +116,9 @@ export async function configureTunInbound(
     const osType = settings.osType ?? type();
     if (osType === "linux") {
         tunInbound.stack = "system";
-    } else {
+    } else if (osType !== "macos") {
+        // macOS 上保留模板默认的 stack（通常为 gvisor），
+        // system stack 在 macOS 上有已知的路由表/IPv6 兼容性问题。
         tunInbound.stack = settings.tunStack ?? (await getTunStack());
     }
     if (osType === "macos") {

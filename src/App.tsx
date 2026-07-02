@@ -1,12 +1,10 @@
 import { useEffect } from "react"
 import { Routes, Route, Navigate } from "react-router-dom"
-import useSWR from "swr"
 import AuthLayout from "./components/AuthLayout"
 import LoginPage from "./components/LoginPage"
 import RegisterPage from "./components/RegisterPage"
 import Dashboard from "./components/Dashboard"
 import { useAuth } from "./contexts/AuthContext"
-import { primeAllConfigTemplateCaches, purgeLegacyTemplateCache } from "./hooks/useSwr"
 import { initNodeLatency } from "./lib/node-latency"
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -41,21 +39,6 @@ function App() {
   useEffect(() => {
     initNodeLatency()
   }, [])
-
-  useSWR('swr-purgeLegacyTemplateCache-key', async () => {
-    await purgeLegacyTemplateCache()
-    return 'ok'
-  }, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    revalidateIfStale: false,
-    dedupingInterval: Infinity,
-  })
-
-  useSWR('swr-primeAllConfigTemplateCaches-key', primeAllConfigTemplateCaches, {
-    revalidateOnFocus: true,
-    dedupingInterval: 60000 * 30,
-  })
 
   return (
     <Routes>

@@ -4,9 +4,8 @@
   "version": "0.3.3",
   "type": "module",
   "scripts": {
-    "sync-templates": "tsx scripts/sync-templates.ts",
-    "predev": "pnpm run sync-templates",
-    "prebuild": "pnpm run sync-templates",
+    "predev": "echo 'No predev'",
+    "prebuild": "echo 'No prebuild'",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
