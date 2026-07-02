@@ -371,7 +371,7 @@ export async function getConfigTemplateURL(mode: configType): Promise<string> {
     const cacheKey = await getConfigTemplateURLKey(mode);
     const defaultTemplatePath = await getDefaultConfigTemplateURL(mode);
     let url = await getStoreValue(cacheKey, defaultTemplatePath) as string;
-    if (url.includes('testingcf.jsdelivr.net') || url.includes('jsdelivr')) {
+    if (url.includes('testingcf.jsdelivr.net') || url.includes('jsdelivr') || (url.includes('raw.githubusercontent.com') && !url.includes('gh-proxy.org'))) {
         url = defaultTemplatePath;
         await setStoreValue(cacheKey, url, { immediate: true });
     }
@@ -384,7 +384,7 @@ export async function setConfigTemplateURL(mode: configType, url: string) {
 }
 
 export async function getDefaultConfigTemplateURL(mode: configType): Promise<string> {
-    const remoteUrl = "https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
+    const remoteUrl = "https://gh-proxy.org/https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
     const versionNumber = SING_BOX_VERSION.replace('v', '').split('.');
     const major = versionNumber[0];
     const minor = versionNumber[1];
