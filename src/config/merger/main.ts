@@ -14,8 +14,8 @@ import {
     isBypassRouterEnabled,
 } from '../../single/store';
 import { DIRECT_RULE_SLOT, LEGACY_DIRECT_RULE_SLOT, LEGACY_PROXY_RULE_SLOT, PROXY_RULE_SLOT, ruleSlotMatches } from '../rule-tags';
-import { STAGE_VERSION_STORE_KEY, selectedNodeTagStoreKey, LEGACY_SELECTED_NODE_TAG_KEY } from '../../types/definition';
-import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB, patchDnsProxyConfig } from './helper';
+import { STAGE_VERSION_STORE_KEY } from '../../types/definition';
+import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB } from './helper';
 
 import { configType } from '../common';
 import { cacheFileNameForProfile } from '../rule-cache';
@@ -44,16 +44,6 @@ async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string)
     if (secret) {
         newConfig.experimental.clash_api.secret = secret;
     }
-}
-
-async function getSavedDefaultNode(identifier: string): Promise<string> {
-    if (!identifier) return '';
-    const key = selectedNodeTagStoreKey(identifier);
-    const [saved, legacy] = await Promise.all([
-        getStoreValue(key, '') as Promise<string>,
-        getStoreValue(LEGACY_SELECTED_NODE_TAG_KEY, '') as Promise<string>,
-    ]);
-    return saved || legacy || '';
 }
 
 type CustomRuleSet = {
@@ -119,7 +109,6 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         tunStack,
         useDHCP,
         configuredDirectDNS,
-        defaultNode,
         directCustomRuleSet,
         proxyCustomRuleSet,
     ] = await Promise.all([
@@ -133,7 +122,6 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         getTunStack(),
         getUseDHCP(),
         getConfiguredDirectDNS(),
-        getSavedDefaultNode(identifier),
         customRulePromises[0],
         customRulePromises[1],
     ]);
@@ -148,7 +136,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
 
     const dbCacheFilePath = await path.join(appConfigPath, cacheFileNameForProfile(options.mode));
     await Promise.all([
-        patchDnsProxyConfig(newConfig),
+
         updateExperimentalConfig(newConfig, dbCacheFilePath),
     ]);
 
@@ -178,7 +166,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
 
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
     await updateDHCPSettings2Config(newConfig, { useDHCP, configuredDirectDNS });
-    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig, defaultNode);
+    await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
 }
 
 export function setRuleConfig(identifier: string, tun: boolean) {

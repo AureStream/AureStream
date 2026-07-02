@@ -457,13 +457,46 @@ async fn verify_and_fallback(applied: Option<&(String, String)>) {
     log::info!("[dns] phase 2 done");
 }
 
-/// Probe if a DNS server is reachable by attempting a TCP connection to port 53.
+/// Probe if a DNS server is reachable by sending a raw UDP A-query for www.baidu.com.
 async fn probe_dns_reachable(server: &str, probe_timeout: std::time::Duration) -> bool {
     use tokio::time::timeout;
-    let addr = format!("{}:53", server);
+    use tokio::net::UdpSocket;
+    use std::net::SocketAddr;
 
-    match timeout(probe_timeout, tokio::net::TcpStream::connect(&addr)).await {
-        Ok(Ok(_)) => true,
+    let ns_addr: SocketAddr = match format!("{}:53", server).parse() {
+        Ok(addr) => addr,
+        Err(_) => return false,
+    };
+    let bind_addr = if ns_addr.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    };
+
+    let socket = match UdpSocket::bind(bind_addr).await {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    if socket.connect(ns_addr).await.is_err() {
+        return false;
+    }
+
+    // A-query for www.baidu.com
+    let mut payload = vec![
+        0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+    payload.extend_from_slice(&[
+        3, b'w', b'w', b'w', 5, b'b', b'a', b'i', b'd', b'u', 3, b'c', b'o', b'm', 0,
+    ]);
+    payload.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]);
+
+    if socket.send(&payload).await.is_err() {
+        return false;
+    }
+
+    let mut buf = [0u8; 512];
+    match timeout(probe_timeout, socket.recv(&mut buf)).await {
+        Ok(Ok(len)) if len >= 12 && buf[0] == 0x12 && buf[1] == 0x34 => true,
         _ => false,
     }
 }
