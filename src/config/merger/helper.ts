@@ -56,8 +56,16 @@ export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData
         throw new Error('subscription_config_missing');
     }
 
-    const outboundsSelectorIndex = 1;
-    const outboundsUrltestIndex = 2;
+    if (!newConfig["outbounds"] || !Array.isArray(newConfig["outbounds"])) {
+        throw new Error('remote_template_missing_outbounds_array');
+    }
+
+    let outboundsSelectorIndex = newConfig["outbounds"].findIndex((o: any) => o.tag === "ExitGateway" && o.type === "selector");
+    let outboundsUrltestIndex = newConfig["outbounds"].findIndex((o: any) => o.tag === "auto" && o.type === "urltest");
+
+    if (outboundsSelectorIndex === -1 || outboundsUrltestIndex === -1) {
+        throw new Error('remote_template_missing_routing_groups');
+    }
 
     const outbound_groups = newConfig["outbounds"];
     const outboundsSelector = outbound_groups[outboundsSelectorIndex]["outbounds"];

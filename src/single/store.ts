@@ -370,7 +370,12 @@ export async function getConfigTemplateURLKey(mode: configType): Promise<string>
 export async function getConfigTemplateURL(mode: configType): Promise<string> {
     const cacheKey = await getConfigTemplateURLKey(mode);
     const defaultTemplatePath = await getDefaultConfigTemplateURL(mode);
-    return getStoreValue(cacheKey, defaultTemplatePath);
+    let url = await getStoreValue(cacheKey, defaultTemplatePath) as string;
+    if (url.includes('testingcf.jsdelivr.net') || url.includes('jsdelivr')) {
+        url = defaultTemplatePath;
+        await setStoreValue(cacheKey, url, { immediate: true });
+    }
+    return url;
 }
 
 export async function setConfigTemplateURL(mode: configType, url: string) {
@@ -379,7 +384,7 @@ export async function setConfigTemplateURL(mode: configType, url: string) {
 }
 
 export async function getDefaultConfigTemplateURL(mode: configType): Promise<string> {
-    const remoteUrl = "https://testingcf.jsdelivr.net/gh/BadKid90s/AureStream-Config@main";
+    const remoteUrl = "https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
     const versionNumber = SING_BOX_VERSION.replace('v', '').split('.');
     const major = versionNumber[0];
     const minor = versionNumber[1];
