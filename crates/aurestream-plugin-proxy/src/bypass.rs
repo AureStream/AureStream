@@ -23,6 +23,32 @@ fn normalize_tokens(raw: &str) -> Vec<String> {
         .collect()
 }
 
+/// Detect a token that is "localhost" repeated with no separator, e.g.
+/// "localhostlocalhostlocalhost", which an older bypass round-trip could
+/// leave in the store. `localhost` is ASCII, so byte slicing is safe.
+fn is_localhost_run(s: &str) -> bool {
+    const LH: &str = "localhost";
+    let lower = s.to_ascii_lowercase();
+    if lower.is_empty() || lower.len() % LH.len() != 0 {
+        return false;
+    }
+    let n = lower.len() / LH.len();
+    (0..n).all(|i| &lower[i * LH.len()..(i + 1) * LH.len()] == LH)
+}
+
+/// Repair legacy bypass corruption: collapse repeated "localhost" runs to a
+/// single entry and drop duplicate tokens (case-insensitive, first occurrence
+/// wins). Keeps the system proxy bypass list clean even at auto/tray engine
+/// start, before the settings UI has a chance to rewrite the store.
+fn repair_tokens(tokens: Vec<String>) -> Vec<String> {
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    tokens
+        .into_iter()
+        .map(|t| if is_localhost_run(&t) { "localhost".to_string() } else { t })
+        .filter(|t| seen.insert(t.to_ascii_lowercase()))
+        .collect()
+}
+
 /// Convert IPv4 CIDR notation to Windows WinINet wildcard bypass entries.
 /// Windows does not support CIDR in the proxy bypass list.
 #[cfg(target_os = "windows")]
@@ -91,7 +117,7 @@ fn cidr_to_windows_bypass_tokens(token: &str) -> Vec<String> {
 
 #[cfg(target_os = "windows")]
 pub fn format_bypass_for_platform(raw: &str) -> String {
-    let tokens = normalize_tokens(raw);
+    let tokens = repair_tokens(normalize_tokens(raw));
     if tokens.is_empty() {
         return DEFAULT_BYPASS.to_string();
     }
@@ -104,7 +130,7 @@ pub fn format_bypass_for_platform(raw: &str) -> String {
 
 #[cfg(not(target_os = "windows"))]
 pub fn format_bypass_for_platform(raw: &str) -> String {
-    let tokens = normalize_tokens(raw);
+    let tokens = repair_tokens(normalize_tokens(raw));
     if tokens.is_empty() {
         return DEFAULT_BYPASS.to_string();
     }
@@ -175,6 +201,35 @@ mod tests {
         assert_eq!(result, "localhost;127.0.0.1");
         #[cfg(not(target_os = "windows"))]
         assert_eq!(result, "localhost,127.0.0.1");
+    }
+
+    #[test]
+    fn repair_collapses_concatenated_localhost_run() {
+        assert_eq!(
+            repair_tokens(vec!["localhostlocalhostlocalhost".into()]),
+            vec!["localhost".to_string()]
+        );
+        // A single "localhost" is a run of length 1 and stays as-is.
+        assert_eq!(repair_tokens(vec!["localhost".into()]), vec!["localhost".to_string()]);
+    }
+
+    #[test]
+    fn repair_dedups_repeated_tokens_case_insensitively() {
+        assert_eq!(
+            repair_tokens(vec![
+                "localhost".into(),
+                "127.0.0.1".into(),
+                "localhost".into(),
+                "LOCALHOST".into(),
+            ]),
+            vec!["localhost".to_string(), "127.0.0.1".to_string()]
+        );
+    }
+
+    #[test]
+    fn format_collapses_localhost_run_to_single_entry() {
+        let formatted = format_bypass_for_platform("localhostlocalhostlocalhost");
+        assert_eq!(formatted, "localhost");
     }
 
     #[test]

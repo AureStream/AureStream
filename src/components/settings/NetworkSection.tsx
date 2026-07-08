@@ -9,9 +9,8 @@ import {
 import {
   BYPASS_PLACEHOLDER,
   parseBypassInputToRuleSet,
-  resolveBypassDisplayValue,
+  resolveBypassEditorValue,
   resolveBypassPersistValue,
-  ruleSetToBypassInput,
 } from "../../lib/proxy-bypass"
 
 const I = {
@@ -31,8 +30,7 @@ export default function NetworkSection() {
   useEffect(() => {
     Promise.all([getProxyBypass(), getCustomRuleSet("direct")]).then(
       ([bypass, directRules]) => {
-        const directRuleText = ruleSetToBypassInput(directRules)
-        setBypassDomains(directRuleText || resolveBypassDisplayValue(bypass))
+        setBypassDomains(resolveBypassEditorValue(bypass, directRules))
       }
     )
   }, [])

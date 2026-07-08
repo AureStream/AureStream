@@ -28,9 +28,29 @@ export const BYPASS_PLACEHOLDER = isWindows
   ? "localhost; 127.*; 192.168.*; 10.*"
   : "localhost, 127.0.0.1, 10.0.0.0/8"
 
-/** Normalize user input for display and storage: trim entries, drop empties. */
+/**
+ * Repair a single bypass token from legacy corruption. An older round-trip
+ * through the direct rule-set could leave "localhost" concatenated with no
+ * separator (e.g. "localhostlocalhostlocalhost"); collapse any such run back
+ * to a single "localhost".
+ */
+function repairBypassToken(token: string): string {
+  return /^(localhost)+$/i.test(token) ? "localhost" : token
+}
+
+/** Normalize user input for display and storage: trim entries, drop empties,
+ * repair legacy "localhost" corruption, and drop duplicate tokens. */
 export function normalizeBypassInput(raw: string): string {
-  return bypassTokens(raw).join(`${BYPASS_SEPARATOR} `)
+  const seen = new Set<string>()
+  const deduped: string[] = []
+  for (const token of bypassTokens(raw).map(repairBypassToken)) {
+    const key = token.toLowerCase()
+    if (!seen.has(key)) {
+      seen.add(key)
+      deduped.push(token)
+    }
+  }
+  return deduped.join(`${BYPASS_SEPARATOR} `)
 }
 
 /** Value shown in settings: saved content if present, otherwise the platform default. */
@@ -100,6 +120,25 @@ export function ruleSetToBypassInput(ruleSet: BypassRuleSet): string {
     ...ruleSet.domain_suffix,
     ...ruleSet.ip_cidr,
   ].join(", "))
+}
+
+/**
+ * Value bound to the Network & Routing textarea. The bypass list is stored
+ * twice: a lossless raw string (proxy_bypass, consumed by the system proxy)
+ * and a lossy direct rule-set (custom_ruleset_direct, injected into sing-box
+ * route rules, which cannot express Windows wildcards like "127.*"). Reading
+ * the lossy rule-set on load collapsed the list to "localhost" after a single
+ * edit, so prefer the lossless raw list and only fall back to the rule-set
+ * (legacy) then the platform default.
+ */
+export function resolveBypassEditorValue(
+  rawBypass: string | undefined | null,
+  directRules: BypassRuleSet,
+): string {
+  const normalizedRaw = normalizeBypassInput(rawBypass ?? "")
+  if (normalizedRaw) return normalizedRaw
+  const directRuleText = ruleSetToBypassInput(directRules)
+  return directRuleText || DEFAULT_PROXY_BYPASS_UI
 }
 
 /** Windows sysproxy expects semicolon-separated bypass. */
