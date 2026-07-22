@@ -78,7 +78,10 @@ const legacyTemplateWithoutClashApi = {
     ],
   },
   experimental: {},
-  outbounds: [],
+  outbounds: [
+    { tag: "ExitGateway", type: "selector", outbounds: ["auto"] },
+    { tag: "auto", type: "urltest", outbounds: [] },
+  ],
 }
 
 describe("config merger", () => {

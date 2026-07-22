@@ -24,7 +24,7 @@ describe("config template URLs", () => {
 
     const url = await getDefaultConfigTemplateURL("tun")
 
-    expect(url).toBe("https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main/1.13/zh-cn/tun-rules.jsonc")
+    expect(url).toBe("https://gh-proxy.org/https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main/1.13/zh-cn/tun-rules.jsonc")
     expect(url).not.toContain("oneoh.cloud")
     expect(url).not.toContain("OneOhCloud")
     expect(url).not.toContain("conf-template")
