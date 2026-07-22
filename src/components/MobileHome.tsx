@@ -504,22 +504,22 @@ export default function MobileHome() {
       <div className="flex-1 flex flex-col justify-between min-h-0 w-full overflow-y-auto no-scrollbar pb-1">
         {/* Row 2: Subscription Card Row */}
         <div className="w-full px-4 pt-1 pb-1 shrink-0">
-          <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-3.5">
-            {/* Top Row: Remaining Traffic + Circular 96% Ring */}
+          <div className="bg-white dark:bg-bg-alt rounded-3xl p-4.5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-4">
+            {/* Top Row: Remaining Traffic + Circular Progress Ring */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-xs font-bold text-slate-400 dark:text-slate-400">{l("Remaining Traffic", "剩余流量")}</span>
+                <span className="text-base font-extrabold text-slate-600 dark:text-slate-300">{l("Remaining Traffic", "剩余流量")}</span>
                 <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-2.5xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
-                  <span className="text-xs font-black text-slate-500">GB</span>
+                  <span className="text-4xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
+                  <span className="text-base font-black text-slate-500">GB</span>
                 </div>
-                <span className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                <span className="text-sm font-bold text-slate-400 mt-0.5">
                   {l("Total Plan", "本月套餐共")} {totalGBText}
                 </span>
               </div>
 
               {/* Circular Progress Ring with % */}
-              <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+              <div className="relative w-18 h-18 shrink-0 flex items-center justify-center">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
                   <circle
@@ -529,7 +529,7 @@ export default function MobileHome() {
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
+                  <span className="text-lg font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
                 </div>
               </div>
             </div>
@@ -538,23 +538,23 @@ export default function MobileHome() {
 
             {/* Bottom Row: Used Traffic + Expire Date */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] text-slate-400 font-semibold">{l("Used", "已使用")}</span>
-                  <span className="text-xs font-black text-slate-900 dark:text-white truncate">{usedText}</span>
+                  <span className="text-xs font-black text-slate-400">{l("Used", "已使用")}</span>
+                  <span className="text-base font-black text-slate-900 dark:text-white truncate">{usedText}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] text-slate-400 font-semibold">{l("Expiration", "到期时间")}</span>
-                  <span className="text-xs font-black text-slate-900 dark:text-white truncate">{expireText}</span>
+                  <span className="text-xs font-black text-slate-400">{l("Expiration", "到期时间")}</span>
+                  <span className="text-base font-black text-slate-900 dark:text-white truncate">{expireText}</span>
                 </div>
               </div>
             </div>
@@ -564,20 +564,20 @@ export default function MobileHome() {
         {/* Row 3: Connection Power Button Row */}
         <div className="w-full px-4 py-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
           {/* Connection Status & Live Duration Display */}
-          <div className="flex items-center justify-center w-full min-h-[32px] mb-3.5">
+          <div className="flex items-center justify-center w-full min-h-[36px] mb-3.5">
             {isConnected ? (
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-black font-mono tracking-wider shadow-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-base font-black font-mono tracking-wider shadow-sm">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
                 <span>{formatDuration(connectTime)}</span>
               </div>
             ) : isConnecting ? (
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-bold tracking-wide animate-pulse shadow-sm">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00BBA7] animate-ping" />
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-base font-black tracking-wide animate-pulse shadow-sm">
+                <span className="w-3 h-3 rounded-full bg-[#00BBA7] animate-ping" />
                 <span>{l("Connecting…", "正在连接…")}</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 text-slate-600 dark:text-slate-300 text-xs font-extrabold tracking-wide shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-slate-400" />
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-black tracking-wide shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
                 <span>{l("Tap central button to connect", "点击按钮进行连接")}</span>
               </div>
             )}
@@ -611,36 +611,36 @@ export default function MobileHome() {
 
           {/* Bottom Protection Hint */}
           <div className="flex flex-col items-center gap-0.5 text-center mt-3.5">
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            <div className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200 font-black">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
             </div>
-            <p className="text-[10px] text-slate-400 font-normal">
+            <p className="text-xs text-slate-400 font-extrabold">
               {isConnected ? l("Protected & Secured Connection", "代理引擎正常工作") : l("Tap central button to start secure connection", "点击中心按钮开启安全连接")}
             </p>
           </div>
         </div>
 
         {/* Row 4: Node Card & Mode Switcher Row */}
-        <div className="w-full px-4 pt-1 pb-10 shrink-0 flex flex-col gap-2 max-w-[340px] mx-auto">
+        <div className="w-full px-4 pt-1 pb-10 shrink-0 flex flex-col gap-2.5 max-w-[340px] mx-auto">
           {/* Integrated Multiline Node Selection Button */}
           <button
             type="button"
             onClick={() => navigate("/dashboard/nodes")}
-            className="bg-white dark:bg-bg-alt rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-white/10 flex items-center justify-between gap-3 w-full text-left cursor-pointer transition-all"
+            className="bg-white dark:bg-bg-alt rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex items-center justify-between gap-3.5 w-full text-left cursor-pointer transition-all"
           >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <span className="text-2xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+              <span className="text-3xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
               <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                <h3 className="text-lg font-black text-slate-900 dark:text-white truncate">
                   {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
                 </h3>
-                <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
-                  <span className="font-mono font-bold uppercase text-slate-500">
+                <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 font-semibold">
+                  <span className="font-mono font-bold uppercase text-slate-400 dark:text-slate-500">
                     {currentNode ? currentNode.protocol : "VLESS"}
                   </span>
                   <span className="text-slate-300 dark:text-white/10">•</span>
-                  <span className="flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
+                  <span className="flex items-center gap-1 font-mono font-semibold text-slate-400 dark:text-slate-500">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
                     {currentNode ? `${activeNodePing || 75} ms` : "--"}
                   </span>
@@ -648,7 +648,7 @@ export default function MobileHome() {
               </div>
             </div>
 
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
@@ -657,9 +657,9 @@ export default function MobileHome() {
           <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 rounded-2xl p-1 w-full shadow-inner flex gap-1">
             <button
               onClick={() => handleSwitchMode('rule')}
-              className={`flex-1 py-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 transition-all ${
                 proxyMode === 'rule'
-                  ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
+                  ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-black scale-[1.01]'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -670,16 +670,16 @@ export default function MobileHome() {
             <button
               onClick={() => handleSwitchMode('tun')}
               disabled={isInstallingService}
-              className={`flex-1 py-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+              className={`flex-1 py-2.5 rounded-lg font-black text-sm flex items-center justify-center gap-1.5 transition-all ${
                 isInstallingService
                   ? 'text-slate-400 cursor-wait'
                   : proxyMode === 'tun'
-                    ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
+                    ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-black scale-[1.01]'
                     : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               {isInstallingService ? (
-                <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <svg className="h-4.5 w-4.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -695,13 +695,13 @@ export default function MobileHome() {
         <div className="w-full px-4 pt-1 pb-3 shrink-0 flex items-center justify-center gap-6">
           <button
             onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
-            className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-sm font-extrabold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
           >
             <I.Globe /> {l("Official Website", "官方网站")}
           </button>
           <button
             onClick={() => navigate("/dashboard/about")}
-            className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-sm font-extrabold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
           >
             <I.Info /> {l("About", "关于本软件")}
           </button>

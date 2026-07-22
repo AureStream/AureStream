@@ -10,12 +10,12 @@ import AboutPage from "./AboutPage"
 export default function Dashboard() {
   return (
     <div className="h-full w-full flex flex-col relative bg-[#F4F7F6] dark:bg-[#0D131A] overflow-hidden">
-      {/* Dynamic Modern Wallpaper Mesh Backdrop */}
-      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-gradient-to-br from-[#00BBA7]/15 via-teal-300/10 to-transparent rounded-full blur-3xl opacity-70" />
-        <div className="absolute top-1/3 -left-20 w-80 h-80 bg-gradient-to-tr from-cyan-400/10 via-[#00BBA7]/10 to-transparent rounded-full blur-3xl opacity-60" />
-        <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-gradient-to-t from-[#00BBA7]/15 via-emerald-200/10 to-transparent rounded-full blur-3xl opacity-65" />
-      </div>
+      {/* High Quality Image Background Wallpaper with Soft Overlay */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none z-0 opacity-30 dark:opacity-40 filter saturate-[1.2]"
+        style={{ backgroundImage: "url('/wallpaper.jpg')" }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-slate-100/50 dark:from-black/40 dark:via-transparent dark:to-slate-950/80 pointer-events-none z-0" />
 
       <div className="relative z-10 flex flex-col h-full flex-1 min-w-0">
         <main className="flex-1 overflow-hidden overflow-x-hidden no-scrollbar">
