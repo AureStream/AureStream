@@ -92,6 +92,26 @@ export default function MobileHome() {
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
   const [activeNodePing, setActiveNodePing] = useState<number>(0)
+  const [connectTime, setConnectTime] = useState<number>(0)
+
+  useEffect(() => {
+    let interval: any
+    if (isConnected) {
+      interval = setInterval(() => {
+        setConnectTime(prev => prev + 1)
+      }, 1000)
+    } else {
+      setConnectTime(0)
+    }
+    return () => clearInterval(interval)
+  }, [isConnected])
+
+  const formatDuration = (seconds: number) => {
+    const h = String(Math.floor(seconds / 3600)).padStart(2, '0')
+    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')
+    const s = String(seconds % 60).padStart(2, '0')
+    return `${h}:${m}:${s}`
+  }
 
   // Node latency is display-only on the dashboard. Measurements happen from the
   // Nodes page and are shared through the in-memory/SQLite latency cache.
@@ -448,29 +468,11 @@ export default function MobileHome() {
   const trafficUsed = hasSub ? sub.traffic_used : 0
   const remainingBytes = Math.max(0, trafficTotal - trafficUsed)
   const usedBytes = Math.max(0, trafficTotal - remainingBytes)
-  const usedText = `${(usedBytes / ONE_GB_BYTES).toFixed(4)} GB`
-  const remainingGBValue = (remainingBytes / ONE_GB_BYTES).toFixed(4)
-  const totalGBText = `${(trafficTotal / ONE_GB_BYTES).toFixed(2)} GB`
-
-  const [connectTime, setConnectTime] = useState<number>(0)
-  useEffect(() => {
-    let interval: any
-    if (isConnected) {
-      interval = setInterval(() => {
-        setConnectTime(prev => prev + 1)
-      }, 1000)
-    } else {
-      setConnectTime(0)
-    }
-    return () => clearInterval(interval)
-  }, [isConnected])
-
-  const formatDuration = (seconds: number) => {
-    const h = String(Math.floor(seconds / 3600)).padStart(2, '0')
-    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')
-    const s = String(seconds % 60).padStart(2, '0')
-    return `${h}:${m}:${s}`
-  }
+  const usedText = subsLoading || !hasSub ? "--" : `${(usedBytes / ONE_GB_BYTES).toFixed(4)} GB`
+  const remainingGBValue = subsLoading || !hasSub ? "--" : (remainingBytes / ONE_GB_BYTES).toFixed(4)
+  const totalGBText = subsLoading || !hasSub ? "--" : `${(trafficTotal / ONE_GB_BYTES).toFixed(2)} GB`
+  const expireText = hasSub && sub.expire_time ? formatDate(sub.expire_time) : "--"
+  const remainingPercent = hasSub && trafficTotal > 0 ? Math.min(100, (remainingBytes / trafficTotal) * 100) : 0
 
   return (
     <div className="flex flex-col w-full h-full animate-fade-in">
