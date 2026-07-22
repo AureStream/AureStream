@@ -51,83 +51,92 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="w-full">
-      <div className="mb-8 text-center">
-        <h2 className="text-3.5xl font-heading font-extrabold tracking-tight bg-gradient-to-r from-secondary to-accent-purple bg-clip-text text-transparent">{t("register")}</h2>
+    <div className="flex h-full w-full flex-col px-5 pb-6 pt-16 animate-fade-in">
+      <div className="flex flex-col gap-2 pt-6">
+        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-secondary to-accent-purple text-white shadow-glow-primary">
+          <I.Mail />
+        </div>
+        <h1 className="mt-3 text-3.5xl font-heading font-extrabold tracking-tight text-text">{t("register")}</h1>
+        <p className="max-w-[18rem] text-sm font-medium leading-relaxed text-text-secondary">
+          {t("register_subtitle", "创建账号，开始管理你的专属代理连接。")}
+        </p>
       </div>
 
-      {error && (
-        <div className="mb-5 p-3.5 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm font-medium">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-extrabold text-text-secondary/80 ml-1 uppercase tracking-wider">{t("email")}</label>
-          <div className="glass-input flex items-center gap-3 px-4.5 py-4 rounded-[20px]">
-            <div className="text-text-muted/80"><I.Mail /></div>
-            <input
-              className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t("email_placeholder", "请输入您的邮箱地址")}
-              required
-            />
+      <div className="mt-8 flex flex-col gap-3">
+        {error && (
+          <div className="rounded-2xl border border-danger/20 bg-danger/10 p-3.5 text-sm font-medium text-danger">
+            {error}
           </div>
-        </div>
+        )}
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-extrabold text-text-secondary/80 ml-1 uppercase tracking-wider">{t("password")}</label>
-          <div className="glass-input flex items-center gap-3 px-4.5 py-4 rounded-[20px]">
-            <div className="text-text-muted/80"><I.Lock /></div>
-            <input
-              className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold tracking-wider"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t("password_placeholder", "请输入您的密码")}
-              required
-            />
+        <form onSubmit={handleSubmit} className="glass-card flex flex-col gap-4 rounded-[28px] p-5 shadow-glass">
+          <div className="flex flex-col gap-2">
+            <label className="ml-1 text-xs font-extrabold uppercase tracking-wider text-text-secondary/80">{t("email")}</label>
+            <div className="glass-input flex items-center gap-3 rounded-[20px] px-4.5 py-4">
+              <div className="text-text-muted/80"><I.Mail /></div>
+              <input
+                className="flex-1 border-none bg-transparent text-[14px] font-semibold text-text outline-none placeholder:text-text-muted/40"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t("email_placeholder", "请输入您的邮箱地址")}
+                required
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-extrabold text-text-secondary/80 ml-1 uppercase tracking-wider">{t("confirm_password")}</label>
-          <div className="glass-input flex items-center gap-3 px-4.5 py-4 rounded-[20px]">
-            <div className="text-text-muted/80"><I.Lock /></div>
-            <input
-              className="flex-1 bg-transparent border-none outline-none text-text text-[14px] placeholder:text-text-muted/40 font-semibold tracking-wider"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder={t("confirm_placeholder", "请再次输入密码以确认")}
-              required
-            />
+          <div className="flex flex-col gap-2">
+            <label className="ml-1 text-xs font-extrabold uppercase tracking-wider text-text-secondary/80">{t("password")}</label>
+            <div className="glass-input flex items-center gap-3 rounded-[20px] px-4.5 py-4">
+              <div className="text-text-muted/80"><I.Lock /></div>
+              <input
+                className="flex-1 border-none bg-transparent text-[14px] font-semibold tracking-wider text-text outline-none placeholder:text-text-muted/40"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("password_placeholder", "请输入您的密码")}
+                required
+              />
+            </div>
           </div>
-        </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full py-4 rounded-[20px] bg-secondary hover:bg-secondary/90 active:scale-[0.98] transition-all text-white font-extrabold shadow-md mt-4 text-[15px] disabled:opacity-60 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
-        >
-          {submitting ? (
-            <>
-              <span className="w-4 h-4 rounded-full border-2 border-t-transparent border-white animate-spin shrink-0" />
-              <span>{t("submitting", "请稍候...")}</span>
-            </>
-          ) : (
-            t("sign_up")
-          )}
-        </button>
-      </form>
+          <div className="flex flex-col gap-2">
+            <label className="ml-1 text-xs font-extrabold uppercase tracking-wider text-text-secondary/80">{t("confirm_password")}</label>
+            <div className="glass-input flex items-center gap-3 rounded-[20px] px-4.5 py-4">
+              <div className="text-text-muted/80"><I.Lock /></div>
+              <input
+                className="flex-1 border-none bg-transparent text-[14px] font-semibold tracking-wider text-text outline-none placeholder:text-text-muted/40"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder={t("confirm_placeholder", "请再次输入密码以确认")}
+                required
+              />
+            </div>
+          </div>
 
-      <div className="mt-8 text-center text-[13px] text-text-secondary">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-[20px] bg-secondary py-4 text-[15px] font-extrabold uppercase tracking-wider text-white shadow-md transition-all hover:bg-secondary/90 active:scale-[0.98] disabled:opacity-60"
+          >
+            {submitting ? (
+              <>
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span>{t("submitting", "请稍候...")}</span>
+              </>
+            ) : (
+              t("sign_up")
+            )}
+          </button>
+        </form>
+      </div>
+
+      <div className="flex-1" />
+
+      <div className="text-center text-[13px] text-text-secondary">
         {t("has_account")}{" "}
-        <Link to="/login" className="font-bold text-secondary hover:text-secondary/80 transition-colors ml-1">
+        <Link to="/login" className="ml-1 font-bold text-secondary transition-colors hover:text-secondary/80">
           {t("sign_in")}
         </Link>
       </div>

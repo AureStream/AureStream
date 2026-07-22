@@ -83,12 +83,12 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="flex flex-col w-full h-full max-w-[420px] mx-auto animate-fade-in">
+    <div className="flex h-full w-full flex-col animate-fade-in">
       <MobileTopBar onBack={() => navigate("/dashboard")} title={l("My", "我的")} />
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-5 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-5 pt-4 flex flex-col gap-4">
         {/* User info card */}
-        <div className="glass-card rounded-[24px] p-5 shadow-glass flex flex-col items-center text-center">
+        <div className="glass-card rounded-[28px] p-5 shadow-glass flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-full bg-secondary p-[3px] shadow-glow-primary mb-3 animate-pulse-slow">
             <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden">
               <img src="/avatar.svg" alt="User" className="w-full h-full aspect-square shrink-0 object-cover" />
@@ -111,7 +111,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Traffic + expiry card (only fields with real data) */}
-        <div className="glass-card rounded-[24px] p-5 shadow-glass flex flex-col gap-4 relative overflow-hidden">
+        <div className="glass-card rounded-[28px] p-5 shadow-glass flex flex-col gap-4 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-tr from-secondary/5 to-accent-purple/5 pointer-events-none z-0" />
 
           <div className="relative z-10 flex flex-col gap-4">

@@ -48,13 +48,13 @@ export default function AboutPage() {
   ]
 
   return (
-    <div className="flex flex-col w-full h-full max-w-[420px] mx-auto animate-fade-in">
+    <div className="flex h-full w-full flex-col animate-fade-in">
       <MobileTopBar onBack={() => navigate("/dashboard")} title={l("About", "关于")} />
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-5 flex flex-col gap-3.5">
 
         {/* Hero Card */}
-        <div className="bg-white dark:bg-bg-alt rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col items-center gap-3">
+        <div className="glass-card rounded-[28px] p-5 shadow-glass flex flex-col items-center gap-3">
           <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-[#00BBA7] to-[#0094A0] flex items-center justify-center shadow-lg">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -68,7 +68,7 @@ export default function AboutPage() {
             <span className="px-3 py-1 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-black">
               v{currentVersion || "..."}
             </span>
-            <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 text-slate-500 text-xs font-bold">
+            <span className="px-3 py-1 rounded-full bg-surface-active/40 border border-border-glass text-text-secondary text-xs font-bold">
               sing-box {SING_BOX_VERSION}
             </span>
           </div>
@@ -81,10 +81,10 @@ export default function AboutPage() {
         </div>
 
         {/* Features Grid */}
-        <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10">
+        <div className="glass-card rounded-[28px] p-4 shadow-glass">
           <div className="grid grid-cols-2 gap-2">
             {features.map((f, i) => (
-              <div key={i} className="bg-slate-50 dark:bg-white/5 rounded-2xl p-3 flex flex-col gap-1.5 border border-slate-100 dark:border-white/5">
+              <div key={i} className="bg-surface-active/25 rounded-2xl p-3 flex flex-col gap-1.5 border border-border-glass/40">
                 <div className="w-8 h-8 rounded-xl bg-[#00BBA7]/10 text-[#00BBA7] flex items-center justify-center">
                   {f.icon}
                 </div>
@@ -96,10 +96,10 @@ export default function AboutPage() {
         </div>
 
         {/* Links */}
-        <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-2">
+        <div className="glass-card rounded-[28px] p-4 shadow-glass flex flex-col gap-2">
           <button
             onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
-            className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer w-full text-left"
+            className="flex items-center gap-3 p-3 rounded-2xl bg-surface-active/25 border border-border-glass/40 hover:bg-surface-active/45 transition-colors cursor-pointer w-full text-left"
           >
             <div className="w-8 h-8 rounded-xl bg-slate-800 dark:bg-white/10 flex items-center justify-center shrink-0">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-white dark:text-slate-200">
@@ -115,7 +115,7 @@ export default function AboutPage() {
 
           <button
             onClick={() => openUrl("https://sing-box.sagernet.org")}
-            className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer w-full text-left"
+            className="flex items-center gap-3 p-3 rounded-2xl bg-surface-active/25 border border-border-glass/40 hover:bg-surface-active/45 transition-colors cursor-pointer w-full text-left"
           >
             <div className="w-8 h-8 rounded-xl bg-[#00BBA7]/10 text-[#00BBA7] flex items-center justify-center shrink-0">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

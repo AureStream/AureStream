@@ -16,10 +16,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <ThemeProvider>
         <AuthProvider>
           <UpdateProvider>
-            <div className="app-shell flex flex-col h-screen w-screen bg-bg">
-              <TitleBar />
-              <div className="flex-1 min-h-0">
-                <App />
+            <div className="app-shell relative flex h-screen w-screen flex-col overflow-hidden bg-bg">
+              <div className="absolute inset-0 app-network-background pointer-events-none z-0" />
+              <div className="absolute inset-0 app-network-background-overlay pointer-events-none z-0" />
+              <div className="relative z-10 flex h-full min-h-0 flex-col">
+                <TitleBar />
+                <div className="flex-1 min-h-0">
+                  <App />
+                </div>
               </div>
             </div>
           </UpdateProvider>
