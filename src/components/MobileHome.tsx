@@ -499,23 +499,23 @@ export default function MobileHome() {
 
       {/* 3 Bento Cards Stack matching reference image */}
       <div className="flex-1 flex flex-col justify-between px-4 py-2 min-h-0 relative gap-3 overflow-y-auto no-scrollbar">
-        {/* Card 1: Subscription & Traffic Card */}
+        {/* Card 1: Subscription & Traffic Card (Reference layout with larger fonts) */}
         <div className="bg-white dark:bg-bg-alt rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-4">
           {/* Top Row: Remaining Traffic + Circular 96% Ring */}
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1 min-w-0">
-              <span className="text-xs font-semibold text-slate-400 dark:text-slate-400">{l("Remaining Traffic", "剩余流量")}</span>
-              <div className="flex items-baseline gap-1">
+              <span className="text-xs font-bold text-slate-400 dark:text-slate-400">{l("Remaining Traffic", "剩余流量")}</span>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
-                <span className="text-xs font-extrabold text-slate-400">GB</span>
+                <span className="text-sm font-black text-slate-500">GB</span>
               </div>
-              <span className="text-xs text-slate-400 font-normal">
+              <span className="text-xs text-slate-400 font-semibold mt-0.5">
                 {l("Total Plan", "本月套餐共")} {totalGBText}
               </span>
             </div>
 
             {/* Circular Progress Ring with % */}
-            <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+            <div className="relative w-18 h-18 shrink-0 flex items-center justify-center">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
                 <circle
@@ -525,7 +525,7 @@ export default function MobileHome() {
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-sm font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
+                <span className="text-base font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
               </div>
             </div>
           </div>
@@ -535,52 +535,58 @@ export default function MobileHome() {
           {/* Bottom Row: Used Traffic + Expire Date */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+              <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-xs text-slate-400 font-medium">{l("Used", "已使用")}</span>
-                <span className="text-xs font-black text-slate-800 dark:text-white truncate">{usedText}</span>
+                <span className="text-xs text-slate-400 font-semibold">{l("Used", "已使用")}</span>
+                <span className="text-sm font-black text-slate-900 dark:text-white truncate">{usedText}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-xs text-slate-400 font-medium">{l("Expiration", "到期时间")}</span>
-                <span className="text-xs font-black text-slate-800 dark:text-white truncate">{expireText}</span>
+                <span className="text-xs text-slate-400 font-semibold">{l("Expiration", "到期时间")}</span>
+                <span className="text-sm font-black text-slate-900 dark:text-white truncate">{expireText}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Card 2: Power Connection Control Card */}
-        <div className="bg-white dark:bg-bg-alt rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col justify-between min-h-[250px]">
-          {/* Header Row: Connection Status & Timer */}
-          <div className="flex items-center justify-between">
+        {/* Middle: Power Connection Hero Area (Seamless, no card container background) */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0 py-4 z-10">
+          {/* Header Row: Connection Status & Timer Pill */}
+          <div className="flex items-center justify-between w-full px-2">
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-[#00BBA7] animate-pulse" : "bg-slate-400"}`} />
+              <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-[#00BBA7] animate-pulse" : "bg-slate-400"}`} />
               <span className="text-sm font-black text-slate-800 dark:text-white">
                 {isConnected ? l("Connected", "已建立连接") : isConnecting ? l("Connecting…", "正在连接…") : l("Disconnected", "连接已断开")}
               </span>
             </div>
-            <div className="bg-slate-100 dark:bg-slate-800 px-3.5 py-1.5 rounded-full text-slate-600 dark:text-slate-300 font-mono font-bold text-xs tracking-wider">
+            <div className="bg-white/80 dark:bg-bg-alt/80 border border-slate-200/60 dark:border-white/10 px-3.5 py-1.5 rounded-full text-slate-600 dark:text-slate-300 font-mono font-bold text-xs tracking-wider shadow-sm">
               {formatDuration(connectTime)}
             </div>
           </div>
 
           {/* Central Power Button Sphere */}
-          <div className="my-3 flex items-center justify-center">
-            <div className="w-44 h-44 rounded-full border border-slate-100 dark:border-white/5 bg-slate-50/40 dark:bg-slate-800/40 flex items-center justify-center p-3">
-              <div className="w-34 h-34 rounded-full border border-slate-100 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-sm">
+          <div className="my-2 relative flex items-center justify-center">
+            {/* Soft glow behind sphere */}
+            <div className={`absolute w-40 h-40 rounded-full blur-2xl transition-all duration-500 ${
+              isConnected ? "bg-[#00BBA7]/25 scale-110" : "bg-slate-200/40 dark:bg-slate-800/40"
+            }`} />
+
+            {/* Double Ring Power Sphere */}
+            <div className="w-48 h-48 rounded-full border border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 backdrop-blur-md flex items-center justify-center p-3 shadow-md">
+              <div className="w-36 h-36 rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-sm">
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
                   className="w-24 h-24 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors drop-shadow-[0_0_12px_rgba(0,187,167,0.4)]" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -589,9 +595,9 @@ export default function MobileHome() {
             </div>
           </div>
 
-          {/* Bottom Hints inside Card */}
+          {/* Bottom Protection Hint */}
           <div className="flex flex-col items-center gap-1 text-center">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
             </div>
