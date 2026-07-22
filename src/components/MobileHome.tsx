@@ -500,10 +500,10 @@ export default function MobileHome() {
         />
       </div>
 
-      {/* Main 5-Row Stack Container */}
-      <div className="flex-1 flex flex-col min-h-0 w-full overflow-y-auto no-scrollbar py-1">
+      {/* Main 5-Row Stack Container (Anchors bottom deck to screen bottom) */}
+      <div className="flex-1 flex flex-col justify-between min-h-0 w-full overflow-y-auto no-scrollbar pb-1">
         {/* Row 2: Subscription Card Row */}
-        <div className="w-full px-4 py-1 shrink-0">
+        <div className="w-full px-4 pt-1 pb-1 shrink-0">
           <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-3.5">
             {/* Top Row: Remaining Traffic + Circular 96% Ring */}
             <div className="flex items-center justify-between">
@@ -561,10 +561,10 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Row 3: Connection Power Button Row (Natural height block, tight spacing) */}
-        <div className="w-full px-4 py-2 shrink-0 flex flex-col items-center justify-center z-10">
+        {/* Row 3: Connection Power Button Row */}
+        <div className="w-full px-4 py-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
           {/* Connection Status & Live Duration Display */}
-          <div className="flex items-center justify-center w-full min-h-[24px] mb-1">
+          <div className="flex items-center justify-center w-full min-h-[22px] mb-0.5">
             {isConnected ? (
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black font-mono tracking-wider shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
