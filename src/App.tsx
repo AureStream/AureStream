@@ -4,6 +4,7 @@ import AuthLayout from "./components/AuthLayout"
 import LoginPage from "./components/LoginPage"
 import RegisterPage from "./components/RegisterPage"
 import Dashboard from "./components/Dashboard"
+import ForceUpdateGate from "./components/ForceUpdateGate"
 import { useAuth } from "./contexts/AuthContext"
 import { initNodeLatency } from "./lib/node-latency"
 
@@ -41,21 +42,23 @@ function App() {
   }, [])
 
   return (
-    <Routes>
-      <Route element={<PublicOnly><AuthLayout /></PublicOnly>}>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-      </Route>
-      <Route
-        path="/dashboard/*"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+    <ForceUpdateGate>
+      <Routes>
+        <Route element={<PublicOnly><AuthLayout /></PublicOnly>}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+        </Route>
+        <Route
+          path="/dashboard/*"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </ForceUpdateGate>
   )
 }
 

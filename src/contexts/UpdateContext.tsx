@@ -11,6 +11,7 @@ interface UpdateState {
   currentVersion: string
   triggerCheck: (silent?: boolean) => Promise<void>
   performUpdate: () => Promise<void>
+  performForceUpdate: () => Promise<void>
 }
 
 const UpdateContext = createContext<UpdateState>({
@@ -20,6 +21,7 @@ const UpdateContext = createContext<UpdateState>({
   currentVersion: "",
   triggerCheck: async () => {},
   performUpdate: async () => {},
+  performForceUpdate: async () => {},
 })
 
 export function useUpdate() {
@@ -43,12 +45,9 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       })
   }, [])
 
-  // Auto check for updates on startup
+  // Auto check for updates on startup (immediate so the force-update gate can block ASAP)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void triggerCheck(true)
-    }, 5000)
-    return () => clearTimeout(timer)
+    void triggerCheck(true)
   }, [])
 
   const triggerCheck = async (silent = false) => {
@@ -147,6 +146,29 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const performForceUpdate = async () => {
+    let activeUpdate = updateObject
+    if (!activeUpdate) {
+      try {
+        activeUpdate = await check()
+      } catch (err) {
+        const errMsg = String(err)
+        if (errMsg.includes("None of the fallback platforms") || errMsg.includes("were found in the response")) {
+          // No update package available; nothing to install.
+          return
+        }
+        throw err
+      }
+    }
+
+    if (!activeUpdate) {
+      return
+    }
+
+    await activeUpdate.downloadAndInstall()
+    await relaunch()
+  }
+
   return (
     <UpdateContext.Provider
       value={{
@@ -156,6 +178,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
         currentVersion,
         triggerCheck,
         performUpdate,
+        performForceUpdate,
       }}
     >
       {children}

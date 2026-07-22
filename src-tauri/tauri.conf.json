@@ -15,10 +15,10 @@
     "windows": [
       {
         "title": "AureStream",
-        "width": 900,
-        "height": 650,
-        "minWidth": 800,
-        "minHeight": 600,
+        "width": 400,
+        "height": 700,
+        "minWidth": 400,
+        "minHeight": 700,
         "visible": false,
         "decorations": false,
         "transparent": true,

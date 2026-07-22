@@ -86,7 +86,7 @@ export default function TitleBar() {
   return (
     <div
       data-tauri-drag-region
-      className="h-9 shrink-0 flex items-center gap-2 select-none px-3 bg-bg/60 backdrop-blur-xl border-b border-border-glass/40 z-50"
+      className="h-9 shrink-0 flex items-center gap-2 select-none px-3 bg-transparent z-50"
     >
       {isMac ? (
         <>

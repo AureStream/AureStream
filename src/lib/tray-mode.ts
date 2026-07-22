@@ -1,6 +1,6 @@
 import type { EngineState } from "@/types/engine-state"
 import type { ProxyMode as EngineProxyMode } from "@/utils/vpn-service"
-import type { ProxyMode as UiProxyMode } from "@/components/ModeSelector"
+import type { ProxyMode as UiProxyMode } from "@/types/proxy-mode"
 
 export type TrayRequestedMode = "system" | "tun"
 
