@@ -140,29 +140,23 @@ export default function NodesPage() {
                   }
                 }
               }}
-              className={`glass-card rounded-xl p-3.5 cursor-pointer transition-all duration-300 flex items-center justify-between gap-3 ${
-                isConnected ? 'ring-1 ring-secondary/30 bg-surface-active/50' : 'hover:bg-surface-active/30'
-              }`}
+              className="bg-white dark:bg-bg-alt rounded-2xl p-3.5 shadow-sm border border-slate-100 dark:border-white/10 cursor-pointer flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 {/* Flag */}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 border transition-all ${
-                  isConnected ? 'bg-secondary/10 border-secondary/20 shadow-sm' : 'bg-surface-active/40 border-border-glass'
-                }`}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 border bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10">
                   {node.flag}
                 </div>
                 {/* Name + protocol */}
                 <div className="min-w-0 flex-1">
-                  <h4 className={`font-bold text-sm leading-tight truncate ${isConnected ? 'text-secondary dark:text-white font-extrabold' : 'text-text'}`} title={node.name}>
+                  <h4 className="font-bold text-sm leading-tight truncate text-slate-900 dark:text-white" title={node.name}>
                     {node.name}
                   </h4>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-[9px] font-mono text-text-muted tracking-wider truncate max-w-[120px]" title={node.id}>
+                    <span className="text-[9px] font-mono text-slate-400 tracking-wider truncate max-w-[120px]" title={node.id}>
                       {node.id.toUpperCase()}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase shrink-0 ${
-                      isConnected ? 'bg-secondary/15 text-secondary' : 'bg-surface-active text-text-secondary border border-border-glass'
-                    }`}>
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase shrink-0 bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200/50 dark:border-white/10">
                       {node.protocol}
                     </span>
                   </div>
@@ -171,21 +165,19 @@ export default function NodesPage() {
 
               {/* Ping latency indicator + Radio button */}
               <div className="flex items-center gap-3 shrink-0">
-                <div className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 ${
-                  isConnected ? 'bg-secondary/15 text-secondary border border-secondary/20' : 'bg-surface-active/60 text-text-secondary border border-border-glass'
-                }`}>
+                <div className="px-2 py-1 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-white/10">
                   {isTestingSpeed && node.ping === 0 ? (
                     <span className="animate-pulse">--</span>
                   ) : node.ping < 0 ? (
                     <span className="text-danger">{l("Timeout", "超时")}</span>
                   ) : node.ping === 0 ? (
-                    <span className="text-text-muted">-- ms</span>
+                    <span className="text-slate-400">-- ms</span>
                   ) : (
                     (() => {
                       const tone = getNodeLatencyTone(node.ping);
                       return (
                         <>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-secondary animate-pulse' : tone.dot}`}></span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>
                           <span className={tone.text}>{node.ping}ms</span>
                         </>
                       );
@@ -193,11 +185,11 @@ export default function NodesPage() {
                   )}
                 </div>
 
-                {/* Radio Button Selector */}
-                <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-colors ${
+                {/* Radio Button Selector (ONLY element changing style on selection) */}
+                <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center transition-colors ${
                   isConnected 
-                    ? 'border border-secondary bg-secondary' 
-                    : 'border border-text-muted/40 hover:border-secondary/60'
+                    ? 'border-2 border-[#00BBA7] bg-[#00BBA7]' 
+                    : 'border-2 border-slate-300 dark:border-slate-600 bg-transparent'
                 }`}>
                   {isConnected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                 </div>
