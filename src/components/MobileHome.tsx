@@ -573,22 +573,25 @@ export default function MobileHome() {
             ) : null}
           </div>
 
-          {/* Central Power Button Sphere (Even Larger & Elevated) */}
+          {/* Central Power Button Sphere (Crisp bright outer ring, no diffuse blur halo) */}
           <div className="my-1 relative flex items-center justify-center">
-            {/* Soft glow behind sphere */}
-            <div className={`absolute w-60 h-60 rounded-full blur-3xl transition-all duration-500 ${
-              isConnected ? "bg-[#00BBA7]/35 scale-110" : "bg-slate-200/60 dark:bg-slate-800/60"
-            }`} />
-
             {/* Double Ring Power Sphere */}
-            <div className="w-64 h-64 rounded-full border border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 backdrop-blur-md flex items-center justify-center p-4 shadow-xl">
-              <div className="w-50 h-50 rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-lg">
+            <div className={`w-64 h-64 rounded-full border transition-all duration-300 flex items-center justify-center p-4 ${
+              isConnected
+                ? "border-[#00BBA7] bg-[#E6F7F5] dark:bg-[#00BBA7]/15 shadow-md"
+                : "border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 shadow-sm"
+            }`}>
+              <div className={`w-50 h-50 rounded-full border transition-all duration-300 flex items-center justify-center ${
+                isConnected
+                  ? "border-[#00BBA7]/35 bg-white dark:bg-bg-alt shadow-sm"
+                  : "border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt shadow-sm"
+              }`}>
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
                   className="w-36 h-36 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors drop-shadow-[0_0_18px_rgba(0,187,167,0.6)]" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -609,8 +612,8 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Card 3: Node Selection Card */}
-        <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-3">
+        {/* Card 3: Node Selection Card (Compact 320px width) */}
+        <div className="bg-white dark:bg-bg-alt rounded-3xl p-3.5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-2.5 max-w-[320px] mx-auto w-full">
           {/* Top Row: Country Flag + Node Title + Arrow */}
           <button
             type="button"
@@ -658,8 +661,8 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Mode Switcher Segmented Control */}
-        <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 rounded-2xl p-1 w-full shadow-inner flex gap-1">
+        {/* Mode Switcher Segmented Control (Compact 320px width) */}
+        <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 rounded-2xl p-1 max-w-[320px] mx-auto w-full shadow-inner flex gap-1">
           <button
             onClick={() => handleSwitchMode('rule')}
             className={`flex-1 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
