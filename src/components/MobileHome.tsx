@@ -564,7 +564,7 @@ export default function MobileHome() {
         {/* Row 3: Connection Power Button Row */}
         <div className="w-full px-4 py-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
           {/* Connection Status & Live Duration Display */}
-          <div className="flex items-center justify-center w-full min-h-[32px] mb-1">
+          <div className="flex items-center justify-center w-full min-h-[32px] mb-3.5">
             {isConnected ? (
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-black font-mono tracking-wider shadow-sm">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -575,7 +575,12 @@ export default function MobileHome() {
                 <span className="w-2.5 h-2.5 rounded-full bg-[#00BBA7] animate-ping" />
                 <span>{l("Connecting…", "正在连接…")}</span>
               </div>
-            ) : null}
+            ) : (
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 text-slate-600 dark:text-slate-300 text-xs font-extrabold tracking-wide shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <span>{l("Tap central button to connect", "点击按钮进行连接")}</span>
+              </div>
+            )}
           </div>
 
           {/* Central Power Button Sphere (Restored to prominent large size) */}
