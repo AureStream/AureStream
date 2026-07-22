@@ -488,6 +488,85 @@ code, pre, .font-mono { font-family: var(--font-mono); }
    BACKGROUND EFFECTS — vibrant mesh for liquid glass
    ============================================================ */
 
+.app-network-background {
+  background:
+    radial-gradient(70% 36% at 6% 8%, rgba(92, 103, 242, 0.26), transparent 65%),
+    radial-gradient(58% 36% at 96% 23%, rgba(0, 187, 167, 0.18), transparent 64%),
+    radial-gradient(50% 34% at 50% 62%, rgba(96, 165, 250, 0.1), transparent 70%),
+    linear-gradient(180deg, #edf4fb 0%, #f8fbff 56%, #ffffff 100%);
+}
+
+.app-network-background::before,
+.app-network-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app-network-background::before {
+  opacity: 0.36;
+  background-image:
+    linear-gradient(rgba(92, 103, 242, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 103, 242, 0.14) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 78%);
+}
+
+.app-network-background::after {
+  opacity: 0.55;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(92, 103, 242, 0.42) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 31%, rgba(0, 187, 167, 0.3) 0 2px, transparent 3px),
+    radial-gradient(circle at 73% 19%, rgba(92, 103, 242, 0.3) 0 2px, transparent 3px),
+    radial-gradient(circle at 83% 52%, rgba(0, 187, 167, 0.26) 0 2px, transparent 3px);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 72%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 72%);
+}
+
+.app-network-background-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.08) 42%,
+    rgba(248, 250, 252, 0.58) 100%
+  );
+}
+
+[data-theme="dark"] .app-network-background {
+  background:
+    radial-gradient(70% 38% at 8% 7%, rgba(92, 103, 242, 0.34), transparent 66%),
+    radial-gradient(58% 36% at 96% 24%, rgba(0, 187, 167, 0.2), transparent 66%),
+    radial-gradient(54% 40% at 50% 64%, rgba(96, 165, 250, 0.12), transparent 72%),
+    linear-gradient(180deg, #111827 0%, #0d131a 58%, #0f172a 100%);
+}
+
+[data-theme="dark"] .app-network-background::before {
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.16) 1px, transparent 1px);
+}
+
+[data-theme="dark"] .app-network-background::after {
+  opacity: 0.38;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(129, 140, 248, 0.42) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 31%, rgba(45, 212, 191, 0.26) 0 2px, transparent 3px),
+    radial-gradient(circle at 73% 19%, rgba(129, 140, 248, 0.28) 0 2px, transparent 3px),
+    radial-gradient(circle at 83% 52%, rgba(45, 212, 191, 0.22) 0 2px, transparent 3px);
+}
+
+[data-theme="dark"] .app-network-background-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.26) 0%,
+    rgba(0, 0, 0, 0.08) 44%,
+    rgba(2, 6, 23, 0.58) 100%
+  );
+}
+
 /* Ultra-vibrant animated mesh */
 .bg-mesh-vibrant {
   position: relative;
