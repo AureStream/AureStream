@@ -556,10 +556,10 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Middle: Power Connection Hero Area (Seamless, no card container background) */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0 py-4 z-10">
+        {/* Middle: Power Connection Hero Area (Shifted upwards with larger power sphere) */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0 py-2 -mt-3 z-10">
           {/* Header Row: Centered Live Duration Display when connected */}
-          <div className="flex items-center justify-center w-full min-h-[32px]">
+          <div className="flex items-center justify-center w-full min-h-[28px]">
             {isConnected ? (
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-black font-mono tracking-wider shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -573,22 +573,22 @@ export default function MobileHome() {
             ) : null}
           </div>
 
-          {/* Central Power Button Sphere (Enlarged) */}
-          <div className="my-3 relative flex items-center justify-center">
+          {/* Central Power Button Sphere (Even Larger & Elevated) */}
+          <div className="my-1 relative flex items-center justify-center">
             {/* Soft glow behind sphere */}
-            <div className={`absolute w-52 h-52 rounded-full blur-3xl transition-all duration-500 ${
-              isConnected ? "bg-[#00BBA7]/30 scale-110" : "bg-slate-200/50 dark:bg-slate-800/50"
+            <div className={`absolute w-60 h-60 rounded-full blur-3xl transition-all duration-500 ${
+              isConnected ? "bg-[#00BBA7]/35 scale-110" : "bg-slate-200/60 dark:bg-slate-800/60"
             }`} />
 
             {/* Double Ring Power Sphere */}
-            <div className="w-56 h-56 rounded-full border border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 backdrop-blur-md flex items-center justify-center p-3.5 shadow-lg">
-              <div className="w-44 h-44 rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-md">
+            <div className="w-64 h-64 rounded-full border border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 backdrop-blur-md flex items-center justify-center p-4 shadow-xl">
+              <div className="w-50 h-50 rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-lg">
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
-                  className="w-32 h-32 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+                  className="w-36 h-36 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors drop-shadow-[0_0_16px_rgba(0,187,167,0.5)]" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors drop-shadow-[0_0_18px_rgba(0,187,167,0.6)]" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -598,7 +598,7 @@ export default function MobileHome() {
           </div>
 
           {/* Bottom Protection Hint */}
-          <div className="flex flex-col items-center gap-1 text-center">
+          <div className="flex flex-col items-center gap-0.5 text-center mt-1">
             <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
