@@ -622,7 +622,7 @@ export default function MobileHome() {
         </div>
 
         {/* Row 4: Node Card & Mode Switcher Row */}
-        <div className="w-full px-4 pt-1 pb-10 shrink-0 flex flex-col gap-2.5 max-w-[340px] mx-auto">
+        <div className="w-full px-4 pt-1 pb-10 shrink-0 flex flex-col gap-4 max-w-[340px] mx-auto">
           {/* Integrated Multiline Node Selection Button */}
           <button
             type="button"
