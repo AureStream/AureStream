@@ -558,35 +558,37 @@ export default function MobileHome() {
 
         {/* Middle: Power Connection Hero Area (Seamless, no card container background) */}
         <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0 py-4 z-10">
-          {/* Header Row: Connection Status & Timer Pill */}
-          <div className="flex items-center justify-between w-full px-2">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-[#00BBA7] animate-pulse" : "bg-slate-400"}`} />
-              <span className="text-sm font-black text-slate-800 dark:text-white">
-                {isConnected ? l("Connected", "已建立连接") : isConnecting ? l("Connecting…", "正在连接…") : l("Disconnected", "连接已断开")}
-              </span>
-            </div>
-            <div className="bg-white/80 dark:bg-bg-alt/80 border border-slate-200/60 dark:border-white/10 px-3.5 py-1.5 rounded-full text-slate-600 dark:text-slate-300 font-mono font-bold text-xs tracking-wider shadow-sm">
-              {formatDuration(connectTime)}
-            </div>
+          {/* Header Row: Centered Live Duration Display when connected */}
+          <div className="flex items-center justify-center w-full min-h-[32px]">
+            {isConnected ? (
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-black font-mono tracking-wider shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{formatDuration(connectTime)}</span>
+              </div>
+            ) : isConnecting ? (
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-bold tracking-wide animate-pulse shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-[#00BBA7] animate-ping" />
+                <span>{l("Connecting…", "正在连接…")}</span>
+              </div>
+            ) : null}
           </div>
 
-          {/* Central Power Button Sphere */}
-          <div className="my-2 relative flex items-center justify-center">
+          {/* Central Power Button Sphere (Enlarged) */}
+          <div className="my-3 relative flex items-center justify-center">
             {/* Soft glow behind sphere */}
-            <div className={`absolute w-40 h-40 rounded-full blur-2xl transition-all duration-500 ${
-              isConnected ? "bg-[#00BBA7]/25 scale-110" : "bg-slate-200/40 dark:bg-slate-800/40"
+            <div className={`absolute w-52 h-52 rounded-full blur-3xl transition-all duration-500 ${
+              isConnected ? "bg-[#00BBA7]/30 scale-110" : "bg-slate-200/50 dark:bg-slate-800/50"
             }`} />
 
             {/* Double Ring Power Sphere */}
-            <div className="w-48 h-48 rounded-full border border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 backdrop-blur-md flex items-center justify-center p-3 shadow-md">
-              <div className="w-36 h-36 rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-sm">
+            <div className="w-56 h-56 rounded-full border border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 backdrop-blur-md flex items-center justify-center p-3.5 shadow-lg">
+              <div className="w-44 h-44 rounded-full border border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-md">
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
-                  className="w-24 h-24 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+                  className="w-32 h-32 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors drop-shadow-[0_0_12px_rgba(0,187,167,0.4)]" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors drop-shadow-[0_0_16px_rgba(0,187,167,0.5)]" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
