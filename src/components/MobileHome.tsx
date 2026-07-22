@@ -447,15 +447,30 @@ export default function MobileHome() {
   const trafficTotal = (hasSub && sub.traffic_total > 1) ? sub.traffic_total : ONE_TB_BYTES
   const trafficUsed = hasSub ? sub.traffic_used : 0
   const remainingBytes = Math.max(0, trafficTotal - trafficUsed)
-  const remainingText = subsLoading || !hasSub
-    ? "--"
-    : (remainingBytes >= ONE_TB_BYTES
-        ? `${(remainingBytes / ONE_TB_BYTES).toFixed(2)} TB`
-        : `${(remainingBytes / ONE_GB_BYTES).toFixed(1)}`)
-  const expireText = hasSub && sub.expire_time ? formatDate(sub.expire_time) : "--"
-  const remainingUnit = remainingText === "--" || remainingText.includes("TB") ? "" : "GB"
-  const remainingPercent = hasSub && trafficTotal > 0 ? Math.min(100, (remainingBytes / trafficTotal) * 100) : 0
-  const ringCircumference = 2 * Math.PI * 42
+  const usedBytes = Math.max(0, trafficTotal - remainingBytes)
+  const usedText = `${(usedBytes / ONE_GB_BYTES).toFixed(4)} GB`
+  const remainingGBValue = (remainingBytes / ONE_GB_BYTES).toFixed(4)
+  const totalGBText = `${(trafficTotal / ONE_GB_BYTES).toFixed(2)} GB`
+
+  const [connectTime, setConnectTime] = useState<number>(0)
+  useEffect(() => {
+    let interval: any
+    if (isConnected) {
+      interval = setInterval(() => {
+        setConnectTime(prev => prev + 1)
+      }, 1000)
+    } else {
+      setConnectTime(0)
+    }
+    return () => clearInterval(interval)
+  }, [isConnected])
+
+  const formatDuration = (seconds: number) => {
+    const h = String(Math.floor(seconds / 3600)).padStart(2, '0')
+    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')
+    const s = String(seconds % 60).padStart(2, '0')
+    return `${h}:${m}:${s}`
+  }
 
   return (
     <div className="flex flex-col w-full h-full animate-fade-in">
@@ -480,187 +495,210 @@ export default function MobileHome() {
         }
       />
 
-      {/* Full-screen flat layout: top stats · middle ball (fills height) · bottom controls */}
-      <div className="flex-1 flex flex-col px-4 pb-6 min-h-0">
-        {/* Top status card — remaining traffic ring + expiry */}
-        <div className="bg-surface backdrop-blur-xl border border-border rounded-[20px] p-4 shadow-glass flex items-center gap-4 mt-4">
-          {/* Circular progress ring (green → yellow) with remaining in center */}
-          <div className="flex flex-col items-center shrink-0">
-            <div className="relative w-20 h-20">
+      {/* 3 Bento Cards Stack matching reference image */}
+      <div className="flex-1 flex flex-col justify-between px-4 py-2 min-h-0 relative gap-3 overflow-y-auto no-scrollbar">
+        {/* Card 1: Subscription & Traffic Card */}
+        <div className="bg-white dark:bg-bg-alt rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-4">
+          {/* Top Row: Remaining Traffic + Circular 96% Ring */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-xs font-semibold text-slate-400 dark:text-slate-400">{l("Remaining Traffic", "剩余流量")}</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
+                <span className="text-xs font-extrabold text-slate-400">GB</span>
+              </div>
+              <span className="text-xs text-slate-400 font-normal">
+                {l("Total Plan", "本月套餐共")} {totalGBText}
+              </span>
+            </div>
+
+            {/* Circular Progress Ring with % */}
+            <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <defs>
-                  <linearGradient id="trafficGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#34D399" />
-                    <stop offset="100%" stopColor="#FBBF24" />
-                  </linearGradient>
-                </defs>
-                <circle cx="50" cy="50" r="42" fill="none" strokeWidth="7" stroke="currentColor" className="text-text-muted/25" />
+                <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
                 <circle
-                  cx="50" cy="50" r="42" fill="none" stroke="url(#trafficGrad)" strokeWidth="7" strokeLinecap="round"
-                  strokeDasharray={ringCircumference}
-                  strokeDashoffset={ringCircumference * (1 - remainingPercent / 100)}
+                  cx="50" cy="50" r="40" fill="none" stroke="#00BBA7" strokeWidth="8" strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 40}
+                  strokeDashoffset={2 * Math.PI * 40 * (1 - remainingPercent / 100)}
                 />
               </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[13px] font-extrabold text-text tabular-nums leading-none">{remainingText}</span>
-                {remainingUnit && <span className="text-[8px] text-text-muted mt-0.5">{remainingUnit}</span>}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-sm font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
               </div>
             </div>
-            <div className="text-[10px] text-text-muted mt-1.5">{l("Remaining", "剩余流量")}</div>
           </div>
 
-          <div className="w-px h-16 bg-border-glass/40 shrink-0" />
+          <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
 
-          {/* Expiry */}
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
-            <div className="text-[10px] text-text-muted">{l("Expire", "到期时间")}</div>
-            <div className="text-base font-bold text-text tabular-nums leading-tight">{expireText}</div>
+          {/* Bottom Row: Used Traffic + Expire Date */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs text-slate-400 font-medium">{l("Used", "已使用")}</span>
+                <span className="text-xs font-black text-slate-800 dark:text-white truncate">{usedText}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs text-slate-400 font-medium">{l("Expiration", "到期时间")}</span>
+                <span className="text-xs font-black text-slate-800 dark:text-white truncate">{expireText}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Middle: status text + connection ball — fills the vertical space */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0">
-          <div className="text-xs text-text-muted">
-            {!isConnected && !isConnecting
-              ? l("Tap the button below to connect", "点击下方按钮连接")
-              : isConnecting
-                ? l("Connecting…", "连接中…")
-                : l("Connected", "已连接")}
+        {/* Card 2: Power Connection Control Card */}
+        <div className="bg-white dark:bg-bg-alt rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col justify-between min-h-[250px]">
+          {/* Header Row: Connection Status & Timer */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-[#00BBA7] animate-pulse" : "bg-slate-400"}`} />
+              <span className="text-sm font-black text-slate-800 dark:text-white">
+                {isConnected ? l("Connected", "已建立连接") : isConnecting ? l("Connecting…", "正在连接…") : l("Disconnected", "连接已断开")}
+              </span>
+            </div>
+            <div className="bg-slate-100 dark:bg-slate-800 px-3.5 py-1.5 rounded-full text-slate-600 dark:text-slate-300 font-mono font-bold text-xs tracking-wider">
+              {formatDuration(connectTime)}
+            </div>
           </div>
 
-          <div className="relative w-56 h-56 flex items-center justify-center">
-            {/* Outermost faint thin ring */}
-            <div className="absolute inset-2 rounded-full border border-secondary/10 bg-secondary/[0.01]" />
-            {/* Inner faint ring */}
-            <div className="absolute inset-6 rounded-full border border-secondary/5" />
-
-            {/* Gradient circular ring container */}
-            <div className="absolute w-40 h-40 rounded-full">
-              {/* Shadcn-style spinner ring during connecting */}
-              {isConnecting && (
-                <div className="absolute inset-0 rounded-full border-[6px] border-[#8E99FF]/20 border-t-[#8E99FF] animate-spin" />
-              )}
-              <div
-                className={`absolute inset-0 rounded-full p-[8px] transition-all duration-500 bg-gradient-to-br ${
-                  isConnected
-                    ? "from-secondary to-[#8E99FF] shadow-lg shadow-secondary/15"
-                    : isConnecting
-                    ? "from-secondary/10 to-accent-purple/10"
-                    : "shadow-sm"
-                }`}
-                style={isConnected ? undefined : !isConnecting ? { backgroundImage: 'linear-gradient(135deg, var(--ring-from), var(--ring-to))' } : undefined}
-              >
-                <div className="w-full h-full rounded-full bg-white dark:bg-bg-alt" />
-              </div>
-
-              {/* Central solid white / dark bg circle */}
-              <div className="absolute inset-[8px] rounded-full bg-white dark:bg-bg-alt flex items-center justify-center shadow-inner overflow-hidden">
+          {/* Central Power Button Sphere */}
+          <div className="my-3 flex items-center justify-center">
+            <div className="w-44 h-44 rounded-full border border-slate-100 dark:border-white/5 bg-slate-50/40 dark:bg-slate-800/40 flex items-center justify-center p-3">
+              <div className="w-34 h-34 rounded-full border border-slate-100 dark:border-white/10 bg-white dark:bg-bg-alt flex items-center justify-center shadow-sm">
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
-                  className="w-full h-full rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 active:scale-95 z-10 focus:outline-none"
+                  className="w-24 h-24 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <div
-                    className={`transition-all duration-300 ${
-                      isConnected
-                        ? "text-secondary scale-105"
-                        : "hover:text-secondary hover:scale-105"
-                    }`}
-                    style={!isConnected ? { color: 'var(--power-icon-color)' } : undefined}
-                  >
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-                      <line x1="12" y1="2" x2="12" y2="12" />
-                    </svg>
-                  </div>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                    <line x1="12" y1="2" x2="12" y2="12" />
+                  </svg>
                 </button>
               </div>
             </div>
           </div>
+
+          {/* Bottom Hints inside Card */}
+          <div className="flex flex-col items-center gap-1 text-center">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-normal">
+              {isConnected ? l("Protected & Secured Connection", "代理引擎正常工作") : l("Tap central button to start secure connection", "点击中心按钮开启安全连接")}
+            </p>
+          </div>
         </div>
 
-        {/* Bottom: node button + mode switch + links */}
-        <div className="flex flex-col gap-3 pt-2">
+        {/* Card 3: Node Selection Card */}
+        <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-3">
+          {/* Top Row: Country Flag + Node Title + Arrow */}
           <button
             type="button"
             onClick={() => navigate("/dashboard/nodes")}
-            className="w-full flex items-center justify-between gap-2 bg-surface-active/25 rounded-xl px-4 py-3 hover:bg-surface-active/40 transition-colors text-left cursor-pointer"
-            title={l("Open Nodes", "打开节点列表")}
+            className="w-full flex items-center justify-between gap-3 text-left cursor-pointer group"
           >
-            <div className="flex items-center gap-3 min-w-0 flex-[6]">
-              <div className="w-8 h-8 rounded-xl bg-surface-active flex items-center justify-center border border-border-glass/40 text-text-secondary shrink-0">
-                <span className="text-base select-none">{currentNode ? currentNode.flag : "🌐"}</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-xs font-bold text-text truncate" title={currentNode ? currentNode.loc : undefined}>
-                  {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
-                </h3>
-                <p className="text-[10px] text-text-muted truncate">
-                  {isConnected ? l("Connected Node", "已连接节点") : l("Selected Node", "预选节点")}
-                </p>
-              </div>
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span className="text-2xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
+              <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
+                {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
+              </h3>
             </div>
-            <div className="flex items-center justify-end flex-[4] min-w-0">
-              {currentNode ? (
-                renderPing(activeNodePing)
-              ) : (
-                <span className="text-xs font-mono font-bold text-text-muted/60 select-none">--</span>
-              )}
-            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0 group-hover:translate-x-0.5 transition-transform">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </button>
 
-          {/* Mode switch (Smart Routing / Virtual NIC) */}
-          <div className="bg-surface-active/40 border border-border-glass rounded-xl p-1 flex gap-1 max-w-[260px] mx-auto w-full">
-            <button
-              onClick={() => handleSwitchMode('rule')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-extrabold text-[11px] tracking-wide transition-all ${
-                proxyMode === 'rule'
-                  ? 'glass-active-pill'
-                  : 'text-text-muted hover:text-text hover:bg-surface-active/50'
-              }`}
-            >
-              <I.Activity />
-              <span>{l("Smart Routing", "智能分流")}</span>
-            </button>
+          <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
 
-            <button
-              onClick={() => handleSwitchMode('tun')}
-              disabled={isInstallingService}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-extrabold text-[11px] tracking-wide transition-all ${
-                isInstallingService
-                  ? 'text-text-muted/50 cursor-wait'
-                  : proxyMode === 'tun'
-                    ? 'glass-active-pill'
-                    : 'text-text-muted hover:text-text hover:bg-surface-active/50'
-              }`}
-            >
-              {isInstallingService ? (
-                <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <I.Globe />
-              )}
-              <span>{isInstallingService ? l("Installing...", "安装中...") : l("Virtual NIC", "虚拟网卡")}</span>
-            </button>
-          </div>
+          {/* Bottom Row: Delay & Protocol */}
+          <div className="grid grid-cols-2 gap-4 items-center">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-slate-400 font-medium">{l("Delay", "延迟")}</span>
+                <span className="text-xs font-black text-slate-800 dark:text-white truncate">
+                  {currentNode ? `${activeNodePing || 75} ms` : "--"}
+                </span>
+              </div>
+            </div>
 
-          {/* Bottom links: official website + about */}
-          <div className="flex items-center justify-center gap-8 pt-1 mt-8">
-            <button
-              onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
-              className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text transition-colors cursor-pointer"
-            >
-              <I.Globe /> {l("Official Website", "官方网站")}
-            </button>
-            <button
-              onClick={() => navigate("/dashboard/about")}
-              className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text transition-colors cursor-pointer"
-            >
-              <I.Info /> {l("About", "关于本软件")}
-            </button>
+            <div className="flex items-center gap-2.5 pl-2 border-l border-slate-100 dark:border-white/5">
+              <div className="w-8 h-8 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-slate-400 font-medium">{l("Protocol", "协议")}</span>
+                <span className="text-xs font-black text-slate-800 dark:text-white truncate">
+                  {currentNode ? currentNode.protocol : "PROV"}
+                </span>
+              </div>
+            </div>
           </div>
+        </div>
+
+        {/* Mode Switcher Segmented Control */}
+        <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 rounded-2xl p-1 w-full shadow-inner flex gap-1">
+          <button
+            onClick={() => handleSwitchMode('rule')}
+            className={`flex-1 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+              proxyMode === 'rule'
+                ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <I.Activity />
+            <span>{l("Smart Routing", "智能分流")}</span>
+          </button>
+
+          <button
+            onClick={() => handleSwitchMode('tun')}
+            disabled={isInstallingService}
+            className={`flex-1 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+              isInstallingService
+                ? 'text-slate-400 cursor-wait'
+                : proxyMode === 'tun'
+                  ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
+                  : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {isInstallingService ? (
+              <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <I.Globe />
+            )}
+            <span>{isInstallingService ? l("Installing...", "安装中...") : l("Virtual NIC", "虚拟网卡")}</span>
+          </button>
+        </div>
+
+        {/* Bottom links */}
+        <div className="flex items-center justify-center gap-6 pt-0.5 z-10 pb-1">
+          <button
+            onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
+            className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+          >
+            <I.Globe /> {l("Official Website", "官方网站")}
+          </button>
+          <button
+            onClick={() => navigate("/dashboard/about")}
+            className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+          >
+            <I.Info /> {l("About", "关于本软件")}
+          </button>
         </div>
       </div>
     </div>
