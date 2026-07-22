@@ -612,7 +612,7 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Card 3: Node Selection Card (Compact 320px width) */}
+        {/* Card 3: Node Selection Card (Compact 320px width, single-line delay & protocol) */}
         <div className="bg-white dark:bg-bg-alt rounded-3xl p-3.5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-2.5 max-w-[320px] mx-auto w-full">
           {/* Top Row: Country Flag + Node Title + Arrow */}
           <button
@@ -633,30 +633,23 @@ export default function MobileHome() {
 
           <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
 
-          {/* Bottom Row: Delay & Protocol */}
-          <div className="grid grid-cols-2 gap-4 items-center">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-slate-400 font-medium">{l("Delay", "延迟")}</span>
-                <span className="text-xs font-black text-slate-800 dark:text-white truncate">
-                  {currentNode ? `${activeNodePing || 75} ms` : "--"}
-                </span>
-              </div>
+          {/* Single Line Row: Delay & Protocol Side-by-Side */}
+          <div className="flex items-center justify-between text-xs px-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[#00BBA7] shrink-0" />
+              <span className="text-slate-400 font-medium">{l("Delay", "延迟")}:</span>
+              <span className="font-black text-slate-800 dark:text-white font-mono">
+                {currentNode ? `${activeNodePing || 75} ms` : "--"}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2.5 pl-2 border-l border-slate-100 dark:border-white/5">
-              <div className="w-8 h-8 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-slate-400 font-medium">{l("Protocol", "协议")}</span>
-                <span className="text-xs font-black text-slate-800 dark:text-white truncate">
-                  {currentNode ? currentNode.protocol : "PROV"}
-                </span>
-              </div>
+            <div className="w-px h-3.5 bg-slate-200 dark:bg-white/10 shrink-0" />
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-slate-400 font-medium">{l("Protocol", "协议")}:</span>
+              <span className="font-black text-slate-800 dark:text-white uppercase font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                {currentNode ? currentNode.protocol : "VLESS"}
+              </span>
             </div>
           </div>
         </div>
