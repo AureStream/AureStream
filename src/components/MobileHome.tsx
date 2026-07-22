@@ -475,91 +475,96 @@ export default function MobileHome() {
   const remainingPercent = hasSub && trafficTotal > 0 ? Math.min(100, (remainingBytes / trafficTotal) * 100) : 0
 
   return (
-    <div className="flex flex-col w-full h-full animate-fade-in">
-      <MobileTopBar
-        left={
-          <button
-            onClick={() => navigate("/dashboard/about")}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer"
-            aria-label="About"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          </button>
-        }
-        right={
-          <button
-            onClick={() => navigate("/dashboard/profile")}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer"
-            aria-label="Profile"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </button>
-        }
-      />
+    <div className="flex flex-col w-full h-full animate-fade-in overflow-hidden">
+      {/* Row 1: Top Navigation Bar */}
+      <div className="w-full shrink-0">
+        <MobileTopBar
+          left={
+            <button
+              onClick={() => navigate("/dashboard/about")}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer"
+              aria-label="About"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </button>
+          }
+          right={
+            <button
+              onClick={() => navigate("/dashboard/profile")}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer"
+              aria-label="Profile"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </button>
+          }
+        />
+      </div>
 
-      {/* 3 Bento Cards Stack matching reference image */}
-      <div className="flex-1 flex flex-col justify-between px-4 py-2 min-h-0 relative gap-3 overflow-y-auto no-scrollbar">
-        {/* Card 1: Subscription & Traffic Card (Reference layout with larger fonts) */}
-        <div className="bg-white dark:bg-bg-alt rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-4">
-          {/* Top Row: Remaining Traffic + Circular 96% Ring */}
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col gap-1 min-w-0">
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-400">{l("Remaining Traffic", "剩余流量")}</span>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
-                <span className="text-sm font-black text-slate-500">GB</span>
+      {/* Main 5-Row Stack Container */}
+      <div className="flex-1 flex flex-col justify-between min-h-0 w-full overflow-y-auto no-scrollbar">
+        {/* Row 2: Subscription Card Row */}
+        <div className="w-full px-4 pt-1 pb-2 shrink-0">
+          <div className="bg-white dark:bg-bg-alt rounded-3xl p-4 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-3.5">
+            {/* Top Row: Remaining Traffic + Circular 96% Ring */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-xs font-bold text-slate-400 dark:text-slate-400">{l("Remaining Traffic", "剩余流量")}</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-2.5xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
+                  <span className="text-xs font-black text-slate-500">GB</span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                  {l("Total Plan", "本月套餐共")} {totalGBText}
+                </span>
               </div>
-              <span className="text-xs text-slate-400 font-semibold mt-0.5">
-                {l("Total Plan", "本月套餐共")} {totalGBText}
-              </span>
-            </div>
 
-            {/* Circular Progress Ring with % */}
-            <div className="relative w-18 h-18 shrink-0 flex items-center justify-center">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
-                <circle
-                  cx="50" cy="50" r="40" fill="none" stroke="#00BBA7" strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray={2 * Math.PI * 40}
-                  strokeDashoffset={2 * Math.PI * 40 * (1 - remainingPercent / 100)}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-base font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
-
-          {/* Bottom Row: Used Traffic + Expire Date */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs text-slate-400 font-semibold">{l("Used", "已使用")}</span>
-                <span className="text-sm font-black text-slate-900 dark:text-white truncate">{usedText}</span>
+              {/* Circular Progress Ring with % */}
+              <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
+                  <circle
+                    cx="50" cy="50" r="40" fill="none" stroke="#00BBA7" strokeWidth="8" strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 40}
+                    strokeDashoffset={2 * Math.PI * 40 * (1 - remainingPercent / 100)}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
+
+            {/* Bottom Row: Used Traffic + Expire Date */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] text-slate-400 font-semibold">{l("Used", "已使用")}</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white truncate">{usedText}</span>
+                </div>
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-xs text-slate-400 font-semibold">{l("Expiration", "到期时间")}</span>
-                <span className="text-sm font-black text-slate-900 dark:text-white truncate">{expireText}</span>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] text-slate-400 font-semibold">{l("Expiration", "到期时间")}</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white truncate">{expireText}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Middle: Power Connection Hero Area (Tight vertical spacing) */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-0 py-0 -mt-6 z-10">
-          {/* Header Row: Centered Live Duration Display when connected */}
-          <div className="flex items-center justify-center w-full min-h-[24px]">
+        {/* Row 3: Connection Power Button Row */}
+        <div className="w-full px-4 py-2 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
+          {/* Connection Status & Live Duration Display */}
+          <div className="flex items-center justify-center w-full min-h-[24px] mb-1">
             {isConnected ? (
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black font-mono tracking-wider shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -574,14 +579,13 @@ export default function MobileHome() {
           </div>
 
           {/* Central Power Button Sphere */}
-          <div className="my-0 relative flex items-center justify-center">
-            {/* Double Ring Power Sphere */}
-            <div className={`w-60 h-60 rounded-full border transition-all duration-300 flex items-center justify-center p-3.5 ${
+          <div className="my-1 relative flex items-center justify-center">
+            <div className={`w-56 h-56 rounded-full border transition-all duration-300 flex items-center justify-center p-3.5 ${
               isConnected
                 ? "border-[#00BBA7] bg-[#E6F7F5] dark:bg-[#00BBA7]/15 shadow-md"
                 : "border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 shadow-sm"
             }`}>
-              <div className={`w-46 h-46 rounded-full border transition-all duration-300 flex items-center justify-center ${
+              <div className={`w-44 h-44 rounded-full border transition-all duration-300 flex items-center justify-center ${
                 isConnected
                   ? "border-[#00BBA7]/35 bg-white dark:bg-bg-alt shadow-sm"
                   : "border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt shadow-sm"
@@ -589,9 +593,9 @@ export default function MobileHome() {
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
-                  className="w-32 h-32 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+                  className="w-30 h-30 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -601,7 +605,7 @@ export default function MobileHome() {
           </div>
 
           {/* Bottom Protection Hint */}
-          <div className="flex flex-col items-center gap-0.5 text-center mt-0.5">
+          <div className="flex flex-col items-center gap-0.5 text-center mt-1">
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
@@ -612,78 +616,78 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Card 3: Integrated Multiline Node Selection Button */}
-        <button
-          type="button"
-          onClick={() => navigate("/dashboard/nodes")}
-          className="bg-white dark:bg-bg-alt rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-white/10 flex items-center justify-between gap-3 max-w-[320px] mx-auto w-full text-left cursor-pointer hover:border-[#00BBA7]/40 hover:shadow-md transition-all group"
-        >
-          {/* Left: Flag + Node Title & Subtitle (Delay / Protocol) */}
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <span className="text-2xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
-            <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-              <h3 className="text-xs font-black text-slate-900 dark:text-white truncate group-hover:text-[#00BBA7] transition-colors">
-                {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
-              </h3>
-              {/* Subtitle Row inside button: Delay & Protocol */}
-              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
-                <span className="flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
-                  {currentNode ? `${activeNodePing || 75} ms` : "--"}
-                </span>
-                <span className="text-slate-300 dark:text-white/10">•</span>
-                <span className="font-mono font-semibold uppercase text-slate-500">
-                  {currentNode ? currentNode.protocol : "VLESS"}
-                </span>
+        {/* Row 4: Node Card & Mode Switcher Row */}
+        <div className="w-full px-4 pt-1 pb-1 shrink-0 flex flex-col gap-2 max-w-[340px] mx-auto">
+          {/* Integrated Multiline Node Selection Button */}
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard/nodes")}
+            className="bg-white dark:bg-bg-alt rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-white/10 flex items-center justify-between gap-3 w-full text-left cursor-pointer hover:border-[#00BBA7]/40 hover:shadow-md transition-all group"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <span className="text-2xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
+              <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                <h3 className="text-xs font-black text-slate-900 dark:text-white truncate group-hover:text-[#00BBA7] transition-colors">
+                  {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
+                </h3>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                  <span className="flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
+                    {currentNode ? `${activeNodePing || 75} ms` : "--"}
+                  </span>
+                  <span className="text-slate-300 dark:text-white/10">•</span>
+                  <span className="font-mono font-semibold uppercase text-slate-500">
+                    {currentNode ? currentNode.protocol : "VLESS"}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Right: Chevron Arrow */}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0 group-hover:translate-x-0.5 transition-transform">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
-        </button>
-
-        {/* Mode Switcher Segmented Control (Compact 320px width) */}
-        <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 rounded-2xl p-1 max-w-[320px] mx-auto w-full shadow-inner flex gap-1">
-          <button
-            onClick={() => handleSwitchMode('rule')}
-            className={`flex-1 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-              proxyMode === 'rule'
-                ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <I.Activity />
-            <span>{l("Smart Routing", "智能分流")}</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0 group-hover:translate-x-0.5 transition-transform">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </button>
 
-          <button
-            onClick={() => handleSwitchMode('tun')}
-            disabled={isInstallingService}
-            className={`flex-1 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-              isInstallingService
-                ? 'text-slate-400 cursor-wait'
-                : proxyMode === 'tun'
+          {/* Mode Switcher Segmented Control */}
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 rounded-2xl p-1 w-full shadow-inner flex gap-1">
+            <button
+              onClick={() => handleSwitchMode('rule')}
+              className={`flex-1 py-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                proxyMode === 'rule'
                   ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
                   : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            {isInstallingService ? (
-              <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              <I.Globe />
-            )}
-            <span>{isInstallingService ? l("Installing...", "安装中...") : l("Virtual NIC", "虚拟网卡")}</span>
-          </button>
+              }`}
+            >
+              <I.Activity />
+              <span>{l("Smart Routing", "智能分流")}</span>
+            </button>
+
+            <button
+              onClick={() => handleSwitchMode('tun')}
+              disabled={isInstallingService}
+              className={`flex-1 py-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                isInstallingService
+                  ? 'text-slate-400 cursor-wait'
+                  : proxyMode === 'tun'
+                    ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-extrabold scale-[1.01]'
+                    : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {isInstallingService ? (
+                <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                <I.Globe />
+              )}
+              <span>{isInstallingService ? l("Installing...", "安装中...") : l("Virtual NIC", "虚拟网卡")}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Bottom links */}
-        <div className="flex items-center justify-center gap-6 pt-0.5 z-10 pb-1">
+        {/* Row 5: Official Website & About Footer Row */}
+        <div className="w-full px-4 pt-1 pb-3 shrink-0 flex items-center justify-center gap-6">
           <button
             onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
             className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
