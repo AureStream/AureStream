@@ -8,11 +8,11 @@ Replace the Home page subscription card's circular remaining-traffic ring with a
 
 - Keep existing remaining-traffic calculations unchanged.
 - Replace the full circular progress ring with an SVG semicircle gauge.
-- The gauge should be centered in the top area of the subscription card.
+- Keep the original left-side text block unchanged.
+- Render the semicircle gauge on the right side where the circular percentage ring used to be.
 - Use a light gray semicircle track.
 - Use a yellow-green to green progress gradient to match the reference image.
-- Show remaining traffic value in the center of the gauge.
-- Show the label "Remaining Traffic" / "剩余流量" below the value.
+- Show the remaining percentage in the center of the right-side gauge.
 - Keep the lower "Used" and "Expiration" rows unchanged.
 
 ## Acceptance Criteria

@@ -494,50 +494,51 @@ export default function MobileHome() {
         {/* Row 2: Subscription Card Row */}
         <div className="w-full px-4 pt-1 pb-1 shrink-0">
           <div className="bg-white dark:bg-bg-alt rounded-3xl p-4.5 shadow-sm border border-slate-100 dark:border-white/10 flex flex-col gap-4">
-            {/* Top Row: Remaining Traffic Semicircle Gauge */}
-            <div className="flex flex-col items-center">
-              <div className="relative h-28 w-48">
-                <svg className="h-full w-full overflow-visible" viewBox="0 0 200 118" aria-hidden="true">
+            {/* Top Row: Remaining Traffic + Semicircle Percentage Gauge */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-base font-extrabold text-slate-600 dark:text-slate-300">{l("Remaining Traffic", "剩余流量")}</span>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className="text-4xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
+                  <span className="text-base font-black text-slate-500">GB</span>
+                </div>
+                <span className="text-sm font-bold text-slate-400 mt-0.5">
+                  {l("Total Plan", "本月套餐共")} {totalGBText}
+                </span>
+              </div>
+
+              <div className="relative h-18 w-26 shrink-0">
+                <svg className="h-full w-full overflow-visible" viewBox="0 0 120 74" aria-hidden="true">
                   <defs>
-                    <linearGradient id="trafficGaugeGradient" x1="20" y1="96" x2="180" y2="16" gradientUnits="userSpaceOnUse">
+                    <linearGradient id="trafficGaugeGradient" x1="12" y1="62" x2="108" y2="14" gradientUnits="userSpaceOnUse">
                       <stop offset="0%" stopColor="#DDF98C" />
                       <stop offset="58%" stopColor="#7BE06C" />
                       <stop offset="100%" stopColor="#20C997" />
                     </linearGradient>
                   </defs>
                   <path
-                    d="M 20 96 A 80 80 0 0 1 180 96"
+                    d="M 12 62 A 48 48 0 0 1 108 62"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="6"
+                    strokeWidth="5"
                     strokeLinecap="round"
                     className="text-slate-200 dark:text-slate-700"
                   />
                   <path
-                    d="M 20 96 A 80 80 0 0 1 180 96"
+                    d="M 12 62 A 48 48 0 0 1 108 62"
                     fill="none"
                     stroke="url(#trafficGaugeGradient)"
-                    strokeWidth="6"
+                    strokeWidth="5"
                     strokeLinecap="round"
                     pathLength="100"
                     strokeDasharray="100"
                     strokeDashoffset={100 - remainingPercent}
                   />
                 </svg>
-                <div className="absolute inset-x-0 top-[48px] flex flex-col items-center">
-                  <div className="flex items-baseline justify-center gap-0.5">
-                    <span className="text-[20px] font-black leading-none text-slate-950 dark:text-white tabular-nums">{remainingGBValue}</span>
-                    <span className="text-[11px] font-black text-slate-950 dark:text-white">GB</span>
-                  </div>
-                  <span className="mt-1 text-sm font-semibold leading-none text-slate-500 dark:text-slate-400">
-                    {l("Remaining Traffic", "剩余流量")}
-                  </span>
+                <div className="absolute inset-x-0 top-[34px] flex items-center justify-center">
+                  <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{remainingPercent.toFixed(0)}%</span>
                 </div>
               </div>
-
-              <span className="mt-1 text-sm font-bold text-slate-400">
-                {l("Total Plan", "本月套餐共")} {totalGBText}
-              </span>
             </div>
 
             <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
