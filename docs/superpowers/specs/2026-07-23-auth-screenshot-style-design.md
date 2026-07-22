@@ -12,8 +12,11 @@ Use the screenshot as the source of truth:
 - No card container around the form.
 - Root page fills the full auth route area.
 - Content starts near the upper-left with generous horizontal padding.
-- Title is large, dark, bold, and left aligned.
+- The form block should sit around the true vertical center of the auth page, independent of the top welcome message height.
+- Add a clear, large top welcome message above the centered form area, positioned lower than the title bar rather than tight to the top edge.
+- Do not show a separate login/register title in the form block; the top welcome message is the only page heading.
 - Inputs are pill-shaped with a thin gray border and white/transparent fill.
+- Inputs and primary buttons should be taller than the earlier implementation, around 60px high.
 - Email/password icons sit inside the inputs on the left.
 - Password and confirm-password inputs include a right-side visibility toggle icon.
 - Primary button is a wide purple rounded pill.

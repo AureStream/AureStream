@@ -512,13 +512,13 @@ export default function MobileHome() {
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="40" fill="none" strokeWidth="8" stroke="currentColor" className="text-slate-100 dark:text-slate-800" />
                   <circle
-                    cx="50" cy="50" r="40" fill="none" stroke="#00BBA7" strokeWidth="8" strokeLinecap="round"
+                    cx="50" cy="50" r="40" fill="none" stroke="#6C5CFF" strokeWidth="8" strokeLinecap="round"
                     strokeDasharray={2 * Math.PI * 40}
                     strokeDashoffset={2 * Math.PI * 40 * (1 - remainingPercent / 100)}
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-lg font-black text-[#00BBA7] tabular-nums">{remainingPercent.toFixed(0)}%</span>
+                  <span className="text-lg font-black text-[#6C5CFF] tabular-nums">{remainingPercent.toFixed(0)}%</span>
                 </div>
               </div>
             </div>
@@ -528,7 +528,7 @@ export default function MobileHome() {
             {/* Bottom Row: Used Traffic + Expire Date */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[#EFECFF] dark:bg-[#6C5CFF]/20 text-[#6C5CFF] flex items-center justify-center shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -538,7 +538,7 @@ export default function MobileHome() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#E6F7F5] dark:bg-[#00BBA7]/20 text-[#00BBA7] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[#EFECFF] dark:bg-[#6C5CFF]/20 text-[#6C5CFF] flex items-center justify-center shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -560,8 +560,8 @@ export default function MobileHome() {
                 <span>{formatDuration(connectTime)}</span>
               </div>
             ) : isConnecting ? (
-              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-base font-black tracking-wide animate-pulse shadow-sm">
-                <span className="w-3 h-3 rounded-full bg-[#00BBA7] animate-ping" />
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-[#6C5CFF]/10 border border-[#6C5CFF]/20 text-[#6C5CFF] text-base font-black tracking-wide animate-pulse shadow-sm">
+                <span className="w-3 h-3 rounded-full bg-[#6C5CFF] animate-ping" />
                 <span>{l("Connecting…", "正在连接…")}</span>
               </div>
             ) : (
@@ -576,12 +576,12 @@ export default function MobileHome() {
           <div className="my-1 relative flex items-center justify-center">
             <div className={`w-64 h-64 rounded-full border transition-all duration-300 flex items-center justify-center p-4 ${
               isConnected
-                ? "border-[#00BBA7] bg-[#E6F7F5] dark:bg-[#00BBA7]/15 shadow-md"
+                ? "border-[#6C5CFF] bg-[#EFECFF] dark:bg-[#6C5CFF]/15 shadow-md"
                 : "border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 shadow-sm"
             }`}>
               <div className={`w-50 h-50 rounded-full border transition-all duration-300 flex items-center justify-center ${
                 isConnected
-                  ? "border-[#00BBA7]/35 bg-white dark:bg-bg-alt shadow-sm"
+                  ? "border-[#6C5CFF]/35 bg-white dark:bg-bg-alt shadow-sm"
                   : "border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt shadow-sm"
               }`}>
                 <button
@@ -589,7 +589,7 @@ export default function MobileHome() {
                   disabled={!canToggleConnection}
                   className="w-36 h-36 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#6C5CFF] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -629,7 +629,7 @@ export default function MobileHome() {
                     {currentNode ? currentNode.protocol : "VLESS"}
                   </span>
                   <span className="flex items-center gap-1 font-mono font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#6C5CFF]" />
                     {currentNode ? `${activeNodePing || 75} ms` : "--"}
                   </span>
                 </div>
@@ -647,7 +647,7 @@ export default function MobileHome() {
               onClick={() => handleSwitchMode('rule')}
               className={`flex-1 py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 transition-all ${
                 proxyMode === 'rule'
-                  ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-black scale-[1.01]'
+                  ? 'bg-white dark:bg-bg-alt text-[#6C5CFF] shadow-sm font-black scale-[1.01]'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -662,7 +662,7 @@ export default function MobileHome() {
                 isInstallingService
                   ? 'text-slate-400 cursor-wait'
                   : proxyMode === 'tun'
-                    ? 'bg-white dark:bg-bg-alt text-[#00BBA7] shadow-sm font-black scale-[1.01]'
+                    ? 'bg-white dark:bg-bg-alt text-[#6C5CFF] shadow-sm font-black scale-[1.01]'
                     : 'text-slate-500 hover:text-slate-800'
               }`}
             >

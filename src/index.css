@@ -29,7 +29,7 @@
   --color-primary-hover: #2D275A;
   --color-primary-light: #E4E5EA;
   --color-primary-glow: rgba(31, 27, 62, 0.15);
-  --color-secondary: #5C67F2; /* Soft blue/purple */
+  --color-secondary: #6C5CFF; /* Soft purple */
   --ring-from: #E2E8F0;
   --ring-to: #E2E8F0;
   --power-icon-color: #CBD5E1;
@@ -105,7 +105,7 @@
   --color-primary-hover: #E2E8F0;
   --color-primary-light: rgba(255, 255, 255, 0.1);
   --color-primary-glow: rgba(255, 255, 255, 0.15);
-  --color-secondary: #5C67F2;
+  --color-secondary: #6C5CFF;
   --ring-from: #2D313F;
   --ring-to: #2D313F;
   --power-icon-color: #4A4F63;

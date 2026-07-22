@@ -55,7 +55,7 @@ export default function AboutPage() {
 
         {/* Hero Card */}
         <div className="glass-card rounded-[28px] p-5 shadow-glass flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-[#00BBA7] to-[#0094A0] flex items-center justify-center shadow-lg">
+          <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-[#6C5CFF] to-[#8B7CFF] flex items-center justify-center shadow-lg">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
@@ -65,7 +65,7 @@ export default function AboutPage() {
             <p className="text-xs text-slate-400 font-semibold mt-0.5">{osType}</p>
           </div>
           <div className="flex items-center gap-2.5">
-            <span className="px-3 py-1 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-black">
+            <span className="px-3 py-1 rounded-full bg-[#6C5CFF]/10 border border-[#6C5CFF]/20 text-[#6C5CFF] text-xs font-black">
               v{currentVersion || "..."}
             </span>
             <span className="px-3 py-1 rounded-full bg-surface-active/40 border border-border-glass text-text-secondary text-xs font-bold">
@@ -85,7 +85,7 @@ export default function AboutPage() {
           <div className="grid grid-cols-2 gap-2">
             {features.map((f, i) => (
               <div key={i} className="bg-surface-active/25 rounded-2xl p-3 flex flex-col gap-1.5 border border-border-glass/40">
-                <div className="w-8 h-8 rounded-xl bg-[#00BBA7]/10 text-[#00BBA7] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-[#6C5CFF]/10 text-[#6C5CFF] flex items-center justify-center">
                   {f.icon}
                 </div>
                 <div className="text-sm font-black text-slate-800 dark:text-white leading-tight">{f.title}</div>
@@ -117,7 +117,7 @@ export default function AboutPage() {
             onClick={() => openUrl("https://sing-box.sagernet.org")}
             className="flex items-center gap-3 p-3 rounded-2xl bg-surface-active/25 border border-border-glass/40 hover:bg-surface-active/45 transition-colors cursor-pointer w-full text-left"
           >
-            <div className="w-8 h-8 rounded-xl bg-[#00BBA7]/10 text-[#00BBA7] flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[#6C5CFF]/10 text-[#6C5CFF] flex items-center justify-center shrink-0">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
                 <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>

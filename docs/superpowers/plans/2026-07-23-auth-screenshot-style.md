@@ -16,6 +16,8 @@
 - Do not add image assets.
 - Preserve existing login/register submit behavior.
 - Use the same soft purple as the login/register primary button for auth accents; do not use green as the auth primary accent.
+- Center the auth form block vertically in the page and use approximately 60px high inputs/buttons.
+- Add a large, readable top welcome message and center the login/register title text below it.
 - `pnpm test` must pass.
 - `pnpm build` must pass.
 
@@ -75,16 +77,31 @@
   <div className="flex h-full w-full flex-col px-10 pb-7 pt-10 animate-fade-in">
   ```
 
+  Add the top welcome message before the middle form area:
+
+  ```tsx
+  <div className="pt-18 text-center">
+    <p className="text-[26px] font-black leading-tight tracking-tight text-slate-800 dark:text-text">{t("auth_welcome", "欢迎使用 AureStream")}</p>
+    <p className="mt-3 text-[14px] font-semibold text-[#6C5CFF]">{t("auth_welcome_subtitle", "安全、快速、简洁的网络连接体验")}</p>
+  </div>
+  ```
+
+  Center the title and form block inside a flexible middle area:
+
+  ```tsx
+  <div className="flex flex-1 flex-col justify-center pb-16">
+  ```
+
   Use pill inputs:
 
   ```tsx
-  className="flex h-12 items-center gap-4 rounded-full border border-slate-300/80 bg-white/55 px-5 text-text shadow-sm"
+  className="flex h-14 items-center gap-4 rounded-full border border-slate-300/80 bg-white/55 px-5 text-text shadow-sm"
   ```
 
   Use a primary button:
 
   ```tsx
-  className="mt-8 flex h-11 w-full cursor-pointer items-center justify-center rounded-full bg-[#6C5CFF] text-base font-extrabold text-white shadow-md transition-all hover:bg-[#6252F4] active:scale-[0.98] disabled:opacity-60"
+  className="mt-8 flex h-14 w-full cursor-pointer items-center justify-center rounded-full bg-[#6C5CFF] text-base font-extrabold text-white shadow-md transition-all hover:bg-[#6252F4] active:scale-[0.98] disabled:opacity-60"
   ```
 
 ---
@@ -125,10 +142,11 @@
 
   Match the screenshot closely:
 
-  - top padding around 40px
-  - title left aligned
-  - three pill inputs
-  - submit button around 48px below inputs
+  - top welcome message
+  - title and form block vertically centered in the page
+  - title centered
+  - three 56px-high pill inputs
+  - 56px-high submit button around 32px below inputs
   - bottom centered login link
 
 ---

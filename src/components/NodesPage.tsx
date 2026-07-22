@@ -188,7 +188,7 @@ export default function NodesPage() {
                 {/* Radio Button Selector (ONLY element changing style on selection) */}
                 <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center transition-colors ${
                   isConnected 
-                    ? 'border-2 border-[#00BBA7] bg-[#00BBA7]' 
+                    ? 'border-2 border-[#6C5CFF] bg-[#6C5CFF]' 
                     : 'border-2 border-slate-300 dark:border-slate-600 bg-transparent'
                 }`}>
                   {isConnected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}

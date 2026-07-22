@@ -12,7 +12,7 @@ import { insertSubscription } from "../action/db"
 const I = {
   Mail: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>),
   Lock: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>),
-  Check: () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>),
+  EyeOff: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 2 20 20"/><path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"/><path d="M9.88 4.24A10.7 10.7 0 0 1 12 4c5 0 9.27 3.11 11 7.5a11.8 11.8 0 0 1-3.16 4.44"/><path d="M6.61 6.61A11.8 11.8 0 0 0 1 11.5C2.73 15.89 7 19 12 19a10.8 10.8 0 0 0 5.39-1.39"/></svg>),
 }
 
 export default function LoginPage() {
@@ -23,6 +23,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [successMessage] = useState<string>(() => {
     const msg = location.state?.message || ""
@@ -40,7 +41,6 @@ export default function LoginPage() {
     setError("")
     setSubmitting(true)
     try {
-      // Clear old local user data before new login starts
       try {
         const { clearLocalUserData } = await import("../lib/auth-cleanup")
         await clearLocalUserData()
@@ -49,8 +49,7 @@ export default function LoginPage() {
       }
 
       await login(email, password)
-      
-      // Auto fetch and sync subscriptions immediately after login
+
       try {
         const subs = await fetchSubscriptions()
         if (subs && subs.length > 0) {
@@ -75,73 +74,69 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col px-5 pb-6 pt-16 animate-fade-in">
-      <div className="flex flex-col gap-2 pt-6">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-white shadow-glow-primary">
-          <I.Check />
-        </div>
-        <h1 className="mt-3 text-3.5xl font-heading font-extrabold tracking-tight text-text">{t("welcome_back")}</h1>
-        <p className="max-w-[18rem] text-sm font-medium leading-relaxed text-text-secondary">
-          {t("login_subtitle", "登录 AureStream，继续使用你的高速安全连接。")}
-        </p>
+    <div className="relative flex h-full w-full flex-col px-10 pb-7 pt-10 animate-fade-in">
+      <div className="pt-18 text-center">
+        <p className="text-[26px] font-black leading-tight tracking-tight text-slate-800 dark:text-text">{t("auth_welcome", "欢迎使用 AureStream")}</p>
+        <p className="mt-3 text-[14px] font-semibold text-[#6C5CFF]">{t("auth_welcome_subtitle", "安全、快速、简洁的网络连接体验")}</p>
       </div>
 
-      <div className="mt-8 flex flex-col gap-3">
+      <div className="absolute left-10 right-10 top-1/2 -translate-y-1/2">
+        <div className="flex flex-col gap-5">
         {error && (
-          <div className="rounded-2xl border border-danger/20 bg-danger/10 p-3.5 text-sm font-medium text-danger">
+          <div className="rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm font-medium text-danger">
             {error}
           </div>
         )}
 
         {successMessage && (
-          <div className="rounded-2xl border border-success/20 bg-success/10 p-3.5 text-sm font-medium text-success">
+          <div className="rounded-2xl border border-success/20 bg-success/10 px-4 py-3 text-sm font-medium text-success">
             {successMessage}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="glass-card flex flex-col gap-5 rounded-[28px] p-5 shadow-glass">
-          <div className="flex flex-col gap-2">
-            <label className="ml-1 text-xs font-extrabold uppercase tracking-wider text-text-secondary/80">{t("email")}</label>
-            <div className="glass-input flex items-center gap-3 rounded-[20px] px-4.5 py-4">
-              <div className="text-text-muted/80"><I.Mail /></div>
-              <input
-                className="flex-1 border-none bg-transparent text-[14px] font-semibold text-text outline-none placeholder:text-text-muted/40"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t("email_placeholder", "请输入您的邮箱地址")}
-                required
-              />
-            </div>
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <label className="flex h-15 items-center gap-4 rounded-full border border-slate-300/80 bg-white/55 px-5 text-slate-500 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10">
+            <I.Mail />
+            <span className="sr-only">{t("email")}</span>
+            <input
+              className="min-w-0 flex-1 border-none bg-transparent text-[16px] font-semibold text-slate-700 outline-none placeholder:text-slate-500 dark:text-text dark:placeholder:text-text-muted"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t("email")}
+              required
+            />
+          </label>
 
-          <div className="flex flex-col gap-2">
-            <label className="ml-1 text-xs font-extrabold uppercase tracking-wider text-text-secondary/80">{t("password")}</label>
-            <div className="glass-input flex items-center gap-3 rounded-[20px] px-4.5 py-4">
-              <div className="text-text-muted/80"><I.Lock /></div>
-              <input
-                className="flex-1 border-none bg-transparent text-[14px] font-semibold tracking-wider text-text outline-none placeholder:text-text-muted/40"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t("password_placeholder", "请输入您的密码")}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <a href="#" className="text-[13px] font-bold text-secondary transition-colors hover:text-secondary/80">{t("forgot_password")}</a>
-          </div>
+          <label className="flex h-15 items-center gap-4 rounded-full border border-slate-300/80 bg-white/55 px-5 text-slate-500 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10">
+            <I.Lock />
+            <span className="sr-only">{t("password")}</span>
+            <input
+              className="min-w-0 flex-1 border-none bg-transparent text-[16px] font-semibold text-slate-700 outline-none placeholder:text-slate-500 dark:text-text dark:placeholder:text-text-muted"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("password")}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-slate-600 dark:text-text-muted dark:hover:text-text"
+              aria-label={showPassword ? t("hide_password", "隐藏密码") : t("show_password", "显示密码")}
+            >
+              <I.EyeOff />
+            </button>
+          </label>
 
           <button
             type="submit"
             disabled={submitting}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-[20px] bg-secondary py-4 text-[15px] font-extrabold uppercase tracking-wider text-white shadow-md transition-all hover:bg-secondary/90 active:scale-[0.98] disabled:opacity-60"
+            className="mt-8 flex h-15 w-full cursor-pointer items-center justify-center rounded-full bg-[#6C5CFF] text-base font-extrabold text-white shadow-md transition-all hover:bg-[#6252F4] active:scale-[0.98] disabled:opacity-60"
           >
             {submitting ? (
               <>
-                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span className="mr-2 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 <span>{t("submitting", "请稍候...")}</span>
               </>
             ) : (
@@ -149,13 +144,12 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+        </div>
       </div>
 
-      <div className="flex-1" />
-
-      <div className="text-center text-[13px] text-text-secondary">
+      <div className="mt-auto text-center text-[14px] font-medium text-slate-800 dark:text-text-secondary">
         {t("no_account")}{" "}
-        <Link to="/register" className="ml-1 font-bold text-secondary transition-colors hover:text-secondary/80">
+        <Link to="/register" className="font-extrabold text-[#6C5CFF] transition-colors hover:text-[#6252F4]">
           {t("sign_up")}
         </Link>
       </div>
