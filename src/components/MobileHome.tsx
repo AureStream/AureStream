@@ -562,7 +562,7 @@ export default function MobileHome() {
         </div>
 
         {/* Row 3: Connection Power Button Row */}
-        <div className="w-full px-4 py-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
+        <div className="w-full px-4 pt-0 pb-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
           {/* Connection Status & Live Duration Display */}
           <div className="flex items-center justify-center w-full min-h-[36px] mb-3.5">
             {isConnected ? (
