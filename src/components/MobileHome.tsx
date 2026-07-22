@@ -19,7 +19,6 @@ import {
   type TrayRequestedMode,
 } from "../lib/tray-mode"
 import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
-import { getNodeLatencyTone } from "../lib/node-latency-tone"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { message } from "@tauri-apps/plugin-dialog"
 import { openUrl } from "@tauri-apps/plugin-opener"
