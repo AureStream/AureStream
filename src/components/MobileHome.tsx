@@ -132,16 +132,6 @@ export default function MobileHome() {
     return () => { active = false }
   }, [activeNodeId])
 
-  const renderPing = (p: number) => {
-    if (p < 0) return <span className="text-danger text-xs font-mono font-bold whitespace-nowrap">{l("Timeout", "超时")}</span>
-    if (p === 0) return <span className="text-text-muted text-xs font-mono font-bold whitespace-nowrap">-- ms</span>
-    const tone = getNodeLatencyTone(p)
-    return (
-      <span className={`flex items-center gap-1.5 text-xs font-mono font-extrabold whitespace-nowrap ${tone.text}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>{p}ms
-      </span>
-    )
-  }
 
   const [subs, setSubs] = useState<Subscription[]>([])
   const [subsLoading, setSubsLoading] = useState(true)
