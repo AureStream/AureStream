@@ -627,16 +627,16 @@ export default function MobileHome() {
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <span className="text-2xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
               <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                <h3 className="text-xs font-black text-slate-900 dark:text-white truncate group-hover:text-[#00BBA7] transition-colors">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white truncate group-hover:text-[#00BBA7] transition-colors">
                   {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
                 </h3>
-                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
                   <span className="flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
                     {currentNode ? `${activeNodePing || 75} ms` : "--"}
                   </span>
                   <span className="text-slate-300 dark:text-white/10">•</span>
-                  <span className="font-mono font-semibold uppercase text-slate-500">
+                  <span className="font-mono font-bold uppercase text-slate-500">
                     {currentNode ? currentNode.protocol : "VLESS"}
                   </span>
                 </div>
