@@ -140,7 +140,7 @@ export default function NodesPage() {
                   }
                 }
               }}
-              className="bg-white dark:bg-bg-alt rounded-2xl p-3.5 shadow-sm border border-slate-100 dark:border-white/10 cursor-pointer flex items-center justify-between gap-3"
+              className="bg-white dark:bg-bg-alt rounded-[12px] p-3.5 shadow-sm border border-slate-100 dark:border-white/10 cursor-pointer flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 {/* Flag */}
@@ -165,7 +165,7 @@ export default function NodesPage() {
 
               {/* Ping latency indicator + Radio button */}
               <div className="flex items-center gap-3 shrink-0">
-                <div className="px-2 py-1 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1.5 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-white/10">
+                <div className="text-[11px] font-mono font-bold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                   {isTestingSpeed && node.ping === 0 ? (
                     <span className="animate-pulse">--</span>
                   ) : node.ping < 0 ? (
