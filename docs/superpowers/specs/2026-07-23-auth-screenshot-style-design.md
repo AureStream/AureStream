@@ -17,6 +17,7 @@ Use the screenshot as the source of truth:
 - Email/password icons sit inside the inputs on the left.
 - Password and confirm-password inputs include a right-side visibility toggle icon.
 - Primary button is a wide purple rounded pill.
+- The app auth accent color should use the same soft purple as the login/register button, not green.
 - Login/register switch text sits at the bottom center.
 
 ## Page Mapping
@@ -60,6 +61,7 @@ Use the same style adapted for login:
 - Register has three pill inputs and one purple pill button.
 - Login has two pill inputs and one purple pill button.
 - Password fields have right-side visibility toggles.
+- Auth pages do not introduce green as a primary accent.
 - `pnpm test` passes.
 - `pnpm build` passes.
 
