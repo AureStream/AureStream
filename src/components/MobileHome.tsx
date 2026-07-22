@@ -507,7 +507,7 @@ export default function MobileHome() {
                 </span>
               </div>
 
-              <div className="relative h-18 w-26 shrink-0">
+              <div className="relative h-22 w-32 shrink-0">
                 <svg className="h-full w-full overflow-visible" viewBox="0 0 120 74" aria-hidden="true">
                   <defs>
                     <linearGradient id="trafficGaugeGradient" x1="12" y1="62" x2="108" y2="14" gradientUnits="userSpaceOnUse">
@@ -535,8 +535,8 @@ export default function MobileHome() {
                     strokeDashoffset={100 - remainingPercent}
                   />
                 </svg>
-                <div className="absolute inset-x-0 top-[34px] flex items-center justify-center">
-                  <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{remainingPercent.toFixed(0)}%</span>
+                <div className="absolute inset-x-0 top-[42px] flex items-center justify-center">
+                  <span className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{remainingPercent.toFixed(0)}%</span>
                 </div>
               </div>
             </div>
