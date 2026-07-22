@@ -635,12 +635,11 @@ export default function MobileHome() {
                 <h3 className="text-lg font-black text-slate-900 dark:text-white truncate">
                   {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
                 </h3>
-                <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 font-semibold">
-                  <span className="font-mono font-bold uppercase text-slate-400 dark:text-slate-500">
+                <div className="flex items-center justify-between w-full text-xs text-slate-400 dark:text-slate-500 font-semibold">
+                  <span className="font-mono font-bold uppercase">
                     {currentNode ? currentNode.protocol : "VLESS"}
                   </span>
-                  <span className="text-slate-300 dark:text-white/10">•</span>
-                  <span className="flex items-center gap-1 font-mono font-semibold text-slate-400 dark:text-slate-500">
+                  <span className="flex items-center gap-1 font-mono font-semibold">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
                     {currentNode ? `${activeNodePing || 75} ms` : "--"}
                   </span>
