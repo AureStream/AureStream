@@ -686,8 +686,8 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Row 5: Official Website & About Footer Row (Generous bottom spacing) */}
-        <div className="w-full px-4 pt-1 pb-10 shrink-0 flex items-center justify-center gap-6">
+        {/* Row 5: Official Website & About Footer Row */}
+        <div className="w-full px-4 pt-1 pb-3 shrink-0 flex items-center justify-center gap-6">
           <button
             onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
             className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
