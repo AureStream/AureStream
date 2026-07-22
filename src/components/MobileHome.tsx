@@ -627,28 +627,28 @@ export default function MobileHome() {
           <button
             type="button"
             onClick={() => navigate("/dashboard/nodes")}
-            className="bg-white dark:bg-bg-alt rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-white/10 flex items-center justify-between gap-3 w-full text-left cursor-pointer hover:border-[#00BBA7]/40 hover:shadow-md transition-all group"
+            className="bg-white dark:bg-bg-alt rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-white/10 flex items-center justify-between gap-3 w-full text-left cursor-pointer transition-all"
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <span className="text-2xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
               <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                <h3 className="text-sm font-black text-slate-900 dark:text-white truncate group-hover:text-[#00BBA7] transition-colors">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
                   {currentNode ? currentNode.loc : l("No Node Selected", "未选择任何节点")}
                 </h3>
                 <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
+                  <span className="font-mono font-bold uppercase text-slate-500">
+                    {currentNode ? currentNode.protocol : "VLESS"}
+                  </span>
+                  <span className="text-slate-300 dark:text-white/10">•</span>
                   <span className="flex items-center gap-1 font-mono font-bold text-slate-700 dark:text-slate-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#00BBA7]" />
                     {currentNode ? `${activeNodePing || 75} ms` : "--"}
-                  </span>
-                  <span className="text-slate-300 dark:text-white/10">•</span>
-                  <span className="font-mono font-bold uppercase text-slate-500">
-                    {currentNode ? currentNode.protocol : "VLESS"}
                   </span>
                 </div>
               </div>
             </div>
 
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0 group-hover:translate-x-0.5 transition-transform">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
