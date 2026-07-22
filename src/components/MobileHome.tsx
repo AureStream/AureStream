@@ -556,32 +556,32 @@ export default function MobileHome() {
           </div>
         </div>
 
-        {/* Middle: Power Connection Hero Area (Shifted upwards with larger power sphere) */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-0 py-2 -mt-3 z-10">
+        {/* Middle: Power Connection Hero Area (Tight vertical spacing) */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-0 py-0 -mt-6 z-10">
           {/* Header Row: Centered Live Duration Display when connected */}
-          <div className="flex items-center justify-center w-full min-h-[28px]">
+          <div className="flex items-center justify-center w-full min-h-[24px]">
             {isConnected ? (
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-black font-mono tracking-wider shadow-sm">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black font-mono tracking-wider shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>{formatDuration(connectTime)}</span>
               </div>
             ) : isConnecting ? (
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-bold tracking-wide animate-pulse shadow-sm">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-bold tracking-wide animate-pulse shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-[#00BBA7] animate-ping" />
                 <span>{l("Connecting…", "正在连接…")}</span>
               </div>
             ) : null}
           </div>
 
-          {/* Central Power Button Sphere (Crisp bright outer ring, no diffuse blur halo) */}
-          <div className="my-1 relative flex items-center justify-center">
+          {/* Central Power Button Sphere */}
+          <div className="my-0 relative flex items-center justify-center">
             {/* Double Ring Power Sphere */}
-            <div className={`w-64 h-64 rounded-full border transition-all duration-300 flex items-center justify-center p-4 ${
+            <div className={`w-60 h-60 rounded-full border transition-all duration-300 flex items-center justify-center p-3.5 ${
               isConnected
                 ? "border-[#00BBA7] bg-[#E6F7F5] dark:bg-[#00BBA7]/15 shadow-md"
                 : "border-slate-200/60 dark:border-white/10 bg-white/40 dark:bg-bg-alt/40 shadow-sm"
             }`}>
-              <div className={`w-50 h-50 rounded-full border transition-all duration-300 flex items-center justify-center ${
+              <div className={`w-46 h-46 rounded-full border transition-all duration-300 flex items-center justify-center ${
                 isConnected
                   ? "border-[#00BBA7]/35 bg-white dark:bg-bg-alt shadow-sm"
                   : "border-slate-200/80 dark:border-white/10 bg-white dark:bg-bg-alt shadow-sm"
@@ -589,9 +589,9 @@ export default function MobileHome() {
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
-                  className="w-36 h-36 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+                  className="w-32 h-32 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 focus:outline-none"
                 >
-                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#00BBA7] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -601,12 +601,12 @@ export default function MobileHome() {
           </div>
 
           {/* Bottom Protection Hint */}
-          <div className="flex flex-col items-center gap-0.5 text-center mt-1">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          <div className="flex flex-col items-center gap-0.5 text-center mt-0.5">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
             </div>
-            <p className="text-[11px] text-slate-400 font-normal">
+            <p className="text-[10px] text-slate-400 font-normal">
               {isConnected ? l("Protected & Secured Connection", "代理引擎正常工作") : l("Tap central button to start secure connection", "点击中心按钮开启安全连接")}
             </p>
           </div>
