@@ -564,15 +564,15 @@ export default function MobileHome() {
         {/* Row 3: Connection Power Button Row */}
         <div className="w-full px-4 py-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
           {/* Connection Status & Live Duration Display */}
-          <div className="flex items-center justify-center w-full min-h-[22px] mb-0.5">
+          <div className="flex items-center justify-center w-full min-h-[32px] mb-1">
             {isConnected ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black font-mono tracking-wider shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-black font-mono tracking-wider shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span>{formatDuration(connectTime)}</span>
               </div>
             ) : isConnecting ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-bold tracking-wide animate-pulse shadow-sm">
-                <span className="w-2 h-2 rounded-full bg-[#00BBA7] animate-ping" />
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00BBA7]/10 border border-[#00BBA7]/20 text-[#00BBA7] text-xs font-bold tracking-wide animate-pulse shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#00BBA7] animate-ping" />
                 <span>{l("Connecting…", "正在连接…")}</span>
               </div>
             ) : null}
@@ -617,7 +617,7 @@ export default function MobileHome() {
         </div>
 
         {/* Row 4: Node Card & Mode Switcher Row */}
-        <div className="w-full px-4 pt-1 pb-6 shrink-0 flex flex-col gap-2 max-w-[340px] mx-auto">
+        <div className="w-full px-4 pt-1 pb-10 shrink-0 flex flex-col gap-2 max-w-[340px] mx-auto">
           {/* Integrated Multiline Node Selection Button */}
           <button
             type="button"
