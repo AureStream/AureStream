@@ -54,10 +54,9 @@ export default function AboutPage() {
   ]
 
   return (
-    <div className="relative flex h-full w-full flex-col animate-fade-in overflow-hidden">
-      <div className="pointer-events-none absolute left-[-5rem] top-0 h-56 w-56 rounded-full bg-[#6C5CFF]/10 blur-3xl" />
-      <div className="pointer-events-none absolute right-[-6rem] top-36 h-60 w-60 rounded-full bg-cyan-200/25 dark:bg-cyan-400/10 blur-3xl" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[22rem] bg-[radial-gradient(circle_at_50%_0%,rgba(108,92,255,0.13),transparent_64%)]" />
+    <div className="relative flex h-full w-full flex-col animate-fade-in overflow-hidden bg-transparent">
+      <div className="pointer-events-none absolute left-[-5rem] top-0 h-56 w-56 rounded-full bg-[#6C5CFF]/7 blur-3xl" />
+      <div className="pointer-events-none absolute right-[-6rem] top-36 h-60 w-60 rounded-full bg-cyan-200/18 dark:bg-cyan-400/10 blur-3xl" />
 
       <div className="relative z-10 shrink-0">
         <MobileTopBar onBack={() => navigate("/dashboard")} title={l("About", "关于")} />

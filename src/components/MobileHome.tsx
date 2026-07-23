@@ -570,7 +570,7 @@ export default function MobileHome() {
         {/* Row 3: Connection Power Button Row */}
         <div className="w-full px-4 pt-0 pb-1 flex-1 flex flex-col items-center justify-center min-h-0 z-10">
           {/* Connection Status & Live Duration Display */}
-          <div className="flex items-center justify-center w-full min-h-[36px] mb-8">
+          <div className="flex items-center justify-center w-full min-h-[36px] mb-4">
             {isConnected ? (
               <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-base font-black font-mono tracking-wider">
                 <span className="w-3 h-3 rounded-full bg-emerald-500" />
@@ -621,11 +621,6 @@ export default function MobileHome() {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? l("Data Tunnel Protection Active", "数据隧道保护已启用") : l("Data Tunnel Protection Inactive", "数据隧道保护未启用")}</span>
             </div>
-            {isConnected && (
-              <p className="text-xs text-slate-400 font-extrabold">
-                {l("Protected & Secured Connection", "代理引擎正常工作")}
-              </p>
-            )}
           </div>
         </div>
 
