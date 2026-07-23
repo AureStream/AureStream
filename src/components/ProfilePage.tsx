@@ -75,90 +75,94 @@ export default function ProfilePage() {
     })
   }
 
-  const StatRow = ({ label, value }: { label: string; value: string }) => (
-    <div className="flex justify-between items-center bg-surface-active/15 border border-border-glass/30 rounded-xl px-3.5 py-2.5">
-      <span className="text-xs text-text-secondary">{label}</span>
-      <span className="text-xs font-bold text-text tabular-nums">{value}</span>
+  const DetailRow = ({ label, value }: { label: string; value: string }) => (
+    <div className="flex items-center justify-between py-3 border-b border-slate-200/55 dark:border-white/8 last:border-b-0">
+      <span className="text-xs font-bold text-text-muted">{label}</span>
+      <span className="text-sm font-black text-text tabular-nums">{value}</span>
     </div>
   )
 
   return (
-    <div className="flex h-full w-full flex-col animate-fade-in">
+    <div className="flex h-full w-full flex-col animate-fade-in overflow-hidden">
       <MobileTopBar onBack={() => navigate("/dashboard")} title={l("My", "我的")} />
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-5 pt-4 flex flex-col gap-4">
-        {/* User info card */}
-        <div className="glass-card rounded-[28px] p-5 shadow-glass flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-full bg-secondary p-[3px] shadow-glow-primary mb-3 animate-pulse-slow">
-            <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden">
-              <img src="/avatar.svg" alt="User" className="w-full h-full aspect-square shrink-0 object-cover" />
-            </div>
-          </div>
-
-          <h2 className="font-heading font-extrabold text-text text-xl leading-tight tracking-tight">{displayName}</h2>
-
-          <div className="text-[10px] text-secondary bg-secondary/10 border border-secondary/15 px-3 py-1 rounded-full font-bold inline-flex items-center gap-1.5 mt-2.5">
-            <I.Crown /> {hasSub ? l("Premium Pro Client", "专业版尊享用户") : l("Free Tier Client", "免费体验用户")}
-          </div>
-
-          <div className="w-full px-1 text-left mt-4">
-            <span className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider">{l("Registered Email", "绑定邮箱")}</span>
-            <div className="flex items-center gap-2.5 mt-2 bg-surface-active/15 border border-border-glass/30 rounded-xl px-3.5 py-2.5">
-              <span className="text-text-secondary shrink-0"><I.Mail /></span>
-              <span className="text-xs font-bold text-text truncate select-all">{emailUser}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Traffic + expiry card (only fields with real data) */}
-        <div className="glass-card rounded-[28px] p-5 shadow-glass flex flex-col gap-4 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-tr from-secondary/5 to-accent-purple/5 pointer-events-none z-0" />
-
-          <div className="relative z-10 flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-secondary"><I.Shield /></span>
-              <h3 className="text-sm font-extrabold text-text uppercase tracking-wider">{l("Traffic", "流量信息")}</h3>
-            </div>
-
-            {/* Remaining — prominent */}
-            <div className="flex flex-col items-center text-center">
-              <div className="text-3xl font-extrabold font-mono tracking-tight text-text leading-none">
-                {remainingText}<span className="text-sm text-text-muted ml-1">{remainingText === "--" || remainingText.includes("TB") ? "" : "GB"}</span>
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-5 pb-5 pt-4 flex flex-col justify-between gap-6">
+        <div className="flex flex-col gap-7">
+          {/* User hero */}
+          <section className="relative flex flex-col items-center text-center pt-2">
+            <div className="absolute top-3 h-[8.5rem] w-[8.5rem] rounded-full bg-[#6C5CFF]/12 blur-3xl pointer-events-none" />
+            <div className="relative w-24 h-24 rounded-full bg-secondary p-[3px] shadow-lg shadow-[#6C5CFF]/20">
+              <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden">
+                <img src="/avatar.svg" alt="User" className="w-full h-full aspect-square shrink-0 object-cover" />
               </div>
-              <div className="text-xs text-text-muted mt-1.5">{l("Remaining this month", "本月剩余流量")}</div>
             </div>
 
-            {/* Progress bar */}
-            <div className="w-full h-2 rounded-full bg-border-glass overflow-hidden shadow-inner">
-              <div className="h-full rounded-full bg-gradient-to-r from-secondary to-accent-purple" style={{ width: `${percentUsed}%` }} />
+            <h2 className="relative font-heading font-black text-text text-3xl leading-tight tracking-tight mt-5">{displayName}</h2>
+
+            <div className="relative text-xs text-secondary bg-secondary/10 px-3.5 py-1.5 rounded-full font-black inline-flex items-center gap-1.5 mt-3">
+              <I.Crown /> {hasSub ? l("Premium Pro Client", "专业版尊享用户") : l("Free Tier Client", "免费体验用户")}
             </div>
 
-            {/* Detail rows */}
-            <div className="flex flex-col gap-2">
-              <StatRow label={l("Used this month", "本月已使用流量")} value={`${usedGB} GB`} />
-              <StatRow label={l("Total this month", "本月总流量")} value={totalText} />
-              <StatRow label={l("Plan ends", "套餐结束时间")} value={expireText} />
+            <div className="relative flex items-center gap-2.5 mt-4 max-w-full text-text-secondary">
+              <span className="shrink-0"><I.Mail /></span>
+              <span className="text-sm font-bold truncate select-all">{emailUser}</span>
             </div>
-          </div>
+          </section>
+
+          {/* Traffic summary */}
+          <section className="relative rounded-[34px] bg-white dark:bg-bg-alt p-5 shadow-sm border border-slate-100 dark:border-white/10 overflow-hidden">
+            <div className="absolute -top-14 -right-14 h-36 w-36 rounded-full bg-[#6C5CFF]/12 blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-16 -left-16 h-36 w-36 rounded-full bg-accent-purple/40 blur-2xl pointer-events-none" />
+
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-secondary"><I.Shield /></span>
+                <h3 className="text-sm font-black text-text uppercase tracking-wider">{l("Traffic", "流量信息")}</h3>
+              </div>
+              <span className="text-xs font-black text-secondary tabular-nums">{100 - percentUsed}% {l("Left", "剩余")}</span>
+            </div>
+
+            <div className="relative pt-6 pb-4">
+              <div className="flex items-end gap-1.5">
+                <span className="text-5xl font-black font-mono tracking-tight text-text leading-none">
+                  {remainingText}
+                </span>
+                <span className="text-base text-text-muted font-black mb-1.5">
+                  {remainingText === "--" || remainingText.includes("TB") ? "" : "GB"}
+                </span>
+              </div>
+              <div className="text-sm text-text-muted font-bold mt-2">{l("Remaining this month", "本月剩余流量")}</div>
+            </div>
+
+            <div className="relative w-full h-2.5 rounded-full bg-slate-100 dark:bg-white/8 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-secondary to-[#8B7CFF]" style={{ width: `${percentUsed}%` }} />
+            </div>
+
+            <div className="relative mt-4">
+              <DetailRow label={l("Used this month", "本月已使用流量")} value={`${usedGB} GB`} />
+              <DetailRow label={l("Total this month", "本月总流量")} value={totalText} />
+              <DetailRow label={l("Plan ends", "套餐结束时间")} value={expireText} />
+            </div>
+          </section>
         </div>
 
-        <div className="flex-1" />
+        <div className="flex flex-col gap-3 pt-1">
+          {/* Renewal placeholder button */}
+          <button
+            onClick={handleRenew}
+            className="w-full h-14 rounded-[22px] bg-gradient-to-r from-secondary to-[#8B7CFF] hover:opacity-90 active:scale-[0.98] transition-all text-white font-black shadow-md shadow-[#6C5CFF]/18 text-sm cursor-pointer flex items-center justify-center gap-2"
+          >
+            <I.Crown /> {l("Renew", "续费")}
+          </button>
 
-        {/* Renewal placeholder button */}
-        <button
-          onClick={handleRenew}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-secondary to-accent-purple hover:opacity-90 active:scale-[0.98] transition-all text-white font-extrabold shadow-md text-sm cursor-pointer flex items-center justify-center gap-2"
-        >
-          <I.Crown /> {l("Renew", "续费")}
-        </button>
-
-        {/* Logout */}
-        <button
-          onClick={() => logout().then(() => navigate('/login'))}
-          className="w-full py-3 rounded-2xl bg-surface-active/40 hover:bg-surface-active/70 border border-border-glass text-text-secondary hover:text-text transition-all font-bold text-sm cursor-pointer flex items-center justify-center gap-2"
-        >
-          <I.LogOut /> {l("Log Out", "退出登录")}
-        </button>
+          {/* Logout */}
+          <button
+            onClick={() => logout().then(() => navigate('/login'))}
+            className="w-full h-[3.25rem] rounded-[22px] bg-white/45 dark:bg-white/6 hover:bg-white/70 dark:hover:bg-white/10 text-text-secondary hover:text-text transition-all font-black text-sm cursor-pointer flex items-center justify-center gap-2"
+          >
+            <I.LogOut /> {l("Log Out", "退出登录")}
+          </button>
+        </div>
       </div>
     </div>
   )
