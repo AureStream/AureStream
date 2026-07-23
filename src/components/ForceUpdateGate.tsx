@@ -17,7 +17,7 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
 
   if (checking && !updateAvailable) {
     return (
-      <div className="flex items-center justify-center h-full bg-bg">
+      <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 rounded-full border-2 border-secondary border-t-transparent animate-spin" />
           <span className="text-sm text-text-muted">AureStream</span>
@@ -39,7 +39,7 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
     }
 
     return (
-      <div className="flex items-center justify-center h-full w-full bg-bg p-6">
+      <div className="flex items-center justify-center h-full w-full p-6">
         <div className="glass-card w-full max-w-[320px] rounded-[24px] p-6 flex flex-col items-center text-center shadow-glass">
           <div className="w-14 h-14 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center mb-4">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

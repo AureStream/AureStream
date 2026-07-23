@@ -89,7 +89,7 @@ export default function NodesPage() {
   })
 
   return (
-    <div className="flex flex-col w-full h-full max-w-[420px] mx-auto animate-fade-in">
+    <div className="flex flex-col w-full h-full animate-fade-in overflow-hidden">
       <MobileTopBar
         onBack={() => navigate("/dashboard")}
         title={l("Nodes", "节点列表")}
@@ -116,94 +116,96 @@ export default function NodesPage() {
         }
       />
 
-      <div className="flex-1 overflow-y-auto no-scrollbar px-4 py-3 flex flex-col gap-2.5">
-        {sortedNodes.map(node => {
-          const isConnected = connectedNodeId === node.id
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 py-8 flex">
+        <div className="w-full flex flex-col justify-center gap-3.5 min-h-full">
+          {sortedNodes.map(node => {
+            const isConnected = connectedNodeId === node.id
 
-          return (
-            <div
-              key={node.key}
-              onClick={async () => {
-                setConnectedNodeId(node.id)
-                if (activeSubId) {
-                  const key = selectedNodeTagStoreKey(activeSubId)
-                  await setStoreValue(key, node.id, { immediate: true })
-                  // Track manual node selection for auto-failover
-                  await setLastManualNodeTag(node.id)
-                  const failoverEnabled = await getAutoFailoverEnabled()
-                  if (failoverEnabled) {
-                    await setAutoFailoverEnabled(false)
+            return (
+              <div
+                key={node.key}
+                onClick={async () => {
+                  setConnectedNodeId(node.id)
+                  if (activeSubId) {
+                    const key = selectedNodeTagStoreKey(activeSubId)
+                    await setStoreValue(key, node.id, { immediate: true })
+                    // Track manual node selection for auto-failover
+                    await setLastManualNodeTag(node.id)
+                    const failoverEnabled = await getAutoFailoverEnabled()
+                    if (failoverEnabled) {
+                      await setAutoFailoverEnabled(false)
+                    }
+                    const changedWhileRunning = await switchNodeActive(activeSubId, node.id)
+                    if (changedWhileRunning) {
+                      requestNetworkInfoRefresh("node-switched")
+                    }
                   }
-                  const changedWhileRunning = await switchNodeActive(activeSubId, node.id)
-                  if (changedWhileRunning) {
-                    requestNetworkInfoRefresh("node-switched")
-                  }
-                }
-              }}
-              className="bg-white dark:bg-bg-alt rounded-[12px] p-3.5 shadow-sm border border-slate-100 dark:border-white/10 cursor-pointer flex items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                {/* Flag */}
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 border bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10">
-                  {node.flag}
+                }}
+                className="bg-white dark:bg-bg-alt rounded-[18px] p-4 shadow-sm border border-slate-100 dark:border-white/10 cursor-pointer flex items-center justify-between gap-3.5"
+              >
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  {/* Flag */}
+                  <div className="w-11 h-11 rounded-[16px] flex items-center justify-center text-xl shrink-0 border bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10">
+                    {node.flag}
+                  </div>
+                  {/* Name + protocol */}
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-sm leading-tight truncate text-slate-900 dark:text-white" title={node.name}>
+                      {node.name}
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[9px] font-mono text-slate-400 tracking-wider truncate max-w-[120px]" title={node.id}>
+                        {node.id.toUpperCase()}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase shrink-0 bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200/50 dark:border-white/10">
+                        {node.protocol}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                {/* Name + protocol */}
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-bold text-sm leading-tight truncate text-slate-900 dark:text-white" title={node.name}>
-                    {node.name}
-                  </h4>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-[9px] font-mono text-slate-400 tracking-wider truncate max-w-[120px]" title={node.id}>
-                      {node.id.toUpperCase()}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold tracking-wider uppercase shrink-0 bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200/50 dark:border-white/10">
-                      {node.protocol}
-                    </span>
+
+                {/* Ping latency indicator + Radio button */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-[11px] font-mono font-bold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                    {isTestingSpeed && node.ping === 0 ? (
+                      <span className="animate-pulse">--</span>
+                    ) : node.ping < 0 ? (
+                      <span className="text-danger">{l("Timeout", "超时")}</span>
+                    ) : node.ping === 0 ? (
+                      <span className="text-slate-400">-- ms</span>
+                    ) : (
+                      (() => {
+                        const tone = getNodeLatencyTone(node.ping);
+                        return (
+                          <>
+                            <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>
+                            <span className={tone.text}>{node.ping}ms</span>
+                          </>
+                        );
+                      })()
+                    )}
+                  </div>
+
+                  {/* Radio Button Selector (ONLY element changing style on selection) */}
+                  <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center transition-colors ${
+                    isConnected 
+                      ? 'border-2 border-[#6C5CFF] bg-[#6C5CFF]' 
+                      : 'border-2 border-slate-300 dark:border-slate-600 bg-transparent'
+                  }`}>
+                    {isConnected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </div>
                 </div>
               </div>
+            )
+          })}
 
-              {/* Ping latency indicator + Radio button */}
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="text-[11px] font-mono font-bold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                  {isTestingSpeed && node.ping === 0 ? (
-                    <span className="animate-pulse">--</span>
-                  ) : node.ping < 0 ? (
-                    <span className="text-danger">{l("Timeout", "超时")}</span>
-                  ) : node.ping === 0 ? (
-                    <span className="text-slate-400">-- ms</span>
-                  ) : (
-                    (() => {
-                      const tone = getNodeLatencyTone(node.ping);
-                      return (
-                        <>
-                          <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>
-                          <span className={tone.text}>{node.ping}ms</span>
-                        </>
-                      );
-                    })()
-                  )}
-                </div>
-
-                {/* Radio Button Selector (ONLY element changing style on selection) */}
-                <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center transition-colors ${
-                  isConnected 
-                    ? 'border-2 border-[#6C5CFF] bg-[#6C5CFF]' 
-                    : 'border-2 border-slate-300 dark:border-slate-600 bg-transparent'
-                }`}>
-                  {isConnected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                </div>
-              </div>
+          {sortedNodes.length === 0 && (
+            <div className="flex min-h-full flex-col items-center justify-center text-text-muted">
+              <I.Activity />
+              <p className="mt-4 text-sm">{l("No nodes found.", "暂无节点")}</p>
             </div>
-          )
-        })}
-
-        {sortedNodes.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-text-muted">
-            <I.Activity />
-            <p className="mt-4 text-sm">{l("No nodes found.", "暂无节点")}</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

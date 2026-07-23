@@ -13,7 +13,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-bg">
+      <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <span className="text-sm text-text-muted">AureStream</span>
