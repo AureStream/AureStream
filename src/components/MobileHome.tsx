@@ -19,6 +19,7 @@ import {
 } from "../lib/tray-mode"
 import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
+import { shouldEnsureTunServiceBeforeModeAction } from "../lib/proxy-mode-transition"
 import { message } from "@tauri-apps/plugin-dialog"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { shouldAllowConnectionToggle } from "../lib/home-network-info"
@@ -140,6 +141,7 @@ export default function MobileHome() {
   const connectionOperationRef = useRef(false)
   const engineStateRef = useRef(engineState)
   const subsRef = useRef(subs)
+  const proxyModeRef = useRef(proxyMode)
 
   useEffect(() => {
     engineStateRef.current = engineState
@@ -148,6 +150,10 @@ export default function MobileHome() {
   useEffect(() => {
     subsRef.current = subs
   }, [subs])
+
+  useEffect(() => {
+    proxyModeRef.current = proxyMode
+  }, [proxyMode])
 
   // Reset tray operation guard when the engine settles into a stable state.
   useEffect(() => {
@@ -181,12 +187,14 @@ export default function MobileHome() {
           setLocalConnecting(true)
           await stopEngine()
         } else {
-          setLocalConnecting(plan.action === "connect")
-          await withScheduledConfigSyncSuspended(async () => {
-            const isTun = plan.targetUiMode === "tun"
-            setProxyMode(plan.targetUiMode)
-            await setEnableTun(isTun)
+          if (shouldEnsureTunServiceBeforeModeAction(plan.action, plan.targetUiMode)) {
+            const ready = await ensureTunServiceReady()
+            if (!ready) return
+          }
 
+          const isTun = plan.targetUiMode === "tun"
+          setLocalConnecting(plan.action === "connect" || plan.action === "switch")
+          await withScheduledConfigSyncSuspended(async () => {
             if (plan.action === "switch") {
               // Mode switch via stop() + start()
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
@@ -196,10 +204,15 @@ export default function MobileHome() {
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
               await connectEngine(subId, "rule", isTun)
             }
+
+            setProxyMode(plan.targetUiMode)
+            await setEnableTun(isTun)
           })
         }
       } catch (err) {
         console.error("Tray switch engine failed:", err)
+        setProxyMode(proxyModeRef.current)
+        await withScheduledConfigSyncSuspended(() => setEnableTun(proxyModeRef.current === "tun"))
       } finally {
         setLocalConnecting(false)
         trayOperationRef.current = false
@@ -274,6 +287,7 @@ export default function MobileHome() {
     if (isConnecting || isInstallingService) return
     if (proxyMode === newMode) return
     const isTun = newMode === "tun"
+    const previousMode = proxyMode
 
     if (isTun) {
       const ready = await ensureTunServiceReady()
@@ -282,19 +296,22 @@ export default function MobileHome() {
 
     try {
       await withScheduledConfigSyncSuspended(async () => {
-        setProxyMode(newMode)
-        await setEnableTun(isTun)
-
         if (!isConnected) {
+          setProxyMode(newMode)
+          await setEnableTun(isTun)
           return
         }
 
         setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
         await switchProxyMode(subId, "rule", isTun)
+        setProxyMode(newMode)
+        await setEnableTun(isTun)
       })
     } catch (err) {
       console.error("Switch mode failed:", err)
+      setProxyMode(previousMode)
+      await withScheduledConfigSyncSuspended(() => setEnableTun(previousMode === "tun"))
     } finally {
       setLocalConnecting(false)
     }

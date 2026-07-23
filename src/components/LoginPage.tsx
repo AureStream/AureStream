@@ -3,10 +3,10 @@ import { useTranslation } from "react-i18next"
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { fetchSubscriptions } from "../api/subscriptions"
-import { setStoreValue } from "../single/store"
-import { syncActiveConnectionConfig } from "../lib/config-sync"
-import { SSI_STORE_KEY } from "../types/definition"
 import { insertSubscription } from "../action/db"
+import { initializeAfterLogin } from "../lib/login-initialization"
+import { syncActiveConnectionConfig } from "../lib/config-sync"
+import { setStoreValue } from "../single/store"
 
 /* ── Icons ── */
 const I = {
@@ -50,20 +50,12 @@ export default function LoginPage() {
 
       await login(email, password)
 
-      try {
-        const subs = await fetchSubscriptions()
-        if (subs && subs.length > 0) {
-          await setStoreValue(SSI_STORE_KEY, subs[0].id)
-          try {
-            await insertSubscription(subs[0].url, subs[0].name, subs[0].id)
-          } catch (dbErr) {
-            console.error("Failed to save subscription config to local DB:", dbErr)
-          }
-          await syncActiveConnectionConfig("login-init")
-        }
-      } catch (subErr) {
-        console.error("Failed to initialize subscriptions after login:", subErr)
-      }
+      await initializeAfterLogin({
+        fetchSubscriptions,
+        setStoreValue,
+        insertSubscription,
+        syncActiveConnectionConfig,
+      })
 
       navigate("/dashboard")
     } catch (err) {
