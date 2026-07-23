@@ -53,7 +53,7 @@ fn build_tray_menu(app_handle: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wr
 /// 初始化系统托盘：创建图标、菜单、事件处理，并将句柄存入 AppData。
 pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
-    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png"))?;
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../../../public/tray.png"))?;
     #[cfg(not(target_os = "macos"))]
     let tray_icon = app.default_window_icon().cloned().unwrap_or_else(|| {
         tauri::image::Image::from_bytes(include_bytes!("../../../public/logo.png")).unwrap()
@@ -63,6 +63,7 @@ pub fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
 
     let tray = TrayIconBuilder::with_id("main-tray")
         .icon(tray_icon)
+        .icon_as_template(cfg!(target_os = "macos"))
         .menu(&menu)
         .tooltip("AureStream")
         .on_menu_event(|app_handle, event| match event.id.as_ref() {
