@@ -26,12 +26,3 @@ export async function mergeConnectionConfig(
 
   return true
 }
-
-export async function isConnectionConfigFresh(
-  _subscriptionIdentifier: string,
-  _routingMode: RoutingMode,
-  _enableTun: boolean
-): Promise<boolean> {
-  // Config is never strictly fresh because we must always fetch the remote template.
-  return false
-}

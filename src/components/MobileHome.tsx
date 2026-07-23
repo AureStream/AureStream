@@ -3,11 +3,10 @@ import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 import { type ProxyMode } from "../types/proxy-mode"
 import { fetchSubscriptions, type Subscription } from "../api/subscriptions"
-import { startEngine, stopEngine } from "../utils/vpn-service"
+import { stopEngine } from "../utils/vpn-service"
 import { useEngineState } from "../hooks/useEngineState"
 import { useTrafficAccumulator } from "../hooks/useTrafficAccumulator"
-import { mergeConnectionConfig } from "../lib/connection-config"
-import { getConfigJsonPath } from "../lib/app-paths"
+import { connectEngine } from "../lib/connection-flow"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
@@ -193,11 +192,9 @@ export default function MobileHome() {
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
               await switchProxyMode(subId, "rule", isTun)
             } else if (plan.action === "connect") {
-              // Engine not running: generate config and start
+              // Engine not running: use the same guarded connection flow as the main button.
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
-              await mergeConnectionConfig(subId, "rule", isTun, { force: true })
-              const configPath = await getConfigJsonPath()
-              await startEngine(configPath, plan.targetEngineMode)
+              await connectEngine(subId, "rule", isTun)
             }
           })
         }
@@ -263,11 +260,7 @@ export default function MobileHome() {
 
         setLocalConnecting(true)
         const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-
-        await mergeConnectionConfig(subId, "rule", isTun, { force: true })
-        const configPath = await getConfigJsonPath()
-
-        await startEngine(configPath, isTun ? "IntoProxy" : "SystemProxy")
+        await connectEngine(subId, "rule", isTun)
       }
     } catch (err) {
       console.error("Toggle connection failed:", err)

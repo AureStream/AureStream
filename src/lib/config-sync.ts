@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core"
 
 import { getConfigJsonPath } from "@/lib/app-paths"
 import {
-  isConnectionConfigFresh,
   mergeConnectionConfig,
 } from "@/lib/connection-config"
 import { hotReloadConnectionConfig, isEngineRunning } from "@/lib/hot-reload-config"
@@ -139,23 +138,18 @@ export function scheduleConfigSync(reason?: string): void {
 }
 
 /**
- * Connect-time guard: config is pre-merged on input changes; only waits for in-flight
- * work or runs a rare fallback merge when inputs changed right before connect.
+ * Connect-time guard: config is pre-merged on input changes.
+ * If an input-triggered merge is already running, wait for it; otherwise run a
+ * conservative fallback merge for cases where inputs changed right before connect.
  */
 export async function ensureConnectionConfigReady(
   subscriptionIdentifier: string,
   routingMode: RoutingMode,
   enableTun: boolean
 ): Promise<void> {
-  if (await isConnectionConfigFresh(subscriptionIdentifier, routingMode, enableTun)) {
-    return
-  }
-
   if (inFlightSync) {
     await inFlightSync
-    if (await isConnectionConfigFresh(subscriptionIdentifier, routingMode, enableTun)) {
-      return
-    }
+    return
   }
 
   await runSync(
