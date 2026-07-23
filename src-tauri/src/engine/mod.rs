@@ -102,15 +102,10 @@ pub fn cleanup_on_shutdown() {
     }
 }
 
-/// Resolve the proxy bypass list from the store, falling back to the
-/// platform-specific default when no custom value is set.
-pub fn resolve_proxy_bypass(app: &tauri::AppHandle) -> String {
-    use tauri_plugin_store::StoreExt;
-    let raw = app
-        .get_store("settings.json")
-        .and_then(|s| s.get(aurestream_plugin_proxy::bypass::PROXY_BYPASS_STORE_KEY))
-        .and_then(|v| v.as_str().map(String::from));
-    aurestream_plugin_proxy::bypass::bypass_from_store_value(raw)
+/// System proxy bypass uses the platform-safe default only. Domain/IP direct
+/// routing should be defined in the remote sing-box config/template.
+pub fn resolve_proxy_bypass(_app: &tauri::AppHandle) -> String {
+    aurestream_plugin_proxy::bypass::DEFAULT_BYPASS.to_string()
 }
 
 #[cfg(test)]

@@ -71,7 +71,6 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 | `singbox_api_port_key` | 9191 |
 | `tun_stack_key` | `system`（可选 `gvisor`、`mixed`） |
 | `tun_auto_route_key`, `tun_mtu_key` | TUN 路由与 MTU |
-| `proxy_bypass_key` | 系统代理绕过列表 |
 | `ssi_store_key` | 当前活动订阅 identifier |
 
 ## 5. Deep Link 规范

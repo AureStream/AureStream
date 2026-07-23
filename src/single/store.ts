@@ -13,7 +13,6 @@ import {
     ENABLE_TUN_STORE_KEY,
     LEGACY_CLASH_API_PORT_STORE_KEY,
     LEGACY_CLASH_API_SECRET_STORE_KEY,
-    PROXY_BYPASS_STORE_KEY,
     PROXY_PORT_STORE_KEY,
     SKIP_SYSTEM_PROXY_STORE_KEY,
     TUN_STACK_STORE_KEY,
@@ -254,29 +253,6 @@ export async function setSkipSystemProxy(value: boolean) {
     await persistStoreKey(SKIP_SYSTEM_PROXY_STORE_KEY, value);
 }
 
-export async function setCustomRuleSet(key: 'direct' | 'proxy', config: { domain: string[]; domain_suffix: string[]; ip_cidr: string[] }) {
-    await persistStoreKey(`custom_ruleset_${key}`, JSON.stringify(config), { immediate: true });
-    invalidateConnectionConfigCache();
-}
-
-export async function getCustomRuleSet(key: 'direct' | 'proxy'): Promise<{ domain: string[]; domain_suffix: string[]; ip_cidr: string[] }> {
-    let s = await readStoreKey<string>(`custom_ruleset_${key}`);
-    if (s) {
-        try {
-            const config = JSON.parse(s);
-            if (config && typeof config === 'object') {
-                if (!Array.isArray(config.domain)) config.domain = [];
-                if (!Array.isArray(config.domain_suffix)) config.domain_suffix = [];
-                if (!Array.isArray(config.ip_cidr)) config.ip_cidr = [];
-                return config;
-            }
-        } catch (e) {
-            console.error('解析自定义规则集失败:', e);
-        }
-    }
-    return { domain: [], domain_suffix: [], ip_cidr: [] };
-}
-
 export async function setDirectDNS(dnsServers: string) {
     await persistStoreKey(DIRECT_DNS_STORE_KEY, dnsServers);
     invalidateConnectionConfigCache();
@@ -329,15 +305,6 @@ export async function setProxyPort(port: number): Promise<void> {
     }
     await persistStoreKey(PROXY_PORT_STORE_KEY, port, { immediate: true });
     invalidateConnectionConfigCache();
-}
-
-export async function getProxyBypass(): Promise<string> {
-    const raw = await readStoreKey<string>(PROXY_BYPASS_STORE_KEY);
-    return raw?.trim() ? raw : '';
-}
-
-export async function setProxyBypass(value: string): Promise<void> {
-    await persistStoreKey(PROXY_BYPASS_STORE_KEY, value);
 }
 
 /** sing-box experimental.clash_api external_controller port */

@@ -40,7 +40,6 @@ vi.mock("../../single/store", async () => {
     getConfiguredProxyDNS: vi.fn(async () => undefined),
     getControllerSecret: vi.fn(async () => "secret-token"),
     getControllerPort: vi.fn(async () => 9191),
-    getCustomRuleSet: vi.fn(async () => ({ domain: [], domain_suffix: [], ip_cidr: [] })),
     getProxyPort: vi.fn(async () => 2345),
     getStoreValue: vi.fn(async (key: string, def: unknown) => {
       if (key === "AppSecretToken") return "secret-token"
