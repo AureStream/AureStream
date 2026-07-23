@@ -7,6 +7,10 @@ interface MobileTopBarProps {
   right?: ReactNode
 }
 
+/** Shared top-bar icon button style (matches Home → Profile). */
+export const topBarIconBtnClass =
+  "w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer shrink-0"
+
 /**
  * Reusable mobile top status bar. Sits below the global OS TitleBar.
  * - Home page: pass `left` (About) + `right` (Profile), no back/title.
@@ -19,10 +23,10 @@ export default function MobileTopBar({ onBack, title, left, right }: MobileTopBa
         {onBack ? (
           <button
             onClick={onBack}
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer shrink-0"
+            className={topBarIconBtnClass}
             aria-label="Back"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>

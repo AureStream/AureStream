@@ -1,4 +1,5 @@
 import { getDataBaseInstance } from '../single/db'
+import { isTauri } from './tauri-env'
 
 // Session-level latency cache shared across pages so measured node delays
 // survive navigation (component unmount). Keyed by node tag.
@@ -12,6 +13,7 @@ export async function initNodeLatency(): Promise<void> {
   if (initPromise) return initPromise
 
   initPromise = (async () => {
+    if (!isTauri()) return
     try {
       const db = await getDataBaseInstance()
       const rows = await db.select<{ tag: string; latency: number }[]>(
@@ -40,6 +42,8 @@ export function setNodeLatency(tag: string, ms: number): void {
   if (!tag) return
   cache.set(tag, ms)
 
+  if (!isTauri()) return
+
   // Asynchronously save to database
   getDataBaseInstance()
     .then(async (db) => {
@@ -59,6 +63,8 @@ export function setNodeLatency(tag: string, ms: number): void {
 
 export function clearNodeLatency(): void {
   cache.clear()
+
+  if (!isTauri()) return
 
   // Asynchronously clear database table
   getDataBaseInstance()

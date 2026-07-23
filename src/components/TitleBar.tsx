@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { type as osType } from "@tauri-apps/plugin-os"
+import { isTauri } from "@/lib/tauri-env"
 
 /* ── Windows / Linux control icons ── */
 const Min = () => (
@@ -20,6 +21,15 @@ const Max = () => (
   </svg>
 )
 
+function getAppWindow() {
+  if (!isTauri()) return null
+  try {
+    return getCurrentWindow()
+  } catch {
+    return null
+  }
+}
+
 export default function TitleBar() {
   const [isMac] = useState(() => {
     try {
@@ -28,7 +38,9 @@ export default function TitleBar() {
       return false
     }
   })
-  const appWindow = getCurrentWindow()
+  const appWindow = getAppWindow()
+  const close = () => void appWindow?.close()
+  const minimize = () => void appWindow?.minimize()
 
   // macOS traffic lights: red close · yellow minimize.
   const lightBtn =
@@ -36,13 +48,13 @@ export default function TitleBar() {
   const glyph = "w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity"
   const trafficLights = (
     <div className="group flex items-center gap-1.5 pl-1 shrink-0">
-      <button onClick={() => appWindow.close()} title="Close" className={`${lightBtn} bg-[#FF5F57]`}>
+      <button onClick={close} title="Close" className={`${lightBtn} bg-[#FF5F57]`}>
         <svg className={glyph} viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
           <line x1="2" y1="2" x2="6" y2="6" />
           <line x1="6" y1="2" x2="2" y2="6" />
         </svg>
       </button>
-      <button onClick={() => appWindow.minimize()} title="Minimize" className={`${lightBtn} bg-[#FEBC2E]`}>
+      <button onClick={minimize} title="Minimize" className={`${lightBtn} bg-[#FEBC2E]`}>
         <svg className={glyph} viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
           <line x1="1.6" y1="4" x2="6.4" y2="4" />
         </svg>
@@ -63,7 +75,7 @@ export default function TitleBar() {
     "w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-text hover:bg-surface-active/70 transition-colors cursor-pointer"
   const winControls = (
     <div className="flex items-center gap-1 shrink-0">
-      <button className={btn} title="Minimize" onClick={() => appWindow.minimize()}>
+      <button className={btn} title="Minimize" onClick={minimize}>
         <Min />
       </button>
       <button
@@ -76,7 +88,7 @@ export default function TitleBar() {
       <button
         className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-white hover:bg-danger transition-colors cursor-pointer"
         title="Close"
-        onClick={() => appWindow.close()}
+        onClick={close}
       >
         <Close />
       </button>

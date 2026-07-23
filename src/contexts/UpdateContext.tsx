@@ -3,6 +3,7 @@ import { check } from "@tauri-apps/plugin-updater"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { ask, message } from "@tauri-apps/plugin-dialog"
 import { invoke } from "@tauri-apps/api/core"
+import { isTauri } from "@/lib/tauri-env"
 
 interface UpdateState {
   updateAvailable: boolean
@@ -37,6 +38,10 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
 
   // Fetch current version on mount
   useEffect(() => {
+    if (!isTauri()) {
+      setCurrentVersion("0.0.0-dev")
+      return
+    }
     invoke<string>("get_app_version")
       .then((ver) => setCurrentVersion(ver))
       .catch((err) => {
@@ -47,10 +52,12 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
 
   // Auto check for updates on startup (immediate so the force-update gate can block ASAP)
   useEffect(() => {
+    if (!isTauri()) return
     void triggerCheck(true)
   }, [])
 
   const triggerCheck = async (silent = false) => {
+    if (!isTauri()) return
     if (checking) return
     setChecking(true)
     try {
