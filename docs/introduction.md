@@ -31,7 +31,6 @@ AureStream/
 │   │   └── templates/         # 内置 sing-box 模板 (config-template.jsonc)
 │   ├── lib/                   # config-sync、connection-flow、hot-reload、perf 等
 │   ├── components/layout/     # LoadingScreen、CircularLoader 启动与加载 UI
-│   ├── components/ui/         # shadcn 原语 + CountryFlag 等
 │   ├── single/                # 单例管理（Store 全局设置、SQLite 数据库连接）
 │   ├── types/                 # 全局 TypeScript 类型与常量定义
 │   └── main.tsx               # 前端渲染入口

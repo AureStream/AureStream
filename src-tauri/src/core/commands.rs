@@ -339,14 +339,6 @@ pub fn get_engine_state(app: AppHandle) -> EngineState {
     app.state::<EngineStateCell>().snapshot()
 }
 
-#[tauri::command]
-pub fn clear_engine_error(app: AppHandle) {
-    let cur = app.state::<EngineStateCell>().snapshot();
-    if matches!(cur, EngineState::Failed { .. }) {
-        let _ = transition(&app, Intent::ClearFailure);
-    }
-}
-
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn get_running_config() -> Option<(ProxyMode, String)> {
     process::running_config()

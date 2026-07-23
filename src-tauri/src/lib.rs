@@ -37,7 +37,6 @@ pub fn run() {
             crate::core::commands::start,
             crate::core::commands::stop,
             crate::core::commands::get_engine_state,
-            crate::core::commands::clear_engine_error,
             crate::core::commands::reload_config,
             crate::engine::config_check::mark_config_verified,
             // engine probe commands
@@ -45,24 +44,14 @@ pub fn run() {
             crate::core::engine_commands::engine_uninstall_service,
             crate::core::engine_commands::engine_probe,
             // shell commands
-            commands::shell::version,
-            commands::shell::read_logs,
-            commands::shell::open_devtools,
             commands::shell::get_app_version,
             commands::shell::get_app_paths,
             commands::shell::get_config_json_path,
-            commands::shell::open_directory,
             commands::shell::quit,
-            commands::shell::restart,
-            commands::shell::get_pending_deep_link,
             // network commands
             commands::network::ping_tcp,
-            commands::network::get_geoip_info,
             // config fetch commands
             commands::config_fetch::fetch_config,
-            commands::config_fetch::verify_deep_link_url,
-            // native theme commands
-            commands::theme::set_native_window_theme,
         ])
         .setup(app::setup::app_setup)
         .on_page_load(|webview, payload| {

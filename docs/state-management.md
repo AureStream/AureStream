@@ -51,5 +51,5 @@ Store 中与网络相关的 setter（端口、TUN 栈、DNS、Bypass 等）均�
 - SQLite：`subscriptions`、`subscription_configs`，级联删除。
 
 ## 9. 引擎状态守卫
-- `engine-guard.ts`、`require-engine-idle.ts`。
-- 切换订阅、改端口等操作前检查 `isEngineBusy()`。
+- `useEngineState()` 订阅 Rust 后端的 `engine-state` 事件。
+- 连接入口通过 `connectEngine()` 与 `ensureConnectionConfigReady()` 统一处理配置准备和启动。

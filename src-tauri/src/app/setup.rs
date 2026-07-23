@@ -1,7 +1,5 @@
-use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
-use url::Url;
 
 use crate::app::tray::setup_tray;
 use crate::utils::show_dashboard;
@@ -123,46 +121,13 @@ fn stop_orphan_tun_service_on_startup() {}
 
 // ── Deep Link ──────────────────────────────────────────────────────
 
-/// 从 `aurestream://config?data=...&apply=1` 中提取参数
-fn extract_deep_link_data(url: &Url) -> Option<crate::state::DeepLinkPayload> {
-    if url.scheme() != "aurestream" || url.host_str() != Some("config") {
-        return None;
-    }
-    let params: std::collections::HashMap<_, _> = url.query_pairs().collect();
-    let data = params.get("data")?.to_string();
-    let apply = params.get("apply").map(|v| v == "1").unwrap_or(false);
-    Some(crate::state::DeepLinkPayload { data, apply })
-}
-
-/// 将 deep link payload 写入 pending state
-fn store_pending_deep_link(
-    app_data: &crate::state::AppData,
-    payload: crate::state::DeepLinkPayload,
-) {
-    if let Ok(mut pending) = app_data.pending_deep_link.lock() {
-        *pending = Some(payload);
-    }
-}
-
-/// 注册 deep link 回调
+/// Register deep link callback. Current UI only focuses the dashboard.
 fn register_deep_link(app: &tauri::App) {
     let handle = app.handle().clone();
     app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
         log::info!("Received deep link: {:#?}", urls);
         show_dashboard(handle.clone());
-
-        if let Some(payload) = urls.first().and_then(extract_deep_link_data) {
-            log::info!(
-                "Received config data: {} apply={}",
-                payload.data,
-                payload.apply
-            );
-            store_pending_deep_link(&handle.state::<crate::state::AppData>(), payload);
-            handle.emit("deep_link_pending", ()).unwrap_or_else(|e| {
-                log::error!("Failed to emit deep_link_pending signal: {}", e);
-            });
-        }
     });
 }
 

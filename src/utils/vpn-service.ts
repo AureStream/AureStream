@@ -17,7 +17,3 @@ export async function stopEngine(): Promise<void> {
 export async function getEngineState(): Promise<EngineState> {
   return invoke("get_engine_state")
 }
-
-export async function clearEngineError(): Promise<void> {
-  return invoke("clear_engine_error")
-}

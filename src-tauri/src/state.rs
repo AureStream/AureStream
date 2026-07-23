@@ -1,16 +1,8 @@
-use serde::Serialize;
 use std::sync::Mutex;
-
-#[derive(Serialize, Clone)]
-pub struct DeepLinkPayload {
-    pub data: String,
-    pub apply: bool,
-}
 
 pub struct AppData {
     pub log_buffer: Mutex<Vec<String>>,
     pub error_log_buffer: Mutex<Vec<String>>,
-    pub pending_deep_link: Mutex<Option<DeepLinkPayload>>,
     pub tray_handle: Mutex<Option<tauri::tray::TrayIcon>>,
 }
 
@@ -24,7 +16,6 @@ impl AppData {
         Self {
             log_buffer: Mutex::new(Vec::new()),
             error_log_buffer: Mutex::new(Vec::new()),
-            pending_deep_link: Mutex::new(None),
             tray_handle: Mutex::new(None),
         }
     }

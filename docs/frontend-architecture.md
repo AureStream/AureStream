@@ -26,7 +26,6 @@ AureStream 前端采用 React 19 + TypeScript + Vite 7 构建，使用 shadcn/ui
 | `components/layout/LoadingScreen.tsx` | 应用内加载占位（面板/全屏变体） |
 | `components/layout/CircularLoader.tsx` | 双环旋转加载动画 |
 | `lib/app-paths.ts` | 通过 Tauri 命令解析 `config.json`、配置目录等路径 |
-| `lib/settings-load.ts` | 设置页批量并行加载 store 项 |
 
 ## 3. 页面组件
 
@@ -65,9 +64,6 @@ AureStream 前端采用 React 19 + TypeScript + Vite 7 构建，使用 shadcn/ui
 | `engine-probe.ts` | 缓存引擎探测结果，减少设置页重复 IPC |
 | `perf.ts` | 前端耗时统计（`connect.*`、`hot-reload.*`、`config-sync.*`） |
 | `routing-mode.ts` | `rule` / `global` 模式 |
-| `proxy-bypass.ts` | 平台感知 Bypass 列表 |
-| `engine-guard.ts` | `isEngineBusy()` / `isEngineIdle()` |
-| `require-engine-idle.ts` | 引擎忙碌拦截弹窗 |
 | `country-flags.ts` | 节点名 → ISO 国家代码映射 |
 | `typography.ts` | 设计系统排版与工具栏按钮样式（`btn.toolbar*`） |
 | `i18n.ts` | i18next 配置 |

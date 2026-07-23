@@ -21,7 +21,7 @@ AureStream 的后端由 Rust 编写，基于 Tauri v2 框架构建，负责系�
 - `start()`: 配置校验（可跳过已 `mark_config_verified` 的重复 check）→ 端口清理 → 状态机 Idle→Starting→Running。
 - `stop()`: Stopping → `PlatformEngine::stop` → 端口释放轮询 → Idle。
 - `reload_config()`: 配置检查 → `PlatformEngine::restart` → 重新应用系统代理。
-- `get_engine_state()` / `clear_engine_error()`。
+- `get_engine_state()`。
 
 ### engine_commands.rs - 提权服务命令
 - `engine_ensure_installed()` / `engine_uninstall_service()` / `engine_probe()` 统一转发到当前平台 `EngineManager`。
@@ -61,11 +61,10 @@ AureStream 的后端由 Rust 编写，基于 Tauri v2 框架构建，负责系�
 
 | 模块 | 主要命令 | 说明 |
 |------|----------|------|
-| `config_fetch.rs` | `fetch_config`, `verify_deep_link_url` | 订阅抓取与 Deep Link 校验 |
-| `network.rs` | `ping_tcp`, `get_geoip_info` | TCP 测速与 GeoIP |
+| `config_fetch.rs` | `fetch_config` | 订阅抓取与可信订阅域名校验 |
+| `network.rs` | `ping_tcp` | TCP 测速 |
 | `prestart.rs` | *(internal)* | 启动前端口冲突预检 |
-| `shell.rs` | `version`, `read_logs`, `get_config_json_path`, `get_app_paths`, `quit`, `restart` 等 | 生命周期与路径 |
-| `theme.rs` | `set_native_window_theme` | 原生窗口主题 |
+| `shell.rs` | `get_app_version`, `get_config_json_path`, `get_app_paths`, `quit` | 生命周期与路径 |
 
 > 历史 DNS 探测类命令已移除；DNS 相关逻辑由 sing-box 配置模板与合并器负责。
 

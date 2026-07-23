@@ -51,6 +51,6 @@
 
 ## 7. 日志收集与调试
 - 应用日志：macOS `~/Library/Logs/com.root.aurestream/aurestream.log`；支持毫秒级时间戳。
-- 内核 sidecar 日志：AppData 目录，最大 50MB 轮转；`read_logs` 命令拉取。
+- 内核 sidecar 日志：AppData 目录，最大 50MB 轮转。
 - 开发：`pnpm tauri dev`；前端 perf 埋点关键字 `connect.`、`hot-reload.`、`config-sync.`。
 - 测试环境可利用 `src/data/mock.ts` 返回假数据。

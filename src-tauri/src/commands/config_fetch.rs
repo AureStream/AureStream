@@ -43,23 +43,6 @@ pub(crate) fn verify_hostname(hostname: &str, app: &AppHandle) -> bool {
     false
 }
 
-#[tauri::command]
-pub async fn verify_deep_link_url(app: AppHandle, url: String) -> bool {
-    let Ok(parsed) = Url::parse(&url) else {
-        log::warn!("[deep-link] verify: URL parse failed");
-        return false;
-    };
-    let Some(host) = parsed.host_str() else {
-        log::warn!("[deep-link] verify: missing host");
-        return false;
-    };
-    let verified = verify_hostname(host, &app);
-    if !verified {
-        log::warn!("[deep-link] verify: hostname not on allowlist, apply=1 will be downgraded");
-    }
-    verified
-}
-
 async fn check_accelerator_tcp() -> bool {
     if ACCELERATE_URL.is_empty() {
         return false;

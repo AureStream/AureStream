@@ -12,7 +12,6 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 | `start(path, mode)` | 启动 sing-box 侧车；`mode` 为 `SystemProxy` 或 `IntoProxy` |
 | `stop()` | 停止引擎，轮询等待端口释放 |
 | `get_engine_state()` | 返回状态机 JSON |
-| `clear_engine_error()` | 清除 Failed，回到 Idle |
 | `reload_config()` | 热重载当前 `config.json` |
 | `mark_config_verified({ configPath })` | 标记配置已通过 check，下次 start 可跳过重复校验 |
 
@@ -26,27 +25,16 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 ### Shell 与生命周期
 | 命令 | 说明 |
 |------|------|
-| `version()` | sing-box 侧车版本 |
 | `get_app_version()` | 应用 UI 版本 |
-| `read_logs()` | 读取应用日志 |
 | `get_config_json_path()` | 返回当前 `config.json` 绝对路径 |
 | `get_app_paths()` | 返回配置目录等路径信息 |
-| `open_devtools()` / `open_directory()` | 开发工具与目录 |
-| `quit()` / `restart()` | 退出或重启应用 |
-| `get_pending_deep_link()` | 获取唤醒时的 Deep Link URI |
+| `quit()` | 退出应用并清理代理状态 |
 
 ### 网络与配置抓取
 | 命令 | 说明 |
 |------|------|
 | `ping_tcp(host, port)` | 节点 TCP 延迟（未连接时 NodeSelector 测速） |
-| `get_geoip_info()` | 公网 IP 与地理位置 |
 | `fetch_config(url)` | 订阅内容抓取（系统 DNS 解析） |
-| `verify_deep_link_url(url)` | Deep Link 导入前 URL 校验 |
-
-### 主题
-| 命令 | 说明 |
-|------|------|
-| `set_native_window_theme(theme)` | 同步原生窗口主题 |
 
 ## 2. sing-box Clash API (REST)
 
@@ -71,7 +59,7 @@ AureStream 的 API 面向三个主要层次：Tauri FFI 接口、sing-box 进程
 | `connectEngine` | 连接前校验 + start |
 | `scheduleConfigSync` / `syncActiveConnectionConfig` | 预合并调度 |
 | `hotReloadConnectionConfig` / `hotReloadIfRunning` | 运行中热重载 |
-| `mergeConnectionConfig` / `isConnectionConfigFresh` | 合并与缓存判断 |
+| `mergeConnectionConfig` | 生成 sing-box `config.json` |
 
 ## 4. Store 键名常数
 

@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react"
 import { listen } from "@tauri-apps/api/event"
 import type { EngineState } from "@/types/engine-state"
-import { getEngineState, startEngine, stopEngine, clearEngineError } from "@/utils/vpn-service"
+import { getEngineState, startEngine, stopEngine } from "@/utils/vpn-service"
 import type { ProxyMode } from "@/utils/vpn-service"
 
 const INITIAL_STATE: EngineState = { kind: "idle", epoch: 0 }
@@ -71,10 +71,6 @@ export function useEngineState() {
     await stopEngine()
   }, [])
 
-  const clearError = useCallback(async () => {
-    await clearEngineError()
-  }, [])
-
   const isRunning = engineState.kind === "running"
   const isStarting = engineState.kind === "starting"
   const isStopping = engineState.kind === "stopping"
@@ -93,6 +89,5 @@ export function useEngineState() {
     isConnected,
     start,
     stop,
-    clearError,
   }
 }

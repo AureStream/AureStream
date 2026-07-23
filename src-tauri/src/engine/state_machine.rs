@@ -86,7 +86,6 @@ pub enum Intent {
     Stop,
     MarkIdle,
     Fail { reason: String },
-    ClearFailure,
 }
 
 fn now_secs() -> i64 {
@@ -133,10 +132,6 @@ pub fn transition(app: &AppHandle, intent: Intent) -> Result<EngineState, String
             | EngineState::Running { .. },
             Intent::MarkIdle,
         ) => {
-            let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;
-            EngineState::Idle { epoch }
-        }
-        (EngineState::Failed { .. }, Intent::ClearFailure) => {
             let epoch = cell.counter.fetch_add(1, Ordering::SeqCst) + 1;
             EngineState::Idle { epoch }
         }
