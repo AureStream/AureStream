@@ -12,6 +12,7 @@ import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription, updateLocalSubscriptionMeta } from "../action/db"
 import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
 import { syncRemoteSubscriptionsToLocal } from "../lib/subscription-sync"
+import { isBootstrapDataFresh } from "../lib/session-bootstrap"
 import { switchProxyMode } from "../lib/mode-switch"
 import {
   planTrayModeAction,
@@ -92,19 +93,22 @@ export default function MobileHome() {
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
   const [activeNodePing, setActiveNodePing] = useState<number>(0)
+  // Derived from engine `running.since` (unix seconds) so duration survives remount.
   const [connectTime, setConnectTime] = useState<number>(0)
 
   useEffect(() => {
-    let interval: any
-    if (isConnected) {
-      interval = setInterval(() => {
-        setConnectTime(prev => prev + 1)
-      }, 1000)
-    } else {
+    if (engineState.kind !== "running") {
       setConnectTime(0)
+      return
     }
+    const startedAtSec = engineState.since
+    const tick = () => {
+      setConnectTime(Math.max(0, Math.floor(Date.now() / 1000) - startedAtSec))
+    }
+    tick()
+    const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [isConnected])
+  }, [engineState])
 
   const formatDuration = (seconds: number) => {
     const h = String(Math.floor(seconds / 3600)).padStart(2, '0')
@@ -135,6 +139,7 @@ export default function MobileHome() {
 
   const [subs, setSubs] = useState<Subscription[]>([])
   const [subsLoading, setSubsLoading] = useState(true)
+  const [selectedSubId, setSelectedSubId] = useState<string>("")
 
   // Guard against concurrent tray-triggered operations (prevents start/stop
   // cascade when the user clicks a tray item multiple times in quick succession).
@@ -143,6 +148,7 @@ export default function MobileHome() {
   const engineStateRef = useRef(engineState)
   const subsRef = useRef(subs)
   const proxyModeRef = useRef(proxyMode)
+  const nodesLoadedForSubRef = useRef<string>("")
 
   useEffect(() => {
     engineStateRef.current = engineState
@@ -320,10 +326,22 @@ export default function MobileHome() {
 
   const loadSubs = useCallback(async () => {
     try {
-      // 1. Load from SQLite first so login-initialized data paints immediately
+      // Auth bootstrap already synced remote → local; prefer local paint to avoid
+      // a second GET /subscriptions right after login/restore.
+      if (isBootstrapDataFresh()) {
+        const localData = await getLocalSubscriptions()
+        setSubs(localData)
+        const ssi = ((await getStoreValue(SSI_STORE_KEY, "")) as string) || localData[0]?.id || ""
+        setSelectedSubId(ssi)
+        return
+      }
+
+      // 1. Load from SQLite first so existing data paints immediately
       const localData = await getLocalSubscriptions()
       if (localData && localData.length > 0) {
         setSubs(localData)
+        const ssi = ((await getStoreValue(SSI_STORE_KEY, "")) as string) || localData[0]?.id || ""
+        setSelectedSubId(ssi)
         setSubsLoading(false)
       }
 
@@ -339,6 +357,8 @@ export default function MobileHome() {
         syncActiveConnectionConfig,
       })
       setSubs(updatedLocal)
+      const ssi = ((await getStoreValue(SSI_STORE_KEY, "")) as string) || updatedLocal[0]?.id || ""
+      setSelectedSubId(ssi)
     } catch (err) {
       console.error("[HOME] Failed to fetch and sync subscriptions:", err)
     } finally {
@@ -361,7 +381,7 @@ export default function MobileHome() {
 
   useTrafficAccumulator(refreshLocalSubs)
 
-  // Run initial subscription sync exactly once on app startup.
+  // Run initial subscription load exactly once on home mount.
   const hasInitiallyLoadedRef = useRef(false)
   useEffect(() => {
     if (hasInitiallyLoadedRef.current) return
@@ -369,78 +389,96 @@ export default function MobileHome() {
     loadSubs()
   }, [loadSubs])
 
-  // Load nodes dynamically from active subscription in SQLite
+  const activeSubKey = selectedSubId || subs[0]?.id || ""
+
+  // Load nodes once per active subscription id (not on every meta-only subs update).
   useEffect(() => {
     const loadNodes = async () => {
-      const activeSubId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-      if (!activeSubId) return
+      if (!activeSubKey) {
+        setNodes([])
+        setActiveNodeId("")
+        nodesLoadedForSubRef.current = ""
+        return
+      }
+      if (nodesLoadedForSubRef.current === activeSubKey) return
+
       try {
-        const config = await getSubscriptionConfig(activeSubId)
-        if (config && Array.isArray(config.outbounds)) {
-          // Filter out selector, urltest, direct, block, and dns outbounds to get proxy nodes
-          const filtered = config.outbounds.filter((item: any) => {
-            return item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block" && item.type !== "dns";
-          });
+        const config = await getSubscriptionConfig(activeSubKey)
+        if (!config || !Array.isArray(config.outbounds)) {
+          setNodes([])
+          setActiveNodeId("")
+          nodesLoadedForSubRef.current = activeSubKey
+          return
+        }
 
-          // Map to UI node model
-          const mapped = filtered.map((n: any) => {
-            const tag = n.tag || "";
-            let flag = "🌐";
-            let region: "asia" | "america" | "europe" = "asia";
+        // Filter out selector, urltest, direct, block, and dns outbounds to get proxy nodes
+        const filtered = config.outbounds.filter((item: any) => {
+          return item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block" && item.type !== "dns";
+        });
 
-            if (tag.includes("日本") || tag.toLowerCase().includes("jp") || tag.toLowerCase().includes("tokyo")) {
-              flag = "🇯🇵";
-              region = "asia";
-            } else if (tag.includes("新加坡") || tag.toLowerCase().includes("sg") || tag.toLowerCase().includes("singapore")) {
-              flag = "🇸🇬";
-              region = "asia";
-            } else if (tag.includes("香港") || tag.toLowerCase().includes("hk") || tag.toLowerCase().includes("hong kong")) {
-              flag = "🇭🇰";
-              region = "asia";
-            } else if (tag.includes("美国") || tag.toLowerCase().includes("us") || tag.toLowerCase().includes("america") || tag.toLowerCase().includes("los angeles") || tag.toLowerCase().includes("new york")) {
-              flag = "🇺🇸";
-              region = "america";
-            } else if (tag.includes("英国") || tag.toLowerCase().includes("uk") || tag.toLowerCase().includes("london") || tag.toLowerCase().includes("gb")) {
-              flag = "🇬🇧";
-              region = "europe";
-            } else if (tag.toLowerCase().includes("de") || tag.includes("德国") || tag.toLowerCase().includes("frankfurt")) {
-              flag = "🇩🇪";
-              region = "europe";
-            }
+        // Map to UI node model
+        const mapped = filtered.map((n: any) => {
+          const tag = n.tag || "";
+          let flag = "🌐";
+          let region: "asia" | "america" | "europe" = "asia";
 
-            return {
-              id: tag,
-              loc: tag,
-              flag,
-              protocol: n.type || "Shadowsocks",
-              region,
-              server: n.server || "",
-              port: Number(n.server_port) || 0,
-            };
-          });
-          setNodes(mapped);
-          if (mapped.length > 0) {
-            const savedTag = (await getStoreValue(selectedNodeTagStoreKey(activeSubId), "")) as string
-            const exists = savedTag && mapped.some((n: any) => n.id === savedTag)
-            setActiveNodeId(exists ? savedTag : mapped[0].id)
+          if (tag.includes("日本") || tag.toLowerCase().includes("jp") || tag.toLowerCase().includes("tokyo")) {
+            flag = "🇯🇵";
+            region = "asia";
+          } else if (tag.includes("新加坡") || tag.toLowerCase().includes("sg") || tag.toLowerCase().includes("singapore")) {
+            flag = "🇸🇬";
+            region = "asia";
+          } else if (tag.includes("香港") || tag.toLowerCase().includes("hk") || tag.toLowerCase().includes("hong kong")) {
+            flag = "🇭🇰";
+            region = "asia";
+          } else if (tag.includes("美国") || tag.toLowerCase().includes("us") || tag.toLowerCase().includes("america") || tag.toLowerCase().includes("los angeles") || tag.toLowerCase().includes("new york")) {
+            flag = "🇺🇸";
+            region = "america";
+          } else if (tag.includes("英国") || tag.toLowerCase().includes("uk") || tag.toLowerCase().includes("london") || tag.toLowerCase().includes("gb")) {
+            flag = "🇬🇧";
+            region = "europe";
+          } else if (tag.toLowerCase().includes("de") || tag.includes("德国") || tag.toLowerCase().includes("frankfurt")) {
+            flag = "🇩🇪";
+            region = "europe";
           }
+
+          return {
+            id: tag,
+            loc: tag,
+            flag,
+            protocol: n.type || "Shadowsocks",
+            region,
+            server: n.server || "",
+            port: Number(n.server_port) || 0,
+          };
+        });
+        setNodes(mapped);
+        nodesLoadedForSubRef.current = activeSubKey
+        if (mapped.length > 0) {
+          const savedTag = (await getStoreValue(selectedNodeTagStoreKey(activeSubKey), "")) as string
+          const exists = savedTag && mapped.some((n: any) => n.id === savedTag)
+          setActiveNodeId(exists ? savedTag : mapped[0].id)
+        } else {
+          setActiveNodeId("")
         }
       } catch (err) {
         console.error("Failed to load subscription nodes:", err);
       }
     };
     if (!subsLoading) {
-      loadNodes();
+      void loadNodes();
     }
-  }, [subsLoading, subs]);
+  }, [subsLoading, activeSubKey]);
 
   // Dynamic subscription nodes data
   const allNodes = nodes.map(n => ({ ...n, active: isConnected && n.id === activeNodeId }))
   const currentNode = allNodes.find(n => n.id === activeNodeId)
+  const latencyText =
+    activeNodePing > 0 ? `${activeNodePing} ms` : activeNodePing < 0 ? l("Timeout", "超时") : "--"
 
-  // Traffic summary for the home header
-  const hasSub = subs.length > 0
-  const sub = subs[0]
+  // Traffic summary for the home header — bind to SSI-selected subscription
+  const sub = (selectedSubId && subs.find((s) => s.id === selectedSubId)) || subs[0]
+  const hasSub = Boolean(sub)
   const trafficTotal = (hasSub && sub.traffic_total > 1) ? sub.traffic_total : ONE_TB_BYTES
   const trafficUsed = hasSub ? sub.traffic_used : 0
   const remainingBytes = Math.max(0, trafficTotal - trafficUsed)
@@ -639,7 +677,7 @@ export default function MobileHome() {
                   </span>
                   <span className="flex items-center gap-1 font-mono font-semibold">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#6C5CFF]" />
-                    {currentNode ? `${activeNodePing || 75} ms` : "--"}
+                    {currentNode ? latencyText : "--"}
                   </span>
                 </div>
               </div>

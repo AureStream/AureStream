@@ -50,9 +50,15 @@ export async function syncRemoteSubscriptionsToLocal(
 
   for (const sub of remoteSubs) {
     if (localIds.has(sub.id)) {
+      // API list is source of truth for traffic / expiry / name.
       await deps.updateLocalSubscriptionMeta(sub)
     } else {
-      await deps.insertSubscription(sub.url, sub.name, sub.id)
+      const inserted = await deps.insertSubscription(sub.url, sub.name, sub.id)
+      // insertSubscription seeds traffic from subscription-userinfo headers;
+      // always overlay API billing metadata when the download succeeded.
+      if (inserted) {
+        await deps.updateLocalSubscriptionMeta(sub)
+      }
     }
   }
 

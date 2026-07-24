@@ -91,6 +91,10 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         getConfiguredDirectDNS(),
     ]);
 
+    if (!dbConfigData || !Array.isArray(dbConfigData.outbounds) || dbConfigData.outbounds.length === 0) {
+        throw new Error(`Subscription config unavailable for identifier=${identifier}`);
+    }
+
     newConfig.log.level = stageVersion === "dev" ? "debug" : "info";
     console.log(options.label);
 

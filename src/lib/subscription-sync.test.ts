@@ -61,11 +61,12 @@ describe("syncRemoteSubscriptionsToLocal", () => {
   it("downloads config only for newly added remote subscriptions", async () => {
     const insertSubscription = vi.fn().mockResolvedValue("sub-b")
     const updateLocalSubscriptionMeta = vi.fn()
+    const planB = { ...sampleRemote, id: "sub-b", url: "https://example.com/b", name: "Plan B" }
 
     await syncRemoteSubscriptionsToLocal({
       fetchSubscriptions: vi.fn().mockResolvedValue([
         sampleRemote,
-        { ...sampleRemote, id: "sub-b", url: "https://example.com/b", name: "Plan B" },
+        planB,
       ]),
       getLocalSubscriptions: vi
         .fn()
@@ -83,11 +84,28 @@ describe("syncRemoteSubscriptionsToLocal", () => {
     })
 
     expect(updateLocalSubscriptionMeta).toHaveBeenCalledWith(sampleRemote)
+    // New inserts also get API billing metadata overlaid after download.
+    expect(updateLocalSubscriptionMeta).toHaveBeenCalledWith(planB)
     expect(insertSubscription).toHaveBeenCalledTimes(1)
     expect(insertSubscription).toHaveBeenCalledWith(
       "https://example.com/b",
       "Plan B",
       "sub-b"
     )
+  })
+
+  it("does not update metadata when insert fails for a new remote", async () => {
+    const updateLocalSubscriptionMeta = vi.fn()
+    await syncRemoteSubscriptionsToLocal({
+      fetchSubscriptions: vi.fn().mockResolvedValue([sampleRemote]),
+      getLocalSubscriptions: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
+      deleteSubscription: vi.fn(),
+      insertSubscription: vi.fn().mockResolvedValue(undefined),
+      updateLocalSubscriptionMeta,
+      getSelectedSubscriptionId: vi.fn().mockResolvedValue(""),
+      setSelectedSubscriptionId: vi.fn(),
+      syncActiveConnectionConfig: vi.fn(),
+    })
+    expect(updateLocalSubscriptionMeta).not.toHaveBeenCalled()
   })
 })

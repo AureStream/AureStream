@@ -3,10 +3,13 @@ import { type User, login as apiLogin, register as apiRegister, revokeRemoteSess
 import { apiFetch } from "../api/client"
 import { beginLogout } from "../lib/auth-session"
 import { clearLocalUserData } from "../lib/auth-cleanup"
+import { bootstrapSessionData, resetSessionBootstrapState } from "../lib/session-bootstrap"
 
 interface AuthState {
   user: User | null
   loading: boolean
+  /** True only after auth is known and subscription bootstrap finished (or no session). */
+  sessionReady: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -15,6 +18,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
+  sessionReady: false,
   login: async () => {},
   register: async () => {},
   logout: async () => {},
@@ -27,38 +31,100 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sessionReady, setSessionReady] = useState(false)
 
-  // On mount, try to fetch current user from stored token
+  // On mount, restore session from stored tokens then bootstrap local data.
   useEffect(() => {
-    if (!hasTokens()) {
-      setLoading(false)
-      return
-    }
+    let cancelled = false
+
     ;(async () => {
+      if (!hasTokens()) {
+        if (!cancelled) {
+          setUser(null)
+          setSessionReady(true)
+          setLoading(false)
+        }
+        return
+      }
+
       try {
-        // If token expired, try refresh first
+        let nextUser: User | null = null
         const res = await apiFetch("/user/me")
         if (res.ok) {
-          setUser(await res.json())
+          nextUser = await res.json()
         } else {
-          // Try to refresh and retry
+          // apiFetch already attempts one refresh on 401; retry path is a last resort.
           const refreshed = await refreshToken()
           if (refreshed) {
             const retry = await apiFetch("/user/me")
-            if (retry.ok) setUser(await retry.json())
+            if (retry.ok) nextUser = await retry.json()
           }
         }
+
+        if (cancelled) return
+
+        if (!nextUser) {
+          clearTokens()
+          setUser(null)
+          setSessionReady(true)
+          return
+        }
+
+        // Keep user unset until bootstrap finishes so PublicOnly cannot race home.
+        try {
+          await bootstrapSessionData("restore")
+        } catch (bootstrapErr) {
+          // Auth succeeded — still enter app; home can paint from local cache.
+          console.error("[auth] session restore bootstrap failed:", bootstrapErr)
+        }
+        if (cancelled) return
+
+        setUser(nextUser)
+        setSessionReady(true)
       } catch {
-        // Silently fail — user will need to login again
+        if (!cancelled) {
+          setUser(null)
+          setSessionReady(true)
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     })()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const result = await apiLogin(email, password)
-    setUser(result.user)
+    // Keep sessionReady true while user is still null so PublicOnly does not
+    // unmount the login form. Only setUser after bootstrap completes.
+    try {
+      const result = await apiLogin(email, password)
+
+      try {
+        await clearLocalUserData()
+      } catch (cleanErr) {
+        console.error("Failed to clear local user data after login:", cleanErr)
+        // Continue: remote sync still reconciles by subscription id.
+      }
+
+      resetSessionBootstrapState()
+      await bootstrapSessionData("login")
+
+      setUser(result.user)
+      setSessionReady(true)
+      setLoading(false)
+    } catch (error) {
+      clearTokens()
+      setUser(null)
+      setSessionReady(true)
+      setLoading(false)
+      resetSessionBootstrapState()
+      throw error
+    }
   }, [])
 
   const register = useCallback(async (email: string, password: string) => {
@@ -66,6 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
+    resetSessionBootstrapState()
+    setSessionReady(true)
     // Must clear session synchronously — never await import/network before setUser(null).
     beginLogout({
       clearTokens,
@@ -76,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, sessionReady, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   )

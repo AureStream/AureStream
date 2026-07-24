@@ -8,18 +8,22 @@ import ForceUpdateGate from "./components/ForceUpdateGate"
 import { useAuth } from "./contexts/AuthContext"
 import { initNodeLatency } from "./lib/node-latency"
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <span className="text-sm text-text-muted">AureStream</span>
-        </div>
+function AuthSpinner() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <span className="text-sm text-text-muted">AureStream</span>
       </div>
-    )
+    </div>
+  )
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading, sessionReady } = useAuth()
+
+  if (loading || !sessionReady) {
+    return <AuthSpinner />
   }
 
   if (!user) {
@@ -30,15 +34,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicOnly({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-  if (loading) return null
-  if (user) return <Navigate to="/dashboard" replace />
+  const { user, loading, sessionReady } = useAuth()
+
+  if (loading || !sessionReady) {
+    return <AuthSpinner />
+  }
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return <>{children}</>
 }
 
 function App() {
   useEffect(() => {
-    initNodeLatency()
+    void initNodeLatency()
   }, [])
 
   return (

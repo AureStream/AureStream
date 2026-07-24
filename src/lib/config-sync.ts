@@ -24,8 +24,12 @@ export type ConnectionConfigParams = {
 const DEBOUNCE_MS = 200
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
-let inFlightSync: Promise<boolean> | null = null
+let inFlightSync: { key: string; promise: Promise<boolean> } | null = null
 let scheduledSyncSuspensionDepth = 0
+
+function paramsKey(params: ConnectionConfigParams): string {
+  return `${params.subscriptionIdentifier}|${params.routingMode}|${params.enableTun ? 1 : 0}`
+}
 
 export function cancelPendingConfigSync(): void {
   if (debounceTimer) {
@@ -67,12 +71,30 @@ async function runSync(
   params: ConnectionConfigParams,
   options: { force?: boolean; reason?: string } = {}
 ): Promise<boolean> {
-  if (inFlightSync) {
-    return inFlightSync
+  const key = paramsKey(params)
+  const { force, reason } = options
+
+  // Same params already merging: join that promise (unless force after it finishes).
+  if (inFlightSync && inFlightSync.key === key && !force) {
+    return inFlightSync.promise
   }
 
-  const { force, reason } = options
-  inFlightSync = perf.run(
+  // Different params (or forced): wait for the current merge, then run ours.
+  if (inFlightSync) {
+    await inFlightSync.promise.catch(() => false)
+  }
+
+  // Another waiter may have started an identical merge while we waited.
+  if (inFlightSync && inFlightSync.key === key && !force) {
+    return inFlightSync.promise
+  }
+
+  const entry: { key: string; promise: Promise<boolean> } = {
+    key,
+    promise: null as unknown as Promise<boolean>,
+  }
+
+  entry.promise = perf.run(
     reason ? `config-sync.merge:${reason}` : "config-sync.merge",
     async () => {
       try {
@@ -102,12 +124,15 @@ async function runSync(
         }
         return merged
       } finally {
-        inFlightSync = null
+        if (inFlightSync === entry) {
+          inFlightSync = null
+        }
       }
     }
   )
 
-  return inFlightSync
+  inFlightSync = entry
+  return entry.promise
 }
 
 /** Merge config for the active subscription immediately (load, switch, explicit changes). */
@@ -139,23 +164,31 @@ export function scheduleConfigSync(reason?: string): void {
 
 /**
  * Connect-time guard: config is pre-merged on input changes.
- * If an input-triggered merge is already running, wait for it; otherwise run a
- * conservative fallback merge for cases where inputs changed right before connect.
+ * Join an in-flight merge only when params match; otherwise wait and merge with
+ * the requested connect params.
  */
 export async function ensureConnectionConfigReady(
   subscriptionIdentifier: string,
   routingMode: RoutingMode,
   enableTun: boolean
 ): Promise<void> {
-  if (inFlightSync) {
-    await inFlightSync
+  const params: ConnectionConfigParams = {
+    subscriptionIdentifier,
+    routingMode,
+    enableTun,
+  }
+  const key = paramsKey(params)
+
+  if (inFlightSync && inFlightSync.key === key) {
+    await inFlightSync.promise
     return
   }
 
-  await runSync(
-    { subscriptionIdentifier, routingMode, enableTun },
-    { force: true, reason: "connect-fallback" }
-  )
+  if (inFlightSync) {
+    await inFlightSync.promise.catch(() => false)
+  }
+
+  await runSync(params, { force: true, reason: "connect-fallback" })
 }
 
 onConnectionConfigStale(() => {

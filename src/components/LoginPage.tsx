@@ -1,12 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Link, useNavigate, useLocation } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { fetchSubscriptions } from "../api/subscriptions"
-import { insertSubscription } from "../action/db"
-import { initializeAfterLogin } from "../lib/login-initialization"
-import { syncActiveConnectionConfig } from "../lib/config-sync"
-import { setStoreValue } from "../single/store"
 
 /* ── Icons ── */
 const I = {
@@ -19,7 +14,6 @@ const I = {
 export default function LoginPage() {
   const { t } = useTranslation()
   const { login } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
 
   const [email, setEmail] = useState("")
@@ -42,23 +36,9 @@ export default function LoginPage() {
     setError("")
     setSubmitting(true)
     try {
+      // AuthContext.login sets user only after bootstrap; PublicOnly then
+      // redirects to /dashboard — no manual navigate (avoids double navigation).
       await login(email, password)
-
-      try {
-        const { clearLocalUserData } = await import("../lib/auth-cleanup")
-        await clearLocalUserData()
-      } catch (cleanErr) {
-        console.error("Failed to clear local user data after login:", cleanErr)
-      }
-
-      await initializeAfterLogin({
-        fetchSubscriptions,
-        setStoreValue,
-        insertSubscription,
-        syncActiveConnectionConfig,
-      })
-
-      navigate("/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {

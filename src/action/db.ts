@@ -113,6 +113,93 @@ export function getRemoteInfoBySubscriptionUserinfo(subscriptionUserinfo: string
     }
 }
 
+async function upsertSubscriptionRow(
+    db: Awaited<ReturnType<typeof getDataBaseInstance>>,
+    identifier: string,
+    fields: {
+        name: string
+        url: string
+        officialWebsite: string
+        usedTraffic: number
+        totalTraffic: number
+        expireTime: number
+        configJson: string
+    }
+): Promise<void> {
+    const lastUpdate = Math.floor(Date.now() / 1000)
+    const existingById: { identifier: string }[] = await db.select(
+        'SELECT identifier FROM subscriptions WHERE identifier = ? LIMIT 1',
+        [identifier]
+    )
+    if (existingById.length > 0) {
+        await db.execute(
+            'UPDATE subscriptions SET name = ?, subscription_url = ?, official_website = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
+            [
+                fields.name,
+                fields.url,
+                fields.officialWebsite,
+                fields.usedTraffic,
+                fields.totalTraffic,
+                fields.expireTime,
+                lastUpdate,
+                identifier,
+            ]
+        )
+        await db.execute(
+            'UPDATE subscription_configs SET config_content = ? WHERE identifier = ?',
+            [fields.configJson, identifier]
+        )
+        return
+    }
+
+    await db.execute(
+        'INSERT INTO subscriptions (identifier, name, subscription_url, official_website, used_traffic, total_traffic, expire_time, last_update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            identifier,
+            fields.name,
+            fields.url,
+            fields.officialWebsite,
+            fields.usedTraffic,
+            fields.totalTraffic,
+            fields.expireTime,
+            lastUpdate,
+        ]
+    )
+    await db.execute(
+        'INSERT INTO subscription_configs (identifier, config_content) VALUES (?, ?)',
+        [identifier, fields.configJson]
+    )
+}
+
+/**
+ * Align a row found by URL to the API subscription id when they differ
+ * (account switch / stale local identifier).
+ */
+async function rekeySubscriptionIdentifier(
+    db: Awaited<ReturnType<typeof getDataBaseInstance>>,
+    fromId: string,
+    toId: string
+): Promise<void> {
+    if (!fromId || !toId || fromId === toId) return
+
+    const conflict: { identifier: string }[] = await db.select(
+        'SELECT identifier FROM subscriptions WHERE identifier = ? LIMIT 1',
+        [toId]
+    )
+    if (conflict.length > 0) {
+        // Target id already exists — drop the stale URL duplicate.
+        await db.execute('DELETE FROM subscription_configs WHERE identifier = ?', [fromId])
+        await db.execute('DELETE FROM subscriptions WHERE identifier = ?', [fromId])
+        return
+    }
+
+    await db.execute('UPDATE subscriptions SET identifier = ? WHERE identifier = ?', [toId, fromId])
+    await db.execute(
+        'UPDATE subscription_configs SET identifier = ? WHERE identifier = ?',
+        [toId, fromId]
+    )
+}
+
 export async function insertSubscription(url: string, name?: string, customIdentifier?: string): Promise<string | undefined> {
     try {
         const response = await fetchConfigContent(url);
@@ -140,6 +227,30 @@ export async function insertSubscription(url: string, name?: string, customIdent
         const usedTraffic = parseInt(upload) + parseInt(download);
         const totalTraffic = parseInt(total) || 1;
         const expireTime = parseInt(expire) * 1000 || (Date.now() + 100 * 365 * 24 * 3600 * 1000);
+        const officialWebsite = response.headers['official-website'] || 'https://sing-box.net';
+        const configJson = JSON.stringify(data);
+        const lastUpdate = Math.floor(Date.now() / 1000);
+
+        // Prefer API id when provided so SSI / remote sync stay aligned.
+        if (customIdentifier) {
+            const byUrl: { identifier: string }[] = await db.select(
+                'SELECT identifier FROM subscriptions WHERE subscription_url = ? ORDER BY id DESC LIMIT 1',
+                [url]
+            );
+            if (byUrl.length > 0 && byUrl[0].identifier !== customIdentifier) {
+                await rekeySubscriptionIdentifier(db, byUrl[0].identifier, customIdentifier);
+            }
+            await upsertSubscriptionRow(db, customIdentifier, {
+                name: resolvedName,
+                url,
+                officialWebsite,
+                usedTraffic,
+                totalTraffic,
+                expireTime,
+                configJson,
+            });
+            return customIdentifier;
+        }
 
         const existing: { identifier: string }[] = await db.select(
             'SELECT identifier FROM subscriptions WHERE subscription_url = ? ORDER BY id DESC LIMIT 1',
@@ -150,28 +261,25 @@ export async function insertSubscription(url: string, name?: string, customIdent
             const identifier = existing[0].identifier;
             await db.execute(
                 'UPDATE subscriptions SET name = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
-                [resolvedName, usedTraffic, totalTraffic, expireTime, Math.floor(Date.now() / 1000), identifier]
+                [resolvedName, usedTraffic, totalTraffic, expireTime, lastUpdate, identifier]
             );
             await db.execute(
                 'UPDATE subscription_configs SET config_content = ? WHERE identifier = ?',
-                [JSON.stringify(data), identifier]
+                [configJson, identifier]
             );
             return identifier;
         }
 
-        const identifier = customIdentifier || crypto.randomUUID().toString().replace(/-/g, '');
-        await db.execute(
-            'INSERT INTO subscriptions (identifier, name, subscription_url, official_website, used_traffic, total_traffic, expire_time, last_update_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                identifier, resolvedName, url,
-                response.headers['official-website'] || 'https://sing-box.net',
-                usedTraffic, totalTraffic, expireTime, Math.floor(Date.now() / 1000),
-            ]
-        );
-        await db.execute(
-            'INSERT INTO subscription_configs (identifier, config_content) VALUES (?, ?)',
-            [identifier, JSON.stringify(data)]
-        );
+        const identifier = crypto.randomUUID().toString().replace(/-/g, '');
+        await upsertSubscriptionRow(db, identifier, {
+            name: resolvedName,
+            url,
+            officialWebsite,
+            usedTraffic,
+            totalTraffic,
+            expireTime,
+            configJson,
+        });
         return identifier;
     } catch (err) {
         console.error(`[import] error url=${url}`, err);
@@ -266,80 +374,12 @@ export async function getSubscriptionMergeRevision(
   }
 }
 
-const MOCK_CONFIG = {
-    outbounds: [
-        {
-            "type": "shadowsocks",
-            "tag": "日本 东京 - 专线 01",
-            "server": "127.0.0.1",
-            "server_port": 1080,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "日本 东京 - 标准 02",
-            "server": "127.0.0.1",
-            "server_port": 1081,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "新加坡 - 优化节点",
-            "server": "127.0.0.1",
-            "server_port": 1082,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "中国 香港 - 专线",
-            "server": "127.0.0.1",
-            "server_port": 1083,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "美国 洛杉矶 - 01",
-            "server": "127.0.0.1",
-            "server_port": 1084,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "美国 纽约 - 02",
-            "server": "127.0.0.1",
-            "server_port": 1085,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "英国 伦敦 - 主干",
-            "server": "127.0.0.1",
-            "server_port": 1086,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        },
-        {
-            "type": "shadowsocks",
-            "tag": "德国 法兰克福",
-            "server": "127.0.0.1",
-            "server_port": 1087,
-            "method": "aes-128-gcm",
-            "password": "mock"
-        }
-    ]
-};
-
-export async function getSubscriptionConfig(identifier: string): Promise<any> {
+/** Returns parsed subscription JSON, or null when missing/invalid (no silent mock data). */
+export async function getSubscriptionConfig(identifier: string): Promise<any | null> {
     try {
         if (!identifier) {
-            console.warn('[DB] identifier is empty, falling back to mock config');
-            return MOCK_CONFIG;
+            console.warn('[DB] identifier is empty');
+            return null;
         }
         const db = await getDataBaseInstance();
         const result: SubscriptionConfig[] = await db.select(
@@ -347,18 +387,18 @@ export async function getSubscriptionConfig(identifier: string): Promise<any> {
             [identifier]
         );
         if (result.length === 0) {
-            console.warn(`[DB] subscription config not found for identifier=${identifier}, falling back to mock config`);
-            return MOCK_CONFIG;
+            console.warn(`[DB] subscription config not found for identifier=${identifier}`);
+            return null;
         }
         const parsed = JSON.parse(result[0].config_content);
         if (!parsed || !Array.isArray(parsed.outbounds) || parsed.outbounds.length === 0) {
-            console.warn(`[DB] subscription outbounds empty for identifier=${identifier}, falling back to mock config`);
-            return MOCK_CONFIG;
+            console.warn(`[DB] subscription outbounds empty for identifier=${identifier}`);
+            return null;
         }
         return parsed;
     } catch (error) {
-        console.error('Error getting subscription config, falling back to mock config:', error);
-        return MOCK_CONFIG;
+        console.error('Error getting subscription config:', error);
+        return null;
     }
 }
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react"
 import { check } from "@tauri-apps/plugin-updater"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { ask, message } from "@tauri-apps/plugin-dialog"
@@ -32,14 +32,17 @@ export function useUpdate() {
 export function UpdateProvider({ children }: { children: ReactNode }) {
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [newVersion, setNewVersion] = useState<string | null>(null)
-  const [checking, setChecking] = useState(false)
+  // Start true in Tauri so ForceUpdateGate blocks first paint until check finishes.
+  const [checking, setChecking] = useState(() => isTauri())
   const [currentVersion, setCurrentVersion] = useState("")
   const [updateObject, setUpdateObject] = useState<any>(null)
+  const checkingRef = useRef(false)
 
   // Fetch current version on mount
   useEffect(() => {
     if (!isTauri()) {
       setCurrentVersion("0.0.0-dev")
+      setChecking(false)
       return
     }
     invoke<string>("get_app_version")
@@ -54,11 +57,13 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isTauri()) return
     void triggerCheck(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only startup check
   }, [])
 
   const triggerCheck = async (silent = false) => {
     if (!isTauri()) return
-    if (checking) return
+    if (checkingRef.current) return
+    checkingRef.current = true
     setChecking(true)
     try {
       const update = await check()
@@ -95,6 +100,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
         })
       }
     } finally {
+      checkingRef.current = false
       setChecking(false)
     }
   }

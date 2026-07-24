@@ -67,11 +67,11 @@ Rust backend implements `Idle → Starting → Running → Stopping → Idle` (w
 ### Config Generation Pipeline
 
 Template-based merger in `src/config/merger/` + pre-merge orchestration in `src/lib/`:
-- Built-in template: `src/config/templates/config-template.jsonc` (no external network sync)
-- **Pre-merge**: `config-sync.ts` debounces merge on subscription/settings/node changes (not on connect)
-- **Cache**: `merge-cache.ts` skips rewrite when inputs unchanged (`computeMergeCacheKey`)
-- **Connect**: `connection-flow.ts` → `ensureConnectionConfigReady` → `start`
-- **Hot reload**: `hot-reload-config.ts` → merge + `reload_config` while engine running
+- Remote templates via `fetchRemoteTemplate` (HTTPS, cache-busted per fetch); merged with local subscription JSON from SQLite
+- **Pre-merge**: `config-sync.ts` debounces merge on subscription/settings changes; session bootstrap awaits merge before `sessionReady`
+- **Cache**: `merge-cache-key.ts` `computeMergeCacheKey` fingerprints SSI + routing/TUN + subscription revision + ports/DNS/TUN stack/etc.; `mergeConnectionConfig` skips rewrite on cache hit unless `force: true` (`merge-cache.ts` holds the last key + stale listeners)
+- **Connect**: `connection-flow.ts` → `ensureConnectionConfigReady` (joins matching in-flight merge or force-merges) → `start`
+- **Hot reload**: `hot-reload-config.ts` → force merge + `reload_config` while engine running
 - TUN stack (`tun_stack_key`: system/gvisor/mixed) applied in `configureTunInbound` when TUN mode enabled
 
 ### Data Persistence

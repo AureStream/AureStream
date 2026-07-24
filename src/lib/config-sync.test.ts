@@ -76,4 +76,31 @@ describe("config sync connect guard", () => {
       configPath: "/tmp/aurestream/config.json",
     })
   })
+
+  it("re-merges with connect params when an in-flight sync used different params", async () => {
+    let releaseMerge!: () => void
+    mergeConnectionConfigMock
+      .mockImplementationOnce(
+        () => new Promise<boolean>((resolve) => {
+          releaseMerge = () => resolve(true)
+        }),
+      )
+      .mockResolvedValueOnce(true)
+
+    const { ensureConnectionConfigReady, syncActiveConnectionConfig } = await import("./config-sync")
+
+    const syncPromise = syncActiveConnectionConfig("inputs-changed")
+    await vi.waitFor(() => expect(mergeConnectionConfigMock).toHaveBeenCalledTimes(1))
+
+    const readyPromise = ensureConnectionConfigReady("sub-b", "rule", true)
+    releaseMerge()
+
+    await syncPromise
+    await readyPromise
+
+    expect(mergeConnectionConfigMock).toHaveBeenCalledTimes(2)
+    expect(mergeConnectionConfigMock).toHaveBeenLastCalledWith("sub-b", "rule", true, {
+      force: true,
+    })
+  })
 })
