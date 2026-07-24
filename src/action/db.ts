@@ -383,6 +383,33 @@ export async function getLocalSubscriptions(): Promise<any[]> {
     }
 }
 
+/** Update traffic/name/expiry from API list without re-downloading the subscription URL. */
+export async function updateLocalSubscriptionMeta(sub: {
+    id: string
+    name: string
+    traffic_used: number
+    traffic_total: number
+    expire_time: number
+}): Promise<void> {
+    try {
+        const db = await getDataBaseInstance();
+        const expireMs = sub.expire_time > 1e12 ? sub.expire_time : sub.expire_time * 1000;
+        await db.execute(
+            'UPDATE subscriptions SET name = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
+            [
+                sub.name,
+                sub.traffic_used,
+                sub.traffic_total > 1 ? sub.traffic_total : 1,
+                expireMs || (Date.now() + 100 * 365 * 24 * 3600 * 1000),
+                Math.floor(Date.now() / 1000),
+                sub.id,
+            ]
+        );
+    } catch (err) {
+        console.error('Error updating subscription metadata:', err);
+    }
+}
+
 export async function accumulateUsedTraffic(
     identifier: string,
     uploadBytes: number,

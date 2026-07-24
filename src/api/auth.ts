@@ -40,15 +40,22 @@ export async function register(email: string, password: string): Promise<any> {
   return data
 }
 
-export async function logout(): Promise<void> {
+/** Revoke refresh token on the server. Does not touch local tokens. */
+export async function revokeRemoteSession(): Promise<void> {
   const refreshToken = localStorage.getItem("aurestream_refresh_token")
-  if (refreshToken) {
-    await apiFetch("/auth/logout", {
-      method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    }).catch(() => {})
+  if (!refreshToken) return
+  await apiFetch("/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  }).catch(() => {})
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await revokeRemoteSession()
+  } finally {
+    clearTokens()
   }
-  clearTokens()
 }
 
 export async function refreshToken(): Promise<boolean> {

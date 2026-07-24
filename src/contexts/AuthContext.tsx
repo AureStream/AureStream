@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-import { type User, login as apiLogin, register as apiRegister, logout as apiLogout, refreshToken, hasTokens } from "../api/auth"
+import { type User, login as apiLogin, register as apiRegister, revokeRemoteSession, clearTokens, refreshToken, hasTokens } from "../api/auth"
 import { apiFetch } from "../api/client"
+import { beginLogout } from "../lib/auth-session"
+import { clearLocalUserData } from "../lib/auth-cleanup"
 
 interface AuthState {
   user: User | null
@@ -64,16 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    // Clear tokens on the backend & localStorage
-    await apiLogout()
-    // Clear local databases, stores and latency caches
-    try {
-      const { clearLocalUserData } = await import("../lib/auth-cleanup")
-      await clearLocalUserData()
-    } catch (e) {
-      console.error("Failed to clean local user data on logout:", e)
-    }
-    setUser(null)
+    // Must clear session synchronously — never await import/network before setUser(null).
+    beginLogout({
+      clearTokens,
+      setUser,
+      revokeRemoteSession,
+      clearLocalUserData,
+    })
   }, [])
 
   return (

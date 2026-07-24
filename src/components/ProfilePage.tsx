@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, type CSSProperties } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
@@ -117,8 +117,15 @@ export default function ProfilePage() {
           onBack={() => navigate("/dashboard")}
           right={
             <button
-              onClick={() => logout().then(() => navigate("/login"))}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void logout()
+                navigate("/login", { replace: true })
+              }}
               className={topBarIconBtnClass}
+              style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
               aria-label={l("Log Out", "退出登录")}
               title={l("Log Out", "退出登录")}
             >

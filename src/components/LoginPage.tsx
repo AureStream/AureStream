@@ -12,7 +12,8 @@ import { setStoreValue } from "../single/store"
 const I = {
   Mail: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>),
   Lock: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>),
-  EyeOff: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 2 20 20"/><path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"/><path d="M9.88 4.24A10.7 10.7 0 0 1 12 4c5 0 9.27 3.11 11 7.5a11.8 11.8 0 0 1-3.16 4.44"/><path d="M6.61 6.61A11.8 11.8 0 0 0 1 11.5C2.73 15.89 7 19 12 19a10.8 10.8 0 0 0 5.39-1.39"/></svg>),
+  Eye: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>),
+  EyeOff: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-4.57"/><path d="m2 2 20 20"/></svg>),
 }
 
 export default function LoginPage() {
@@ -41,14 +42,14 @@ export default function LoginPage() {
     setError("")
     setSubmitting(true)
     try {
+      await login(email, password)
+
       try {
         const { clearLocalUserData } = await import("../lib/auth-cleanup")
         await clearLocalUserData()
       } catch (cleanErr) {
-        console.error("Failed to clear local user data before login:", cleanErr)
+        console.error("Failed to clear local user data after login:", cleanErr)
       }
-
-      await login(email, password)
 
       await initializeAfterLogin({
         fetchSubscriptions,
@@ -104,7 +105,7 @@ export default function LoginPage() {
             <I.Lock />
             <span className="sr-only">{t("password")}</span>
             <input
-              className="min-w-0 flex-1 border-none bg-transparent text-[16px] font-semibold text-slate-700 outline-none placeholder:text-slate-500 dark:text-text dark:placeholder:text-text-muted"
+              className="min-w-0 flex-1 border-none bg-transparent text-[16px] font-semibold text-slate-700 outline-none placeholder:text-slate-500 dark:text-text dark:placeholder:text-text-muted [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -117,7 +118,7 @@ export default function LoginPage() {
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-slate-600 dark:text-text-muted dark:hover:text-text"
               aria-label={showPassword ? t("hide_password", "隐藏密码") : t("show_password", "显示密码")}
             >
-              <I.EyeOff />
+              {showPassword ? <I.EyeOff /> : <I.Eye />}
             </button>
           </label>
 

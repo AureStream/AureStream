@@ -168,10 +168,15 @@ impl EngineManager for LinuxEngine {
             }
             ProxyMode::IntoProxy => {
                 let dns_info = take_dns_override();
-                stop_tun_and_restore_dns(dns_info.as_ref()).map_err(|e| {
-                    log::error!("Failed to stop TUN process: {}", e);
-                    e
-                })?;
+                // pkexec is a blocking subprocess; keep it off the async worker
+                // so quit()/timeout can still fire if the auth dialog hangs.
+                tokio::task::spawn_blocking(move || stop_tun_and_restore_dns(dns_info.as_ref()))
+                    .await
+                    .map_err(|e| format!("stop join error: {e}"))?
+                    .map_err(|e| {
+                        log::error!("Failed to stop TUN process: {}", e);
+                        e
+                    })?;
                 crate::engine::shutdown::wait_for_sidecar_ports_release(app).await;
             }
         }

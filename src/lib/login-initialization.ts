@@ -16,6 +16,17 @@ export async function initializeAfterLogin(deps: LoginInitializationDeps) {
 
   const activeSubscription = subs[0]
   await deps.setStoreValue(SSI_STORE_KEY, activeSubscription.id)
-  await deps.insertSubscription(activeSubscription.url, activeSubscription.name, activeSubscription.id)
-  await deps.syncActiveConnectionConfig("login-init")
+  const inserted = await deps.insertSubscription(
+    activeSubscription.url,
+    activeSubscription.name,
+    activeSubscription.id
+  )
+  if (!inserted) {
+    throw new Error("订阅配置拉取失败")
+  }
+
+  // Config merge can finish after navigation; blocking here delays home paint.
+  void deps.syncActiveConnectionConfig("login-init").catch((error) => {
+    console.error("[login-init] config sync failed:", error)
+  })
 }

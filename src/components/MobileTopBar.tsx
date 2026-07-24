@@ -1,4 +1,4 @@
-import { type ReactNode } from "react"
+import { type CSSProperties, type ReactNode } from "react"
 
 interface MobileTopBarProps {
   onBack?: () => void
@@ -11,6 +11,8 @@ interface MobileTopBarProps {
 export const topBarIconBtnClass =
   "w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer shrink-0"
 
+const noDragStyle = { WebkitAppRegion: "no-drag" } as CSSProperties
+
 /**
  * Reusable mobile top status bar. Sits below the global OS TitleBar.
  * - Home page: pass `left` (About) + `right` (Profile), no back/title.
@@ -19,9 +21,10 @@ export const topBarIconBtnClass =
 export default function MobileTopBar({ onBack, title, left, right }: MobileTopBarProps) {
   return (
     <div className="sticky top-0 z-20 flex items-center h-12 px-2 bg-transparent shrink-0">
-      <div className="flex items-center gap-1 min-w-0 flex-1 justify-start">
+      <div className="relative z-30 flex items-center gap-1 min-w-0 flex-1 justify-start" style={noDragStyle}>
         {onBack ? (
           <button
+            type="button"
             onClick={onBack}
             className={topBarIconBtnClass}
             aria-label="Back"
@@ -41,7 +44,9 @@ export default function MobileTopBar({ onBack, title, left, right }: MobileTopBa
         </div>
       )}
 
-      <div className="flex items-center gap-1 flex-1 justify-end">{right}</div>
+      <div className="relative z-30 flex items-center gap-1 flex-1 justify-end" style={noDragStyle}>
+        {right}
+      </div>
     </div>
   )
 }

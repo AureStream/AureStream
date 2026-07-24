@@ -42,6 +42,16 @@ pub async fn quit(app: AppHandle) {
     // itself has internal timeouts; this outer timeout is a hard deadline to
     // prevent the quit command from hanging indefinitely.
     const STOP_TIMEOUT: Duration = Duration::from_secs(5);
+    const HARD_EXIT: Duration = Duration::from_secs(6);
+
+    // Absolute failsafe: even if stop() blocks a worker (e.g. pkexec dialog),
+    // another task can still force-exit the process.
+    let hard_exit_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(HARD_EXIT).await;
+        log::error!("[quit] hard deadline reached, forcing exit");
+        hard_exit_app.exit(0);
+    });
 
     match timeout(STOP_TIMEOUT, stop(app.clone())).await {
         Ok(Ok(())) => log::info!("[quit] proxy stopped successfully"),

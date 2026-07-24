@@ -9,6 +9,20 @@
   html {
     font-size: clamp(12px, 1.11vw, 22px);
   }
+
+  /* Hide browser native password reveal — login/register render their own toggle */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
+
+  input[type="password"]::-webkit-credentials-auto-fill-button,
+  input[type="password"]::-webkit-strong-password-auto-fill-button,
+  input[type="password"]::-webkit-contacts-auto-fill-button {
+    visibility: hidden;
+    display: none !important;
+    pointer-events: none;
+  }
 }
 
 /* ============================================================

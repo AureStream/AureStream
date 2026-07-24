@@ -9,8 +9,9 @@ import { useTrafficAccumulator } from "../hooks/useTrafficAccumulator"
 import { connectEngine } from "../lib/connection-flow"
 import { getEnableTun, setEnableTun, getStoreValue, setStoreValue } from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
-import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription } from "../action/db"
+import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription, updateLocalSubscriptionMeta } from "../action/db"
 import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
+import { syncRemoteSubscriptionsToLocal } from "../lib/subscription-sync"
 import { switchProxyMode } from "../lib/mode-switch"
 import {
   planTrayModeAction,
@@ -319,48 +320,25 @@ export default function MobileHome() {
 
   const loadSubs = useCallback(async () => {
     try {
-      // 1. Load from SQLite database first for instant UI response
+      // 1. Load from SQLite first so login-initialized data paints immediately
       const localData = await getLocalSubscriptions()
       if (localData && localData.length > 0) {
         setSubs(localData)
         setSubsLoading(false)
       }
 
-      // 2. Fetch the latest subscription list from the server to sync
-      const remoteSubs = await fetchSubscriptions()
-
-      // 3. Sync database with remote list
-      if (Array.isArray(remoteSubs)) {
-        const remoteIds = remoteSubs.map(s => s.id)
-
-        // A. Delete local subscriptions that do not exist on the server anymore (orphaned/dirty data)
-        const localList = await getLocalSubscriptions()
-        for (const local of localList) {
-          if (!remoteIds.includes(local.id)) {
-            await deleteSubscription(local.id)
-          }
-        }
-
-        // B. Insert or update remote subscriptions in local database
-        for (const sub of remoteSubs) {
-          await insertSubscription(sub.url, sub.name, sub.id)
-        }
-
-        // C. Reload and set active state
-        const updatedLocal = await getLocalSubscriptions()
-        setSubs(updatedLocal)
-
-        // D. If the currently selected subscription was deleted, reset selected subscription key
-        const currentSelectedId = await getStoreValue(SSI_STORE_KEY)
-        if (currentSelectedId && !remoteIds.includes(currentSelectedId)) {
-          if (remoteIds.length > 0) {
-            await setStoreValue(SSI_STORE_KEY, remoteIds[0])
-          } else {
-            await setStoreValue(SSI_STORE_KEY, '')
-          }
-          await syncActiveConnectionConfig("sync-cleanup")
-        }
-      }
+      // 2. Sync list/metadata from API; only download configs for brand-new subs
+      const updatedLocal = await syncRemoteSubscriptionsToLocal({
+        fetchSubscriptions,
+        getLocalSubscriptions,
+        deleteSubscription,
+        insertSubscription,
+        updateLocalSubscriptionMeta,
+        getSelectedSubscriptionId: () => getStoreValue(SSI_STORE_KEY),
+        setSelectedSubscriptionId: (id) => setStoreValue(SSI_STORE_KEY, id),
+        syncActiveConnectionConfig,
+      })
+      setSubs(updatedLocal)
     } catch (err) {
       console.error("[HOME] Failed to fetch and sync subscriptions:", err)
     } finally {

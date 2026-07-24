@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { type as osType } from "@tauri-apps/plugin-os"
 import { isTauri } from "@/lib/tauri-env"
@@ -39,7 +40,15 @@ export default function TitleBar() {
     }
   })
   const appWindow = getAppWindow()
-  const close = () => void appWindow?.close()
+  const close = () => {
+    if (appWindow) {
+      void appWindow.close().catch(() => {
+        void invoke("quit")
+      })
+      return
+    }
+    void invoke("quit")
+  }
   const minimize = () => void appWindow?.minimize()
 
   // macOS traffic lights: red close · yellow minimize.
