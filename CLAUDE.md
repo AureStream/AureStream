@@ -1,157 +1,64 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code and other agents in this repository.
 
-## Project Overview
+**Canonical project rules**: see [`AGENTS.md`](./AGENTS.md) (kept current for the mobile-shell / auth rewrite).  
+**Full wiki**: [`docs/index.md`](./docs/index.md) — prefer code when docs lag.
 
-📖 **Full Documentation**: See the [AureStream Wiki](file:///d:/wry/Projects/AureStream/docs/index.md) for comprehensive architecture, state management, and API references.
+## Quick orientation
 
-AureStream is a cross-platform proxy/VPN client built with **Tauri v2** (Rust backend + WebView frontend). It uses **sing-box** as the core network routing engine, running as an external sidecar binary.
+AureStream is a cross-platform proxy/VPN client: **Tauri v2** (Rust) + **React/TypeScript** frontend + **sing-box** sidecar.
 
-## Tech Stack
+| Area | Location |
+|---|---|
+| Frontend | `src/` — React Router app (`/login`, `/register`, `/dashboard/*`) |
+| Config merge | `src/config/merger/`, `src/lib/config-sync.ts`, `connection-flow.ts` |
+| Clash API | `src/utils/singbox-api/` |
+| Rust engine | `src-tauri/src/engine/` |
+| Tauri commands | `src-tauri/src/core/`, `src-tauri/src/commands/` |
+| Privilege / TUN / proxy | `crates/aurestream-plugin-*` |
 
-- **Frontend**: React 19 + TypeScript + Vite 7 + Tailwind CSS v4 + shadcn/ui (new-york style)
-- **Backend**: Rust (Tauri v2) with Tokio async runtime
-- **VPN Engine**: sing-box v1.13.13 (sidecar binary)
-- **Package Manager**: pnpm 11.4.0 (ESM modules)
-- **i18n**: i18next (Chinese default, English available)
-
-## Common Commands
+## Common commands
 
 ```bash
-# Development
-pnpm dev                    # Start Vite dev server (port 1420, HMR on 1421)
-pnpm tauri dev              # Start Tauri dev mode (opens desktop app)
+pnpm dev                 # Vite (port 1420)
+pnpm tauri dev           # Desktop app
+pnpm build               # tsc + vite build
+pnpm test                # vitest run
+pnpm tauri build         # Full Tauri build
+pnpm download-binaries   # sing-box + rule DBs
+pnpm build-tun           # Windows TUN service
+pnpm pre-bundle          # macOS privileged helper
+pnpm release             # binaries + tun + build + tauri build
 
-# Build
-pnpm build                  # TypeScript check + Vite production build
-pnpm tauri build            # Full Tauri build (includes Rust compilation)
-
-# Release pipeline
-pnpm release                # Download binaries + build TUN service + build + tauri build
-
-# Utility scripts
-pnpm download-binaries      # Download sing-box sidecar binaries and rule databases
-pnpm build-tun              # Build Windows TUN service sidecar
-pnpm pre-bundle             # Build and sign macOS privileged helper
-pnpm sign-macos-bundle      # Re-sign macOS .app/.dmg bundle locally
-
-# Rust (in src-tauri/)
-cargo build                 # Build Rust backend
-cargo check                 # Quick type check without full compilation
+# Rust
+cargo check              # from repo root or src-tauri/
+cargo build
 ```
 
-## Architecture
+## Architecture snapshot
 
-### Three-Tier Communication
+**Three-tier I/O**
 
-1. **Frontend → Rust**: Tauri IPC via `invoke()` from `@tauri-apps/api/core`
-   - Commands registered in `src-tauri/src/lib.rs`
-   - Handlers in `src-tauri/src/commands/`
+1. Frontend → Rust: `invoke()` (handlers registered in `src-tauri/src/lib.rs`)
+2. Rust → Frontend: events (`engine-state`, `tauri-log`, …)
+3. Frontend → sing-box: Clash API REST (`src/utils/singbox-api/`) — not via IPC
 
-2. **Rust → Frontend**: Tauri events via `app.emit()`
-   - `engine-state`: State machine transitions (Idle/Starting/Running/Stopping/Failed)
-   - `tauri-log`: Log messages
+**Engine**: `Idle → Starting → Running → Stopping → Idle` (+ `Failed`) in `state_machine.rs`.
 
-3. **Frontend → sing-box**: Direct REST API via Clash API (`experimental.clash_api`)
-   - Client in `src/utils/singbox-api/`
-   - Used for node selection, delay testing, traffic monitoring
+**Config**: debounced pre-merge (`config-sync`) → cache key skip → connect (`connection-flow`) / hot reload (`reload_config`).
 
-### Engine State Machine
+**UI (current branch)**: auth-gated react-router app; dashboard routes to `MobileHome`, `NodesPage`, `ProfilePage`, `AboutPage`. Contexts: `AuthContext`, `UpdateContext`.
 
-Rust backend implements `Idle → Starting → Running → Stopping → Idle` (with `Failed` error state). Defined in `src-tauri/src/engine/state_machine.rs`. Platform-specific implementations:
-- `WindowsEngine`: Sidecar + WinINet proxy
-- `MacOSEngine`: XPC helper, DNS watcher, watchdog
-- `LinuxEngine`: pkexec, systemd-resolved
+**Persistence**: `settings.json` (plugin-store), `data.db` (plugin-sql).
 
-### Config Generation Pipeline
+**i18n**: `lang/zh.json` (default), `lang/en.json` via `react-i18next`.
 
-Template-based merger in `src/config/merger/` + pre-merge orchestration in `src/lib/`:
-- Remote templates via `fetchRemoteTemplate` (HTTPS, cache-busted per fetch); merged with local subscription JSON from SQLite
-- **Pre-merge**: `config-sync.ts` debounces merge on subscription/settings changes; session bootstrap awaits merge before `sessionReady`
-- **Cache**: `merge-cache-key.ts` `computeMergeCacheKey` fingerprints SSI + routing/TUN + subscription revision + ports/DNS/TUN stack/etc.; `mergeConnectionConfig` skips rewrite on cache hit unless `force: true` (`merge-cache.ts` holds the last key + stale listeners)
-- **Connect**: `connection-flow.ts` → `ensureConnectionConfigReady` (joins matching in-flight merge or force-merges) → `start`
-- **Hot reload**: `hot-reload-config.ts` → force merge + `reload_config` while engine running
-- TUN stack (`tun_stack_key`: system/gvisor/mixed) applied in `configureTunInbound` when TUN mode enabled
+**Path alias**: `@/*` → `./src/*`.
 
-### Data Persistence
+**UI**: shadcn/ui new-york + Tailwind v4 CSS variables in `src/index.css`. Add components with `npx shadcn@latest add <name>`.
 
-- **Settings**: `settings.json` via `@tauri-apps/plugin-store` (LazyStore) for preferences
-- **Database**: `data.db` (SQLite) via `@tauri-apps/plugin-sql` for subscriptions with migrations
-
-### State Management
-
-React Context API (no Redux/Zustand):
-- `NavigationContext`: Tab routing (`"home" | "subscription" | "settings"`)
-- `SubscriptionContext`: Subscription data + auto-update timer
-- `ThemeContext`: Dark/light/system theme
-
-### Privilege Separation
-
-High-privilege operations (TUN, DNS) delegated to platform services:
-- Windows: UAC elevation in `crates/aurestream-plugin-privilege/src/windows.rs` installs/updates the SCM TUN service from `crates/aurestream-plugin-tun`.
-- macOS: XPC privileged helper source in `crates/aurestream-plugin-privilege/macos-helper/`, bundled into `Contents/Library/LaunchServices/`.
-- Linux: pkexec helper and polkit assets in `crates/aurestream-plugin-privilege/linux-helper/`.
-
-## Key Directories
-
-```
-src/                          # Frontend (React/TypeScript)
-├── action/                   # Database CRUD operations
-├── components/home/          # Home page panels (Connection, Node, Network, Usage)
-├── components/ui/            # shadcn/ui primitives
-├── config/merger/            # sing-box config generation
-├── contexts/                 # React contexts
-├── hooks/                    # Custom hooks (useEngineState, useSubscriptions)
-├── lib/                      # config-sync, connection-flow, hot-reload, perf, i18n, etc.
-├── pages/                    # Page components
-├── utils/singbox-api/        # sing-box Clash API client
-
-src-tauri/                    # Rust backend
-├── src/commands/             # Tauri command handlers
-├── src/core/                 # Tauri command entrypoints
-├── src/engine/               # Engine orchestration, state, platform engines
-├── resources/linux/          # Linux deb/rpm package scripts
-
-crates/                       # Rust workspace crates
-├── aurestream-plugin-proxy/   # Cross-platform system proxy
-├── aurestream-plugin-tun/     # TUN service/business logic
-├── aurestream-plugin-privilege/ # Platform elevation and helper assets
-```
-
-## Path Aliases
-
-TypeScript: `@/*` maps to `./src/*` (configured in `tsconfig.json` and `vite.config.ts`)
-
-## UI Components
-
-Uses shadcn/ui with new-york style. Component configuration in `components.json`. Add new components via:
-```bash
-npx shadcn@latest add <component-name>
-```
-
-## Internationalization
-
-- Translation files: `lang/zh.json` (default), `lang/en.json`
-- Detection: OS locale via `@tauri-apps/plugin-os`
-- Usage: `useTranslation()` hook from `react-i18next`
-
-## Theming
-
-CSS custom properties (HSL-based) in `src/index.css` with light/dark variants. Tailwind CSS v4 with `@custom-variant dark`. Theme persisted in localStorage.
-
-## Platform-Specific Builds
-
-- `tauri.conf.json`: Base config (all platforms)
-- `tauri.windows.conf.json`: Windows-specific (adds tun-service sidecar)
-- macOS requires code signing for the privileged helper
-- Deep link scheme: `aurestream://`
-
-## Build Scripts
-
-- `scripts/download-binaries.ts`: Fetches sing-box binaries from GitHub releases
-- `scripts/build-tun-service.ts`: Compiles Windows TUN service
-- `scripts/prebundle.ts`: Builds and signs macOS privileged helper
+For detailed conventions, file map, and “where to look first”, use **AGENTS.md**.
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
