@@ -1,4 +1,4 @@
-//! sing-box sidecar config validation (`aurestream-core check`).
+//! Xray-core sidecar config validation (`aurestream-core run -test -c`).
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -63,7 +63,11 @@ pub fn mark_config_verified(config_path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Run `sing-box check -c <path>` via the aurestream-core sidecar before start.
+/// Run `xray run -test -c <path>` via the aurestream-core sidecar before start.
+///
+/// Xray prints `Configuration OK.` on success and `Failed to start: <err>` on
+/// failure, both via stdout (not stderr) — unlike sing-box, so both streams
+/// are captured and combined for the error message.
 pub async fn verify(app: &AppHandle, config_path: &str) -> Result<(), String> {
     let path = config_path.to_string();
     let result = verify_inner(app, config_path).await;
@@ -78,18 +82,20 @@ async fn verify_inner(app: &AppHandle, config_path: &str) -> Result<(), String> 
         .shell()
         .sidecar("aurestream-core")
         .map_err(|e| format!("sidecar lookup failed: {}", e))?
-        .env("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true")
-        .args(["check", "-c", config_path, "--disable-color"])
+        .args(["run", "-test", "-c", config_path])
         .spawn()
         .map_err(|e| format!("config check spawn failed: {}", e))?;
 
-    let mut stderr = String::new();
+    let mut output = String::new();
     let mut exit_code: Option<i32> = None;
 
     while let Some(event) = rx.recv().await {
         match event {
+            CommandEvent::Stdout(line) => {
+                output.push_str(&String::from_utf8_lossy(&line));
+            }
             CommandEvent::Stderr(line) => {
-                stderr.push_str(&String::from_utf8_lossy(&line));
+                output.push_str(&String::from_utf8_lossy(&line));
             }
             CommandEvent::Terminated(payload) => {
                 exit_code = payload.code;
@@ -100,15 +106,15 @@ async fn verify_inner(app: &AppHandle, config_path: &str) -> Result<(), String> 
 
     match exit_code {
         Some(0) => Ok(()),
-        Some(code) => Err(if stderr.trim().is_empty() {
-            format!("sing-box check exited with code {}", code)
+        Some(code) => Err(if output.trim().is_empty() {
+            format!("config check exited with code {}", code)
         } else {
-            stderr.trim().to_string()
+            output.trim().to_string()
         }),
-        None => Err(if stderr.trim().is_empty() {
-            "sing-box check terminated without exit code".into()
+        None => Err(if output.trim().is_empty() {
+            "config check terminated without exit code".into()
         } else {
-            stderr.trim().to_string()
+            output.trim().to_string()
         }),
     }
 }

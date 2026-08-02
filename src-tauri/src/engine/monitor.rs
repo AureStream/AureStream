@@ -3,7 +3,7 @@ use tauri::Emitter;
 use tauri::Manager;
 
 use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
-use crate::engine::log::{create_singbox_log_writer, write_singbox_log};
+use crate::engine::log::{create_core_log_writer, write_core_log};
 use crate::engine::process::ProcessManager;
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 use crate::engine::{EngineManager, PlatformEngine, ProxyMode};
@@ -15,10 +15,10 @@ pub(crate) fn spawn_process_monitor(
     child_pid: u32,
     spawn_epoch: u64,
 ) {
-    let mut singbox_log = create_singbox_log_writer(&app);
+    let mut core_log = create_core_log_writer(&app);
     let spawn_at = std::time::Instant::now();
     log::info!(
-        "[sing-box] monitor attached pid={} mode={:?}",
+        "[core] monitor attached pid={} mode={:?}",
         child_pid,
         mode
     );
@@ -31,31 +31,31 @@ pub(crate) fn spawn_process_monitor(
                 | tauri_plugin_shell::process::CommandEvent::Stderr(line) = event
                 {
                     let line_str = String::from_utf8_lossy(&line);
-                    write_singbox_log(&mut singbox_log, &line_str);
+                    write_core_log(&mut core_log, &line_str);
                 }
                 continue;
             }
             match event {
                 tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                     let line_str = String::from_utf8_lossy(&line);
-                    write_singbox_log(&mut singbox_log, &line_str);
+                    write_core_log(&mut core_log, &line_str);
                 }
                 tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                     let line_str = String::from_utf8_lossy(&line);
-                    write_singbox_log(&mut singbox_log, &line_str);
+                    write_core_log(&mut core_log, &line_str);
                     scan_stderr_for_bind_error(child_pid, &line_str);
                     let _ = app.emit(EVENT_TAURI_LOG, (0, line_str.to_string()));
                 }
                 tauri_plugin_shell::process::CommandEvent::Error(err) => {
-                    log::error!("[sing-box] pid={} process error: {}", child_pid, err);
-                    write_singbox_log(&mut singbox_log, &format!("[ERROR] {}", err));
+                    log::error!("[core] pid={} process error: {}", child_pid, err);
+                    write_core_log(&mut core_log, &format!("[ERROR] {}", err));
                     let _ = app.emit(EVENT_TAURI_LOG, (1, err.to_string()));
                 }
                 tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                     terminated = true;
                     let runtime = spawn_at.elapsed();
                     log::info!(
-                        "[sing-box] pid={} terminated runtime={:.2}s code={:?} signal={:?}",
+                        "[core] pid={} terminated runtime={:.2}s code={:?} signal={:?}",
                         child_pid,
                         runtime.as_secs_f64(),
                         payload.code,
@@ -93,12 +93,15 @@ pub(crate) fn spawn_process_monitor(
     });
 }
 
+/// Matches Go's standard `net.Listen` bind-error phrasing (e.g. `listen tcp
+/// 127.0.0.1:1080: bind: address already in use`), which Xray-core emits the
+/// same way sing-box did since both use the Go standard library.
 fn scan_stderr_for_bind_error(pid: u32, line: &str) {
     let lc = line.to_ascii_lowercase();
     if lc.contains("address already in use") || lc.contains("eaddrinuse") {
-        log::warn!("[sing-box] pid={} BIND FAILED: {}", pid, line.trim_end());
+        log::warn!("[core] pid={} BIND FAILED: {}", pid, line.trim_end());
     } else if lc.contains("listen tcp") && lc.contains("bind:") {
-        log::warn!("[sing-box] pid={} listener error: {}", pid, line.trim_end());
+        log::warn!("[core] pid={} listener error: {}", pid, line.trim_end());
     }
 }
 
@@ -190,7 +193,7 @@ pub(crate) async fn handle_process_termination(
                 let _ = transition(
                     app_handle,
                     Intent::Fail {
-                        reason: format!("sing-box exited unexpectedly (code={})", code),
+                        reason: format!("core exited unexpectedly (code={})", code),
                     },
                 );
             }

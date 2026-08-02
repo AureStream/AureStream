@@ -8,7 +8,6 @@ use aurestream_plugin_tun::macos::{
     apply_system_dns_override, release_dns_on_network_down, restore_system_dns,
     start_tun_via_helper, stop_tun_process,
 };
-use std::process::Command;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
@@ -33,8 +32,7 @@ impl EngineManager for MacOSEngine {
                     .shell()
                     .sidecar("aurestream-core")
                     .map_err(|e| format!("sidecar lookup failed: {}", e))?
-                    .env("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true")
-                    .args(["run", "-c", &config_path, "--disable-color"]);
+                    .args(["run", "-c", &config_path]);
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
                 log::info!(
@@ -71,7 +69,7 @@ impl EngineManager for MacOSEngine {
                     .and_then(|store| store.get("enable_bypass_router_key"))
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                let log_path_str = crate::engine::log::resolve_singbox_log_path(app)
+                let log_path_str = crate::engine::log::resolve_core_log_path(app)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
                 let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
@@ -175,7 +173,7 @@ impl EngineManager for MacOSEngine {
 
                 // Step 3: Parallel port cleanup (optimized from serial)
                 let mixed = crate::engine::ports::mixed_proxy_port(app);
-                let ctrl = crate::engine::ports::controller_port(app);
+                let ctrl = crate::engine::ports::api_port(app);
 
                 let ports = if ctrl != mixed {
                     vec![mixed, ctrl]
@@ -269,7 +267,13 @@ impl EngineManager for MacOSEngine {
             .map_err(|e| format!("helper_probe join error: {}", e))?
     }
 
-    async fn restart(_app: &AppHandle) -> Result<(), String> {
+    /// Xray-core has no SIGHUP-based hot reload (`run.go` only handles
+    /// `os.Interrupt`/`SIGTERM`; the OS default disposition for SIGHUP is to
+    /// kill the process). TUN mode keeps its existing helper-managed restart
+    /// (deferred, untouched this phase); SystemProxy mode now does a real
+    /// stop+start cycle, mirroring the pattern `WindowsEngine::restart` already
+    /// used (Windows never had SIGHUP either).
+    async fn restart(app: &AppHandle) -> Result<(), String> {
         let is_tun = {
             let manager = ProcessManager::acquire();
             matches!(
@@ -289,54 +293,37 @@ impl EngineManager for MacOSEngine {
                 Ok(Err(e)) => log::warn!("[reload] flush_dns_cache failed: {}", e),
                 Err(e) => log::warn!("[reload] flush_dns_cache join error: {}", e),
             }
+            Ok(())
         } else {
-            match Command::new("pgrep")
-                .args(["-lf", "aurestream-core"])
-                .output()
-            {
-                Ok(out) => {
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    let lines: Vec<&str> = stdout.lines().collect();
-                    log::info!(
-                        "[reload] pgrep pre-pkill: {} aurestream-core process(es) {:?}",
-                        lines.len(),
-                        lines
-                    );
-                }
-                Err(e) => log::warn!("[reload] pgrep pre-pkill failed: {}", e),
-            }
-            let pm_pid = {
-                let m = ProcessManager::acquire();
-                m.child.as_ref().map(|c| c.pid())
+            let (mode, config_path) = {
+                let manager = ProcessManager::acquire();
+                let mode = manager.mode.as_ref().map(|m| (**m).clone());
+                let cfg = manager
+                    .config_path
+                    .as_ref()
+                    .map(|p| p.as_str().to_string())
+                    .unwrap_or_default();
+                (mode, cfg)
             };
-            log::info!(
-                "[reload] pm_child_pid={:?} (expected sole SIGHUP target)",
-                pm_pid
-            );
+            let Some(mode) = mode else {
+                return Err("No running process found".to_string());
+            };
 
-            let output = Command::new("pkill")
-                .args(["-HUP", "aurestream-core"])
-                .output()
-                .map_err(|e| format!("Failed to send SIGHUP: {}", e))?;
-            let code = output.status.code();
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if !output.status.success() {
-                if code == Some(1) {
-                    log::warn!(
-                        "[reload] pkill -HUP matched 0 processes (code=1) — aurestream-core may already be dead"
-                    );
-                    return Err(format!("pkill -HUP matched nothing: {}", stderr));
-                }
-                return Err(format!("pkill -HUP non-zero (code={:?}): {}", code, stderr));
+            let start_epoch = app
+                .state::<crate::engine::state_machine::EngineStateCell>()
+                .snapshot()
+                .epoch();
+            let mixed_port = crate::engine::ports::mixed_proxy_port(app);
+            Self::stop(app).await?;
+
+            let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while std::time::Instant::now() < release_deadline
+                && !crate::engine::ports::probe_port_bindable(mixed_port)
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             }
-            log::info!(
-                "[reload] SIGHUP sent via pkill code={:?} stdout={:?} stderr={:?}",
-                code,
-                stdout.trim(),
-                stderr.trim()
-            );
+
+            Self::start(app, mode, config_path, start_epoch).await
         }
-        Ok(())
     }
 }

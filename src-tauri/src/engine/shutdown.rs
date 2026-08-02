@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use tauri::AppHandle;
 
-use crate::engine::ports::{controller_port, mixed_proxy_port, wait_for_port_bindable};
+use crate::engine::ports::{api_port, mixed_proxy_port, wait_for_port_bindable};
 
 const SIDECAR_PORT_RELEASE_TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -15,7 +15,7 @@ pub(crate) async fn wait_for_sidecar_ports_release(app: &AppHandle) {
     let mixed_ok = wait_for_port_bindable(mixed, SIDECAR_PORT_RELEASE_TIMEOUT).await;
     let mixed_ms = started.elapsed().as_millis();
 
-    let ctrl = controller_port(app);
+    let ctrl = api_port(app);
     let (ctrl_ok, ctrl_ms) = if ctrl != mixed {
         let ctrl_started = Instant::now();
         let remaining = SIDECAR_PORT_RELEASE_TIMEOUT.saturating_sub(started.elapsed());

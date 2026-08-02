@@ -1,4 +1,4 @@
-//! sing-box sidecar process session (child handle, mode, config path).
+//! Core sidecar process session (child handle, mode, config path).
 
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};

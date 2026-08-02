@@ -180,7 +180,7 @@ async fn restart_tun_send_safe(app: AppHandle, path: Arc<String>) -> Result<(), 
     let _pid = tokio::task::spawn_blocking(move || {
         aurestream_plugin_tun::macos::start_tun_via_helper(
             &path_c,
-            &crate::engine::log::resolve_singbox_log_path(&app_c)
+            &crate::engine::log::resolve_core_log_path(&app_c)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default(),
             false,

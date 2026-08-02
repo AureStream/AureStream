@@ -103,7 +103,7 @@ pub fn cleanup_on_shutdown() {
 }
 
 /// System proxy bypass uses the platform-safe default only. Domain/IP direct
-/// routing should be defined in the remote sing-box config/template.
+/// routing should be defined in the remote proxy config/template.
 pub fn resolve_proxy_bypass(_app: &tauri::AppHandle) -> String {
     aurestream_plugin_proxy::bypass::DEFAULT_BYPASS.to_string()
 }

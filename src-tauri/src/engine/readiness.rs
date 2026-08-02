@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager};
 use tokio::net::TcpStream;
 use tokio::time::{sleep, timeout, Instant};
 
-use crate::engine::ports::controller_port;
+use crate::engine::ports::api_port;
 use crate::engine::state_machine::{transition, EngineState, EngineStateCell, Intent};
 
 pub(crate) const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -13,7 +13,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 pub fn spawn(app: AppHandle, start_epoch: u64) {
     tokio::spawn(async move {
-        let controller = controller_port(&app);
+        let controller = api_port(&app);
         let started = Instant::now();
         let deadline = started + STARTUP_TIMEOUT;
         loop {

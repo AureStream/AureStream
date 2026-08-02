@@ -8,7 +8,7 @@ pub(super) fn today_date_string() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 
-fn compress_singbox_log(log_path: &Path) -> std::io::Result<()> {
+fn compress_core_log(log_path: &Path) -> std::io::Result<()> {
     const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024;
 
     if let Ok(meta) = std::fs::metadata(log_path) {
@@ -38,7 +38,7 @@ fn compress_singbox_log(log_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::path::PathBuf> {
+pub(crate) fn prepare_core_log_dir(log_dir: &Path) -> std::io::Result<std::path::PathBuf> {
     std::fs::create_dir_all(log_dir)?;
 
     let date = today_date_string();
@@ -69,7 +69,7 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
             }
 
             if is_log && !name_str.contains(&date) {
-                let _ = compress_singbox_log(&entry.path());
+                let _ = compress_core_log(&entry.path());
             }
         }
     }
@@ -83,7 +83,7 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             let fallback = log_dir.join(format!("aurestream-core-user-{}.log", date));
             log::warn!(
-                "[sing-box] log {} is not writable, using {}",
+                "[core] log {} is not writable, using {}",
                 log_path.display(),
                 fallback.display()
             );
@@ -97,15 +97,15 @@ pub(crate) fn prepare_singbox_log_dir(log_dir: &Path) -> std::io::Result<std::pa
     }
 }
 
-pub(crate) fn resolve_singbox_log_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_core_log_path(app: &AppHandle) -> Option<std::path::PathBuf> {
     let log_dir = app.path().app_log_dir().ok()?;
-    prepare_singbox_log_dir(&log_dir)
-        .map_err(|e| log::warn!("[sing-box] prepare log dir failed: {}", e))
+    prepare_core_log_dir(&log_dir)
+        .map_err(|e| log::warn!("[core] prepare log dir failed: {}", e))
         .ok()
 }
 
-pub(super) fn create_singbox_log_writer(app: &AppHandle) -> Option<std::fs::File> {
-    let log_path = resolve_singbox_log_path(app)?;
+pub(super) fn create_core_log_writer(app: &AppHandle) -> Option<std::fs::File> {
+    let log_path = resolve_core_log_path(app)?;
     std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -114,7 +114,7 @@ pub(super) fn create_singbox_log_writer(app: &AppHandle) -> Option<std::fs::File
         .ok()
 }
 
-pub(super) fn write_singbox_log(writer: &mut Option<std::fs::File>, line: &str) {
+pub(super) fn write_core_log(writer: &mut Option<std::fs::File>, line: &str) {
     if let Some(ref mut file) = writer {
         let trimmed = line.trim_end_matches(|c| c == '\r' || c == '\n');
         let _ = writeln!(file, "{}", trimmed);

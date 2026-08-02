@@ -1,6 +1,6 @@
 use crate::core::{EVENT_STATUS_CHANGED, EVENT_TAURI_LOG};
 use crate::engine::ports::{
-    controller_port, mixed_proxy_port, probe_port_listening, wait_for_port_bindable,
+    api_port, mixed_proxy_port, probe_port_listening, wait_for_port_bindable,
     wait_for_port_listening,
 };
 use crate::engine::process::{pm_snapshot, ProcessManager};
@@ -37,10 +37,10 @@ fn note_reload_entry() -> Option<Duration> {
     elapsed
 }
 
-/// Always ask the privileged helper to release sing-box (TUN mode runs as root).
+/// Always ask the privileged helper to release core (TUN mode runs as root).
 #[cfg(target_os = "macos")]
-async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
-    ::log::info!("[start] ensuring helper-managed sing-box is stopped");
+async fn stop_helper_managed_core(mixed_port: u16, ctrl_port: u16) {
+    ::log::info!("[start] ensuring helper-managed core is stopped");
     // ensure_port_free_with_retry kills processes in ALL TCP states via the
     // root helper, then polls TcpListener::bind to confirm the port is free.
     if let Err(e) =
@@ -59,16 +59,16 @@ async fn stop_helper_managed_sing_box(mixed_port: u16, ctrl_port: u16) {
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn stop_helper_managed_sing_box(_mixed_port: u16, _ctrl_port: u16) {}
+async fn stop_helper_managed_core(_mixed_port: u16, _ctrl_port: u16) {}
 
 async fn ensure_proxy_ports_free(app: &AppHandle) {
     let mixed_port = mixed_proxy_port(app);
-    let ctrl_port = controller_port(app);
+    let ctrl_port = api_port(app);
 
     // Delegate port cleanup to the privileged helper (root) when available.
     // On macOS this kills processes in ALL TCP states and polls bindability.
     // On other platforms it polls TcpListener::bind with a timeout.
-    stop_helper_managed_sing_box(mixed_port, ctrl_port).await;
+    stop_helper_managed_core(mixed_port, ctrl_port).await;
 
     // Also run user-level kill_orphans as belt-and-suspenders for any
     // user-owned processes the helper may have missed.
@@ -82,9 +82,9 @@ async fn ensure_proxy_ports_free(app: &AppHandle) {
         ::log::info!("[start] prestart :{port}: {}", res.message);
     }
 
-    // Final hard check: ports MUST be bindable before we spawn sing-box.
+    // Final hard check: ports MUST be bindable before we spawn core.
     // If ports are still blocked after all cleanup, fail fast instead of
-    // "proceeding anyway" and letting sing-box crash with BIND FAILED.
+    // "proceeding anyway" and letting core crash with BIND FAILED.
     let mixed_bindable = wait_for_port_bindable(mixed_port, Duration::from_secs(5)).await;
     if !mixed_bindable {
         ::log::warn!(
@@ -244,7 +244,7 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
             return Err(e);
         }
     } else {
-        ::log::info!("[start] action={action} config unchanged, skipping sing-box check");
+        ::log::info!("[start] action={action} config unchanged, skipping config check");
     }
 
     let engine_start = perf::StepTimer::new("start.engine");
@@ -386,7 +386,7 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
                 return Err(e);
             }
         } else {
-            ::log::info!("[reload] action={action} config unchanged, skipping sing-box check");
+            ::log::info!("[reload] action={action} config unchanged, skipping config check");
         }
 
         ::log::info!("[reload] action={action} dispatching PlatformEngine::restart");

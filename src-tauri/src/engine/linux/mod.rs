@@ -6,7 +6,7 @@ use aurestream_plugin_tun::linux::{
     apply_system_dns_override, prepare_dns_override, restore_system_dns, set_dns_override,
     stop_tun_and_restore_dns, take_dns_override,
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 pub struct LinuxEngine;
 
@@ -27,8 +27,7 @@ impl EngineManager for LinuxEngine {
                     .shell()
                     .sidecar("aurestream-core")
                     .map_err(|e| format!("sidecar lookup failed: {}", e))?
-                    .env("ENABLE_DEPRECATED_LEGACY_DNS_SERVERS", "true")
-                    .args(["run", "-c", &config_path, "--disable-color"]);
+                    .args(["run", "-c", &config_path]);
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
                 log::info!(
@@ -257,7 +256,43 @@ impl EngineManager for LinuxEngine {
         }
     }
 
-    async fn restart(_app: &AppHandle) -> Result<(), String> {
-        aurestream_plugin_privilege::linux::reload()
+    /// Xray-core has no SIGHUP-based hot reload, so SystemProxy mode does a
+    /// real stop+start cycle instead (mirrors `WindowsEngine::restart`). TUN
+    /// mode keeps the existing pkexec-helper reload path, deferred/untouched
+    /// this phase.
+    async fn restart(app: &AppHandle) -> Result<(), String> {
+        let (mode, config_path) = {
+            let manager = ProcessManager::acquire();
+            let mode = manager.mode.as_ref().map(|m| (**m).clone());
+            let cfg = manager
+                .config_path
+                .as_ref()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            (mode, cfg)
+        };
+        let Some(mode) = mode else {
+            return Err("No running process found".to_string());
+        };
+
+        if matches!(mode, ProxyMode::IntoProxy) {
+            return aurestream_plugin_privilege::linux::reload();
+        }
+
+        let start_epoch = app
+            .state::<crate::engine::state_machine::EngineStateCell>()
+            .snapshot()
+            .epoch();
+        let mixed_port = crate::engine::ports::mixed_proxy_port(app);
+        Self::stop(app).await?;
+
+        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < release_deadline
+            && !crate::engine::ports::probe_port_bindable(mixed_port)
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        Self::start(app, mode, config_path, start_epoch).await
     }
 }
