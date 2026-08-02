@@ -8,6 +8,7 @@ pub mod process;
 pub mod readiness;
 pub mod shutdown;
 pub mod state_machine;
+pub mod xray_api;
 
 #[cfg(target_os = "linux")]
 pub mod linux;

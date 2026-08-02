@@ -1,17 +1,14 @@
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
 import { invalidateConnectionConfigCache } from '@/lib/merge-cache';
-import { invalidateControllerClientCache } from '@/utils/singbox-api/controller-cache';
 import {
     ALLOWLAN_STORE_KEY,
     CONTROLLER_PORT_STORE_KEY,
-    CONTROLLER_SECRET_STORE_KEY,
     DEFAULT_CONTROLLER_PORT,
     DEFAULT_PROXY_PORT,
     ENABLE_BYPASS_ROUTER_STORE_KEY,
     ENABLE_TUN_STORE_KEY,
     LEGACY_CLASH_API_PORT_STORE_KEY,
-    LEGACY_CLASH_API_SECRET_STORE_KEY,
     PROXY_PORT_STORE_KEY,
     SKIP_SYSTEM_PROXY_STORE_KEY,
     TUN_STACK_STORE_KEY,
@@ -195,30 +192,6 @@ async function readPortWithLegacy(
     return defaultPort;
 }
 
-/** Bearer secret for sing-box experimental.clash_api. */
-export async function getControllerSecret(): Promise<string> {
-    let secret =
-        (await readStoreKey<string>(CONTROLLER_SECRET_STORE_KEY)) ??
-        (await readStoreKey<string>(LEGACY_CLASH_API_SECRET_STORE_KEY));
-    if (secret) {
-        if (!(await readStoreKey(CONTROLLER_SECRET_STORE_KEY))) {
-            await persistStoreKey(CONTROLLER_SECRET_STORE_KEY, secret, { immediate: true });
-            invalidateControllerClientCache();
-        }
-        return secret;
-    }
-    const array = new Uint8Array(12);
-    crypto.getRandomValues(array);
-    const randomSecret = Array.from(array)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-    await persistStoreKey(CONTROLLER_SECRET_STORE_KEY, randomSecret, { immediate: true });
-    invalidateControllerClientCache();
-    return randomSecret;
-}
-
-/** @deprecated Use getControllerSecret */
-export const getClashApiSecret = getControllerSecret;
 
 export async function isBypassRouterEnabled(): Promise<boolean> {
     return Boolean(await readStoreKey(ENABLE_BYPASS_ROUTER_STORE_KEY));
@@ -319,7 +292,6 @@ export async function setControllerPort(port: number): Promise<void> {
     }
     await persistStoreKey(CONTROLLER_PORT_STORE_KEY, port, { immediate: true });
     invalidateConnectionConfigCache();
-    invalidateControllerClientCache();
 }
 
 /** @deprecated Use getControllerPort */

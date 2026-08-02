@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useEngineState } from "./useEngineState"
-import { subscribeTraffic } from "@/utils/singbox-api/traffic"
+import { subscribeTraffic } from "@/utils/xray-api/traffic"
 import { getStoreValue } from "@/single/store"
 import { SSI_STORE_KEY } from "@/types/definition"
 import { accumulateUsedTraffic, getLocalSubscriptions, uploadPendingTraffic } from "@/action/db"

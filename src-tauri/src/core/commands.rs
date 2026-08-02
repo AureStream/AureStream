@@ -427,6 +427,20 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
     }
 }
 
+/// Live-switches the active proxy node via Xray's balancer override API,
+/// without restarting the process. Replaces the old Clash-API
+/// `PUT /proxies/ExitGateway` call in `src/lib/hot-reload-config.ts` —
+/// callers should fall back to `reload_config` (full config regen + restart)
+/// if this fails, same as before.
+#[tauri::command]
+pub async fn select_node(app: tauri::AppHandle, node_tag: String) -> Result<(), String> {
+    let cur = app.state::<EngineStateCell>().snapshot();
+    if !matches!(cur, EngineState::Running { .. }) {
+        return Err(format!("engine not running (state={})", cur.kind()));
+    }
+    crate::engine::xray_api::override_balancer(&app, &node_tag).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,11 +20,8 @@ export const MINIMIZE_TO_TRAY_STORE_KEY = 'minimize_to_tray_key';
 /** Xray-core `api` inbound (gRPC HandlerService/StatsService/RoutingService) port. */
 export const DEFAULT_CONTROLLER_PORT = 9191;
 export const CONTROLLER_PORT_STORE_KEY = 'core_api_port_key';
-/** @deprecated Unused since the Xray-core migration — Xray's api service has no secret/auth. */
-export const CONTROLLER_SECRET_STORE_KEY = 'singbox_api_secret_key';
-/** Legacy store keys (read-only migration) */
+/** Legacy store key (read-only migration) */
 export const LEGACY_CLASH_API_PORT_STORE_KEY = 'clash_api_port_key';
-export const LEGACY_CLASH_API_SECRET_STORE_KEY = 'clash_api_secret_key';
 
 export const APP_VERSION = '0.3.4';
 

@@ -37,6 +37,7 @@ pub fn spawn(app: AppHandle, start_epoch: u64) {
                     started.elapsed().as_millis()
                 );
                 let _ = transition(&app, Intent::MarkRunning);
+                crate::engine::xray_api::spawn_traffic_poll(app.clone());
                 return;
             }
 

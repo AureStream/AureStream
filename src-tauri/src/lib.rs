@@ -38,6 +38,7 @@ pub fn run() {
             crate::core::commands::stop,
             crate::core::commands::get_engine_state,
             crate::core::commands::reload_config,
+            crate::core::commands::select_node,
             crate::engine::config_check::mark_config_verified,
             // engine probe commands
             crate::core::engine_commands::engine_ensure_installed,

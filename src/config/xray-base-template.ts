@@ -121,7 +121,14 @@ export function buildBaseXrayConfig(
     },
     stats: {},
     policy: {
-      system: { statsOutboundUplink: true, statsOutboundDownlink: true },
+      // Inbound counters (not outbound) give total app traffic in one query
+      // regardless of how many subscription nodes exist — see engine/xray_api.rs.
+      system: {
+        statsInboundUplink: true,
+        statsInboundDownlink: true,
+        statsOutboundUplink: true,
+        statsOutboundDownlink: true,
+      },
     },
     dns: {
       servers: ["223.5.5.5", "8.8.8.8"],

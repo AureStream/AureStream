@@ -12,8 +12,7 @@ import {
 import { flushStore, getEnableTun, getStoreValue } from "@/single/store"
 import { SSI_STORE_KEY } from "@/types/definition"
 import { getEngineState } from "@/utils/vpn-service"
-import { invalidateControllerClientCache } from "@/utils/singbox-api/controller-cache"
-import { selectProxyNode } from "@/utils/singbox-api/proxies"
+import { selectProxyNode } from "@/utils/xray-api/proxies"
 
 export async function isEngineRunning(): Promise<boolean> {
   const state = await getEngineState()
@@ -48,8 +47,6 @@ export async function hotReloadConnectionConfig(
     await flushStore()
     await perf.run("hot-reload.invoke", () => invoke("reload_config"))
   })
-
-  invalidateControllerClientCache()
 }
 
 /** Hot-reload when engine is running; no-op when idle. Returns whether reload ran. */
@@ -74,9 +71,9 @@ export async function hotReloadIfRunning(
 }
 
 /**
- * 动态无缝切换正在运行中的 sing-box 节点。
- * 若引擎运行中，优先使用 Clash API 进行选择切换并静默更新磁盘配置；
- * 若 API 切换失败，则自动降级回退到全量热重载（SIGHUP/重启）。
+ * 动态无缝切换正在运行中的 Xray-core 节点。
+ * 若引擎运行中，优先使用 balancer override API 进行选择切换并静默更新磁盘配置；
+ * 若 API 切换失败，则自动降级回退到全量热重载（stop+respawn，Xray 没有热重载）。
  */
 export async function switchNodeActive(
   subscriptionIdentifier: string,
@@ -95,11 +92,11 @@ export async function switchNodeActive(
     return false
   }
 
-  // 2. 引擎运行中，尝试调用 Clash API 动态切换当前 ExitGateway 节点
+  // 2. 引擎运行中，尝试调用 balancer override API 动态切换当前代理节点
   const apiSuccess = await selectProxyNode(nodeId)
 
   if (apiSuccess) {
-    console.info(`[hot-reload] 成功通过 Clash API 无缝切换节点至 "${nodeId}"`)
+    console.info(`[hot-reload] 成功通过 balancer override 无缝切换节点至 "${nodeId}"`)
 
     // 3. 静默在后台将新节点保存进磁盘 config.json，不触发 SIGHUP 信号
     try {
@@ -115,8 +112,8 @@ export async function switchNodeActive(
     return true
   }
 
-  // 4. API 切换失败降级：回退到全量热重载（SIGHUP / 重启）
-  console.warn(`[hot-reload] Clash API 切换节点 "${nodeId}" 失败，降级回退至全量热重载`)
+  // 4. API 切换失败降级：回退到全量热重载（stop+respawn）
+  console.warn(`[hot-reload] balancer override 切换节点 "${nodeId}" 失败，降级回退至全量热重载`)
   await hotReloadConnectionConfig(subscriptionIdentifier)
   return true
 }

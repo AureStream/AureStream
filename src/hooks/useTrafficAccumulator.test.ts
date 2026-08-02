@@ -40,7 +40,7 @@ vi.mock("@/action/db", () => ({
   uploadPendingTraffic: uploadPendingTrafficMock,
 }))
 
-vi.mock("@/utils/singbox-api/traffic", () => ({
+vi.mock("@/utils/xray-api/traffic", () => ({
   subscribeTraffic: subscribeTrafficMock,
 }))
 

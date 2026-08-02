@@ -5,7 +5,6 @@ import { mergeConnectionConfig } from "@/lib/connection-config"
 import { perf } from "@/lib/perf"
 import type { RoutingMode } from "@/lib/routing-mode"
 import type { ProxyMode } from "@/utils/vpn-service"
-import { invalidateControllerClientCache } from "@/utils/singbox-api/controller-cache"
 
 /**
  * Mode switch: stop the current engine, generate new config, then restart.
@@ -37,8 +36,5 @@ export async function switchProxyMode(
     await perf.run("mode-switch.start", () =>
       invoke("start", { path: configPath, mode })
     )
-
-    // 4. Invalidate controller client cache (controller port may change)
-    invalidateControllerClientCache()
   })
 }

@@ -3,7 +3,6 @@ import {
   getAllowLan,
   getConfiguredDirectDNS,
   getControllerPort,
-  getControllerSecret,
   getProxyPort,
   getStoreValue,
   getTunStack,
@@ -35,7 +34,6 @@ export async function computeMergeCacheKey(
     useDHCP,
     directDns,
     controllerPort,
-    controllerSecret,
     stageVersion,
   ] = await Promise.all([
     getSubscriptionMergeRevision(input.subscriptionIdentifier),
@@ -46,7 +44,6 @@ export async function computeMergeCacheKey(
     getUseDHCP(),
     getConfiguredDirectDNS(),
     getControllerPort(),
-    getControllerSecret(),
     getStoreValue(STAGE_VERSION_STORE_KEY, "release"),
   ])
 
@@ -62,7 +59,6 @@ export async function computeMergeCacheKey(
     useDHCP ? "1" : "0",
     directDns ?? "",
     String(controllerPort),
-    controllerSecret,
     String(stageVersion ?? ""),
   ].join("|")
 }
