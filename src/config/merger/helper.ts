@@ -1,159 +1,83 @@
-import { type } from '@tauri-apps/plugin-os';
-import { getConfiguredDirectDNS, getProxyPort, getTunStack, getUseDHCP } from "../../single/store";
-import { TUN_INTERFACE_NAME } from "../../types/definition";
+import { getProxyPort } from "../../single/store";
 import { writeConfigFile } from "../helper";
+import type { FragmentSpec, XrayOutbound } from "../subscription-decoder";
 
-type Item = {
-    tag: string;
-    type: string;
-    platform?: any;
-    stack?: string;
-    interface_name?: string;
-    route_exclude_address?: string[];
-}
+const PROXY_BALANCER_TAG = "proxy-balancer";
 
-type DnsSettings = {
-    useDHCP?: boolean;
-    configuredDirectDNS?: string;
-}
-
-type TunInboundSettings = {
-    proxyPort?: number;
-    tunStack?: string;
-    osType?: string;
-    enableAutoRoute?: boolean;
-}
-
-export async function updateDHCPSettings2Config(newConfig: any, settings: DnsSettings = {}) {
-    const useDHCP = settings.useDHCP ?? (await getUseDHCP());
-    const configuredDirectDNS = useDHCP
-        ? undefined
-        : settings.configuredDirectDNS ?? (await getConfiguredDirectDNS());
-    for (let i = 0; i < newConfig.dns.servers.length; i++) {
-        const server = newConfig.dns.servers[i];
-        if (server.tag === "system") {
-            if (useDHCP) {
-                server.type = "dhcp";
-                delete server.server;
-                delete server.server_port;
-                console.log("启用 DHCP DNS 模式");
-            } else if (configuredDirectDNS) {
-                console.log("当前使用自定义直连 DNS 地址：", configuredDirectDNS);
-                server.type = "udp";
-                server.server = configuredDirectDNS;
-                server.server_port = 53;
-                console.log("启用 UDP DNS 模式, 服务器地址：", server.server);
-            }
-        }
-    }
+function fragmentKey(f: FragmentSpec): string {
+    return `${f.packets}|${f.length}|${f.interval}`;
 }
 
 /**
- * 只提取 VPN 服务器节点配置合并到配置文件中
+ * Inject subscription outbounds into the base config: dedupes identical
+ * `_fragment` tuples into shared `freedom` outbounds (wired in via
+ * `streamSettings.sockopt.dialerProxy`), builds the proxy balancer from every
+ * node tag, and appends the catch-all routing rule that sends non-direct
+ * traffic to it.
  */
 export async function updateVPNServerConfigFromDB(fileName: string, dbConfigData: any, newConfig: any) {
     if (!dbConfigData?.outbounds) {
         throw new Error('subscription_config_missing');
     }
-
-    if (!newConfig["outbounds"] || !Array.isArray(newConfig["outbounds"])) {
-        throw new Error('remote_template_missing_outbounds_array');
+    if (!Array.isArray(newConfig.outbounds)) {
+        throw new Error('base_template_missing_outbounds_array');
+    }
+    if (!newConfig.routing || !Array.isArray(newConfig.routing.rules)) {
+        throw new Error('base_template_missing_routing');
     }
 
-    let outboundsSelectorIndex = newConfig["outbounds"].findIndex((o: any) => o.tag === "ExitGateway" && o.type === "selector");
-    let outboundsUrltestIndex = newConfig["outbounds"].findIndex((o: any) => o.tag === "auto" && o.type === "urltest");
-
-    if (outboundsSelectorIndex === -1 || outboundsUrltestIndex === -1) {
-        throw new Error('remote_template_missing_routing_groups');
+    const nodeOutbounds: XrayOutbound[] = dbConfigData.outbounds;
+    if (nodeOutbounds.length === 0) {
+        throw new Error('subscription_config_empty');
     }
 
-    const outbound_groups = newConfig["outbounds"];
-    const outboundsSelector = outbound_groups[outboundsSelectorIndex]["outbounds"];
-    const outboundsUrltest = outbound_groups[outboundsUrltestIndex]["outbounds"];
+    const fragmentTagByKey = new Map<string, string>();
+    const fragmentOutbounds: Record<string, unknown>[] = [];
+    const nodeTags: string[] = [];
 
-    const seenTags = new Set<string>();
-    const vpnServerList = dbConfigData.outbounds.filter((item: Item) => {
-        // 只找VPN服务器的节点配置
-        let flag = item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block";
+    for (const node of nodeOutbounds) {
+        const { _fragment, ...clean } = node;
 
-        // sing-box 1.12 版本开始，dns 类型的节点不再需要
-        flag = flag && item.type !== "dns";
-
-        if (flag && seenTags.has(item.tag)) {
-            console.warn(`[CONFIG] Skipping duplicate outbound tag: ${item.tag}`);
-            return false;
+        if (_fragment) {
+            const key = fragmentKey(_fragment);
+            let tag = fragmentTagByKey.get(key);
+            if (!tag) {
+                tag = `fragment-out-${fragmentTagByKey.size + 1}`;
+                fragmentTagByKey.set(key, tag);
+                fragmentOutbounds.push({
+                    tag,
+                    protocol: "freedom",
+                    settings: { fragment: _fragment },
+                });
+            }
+            const existingStream = (clean.streamSettings as Record<string, unknown> | undefined) ?? {};
+            const existingSockopt = (existingStream.sockopt as Record<string, unknown> | undefined) ?? {};
+            clean.streamSettings = {
+                ...existingStream,
+                sockopt: { ...existingSockopt, dialerProxy: tag },
+            };
         }
-        if (flag) seenTags.add(item.tag);
-        return flag;
+
+        newConfig.outbounds.push(clean);
+        nodeTags.push(clean.tag);
+    }
+
+    newConfig.outbounds.push(...fragmentOutbounds);
+
+    newConfig.routing.balancers = [
+        {
+            tag: PROXY_BALANCER_TAG,
+            selector: nodeTags,
+            strategy: { type: "random" },
+        },
+    ];
+    newConfig.routing.rules.push({
+        type: "field",
+        network: "tcp,udp",
+        balancerTag: PROXY_BALANCER_TAG,
     });
 
-    for (let i = 0; i < vpnServerList.length; i++) {
-        vpnServerList[i]["domain_resolver"] = "system";
-        outboundsSelector.push(vpnServerList[i].tag);
-    }
-
-    const urltestNameList: string[] = vpnServerList.map((item: any) => item.tag);
-
-    outboundsUrltest.push(...urltestNameList);
-    outbound_groups.push(...vpnServerList);
-
     await writeConfigFile(fileName, new TextEncoder().encode(JSON.stringify(newConfig)));
-}
-
-export async function configureTunInbound(
-    newConfig: any,
-    bypassRouter: boolean = false,
-    settings: TunInboundSettings = {}
-): Promise<void> {
-    const tunInbound = newConfig.inbounds.find((ib: Item) => ib.type === "tun" && ib.tag === "tun");
-    if (!tunInbound) return;
-    const proxyPort = settings.proxyPort ?? (await getProxyPort());
-
-    if (tunInbound.platform?.http_proxy) {
-        tunInbound.platform.http_proxy.server_port = proxyPort;
-    }
-
-    const osType = settings.osType ?? type();
-    if (osType === "linux") {
-        tunInbound.stack = "system";
-    } else if (osType !== "macos") {
-        // macOS 上保留模板默认的 stack（通常为 gvisor），
-        // system stack 在 macOS 上有已知的路由表/IPv6 兼容性问题。
-        tunInbound.stack = settings.tunStack ?? (await getTunStack());
-    }
-    if (osType === "macos") {
-        tunInbound.interface_name = TUN_INTERFACE_NAME;
-    }
-
-    if (bypassRouter && Array.isArray(tunInbound.route_exclude_address)) {
-        const lanRanges = new Set(["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]);
-        tunInbound.route_exclude_address = tunInbound.route_exclude_address.filter(
-            (cidr: string) => !lanRanges.has(cidr),
-        );
-        tunInbound.route_exclude_address.push("10.0.0.1/32");
-    }
-
-    if (bypassRouter) {
-        const hasDnsIn = newConfig.inbounds.some((ib: Item) => ib.tag === "dns-in");
-        if (!hasDnsIn) {
-            newConfig.inbounds.push({
-                tag: "dns-in",
-                type: "direct",
-                listen: "::",
-                listen_port: 53,
-            });
-            console.log("旁路由模式：注入 dns-in inbound ([::]:53)");
-        }
-    }
-
-    // Control whether TUN captures system traffic via auto_route.
-    // When false, TUN inbound exists but doesn't set up routes — used for
-    // fast mode-switching (config always has both inbounds).
-    if (settings.enableAutoRoute !== undefined) {
-        tunInbound.auto_route = settings.enableAutoRoute;
-    }
-
-    console.log("当前 TUN Stack:", tunInbound.stack, "auto_route:", tunInbound.auto_route);
 }
 
 export async function configureMixedInbound(
@@ -162,9 +86,23 @@ export async function configureMixedInbound(
     bypassRouter: boolean = false,
     proxyPort?: number
 ): Promise<void> {
-    const mixedInbound = newConfig.inbounds.find((ib: Item) => ib.type === "mixed" && ib.tag === "mixed");
-    if (mixedInbound) {
-        mixedInbound.listen = (allowLan || bypassRouter) ? "0.0.0.0" : "127.0.0.1";
-        mixedInbound.listen_port = proxyPort ?? (await getProxyPort());
+    const socksInbound = newConfig.inbounds.find((ib: any) => ib.tag === "mixed-in");
+    if (socksInbound) {
+        socksInbound.listen = (allowLan || bypassRouter) ? "0.0.0.0" : "127.0.0.1";
+        socksInbound.port = proxyPort ?? (await getProxyPort());
+    }
+}
+
+export function updateApiConfig(newConfig: any, apiPort: number): void {
+    if (newConfig.api) {
+        newConfig.api.listen = `127.0.0.1:${apiPort}`;
+    }
+}
+
+/** Direct (non-proxied) DNS servers. Xray has no DHCP-sourced DNS server type
+ *  (unlike sing-box), so a custom direct DNS just replaces the default list. */
+export function updateDnsSettings(newConfig: any, configuredDirectDNS?: string): void {
+    if (configuredDirectDNS) {
+        newConfig.dns.servers = [configuredDirectDNS];
     }
 }

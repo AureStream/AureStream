@@ -1,48 +1,15 @@
-import * as path from '@tauri-apps/api/path';
-import { type as getOsType } from '@tauri-apps/plugin-os';
 import { getSubscriptionConfig } from '../../action/db';
 import {
     getAllowLan,
     getConfiguredDirectDNS,
-    getControllerSecret,
     getControllerPort,
     getProxyPort,
-    getStoreValue,
-    getTunStack,
-    getUseDHCP,
     isBypassRouterEnabled,
 } from '../../single/store';
-import { STAGE_VERSION_STORE_KEY } from '../../types/definition';
-import { configureMixedInbound, configureTunInbound, updateDHCPSettings2Config, updateVPNServerConfigFromDB } from './helper';
+import { configureMixedInbound, updateApiConfig, updateDnsSettings, updateVPNServerConfigFromDB } from './helper';
+import { buildBaseXrayConfig } from '../xray-base-template';
 
 import { configType } from '../common';
-import { cacheFileNameForProfile } from '../rule-cache';
-import { fetchRemoteTemplate } from '../templates/fetch';
-
-async function getConfigTemplate(mode: configType): Promise<any> {
-    const configString = await fetchRemoteTemplate(mode);
-    return JSON.parse(configString);
-}
-
-
-async function updateExperimentalConfig(newConfig: any, dbCacheFilePath: string) {
-    newConfig.experimental = newConfig.experimental ?? {};
-    newConfig.experimental.clash_api = newConfig.experimental.clash_api ?? {};
-
-    newConfig.experimental.cache_file = {
-        enabled: true,
-        path: dbCacheFilePath,
-        store_fakeip: true,
-        store_rdrc: true,
-    };
-
-    newConfig.experimental.clash_api.external_controller =
-        `127.0.0.1:${await getControllerPort()}`;
-    const secret = await getControllerSecret();
-    if (secret) {
-        newConfig.experimental.clash_api.secret = secret;
-    }
-}
 
 /** Routing mode dimension (without proxy mode). */
 export type RoutingMode = 'rule' | 'global';
@@ -52,42 +19,46 @@ export type MergeProfile = {
     mode: configType;
 }
 
-/** Convenience: build MergeProfile from routing mode + TUN boolean. */
+/**
+ * Convenience: build MergeProfile from routing mode + TUN boolean.
+ *
+ * TUN mode is deferred — Xray-core's native `tun` inbound isn't wired up on
+ * the Rust engine side yet (System Proxy mode only, this phase).
+ */
 export function makeProfile(routing: RoutingMode, tun: boolean): MergeProfile {
-    if (routing === 'global') {
-        return { mode: tun ? 'tun-global' : 'mixed-global' };
+    if (tun) {
+        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
     }
-    return { mode: tun ? 'tun' : 'mixed' };
+    return { mode: routing === 'global' ? 'mixed-global' : 'mixed' };
 }
 
 type MergeConfigOptions = MergeProfile & {
     label: string;
 }
 
+function isTunMode(mode: configType): boolean {
+    return mode === 'tun' || mode === 'tun-global';
+}
+
 async function mergeConfig(identifier: string, options: MergeConfigOptions) {
-    const isTun = options.mode === 'tun' || options.mode === 'tun-global';
+    if (isTunMode(options.mode)) {
+        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
+    }
+    const isGlobal = options.mode === 'mixed-global';
 
     const [
-        newConfig,
         dbConfigData,
-        appConfigPath,
-        stageVersion,
         allowLan,
         bypassRouter,
         proxyPort,
-        tunStack,
-        useDHCP,
+        apiPort,
         configuredDirectDNS,
     ] = await Promise.all([
-        getConfigTemplate(options.mode),
         getSubscriptionConfig(identifier),
-        path.appConfigDir(),
-        getStoreValue(STAGE_VERSION_STORE_KEY),
         getAllowLan(),
         isBypassRouterEnabled(),
         getProxyPort(),
-        getTunStack(),
-        getUseDHCP(),
+        getControllerPort(),
         getConfiguredDirectDNS(),
     ]);
 
@@ -95,56 +66,32 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         throw new Error(`Subscription config unavailable for identifier=${identifier}`);
     }
 
-    newConfig.log.level = stageVersion === "dev" ? "debug" : "info";
     console.log(options.label);
 
-    const dbCacheFilePath = await path.join(appConfigPath, cacheFileNameForProfile(options.mode));
-    await Promise.all([
+    const newConfig = buildBaseXrayConfig(isGlobal);
 
-        updateExperimentalConfig(newConfig, dbCacheFilePath),
-    ]);
-
-    // Resolve local rule_set paths, and force remote rule_sets to download
-    // through the direct outbound so they don't compete with proxy setup.
-    if (newConfig.route?.rule_set) {
-        for (const ruleSet of newConfig.route.rule_set) {
-            if (ruleSet.type === "local" && ruleSet.path) {
-                ruleSet.path = await path.resolveResource(ruleSet.path);
-            }
-            if (ruleSet.type === "remote" && !ruleSet.download_detour) {
-                ruleSet.download_detour = "direct";
-            }
-        }
-    }
-
-    // TUN mode: configure the TUN inbound (stack, gateway, auto_route, etc.)
-    // SystemProxy mode: the template already has no TUN inbound — nothing to remove.
-    if (isTun) {
-        await configureTunInbound(newConfig, bypassRouter, {
-            proxyPort,
-            tunStack,
-            osType: getOsType(),
-            enableAutoRoute: true,
-        });
-    }
-
+    updateApiConfig(newConfig, apiPort);
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
-    await updateDHCPSettings2Config(newConfig, { useDHCP, configuredDirectDNS });
+    updateDnsSettings(newConfig, configuredDirectDNS);
     await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
 }
 
-export function setRuleConfig(identifier: string, tun: boolean) {
-    const mode: configType = tun ? 'tun' : 'mixed';
+export async function setRuleConfig(identifier: string, tun: boolean) {
+    if (tun) {
+        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
+    }
     return mergeConfig(identifier, {
-        mode,
-        label: `写入[规则]${tun ? 'TUN' : '系统代理'}配置文件`,
+        mode: 'mixed',
+        label: `写入[规则]系统代理配置文件`,
     });
 }
 
-export function setGlobalConfig(identifier: string, tun: boolean) {
-    const mode: configType = tun ? 'tun-global' : 'mixed-global';
+export async function setGlobalConfig(identifier: string, tun: boolean) {
+    if (tun) {
+        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
+    }
     return mergeConfig(identifier, {
-        mode,
-        label: `写入[全局]${tun ? 'TUN' : '系统代理'}配置文件`,
+        mode: 'mixed-global',
+        label: `写入[全局]系统代理配置文件`,
     });
 }

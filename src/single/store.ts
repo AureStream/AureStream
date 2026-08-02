@@ -1,6 +1,5 @@
 import { locale } from '@tauri-apps/plugin-os';
 import { LazyStore } from '@tauri-apps/plugin-store';
-import type { configType } from '@/config/common';
 import { invalidateConnectionConfigCache } from '@/lib/merge-cache';
 import { invalidateControllerClientCache } from '@/utils/singbox-api/controller-cache';
 import {
@@ -23,8 +22,6 @@ import {
     MINIMIZE_TO_TRAY_STORE_KEY,
     AUTO_FAILOVER_ENABLED_KEY,
     LAST_MANUAL_NODE_TAG_KEY,
-    SING_BOX_MAJOR_VERSION,
-    SING_BOX_VERSION,
     SSI_STORE_KEY,
     SELECTED_NODE_TAG_STORE_PREFIX,
 } from '../types/definition';
@@ -329,49 +326,6 @@ export async function setControllerPort(port: number): Promise<void> {
 export const getClashApiPort = getControllerPort;
 /** @deprecated Use setControllerPort */
 export const setClashApiPort = setControllerPort;
-
-export async function getConfigTemplateURLKey(mode: configType): Promise<string> {
-    return `key-sing-box-${SING_BOX_MAJOR_VERSION}-${mode}-template-path`;
-}
-
-export async function getConfigTemplateURL(mode: configType): Promise<string> {
-    const cacheKey = await getConfigTemplateURLKey(mode);
-    const defaultTemplatePath = await getDefaultConfigTemplateURL(mode);
-    let url = await getStoreValue(cacheKey, defaultTemplatePath) as string;
-    if (url.includes('testingcf.jsdelivr.net') || url.includes('jsdelivr') || (url.includes('raw.githubusercontent.com') && !url.includes('gh-proxy.org'))) {
-        url = defaultTemplatePath;
-        await setStoreValue(cacheKey, url, { immediate: true });
-    }
-    return url;
-}
-
-export async function setConfigTemplateURL(mode: configType, url: string) {
-    const cacheKey = await getConfigTemplateURLKey(mode);
-    await setStoreValue(cacheKey, url, { immediate: true });
-}
-
-export async function getDefaultConfigTemplateURL(mode: configType): Promise<string> {
-    const remoteUrl = "https://gh-proxy.org/https://raw.githubusercontent.com/BadKid90s/AureStream-Config/main";
-    const versionNumber = SING_BOX_VERSION.replace('v', '').split('.');
-    const major = versionNumber[0];
-    const minor = versionNumber[1];
-    const patch = parseInt(versionNumber[2] || '0', 10);
-    let ver = `${major}.${minor}`;
-    if (major === '1' && minor === '13' && patch >= 8) {
-        ver = '1.13';
-    }
-
-    switch (mode) {
-        case 'mixed':
-            return `${remoteUrl}/${ver}/zh-cn/mixed-rules.jsonc`;
-        case 'tun':
-            return `${remoteUrl}/${ver}/zh-cn/tun-rules.jsonc`;
-        case 'mixed-global':
-            return `${remoteUrl}/${ver}/zh-cn/mixed-global.jsonc`;
-        case 'tun-global':
-            return `${remoteUrl}/${ver}/zh-cn/tun-global.jsonc`;
-    }
-}
 
 export type TunStack = 'system' | 'gvisor' | 'mixed';
 

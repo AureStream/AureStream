@@ -1,25 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const appConfigDirMock = vi.hoisted(() => vi.fn())
-const joinMock = vi.hoisted(() => vi.fn())
-const resolveResourceMock = vi.hoisted(() => vi.fn())
-const existsMock = vi.hoisted(() => vi.fn())
 const writeFileMock = vi.hoisted(() => vi.fn())
+const existsMock = vi.hoisted(() => vi.fn())
 const createMock = vi.hoisted(() => vi.fn())
 const getSubscriptionConfigMock = vi.hoisted(() => vi.fn())
-const getSubscriptionMergeRevisionMock = vi.hoisted(() => vi.fn())
-const storeValues = vi.hoisted(() => new Map<string, unknown>())
-const fetchRemoteTemplateMock = vi.hoisted(() => vi.fn())
-
-vi.mock("@tauri-apps/api/path", () => ({
-  appConfigDir: appConfigDirMock,
-  join: joinMock,
-  resolveResource: resolveResourceMock,
-}))
-
-vi.mock("@tauri-apps/plugin-os", () => ({
-  type: () => "windows",
-}))
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   BaseDirectory: { AppConfig: "AppConfig" },
@@ -30,103 +14,127 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 
 vi.mock("../../action/db", () => ({
   getSubscriptionConfig: getSubscriptionConfigMock,
-  getSubscriptionMergeRevision: getSubscriptionMergeRevisionMock,
 }))
 
-vi.mock("../../single/store", async () => {
-  return {
-    getAllowLan: vi.fn(async () => false),
-    getConfiguredDirectDNS: vi.fn(async () => undefined),
-    getConfiguredProxyDNS: vi.fn(async () => undefined),
-    getControllerSecret: vi.fn(async () => "secret-token"),
-    getControllerPort: vi.fn(async () => 9191),
-    getProxyPort: vi.fn(async () => 2345),
-    getStoreValue: vi.fn(async (key: string, def: unknown) => {
-      if (key === "AppSecretToken") return "secret-token"
-      if (key === "AppApiPort") return 9191
-      return storeValues.get(key) ?? def
-    }),
-    getTunStack: vi.fn(async () => "system"),
-    getUseDHCP: vi.fn(async () => false),
-    isBypassRouterEnabled: vi.fn(async () => true),
-    setStoreValue: vi.fn(async (key: string, value: unknown) => {
-      storeValues.set(key, value)
-    }),
-  }
-})
-
-vi.mock("../templates/fetch", () => ({
-  fetchRemoteTemplate: fetchRemoteTemplateMock,
+vi.mock("../../single/store", () => ({
+  getAllowLan: vi.fn(async () => false),
+  getConfiguredDirectDNS: vi.fn(async () => undefined),
+  getControllerPort: vi.fn(async () => 9191),
+  getProxyPort: vi.fn(async () => 2345),
+  isBypassRouterEnabled: vi.fn(async () => false),
 }))
 
-const legacyTemplateWithoutClashApi = {
-  log: { level: "info" },
-  dns: {
-    servers: [
-      { tag: "system", type: "udp", server: "223.5.5.5" },
-      { tag: "dns_proxy", type: "tls", server: "8.8.8.8" },
-    ],
+const sampleOutbounds = [
+  {
+    tag: "node-a",
+    protocol: "vless",
+    settings: {
+      vnext: [{ address: "1.2.3.4", port: 443, users: [{ id: "uuid-a", encryption: "none" }] }],
+    },
+    streamSettings: { network: "ws", security: "tls", tlsSettings: { serverName: "example.com" } },
   },
-  inbounds: [
-    { tag: "mixed", type: "mixed", listen: "127.0.0.1", listen_port: 6789 },
-  ],
-  route: {
-    rules: [
-      { domain: ["direct-tag.oneoh.cloud"], outbound: "direct" },
-      { domain: ["proxy-tag.oneoh.cloud"], outbound: "ExitGateway" },
-    ],
+  {
+    tag: "node-b",
+    protocol: "vless",
+    settings: {
+      vnext: [{ address: "5.6.7.8", port: 443, users: [{ id: "uuid-b", encryption: "none" }] }],
+    },
+    streamSettings: { network: "ws", security: "tls", tlsSettings: { serverName: "example.com" } },
+    _fragment: { packets: "tlshello", length: "40-60", interval: "30-50" },
   },
-  experimental: {},
-  outbounds: [
-    { tag: "ExitGateway", type: "selector", outbounds: ["auto"] },
-    { tag: "auto", type: "urltest", outbounds: [] },
-  ],
-}
+]
 
-describe("config merger", () => {
+describe("config merger (Xray-core, local template)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    storeValues.clear()
-    appConfigDirMock.mockResolvedValue("C:/Users/test/AppData/Roaming/AureStream")
-    joinMock.mockImplementation(async (...parts: string[]) => parts.join("/"))
-    resolveResourceMock.mockImplementation(async (value: string) => value)
     existsMock.mockResolvedValue(true)
     writeFileMock.mockResolvedValue(undefined)
     createMock.mockResolvedValue({
       write: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined),
     })
-    getSubscriptionConfigMock.mockResolvedValue({
-      outbounds: [
-        {
-          type: "shadowsocks",
-          tag: "node-a",
-          server: "127.0.0.1",
-          server_port: 1080,
-          method: "aes-128-gcm",
-          password: "mock",
-        },
-      ],
-    })
-    getSubscriptionMergeRevisionMock.mockResolvedValue("1:1")
+    getSubscriptionConfigMock.mockResolvedValue({ outbounds: sampleOutbounds })
   })
 
-  it("normalizes legacy templates that do not include experimental.clash_api", async () => {
+  it("writes a locally-built config with all subscription nodes in the proxy balancer", async () => {
     const { setRuleConfig } = await import("./main")
-    fetchRemoteTemplateMock.mockResolvedValue(JSON.stringify(legacyTemplateWithoutClashApi))
 
     await expect(setRuleConfig("sub-a", false)).resolves.toBeUndefined()
 
     const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
     const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
-    expect(written.experimental.clash_api).toEqual({
-      external_controller: "127.0.0.1:9191",
-      secret: "secret-token",
+
+    expect(written.api).toEqual({
+      tag: "api",
+      listen: "127.0.0.1:9191",
+      services: ["HandlerService", "LoggerService", "StatsService", "RoutingService"],
     })
-    expect(written.experimental.cache_file).toMatchObject({
-      enabled: true,
-      store_fakeip: true,
-      store_rdrc: true,
+
+    const tags = written.outbounds.map((o: any) => o.tag)
+    expect(tags).toContain("node-a")
+    expect(tags).toContain("node-b")
+    expect(tags).toContain("direct")
+    expect(tags).toContain("block")
+
+    expect(written.routing.balancers).toEqual([
+      { tag: "proxy-balancer", selector: ["node-a", "node-b"], strategy: { type: "random" } },
+    ])
+    expect(written.routing.rules).toContainEqual({
+      type: "field",
+      network: "tcp,udp",
+      balancerTag: "proxy-balancer",
     })
+    // Rule mode keeps the CN-direct/ads-block rules from the base template.
+    expect(written.routing.rules).toContainEqual({
+      type: "field",
+      domain: ["geosite:cn"],
+      outboundTag: "direct",
+    })
+  })
+
+  it("dedupes identical fragment tuples into a single shared freedom outbound", async () => {
+    const { setRuleConfig } = await import("./main")
+    await setRuleConfig("sub-a", false)
+
+    const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
+    const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
+
+    const fragmentOutbounds = written.outbounds.filter((o: any) => o.protocol === "freedom" && o.settings?.fragment)
+    expect(fragmentOutbounds).toHaveLength(1)
+    expect(fragmentOutbounds[0].settings.fragment).toEqual({
+      packets: "tlshello",
+      length: "40-60",
+      interval: "30-50",
+    })
+
+    const nodeB = written.outbounds.find((o: any) => o.tag === "node-b")
+    expect(nodeB.streamSettings.sockopt.dialerProxy).toBe(fragmentOutbounds[0].tag)
+    expect(nodeB._fragment).toBeUndefined()
+
+    const nodeA = written.outbounds.find((o: any) => o.tag === "node-a")
+    expect(nodeA.streamSettings.sockopt).toBeUndefined()
+  })
+
+  it("skips the CN-direct rules in global mode so everything falls through to the balancer", async () => {
+    const { setGlobalConfig } = await import("./main")
+    await setGlobalConfig("sub-a", false)
+
+    const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
+    const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
+
+    const cnRule = written.routing.rules.find((r: any) => Array.isArray(r.domain) && r.domain.includes("geosite:cn"))
+    expect(cnRule).toBeUndefined()
+    expect(written.routing.rules).toContainEqual({
+      type: "field",
+      network: "tcp,udp",
+      balancerTag: "proxy-balancer",
+    })
+  })
+
+  it("rejects TUN mode as not yet supported", async () => {
+    const { setRuleConfig, setGlobalConfig, makeProfile } = await import("./main")
+    await expect(setRuleConfig("sub-a", true)).rejects.toThrow(/TUN mode/)
+    await expect(setGlobalConfig("sub-a", true)).rejects.toThrow(/TUN mode/)
+    expect(() => makeProfile("rule", true)).toThrow(/TUN mode/)
   })
 })
