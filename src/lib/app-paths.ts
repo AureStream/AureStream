@@ -16,7 +16,7 @@ export async function getAppConfigDir(): Promise<string> {
   return configDirPromise
 }
 
-/** Absolute path to sing-box `config.json` (resolved once via Rust). */
+/** Absolute path to the core's `config.json` (resolved once via Rust). */
 export async function getConfigJsonPath(): Promise<string> {
   if (!configJsonPathPromise) {
     configJsonPathPromise = invoke<string>("get_config_json_path").catch((err) => {

@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 import { useUpdate } from "../contexts/UpdateContext"
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { SING_BOX_VERSION } from "../types/definition"
+import { XRAY_VERSION } from "../types/definition"
 import { type as getOsType } from "@tauri-apps/plugin-os"
 import { useState, useEffect } from "react"
 import MobileTopBar from "./MobileTopBar"
@@ -49,7 +49,7 @@ export default function AboutPage() {
 
   const meta = [
     { label: l("App", "应用"), value: `v${currentVersion || "..."}` },
-    { label: l("Core", "内核"), value: `v${SING_BOX_VERSION}` },
+    { label: l("Core", "内核"), value: XRAY_VERSION },
     { label: l("Platform", "平台"), value: osType },
   ]
 
@@ -119,7 +119,7 @@ export default function AboutPage() {
                   {l("Secure. Fast. Clear.", "安全、快速、清晰。")}
                 </h2>
                 <p className="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
-                  {l("Powered by sing-box core", "由 sing-box 内核驱动")}
+                  {l("Powered by Xray-core", "由 Xray-core 内核驱动")}
                 </p>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function AboutPage() {
               </button>
 
               <button
-                onClick={() => openUrl("https://sing-box.sagernet.org")}
+                onClick={() => openUrl("https://xtls.github.io")}
                 className="flex items-center justify-center gap-2 rounded-full bg-[#EFECFF] dark:bg-[#6C5CFF]/16 px-3 py-2.5 text-[#6C5CFF] transition-all cursor-pointer active:scale-[0.98]"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -177,7 +177,7 @@ export default function AboutPage() {
                   <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
                   <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
                 </svg>
-                <span className="text-xs font-black">sing-box</span>
+                <span className="text-xs font-black">Xray-core</span>
               </button>
             </div>
           </section>

@@ -55,6 +55,18 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
         log::warn!("[setup] failed to spawn database copy thread: {}", e);
     }
 
+    let geo_copy_handle = app.handle().clone();
+    if let Err(e) = std::thread::Builder::new()
+        .name("aurestream-geo-copy".into())
+        .spawn(move || {
+            if let Err(e) = crate::utils::copy_geo_data_files(&geo_copy_handle) {
+                log::error!("Failed to copy geo data files: {}", e);
+            }
+        })
+    {
+        log::warn!("[setup] failed to spawn geo data copy thread: {}", e);
+    }
+
     match crate::utils::copy_config_to_app_dir(app.handle()) {
         Ok(path) => log::info!("Config ready at: {:?}", path),
         Err(e) => log::error!("Failed to copy config: {}", e),

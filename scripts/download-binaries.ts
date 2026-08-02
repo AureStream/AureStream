@@ -3,39 +3,36 @@ import path from 'node:path';
 import { pipeline } from 'node:stream';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { x } from 'tar';
 import unzipper from 'unzipper';
-import { SING_BOX_VERSION } from '../src/types/definition';
+import { XRAY_VERSION } from '../src/types/definition';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BINARY_NAME = 'sing-box';
-const GITHUB_RELEASE_URL = 'https://github.com/SagerNet/sing-box/releases/download/';
+const BINARY_NAME = 'xray';
+const GITHUB_RELEASE_URL = 'https://github.com/XTLS/Xray-core/releases/download/';
 
-
-// cronet-go repository URL
-const CRONET_REPO_API = 'https://api.github.com/repos/SagerNet/cronet-go/releases/latest';
-const CRONET_RELEASE_URL = 'https://github.com/SagerNet/cronet-go/releases/download/';
-
-
-const SkipVersionList = [
-    "v1.12.5", //This version of sing-box has DNS issues, skip downloading
-];
-
-// Supported target architecture mapping
+// Xray-core release assets always ship as a zip, on every platform (unlike
+// sing-box's tar.gz-for-unix/zip-for-windows split), and extract flat at the
+// archive root (no versioned subdirectory) — e.g. `Xray-macos-arm64-v8a.zip`
+// contains `xray`, `geoip.dat`, `geosite.dat`, `LICENSE`, `README.md`
+// directly, not `Xray-v26.3.27-macos-arm64-v8a/xray`.
+//
+// Supported target architecture mapping: Rust target triple -> Xray asset
+// platform/arch component (verified against the real release asset list via
+// `gh api repos/XTLS/Xray-core/releases/latest`).
 const RUST_TARGET_TRIPLES = {
     "darwin": {
-        "arm64": "aarch64-apple-darwin",
-        "amd64": "x86_64-apple-darwin"
+        "arm64": { targetTriple: "aarch64-apple-darwin", assetSuffix: "macos-arm64-v8a" },
+        "amd64": { targetTriple: "x86_64-apple-darwin", assetSuffix: "macos-64" }
     },
     "linux": {
-        "amd64": "x86_64-unknown-linux-gnu",
-        "arm64": "aarch64-unknown-linux-gnu"
+        "amd64": { targetTriple: "x86_64-unknown-linux-gnu", assetSuffix: "linux-64" },
+        "arm64": { targetTriple: "aarch64-unknown-linux-gnu", assetSuffix: "linux-arm64-v8a" }
     },
     "windows": {
-        "amd64": "x86_64-pc-windows-msvc",
-        "arm64": "aarch64-pc-windows-msvc",
+        "amd64": { targetTriple: "x86_64-pc-windows-msvc", assetSuffix: "windows-64" },
+        "arm64": { targetTriple: "aarch64-pc-windows-msvc", assetSuffix: "windows-arm64-v8a" },
     }
 } as const;
 
@@ -84,25 +81,25 @@ async function downloadFile(url: string, dest: string, maxRetries: number = 3): 
     throw new Error(`Download failed after ${maxRetries} attempts: '${url}'. Last error: ${lastError?.message}`);
 }
 
-async function extractFile(filePath: string, fileExtension: string, tmpDir: string): Promise<void> {
-    if (fileExtension === 'zip') {
-        await fs.createReadStream(filePath).pipe(unzipper.Extract({ path: tmpDir })).promise();
-    } else {
-        await x({ file: filePath, cwd: tmpDir });
-    }
+async function extractZip(filePath: string, tmpDir: string): Promise<void> {
+    await fs.createReadStream(filePath).pipe(unzipper.Extract({ path: tmpDir })).promise();
 }
+
+/** First platform/arch processed writes geoip.dat/geosite.dat (identical
+ *  content across platforms — no point downloading twice-per-arch). */
+let geoDataSaved = false;
 
 async function embeddingExternalBinaries(
     platform: Platform,
     arch: Architecture,
     extension: string,
-    targetTriple: string
+    target: typeof RUST_TARGET_TRIPLES[Platform][Architecture]
 ): Promise<void> {
     const startTime = Date.now();
-    const fileExtension = platform === 'windows' ? 'zip' : 'tar.gz';
-    const fileName = `${BINARY_NAME}-${platform}-${arch}.${fileExtension}`;
-    const downloadUrl = `${GITHUB_RELEASE_URL}${SING_BOX_VERSION}/${BINARY_NAME}-${SING_BOX_VERSION.substring(1)}-${platform}-${arch}.${fileExtension}`;
-    // 为每个任务创建唯一的临时目录s
+    const { targetTriple, assetSuffix } = target;
+    const fileName = `Xray-${assetSuffix}.zip`;
+    const downloadUrl = `${GITHUB_RELEASE_URL}${XRAY_VERSION}/${fileName}`;
+    // 为每个任务创建唯一的临时目录
     const tmpDir = path.join(__dirname, 'tmp', `${platform}-${arch}-${Date.now()}-${Math.random().toString(36).substring(7)}`);
     const downloadPath = path.join(tmpDir, fileName);
 
@@ -111,12 +108,12 @@ async function embeddingExternalBinaries(
         !fs.existsSync(tmpDir) && fs.mkdirSync(tmpDir, { recursive: true });
 
         // Download and extract file
-        console.log(`Downloading sing-box version ${platform}-${arch}-${SING_BOX_VERSION}...`);
+        console.log(`Downloading Xray-core ${platform}-${arch}-${XRAY_VERSION}...`);
         await downloadFile(downloadUrl, downloadPath);
-        await extractFile(downloadPath, fileExtension, tmpDir);
+        await extractZip(downloadPath, tmpDir);
 
-        // Move file to target location
-        const extractedFilePath = path.join(tmpDir, `${BINARY_NAME}-${SING_BOX_VERSION.substring(1)}-${platform}-${arch}/${BINARY_NAME}${extension}`);
+        // Move binary to target location (flat extraction, no version subdir)
+        const extractedFilePath = path.join(tmpDir, `${BINARY_NAME}${extension}`);
         const targetPath = `src-tauri/binaries/aurestream-core-${targetTriple}${extension}`;
 
         // Ensure target directory exists
@@ -125,6 +122,32 @@ async function embeddingExternalBinaries(
 
         // Move file and cleanup
         fs.renameSync(extractedFilePath, targetPath);
+
+        // unzipper doesn't restore the Unix executable bit from the zip's
+        // stored permissions (unlike tar, which the old sing-box script used
+        // for unix platforms specifically to avoid this) — every Xray-core
+        // release asset is a zip, on every platform, so this is needed here.
+        if (platform !== 'windows') {
+            fs.chmodSync(targetPath, 0o755);
+        }
+
+        // geoip.dat/geosite.dat ship in every platform's zip with identical
+        // content — grab them once for the routing rules (geosite:cn etc.).
+        // The check-and-claim below is synchronous (no `await` in between),
+        // so it's race-safe under Node's single-threaded event loop even
+        // with these tasks running concurrently via Promise.all.
+        if (!geoDataSaved) {
+            geoDataSaved = true;
+            const resourcesDir = 'src-tauri/resources';
+            !fs.existsSync(resourcesDir) && fs.mkdirSync(resourcesDir, { recursive: true });
+            for (const geoFile of ['geoip.dat', 'geosite.dat']) {
+                const src = path.join(tmpDir, geoFile);
+                if (fs.existsSync(src)) {
+                    fs.copyFileSync(src, path.join(resourcesDir, geoFile));
+                }
+            }
+        }
+
         fs.rmSync(tmpDir, { recursive: true, force: true });
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -140,14 +163,14 @@ async function downloadEmbeddingExternalBinaries(): Promise<void> {
     const downloadTasks: Promise<void>[] = [];
 
     for (const [platform, archs] of Object.entries(RUST_TARGET_TRIPLES)) {
-        for (const [arch, targetTriple] of Object.entries(archs)) {
+        for (const [arch, target] of Object.entries(archs)) {
             const extension = platform === 'windows' ? '.exe' : '';
             downloadTasks.push(
                 embeddingExternalBinaries(
                     platform as Platform,
                     arch as Architecture,
                     extension,
-                    targetTriple
+                    target
                 )
             );
         }
@@ -156,110 +179,12 @@ async function downloadEmbeddingExternalBinaries(): Promise<void> {
     await Promise.all(downloadTasks);
 }
 
-// 获取 cronet-go 最新版本 tag
-async function getCronetLatestVersion(): Promise<string> {
-    let lastError: Error | null = null;
-    const maxRetries = 3;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const response = await fetch(CRONET_REPO_API, {
-                headers: {
-                    'User-Agent': 'AureStream-Download-Script',
-                    'Accept': 'application/vnd.github+json'
-                }
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch cronet-go latest release: ${response.status}`);
-            }
-            const data = await response.json();
-            return data.tag_name;
-        } catch (error) {
-            lastError = error as Error;
-            if (attempt < maxRetries) {
-                const waitTime = attempt * 1000;
-                console.warn(`Fetch attempt ${attempt} failed: ${lastError.message}. Retrying in ${waitTime}ms...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-            }
-        }
-    }
-
-    throw new Error(`Failed to fetch cronet-go version after ${maxRetries} attempts. Last error: ${lastError?.message}`);
-}
-
-// 下载 cronet 库文件到 src-tauri/resources 目录
-async function downloadCronetLibraries(): Promise<void> {
-    const cronetVersion = await getCronetLatestVersion();
-    console.log(`Using cronet-go version: ${cronetVersion}`);
-
-    const cronetFiles = [
-        {
-            name: 'libcronet.so',
-            url: `${CRONET_RELEASE_URL}${cronetVersion}/libcronet-linux-amd64.so`
-        },
-        {
-            name: 'libcronet.dll',
-            url: `${CRONET_RELEASE_URL}${cronetVersion}/libcronet-windows-amd64.dll`
-        }
-    ];
-
-    const resourcesDir = 'src-tauri/resources';
-    !fs.existsSync(resourcesDir) && fs.mkdirSync(resourcesDir, { recursive: true });
-
-    const downloadTasks = cronetFiles.map(async (file) => {
-        const startTime = Date.now();
-        const destPath = path.join(resourcesDir, file.name);
-        console.log(`Downloading cronet library: ${file.name}...`);
-        await downloadFile(file.url, destPath);
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`Downloaded cronet library to: ${destPath} (${elapsed}s)`);
-    });
-
-    await Promise.all(downloadTasks);
-}
-
-// Upstream conf-template still publishes v1-named rule caches; rename to v2
-// on save so AureStream's v2 migration picks them up without touching upstream.
-async function downloadDatabaseFiles(): Promise<void> {
-    const dbFiles = [
-        {
-            name: 'mixed-cache-rule-v2.db',
-            url: 'https://github.com/OneOhCloud/conf-template/raw/refs/heads/database/database/stable/1.13/zh-cn/mixed-cache-rule-v1.db',
-        },
-        {
-            name: 'tun-cache-rule-v2.db',
-            url: 'https://github.com/OneOhCloud/conf-template/raw/refs/heads/database/database/stable/1.13/zh-cn/tun-cache-rule-v1.db'
-        }
-    ];
-
-    const resourcesDir = 'src-tauri/resources';
-    !fs.existsSync(resourcesDir) && fs.mkdirSync(resourcesDir, { recursive: true });
-
-    const downloadTasks = dbFiles.map(async (dbFile) => {
-        const startTime = Date.now();
-        const destPath = path.join(resourcesDir, dbFile.name);
-        console.log(`Downloading database file: ${dbFile.name}...`);
-        await downloadFile(dbFile.url, destPath);
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`Downloaded database file to: ${destPath} (${elapsed}s)`);
-    });
-
-    await Promise.all(downloadTasks);
-}
-
 // 并行执行所有下载任务
-if (SkipVersionList.includes(SING_BOX_VERSION)) {
-    console.log(`Skipping download for version ${SING_BOX_VERSION}`);
-    throw new Error(`Version ${SING_BOX_VERSION} is in the skip list.`);
-} else {
+{
     const scriptStartTime = Date.now();
-    console.log('Starting parallel downloads...\n');
+    console.log('Starting downloads...\n');
 
-    Promise.all([
-        downloadEmbeddingExternalBinaries(),
-        downloadDatabaseFiles(),
-        // downloadCronetLibraries()
-    ]).then(() => {
+    downloadEmbeddingExternalBinaries().then(() => {
         const totalElapsed = ((Date.now() - scriptStartTime) / 1000).toFixed(2);
         console.log(`\n✓ All downloads completed! Total time: ${totalElapsed}s`);
         process.exit(0);

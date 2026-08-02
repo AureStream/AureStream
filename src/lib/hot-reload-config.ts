@@ -19,7 +19,7 @@ export async function isEngineRunning(): Promise<boolean> {
   return state.kind === "running"
 }
 
-/** Rebuild config.json and hot-reload sing-box without disconnecting. */
+/** Rebuild config.json and hot-reload the core without disconnecting. */
 export async function hotReloadConnectionConfig(
   subscriptionIdentifier: string,
   routingMode?: RoutingMode,

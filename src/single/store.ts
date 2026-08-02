@@ -277,7 +277,7 @@ export async function setProxyPort(port: number): Promise<void> {
     invalidateConnectionConfigCache();
 }
 
-/** sing-box experimental.clash_api external_controller port */
+/** Xray-core `api` inbound (gRPC) port. */
 export async function getControllerPort(): Promise<number> {
     return readPortWithLegacy(
         CONTROLLER_PORT_STORE_KEY,

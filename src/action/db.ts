@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
-import { buildSubscriptionUserAgent, Subscription, SubscriptionConfig } from '../types/definition';
+import { buildSubscriptionUserAgent, GITHUB_URL, Subscription, SubscriptionConfig } from '../types/definition';
 import { parseSubscriptionBody } from '../config/subscription-decoder';
 import { apiFetch } from '../api/client';
 
@@ -35,7 +35,7 @@ export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
                 data: JSON.parse(content),
                 headers: {
                     'subscription-userinfo': `upload=0; download=0; total=1125899906842624; expire=32503680000`,
-                    'official-website': 'https://sing-box.net',
+                    'official-website': GITHUB_URL,
                     'content-disposition': `attachment; filename=local-config-${Date.now()}.json`
                 },
                 status: 200
@@ -68,7 +68,7 @@ export async function fetchConfigContent(url: string): Promise<ConfigResponse> {
             data: result.data ?? null,
             headers: {
                 'subscription-userinfo': normalizedHeaders['subscription-userinfo'] || '',
-                'official-website': normalizedHeaders['official-website'] || 'https://sing-box.net',
+                'official-website': normalizedHeaders['official-website'] || GITHUB_URL,
                 'content-disposition': normalizedHeaders['content-disposition'] || '',
             },
             status: result.status,
@@ -227,7 +227,7 @@ export async function insertSubscription(url: string, name?: string, customIdent
         const usedTraffic = parseInt(upload) + parseInt(download);
         const totalTraffic = parseInt(total) || 1;
         const expireTime = parseInt(expire) * 1000 || (Date.now() + 100 * 365 * 24 * 3600 * 1000);
-        const officialWebsite = response.headers['official-website'] || 'https://sing-box.net';
+        const officialWebsite = response.headers['official-website'] || GITHUB_URL;
         const configJson = JSON.stringify(data);
         const lastUpdate = Math.floor(Date.now() / 1000);
 
@@ -309,7 +309,7 @@ export async function updateSubscription(identifier: string): Promise<boolean> {
         }
 
         const { upload, download, total, expire } = getRemoteInfoBySubscriptionUserinfo(response.headers['subscription-userinfo'] || '');
-        const officialWebsite = response.headers['official-website'] || 'https://sing-box.net';
+        const officialWebsite = response.headers['official-website'] || GITHUB_URL;
         const used_traffic = parseInt(upload) + parseInt(download);
         const total_traffic = parseInt(total) || 1;
         const expire_time = parseInt(expire) * 1000 || (Date.now() + 100 * 365 * 24 * 3600 * 1000);

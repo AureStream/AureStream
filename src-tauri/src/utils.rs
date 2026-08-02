@@ -58,6 +58,38 @@ pub fn copy_database_files(app: &AppHandle) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
+/// Copies `geoip.dat`/`geosite.dat` (bundled via the `resources/**/*` glob —
+/// see `scripts/download-binaries.ts`) next to the `aurestream-core` sidecar
+/// binary. Xray-core looks for these in `XRAY_LOCATION_ASSET` if set, else
+/// falls back to the directory the running executable lives in — copying
+/// them there means every spawn path (Tauri-direct sidecar AND the
+/// privileged-helper/TUN-service spawns, which don't go through Tauri's
+/// `.env()`) finds them with no extra env var plumbing needed anywhere.
+pub fn copy_geo_data_files(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let resource_dir = app.path().resource_dir()?;
+    let resources_path = resource_dir.join("resources");
+    let sidecar_dir = crate::engine::helper::sidecar_dir()?;
+
+    for name in ["geoip.dat", "geosite.dat"] {
+        let src = resources_path.join(name);
+        if !src.exists() {
+            log::warn!("Geo data file not found in bundle: {:?}", src);
+            continue;
+        }
+        let dest = sidecar_dir.join(name);
+        // Re-copy unconditionally (unlike copy_database_files, which skips
+        // existing files) — geo data is small, read-only, and should always
+        // match the version bundled with the current app build.
+        if let Err(e) = fs::copy(&src, &dest) {
+            log::error!("Failed to copy {:?} to {:?}: {}", src, dest, e);
+        } else {
+            log::info!("Copied geo data file to {:?}", dest);
+        }
+    }
+
+    Ok(())
+}
+
 pub fn copy_config_to_app_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let config_dir = app
         .path()

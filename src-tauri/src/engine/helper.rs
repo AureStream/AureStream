@@ -1,10 +1,18 @@
 use std::fs;
-#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::path::Path;
-#[cfg(any(target_os = "windows", target_os = "linux"))]
 use tauri::utils::platform;
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+/// Directory the running executable (and its Tauri `externalBin` sidecars)
+/// live in — same on all three platforms (macOS `Contents/MacOS/`, Windows
+/// next to the `.exe`, Linux next to the main binary).
+pub fn sidecar_dir() -> Result<std::path::PathBuf, anyhow::Error> {
+    platform::current_exe()?
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| anyhow::anyhow!("Failed to get the executable directory"))
+}
+
+#[allow(dead_code)] // only called from windows/mod.rs and linux/mod.rs
 pub fn get_sidecar_path(program: &Path) -> Result<String, anyhow::Error> {
     match platform::current_exe()?.parent() {
         #[cfg(windows)]

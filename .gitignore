@@ -39,5 +39,6 @@ src-tauri/gen/
 src-tauri/binaries/
 src-tauri/*.db
 src-tauri/resources/*.db
+src-tauri/resources/*.dat
 src-tauri/resources/rules/
 scripts/tmp/

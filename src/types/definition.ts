@@ -1,9 +1,8 @@
-export const SING_BOX_MAJOR_VERSION = "1.13";
-export const SING_BOX_MINOR_VERSION = "13";
-export const SING_BOX_VERSION = `v${SING_BOX_MAJOR_VERSION}.${SING_BOX_MINOR_VERSION}`;
+/** XTLS/Xray-core release tag (includes the "v" prefix, e.g. "v26.3.27"). */
+export const XRAY_VERSION = "v26.3.27";
 
 export const GITHUB_URL = 'https://github.com/BadKid90s/AureStream';
-export const OFFICIAL_WEBSITE = 'https://sing-box.net';
+export const OFFICIAL_WEBSITE = 'https://xtls.github.io';
 export const STAGE_VERSION_STORE_KEY = 'stage_version_key';
 export const TUN_STACK_STORE_KEY = 'tun_stack_key';
 export const TUN_INTERFACE_NAME = 'utun233';
