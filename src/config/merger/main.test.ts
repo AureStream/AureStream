@@ -4,6 +4,7 @@ const writeFileMock = vi.hoisted(() => vi.fn())
 const existsMock = vi.hoisted(() => vi.fn())
 const createMock = vi.hoisted(() => vi.fn())
 const getSubscriptionConfigMock = vi.hoisted(() => vi.fn())
+const isBypassRouterEnabledMock = vi.hoisted(() => vi.fn())
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   BaseDirectory: { AppConfig: "AppConfig" },
@@ -21,7 +22,7 @@ vi.mock("../../single/store", () => ({
   getConfiguredDirectDNS: vi.fn(async () => undefined),
   getControllerPort: vi.fn(async () => 9191),
   getProxyPort: vi.fn(async () => 2345),
-  isBypassRouterEnabled: vi.fn(async () => false),
+  isBypassRouterEnabled: isBypassRouterEnabledMock,
 }))
 
 const sampleOutbounds = [
@@ -54,6 +55,7 @@ describe("config merger (Xray-core, local template)", () => {
       close: vi.fn(async () => undefined),
     })
     getSubscriptionConfigMock.mockResolvedValue({ outbounds: sampleOutbounds })
+    isBypassRouterEnabledMock.mockResolvedValue(false)
   })
 
   it("writes a locally-built config with all subscription nodes in the proxy balancer", async () => {
@@ -143,7 +145,10 @@ describe("config merger (Xray-core, local template)", () => {
     const tunInbound = written.inbounds.find((ib: any) => ib.protocol === "tun")
     expect(tunInbound).toBeDefined()
     expect(tunInbound.settings.gateway).toEqual(["172.19.0.1/30"])
-    expect(tunInbound.settings.autoSystemRoutingTable).toEqual(["0.0.0.0/0", "::/0"])
+    // Default (non-bypass-router): LAN ranges excluded from the tunnel.
+    expect(tunInbound.settings.autoSystemRoutingTable).not.toContain("0.0.0.0/0")
+    expect(tunInbound.settings.autoSystemRoutingTable).toContain("::/0")
+    expect(tunInbound.settings.autoSystemRoutingTable.length).toBeGreaterThan(40)
     // Local SOCKS inbound stays present alongside tun.
     expect(written.inbounds.some((ib: any) => ib.tag === "mixed-in")).toBe(true)
     expect(written.routing.rules).toContainEqual({
@@ -151,6 +156,18 @@ describe("config merger (Xray-core, local template)", () => {
       domain: ["geosite:cn"],
       outboundTag: "direct",
     })
+  })
+
+  it("bypass-router mode captures the full 0.0.0.0/0 + ::/0 (LAN included) for tun", async () => {
+    isBypassRouterEnabledMock.mockResolvedValue(true)
+    const { setRuleConfig } = await import("./main")
+
+    await setRuleConfig("sub-a", true)
+
+    const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
+    const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
+    const tunInbound = written.inbounds.find((ib: any) => ib.protocol === "tun")
+    expect(tunInbound.settings.autoSystemRoutingTable).toEqual(["0.0.0.0/0", "::/0"])
   })
 
   it("global+tun skips CN-direct rules but still adds the tun inbound", async () => {

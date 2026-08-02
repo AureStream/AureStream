@@ -61,7 +61,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
 
     console.log(options.label);
 
-    const newConfig = buildBaseXrayConfig(isGlobal, isTun);
+    const newConfig = buildBaseXrayConfig(isGlobal, isTun, bypassRouter);
 
     updateApiConfig(newConfig, apiPort);
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
