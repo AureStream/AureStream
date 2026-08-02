@@ -8,12 +8,92 @@ use aurestream_plugin_tun::macos::{
     apply_system_dns_override, release_dns_on_network_down, restore_system_dns,
     start_tun_via_helper, stop_tun_process,
 };
+use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
 pub(crate) mod watchdog;
 
 pub struct MacOSEngine;
+
+/// Starts (or, when called again over an existing run, restarts — the
+/// privileged helper's `startSingBoxWithConfigPath:` already reaps any prior
+/// process before spawning) TUN mode via the privileged helper. Shared by
+/// `MacOSEngine::start` and `MacOSEngine::restart`, since Xray-core has no
+/// SIGHUP-based hot reload — a "reload" here just means calling this again.
+async fn start_tun_mode(
+    app: &AppHandle,
+    config_path: String,
+    start_epoch: u64,
+) -> Result<(), String> {
+    // Frontend pre-checks helper installation before switching to TUN mode.
+    // If somehow we reach here without helper, start_tun_via_helper will fail with a clear error.
+    let bypass_router_enabled = app
+        .get_store("settings.json")
+        .and_then(|store| store.get("enable_bypass_router_key"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let log_path_str = crate::engine::log::resolve_core_log_path(app)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let gateway =
+        crate::engine::helper::extract_tun_gateway_from_config(&config_path).unwrap_or_default();
+
+    let path_c = config_path.clone();
+    tokio::task::spawn_blocking(move || {
+        start_tun_via_helper(&path_c, &log_path_str, bypass_router_enabled, &gateway)
+    })
+    .await
+    .map_err(|e| format!("start_tun join error: {}", e))?
+    .map_err(|e| format!("start_tun_via_helper failed: {}", e))?;
+
+    let mut exit_rx = macos_helper::subscribe_sing_box_exits();
+    let exit_app = app.clone();
+    let mode_arc = Arc::new(ProxyMode::IntoProxy);
+    let exit_mode = Arc::clone(&mode_arc);
+    let exit_spawn_epoch = start_epoch;
+    tokio::spawn(async move {
+        match exit_rx.recv().await {
+            Ok(exit) => {
+                log::info!(
+                    "[helper-bridge] sing-box exit event pid={} code={}",
+                    exit.pid,
+                    exit.exit_code
+                );
+                let payload = tauri_plugin_shell::process::TerminatedPayload {
+                    code: Some(exit.exit_code),
+                    signal: None,
+                };
+                crate::engine::monitor::handle_process_termination(
+                    &exit_app,
+                    &exit_mode,
+                    payload,
+                    exit_spawn_epoch,
+                )
+                .await;
+            }
+            Err(_) => {
+                log::warn!("[helper-bridge] exit broadcast channel closed");
+            }
+        }
+    });
+
+    let config_path_arc = Arc::new(config_path);
+    {
+        let mut mgr = ProcessManager::acquire();
+        mgr.mode = Some(Arc::clone(&mode_arc));
+        mgr.config_path = Some(Arc::clone(&config_path_arc));
+        mgr.child = None; // managed by helper
+        mgr.is_stopping = false;
+    }
+
+    if bypass_router_enabled {
+        watchdog::spawn(app.clone(), Arc::clone(&config_path_arc));
+    }
+
+    let _ = clear_system_proxy().await;
+    Ok(())
+}
 
 impl EngineManager for MacOSEngine {
     async fn start(
@@ -22,7 +102,6 @@ impl EngineManager for MacOSEngine {
         config_path: String,
         start_epoch: u64,
     ) -> Result<(), String> {
-        use std::sync::Arc;
         use tauri_plugin_shell::ShellExt;
 
         match mode {
@@ -62,72 +141,7 @@ impl EngineManager for MacOSEngine {
                 }
             }
             ProxyMode::IntoProxy => {
-                // Frontend pre-checks helper installation before switching to TUN mode.
-                // If somehow we reach here without helper, start_tun_via_helper will fail with a clear error.
-                let bypass_router_enabled = app
-                    .get_store("settings.json")
-                    .and_then(|store| store.get("enable_bypass_router_key"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let log_path_str = crate::engine::log::resolve_core_log_path(app)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
-                    .unwrap_or_default();
-
-                let path_c = config_path.clone();
-                tokio::task::spawn_blocking(move || {
-                    start_tun_via_helper(&path_c, &log_path_str, bypass_router_enabled, &gateway)
-                })
-                .await
-                .map_err(|e| format!("start_tun join error: {}", e))?
-                .map_err(|e| format!("start_tun_via_helper failed: {}", e))?;
-
-                let mut exit_rx = macos_helper::subscribe_sing_box_exits();
-                let exit_app = app.clone();
-                let mode_arc = Arc::new(ProxyMode::IntoProxy);
-                let exit_mode = Arc::clone(&mode_arc);
-                let exit_spawn_epoch = start_epoch;
-                tokio::spawn(async move {
-                    match exit_rx.recv().await {
-                        Ok(exit) => {
-                            log::info!(
-                                "[helper-bridge] sing-box exit event pid={} code={}",
-                                exit.pid,
-                                exit.exit_code
-                            );
-                            let payload = tauri_plugin_shell::process::TerminatedPayload {
-                                code: Some(exit.exit_code),
-                                signal: None,
-                            };
-                            crate::engine::monitor::handle_process_termination(
-                                &exit_app,
-                                &exit_mode,
-                                payload,
-                                exit_spawn_epoch,
-                            )
-                            .await;
-                        }
-                        Err(_) => {
-                            log::warn!("[helper-bridge] exit broadcast channel closed");
-                        }
-                    }
-                });
-
-                let config_path_arc = Arc::new(config_path);
-                {
-                    let mut mgr = ProcessManager::acquire();
-                    mgr.mode = Some(Arc::clone(&mode_arc));
-                    mgr.config_path = Some(Arc::clone(&config_path_arc));
-                    mgr.child = None; // managed by helper
-                    mgr.is_stopping = false;
-                }
-
-                if bypass_router_enabled {
-                    watchdog::spawn(app.clone(), Arc::clone(&config_path_arc));
-                }
-
-                let _ = clear_system_proxy().await;
+                start_tun_mode(app, config_path, start_epoch).await?;
             }
         }
         Ok(())
@@ -269,61 +283,52 @@ impl EngineManager for MacOSEngine {
 
     /// Xray-core has no SIGHUP-based hot reload (`run.go` only handles
     /// `os.Interrupt`/`SIGTERM`; the OS default disposition for SIGHUP is to
-    /// kill the process). TUN mode keeps its existing helper-managed restart
-    /// (deferred, untouched this phase); SystemProxy mode now does a real
-    /// stop+start cycle, mirroring the pattern `WindowsEngine::restart` already
-    /// used (Windows never had SIGHUP either).
+    /// kill the process). Both modes now do a real restart instead of
+    /// signalling the running process: SystemProxy stops then respawns via
+    /// the Tauri sidecar (mirrors `WindowsEngine::restart`, which never had
+    /// SIGHUP either); TUN mode calls `start_tun_mode` again, whose
+    /// `startSingBoxWithConfigPath:` XPC call already reaps the prior
+    /// helper-managed process before spawning the new one.
     async fn restart(app: &AppHandle) -> Result<(), String> {
-        let is_tun = {
+        let (mode, config_path) = {
             let manager = ProcessManager::acquire();
-            matches!(
-                manager.mode.as_ref().map(|m| m.as_ref()),
-                Some(ProxyMode::IntoProxy)
-            )
+            let mode = manager.mode.as_ref().map(|m| (**m).clone());
+            let cfg = manager
+                .config_path
+                .as_ref()
+                .map(|p| p.as_str().to_string())
+                .unwrap_or_default();
+            (mode, cfg)
         };
-        if is_tun {
-            tokio::task::spawn_blocking(macos_helper::api::reload_sing_box)
-                .await
-                .map_err(|e| format!("reload join error: {}", e))?
-                .map_err(|e| format!("helper reload_sing_box failed: {}", e))?;
-            log::info!("[reload] SIGHUP sent via helper");
+        let Some(mode) = mode else {
+            return Err("No running process found".to_string());
+        };
 
+        let start_epoch = app
+            .state::<crate::engine::state_machine::EngineStateCell>()
+            .snapshot()
+            .epoch();
+
+        if matches!(mode, ProxyMode::IntoProxy) {
+            start_tun_mode(app, config_path, start_epoch).await?;
             match tokio::task::spawn_blocking(macos_helper::api::flush_dns_cache).await {
                 Ok(Ok(())) => log::info!("[reload] flushed DNS cache"),
                 Ok(Err(e)) => log::warn!("[reload] flush_dns_cache failed: {}", e),
                 Err(e) => log::warn!("[reload] flush_dns_cache join error: {}", e),
             }
-            Ok(())
-        } else {
-            let (mode, config_path) = {
-                let manager = ProcessManager::acquire();
-                let mode = manager.mode.as_ref().map(|m| (**m).clone());
-                let cfg = manager
-                    .config_path
-                    .as_ref()
-                    .map(|p| p.as_str().to_string())
-                    .unwrap_or_default();
-                (mode, cfg)
-            };
-            let Some(mode) = mode else {
-                return Err("No running process found".to_string());
-            };
-
-            let start_epoch = app
-                .state::<crate::engine::state_machine::EngineStateCell>()
-                .snapshot()
-                .epoch();
-            let mixed_port = crate::engine::ports::mixed_proxy_port(app);
-            Self::stop(app).await?;
-
-            let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-            while std::time::Instant::now() < release_deadline
-                && !crate::engine::ports::probe_port_bindable(mixed_port)
-            {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            }
-
-            Self::start(app, mode, config_path, start_epoch).await
+            return Ok(());
         }
+
+        let mixed_port = crate::engine::ports::mixed_proxy_port(app);
+        Self::stop(app).await?;
+
+        let release_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < release_deadline
+            && !crate::engine::ports::probe_port_bindable(mixed_port)
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+
+        Self::start(app, mode, config_path, start_epoch).await
     }
 }

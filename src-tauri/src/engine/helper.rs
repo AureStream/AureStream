@@ -28,18 +28,29 @@ fn strip_verbatim_prefix(s: &str) -> &str {
     s.strip_prefix(r"\\?\").unwrap_or(s)
 }
 
+/// Extracts the IPv4 gateway address from an Xray-core `tun` inbound
+/// (`inbounds[].protocol == "tun"`, `settings.gateway: string[]`, each entry
+/// a CIDR like `"172.19.0.1/30"`). Returns the bare IP, no prefix length.
 pub fn extract_tun_gateway_from_config(config_path: &str) -> Option<String> {
     let content = fs::read_to_string(config_path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&content).ok()?;
     let inbounds = v.get("inbounds")?.as_array()?;
     for inb in inbounds {
-        if inb.get("type").and_then(serde_json::Value::as_str) != Some("tun") {
+        if inb.get("protocol").and_then(serde_json::Value::as_str) != Some("tun") {
             continue;
         }
-        let addrs = inb.get("address")?.as_array()?;
-        for a in addrs {
-            let s = a.as_str()?;
-            let ip = s.split('/').next()?;
+        let Some(gateways) = inb
+            .get("settings")
+            .and_then(|s| s.get("gateway"))
+            .and_then(serde_json::Value::as_array)
+        else {
+            continue;
+        };
+        for g in gateways {
+            let Some(s) = g.as_str() else { continue };
+            let Some(ip) = s.split('/').next() else {
+                continue;
+            };
             if ip.contains('.') && !ip.is_empty() {
                 return Some(ip.to_string());
             }

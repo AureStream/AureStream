@@ -565,7 +565,6 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
             (char *)"run",
             (char *)"-c",
             (char *)configC,
-            (char *)"--disable-color",
             NULL
         };
 

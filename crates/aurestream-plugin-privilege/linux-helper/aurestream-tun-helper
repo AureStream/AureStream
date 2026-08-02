@@ -21,7 +21,7 @@ case "$1" in
             shift 5
             resolvectl dns "$iface" "$gateway" "$@"
         fi
-        exec "$sidecar" run -c "$config" --disable-color
+        exec "$sidecar" run -c "$config"
         ;;
     stop-tun)
         # $2 = iface (optional), $3... = original DNS servers (optional)
@@ -46,6 +46,10 @@ case "$1" in
         resolvectl dns "$iface" "$@"
         ;;
     reload)
+        # Unused by the app since the Xray-core migration: Xray has no
+        # SIGHUP-based hot reload (SIGHUP's default disposition kills it),
+        # so the Rust engine now does stop-tun + start-tun instead. Left in
+        # place in case anything external still calls it directly.
         pkill -HUP aurestream-core || true
         resolvectl flush-caches 2>/dev/null || true
         ;;

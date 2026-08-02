@@ -19,17 +19,12 @@ export type MergeProfile = {
     mode: configType;
 }
 
-/**
- * Convenience: build MergeProfile from routing mode + TUN boolean.
- *
- * TUN mode is deferred — Xray-core's native `tun` inbound isn't wired up on
- * the Rust engine side yet (System Proxy mode only, this phase).
- */
+/** Convenience: build MergeProfile from routing mode + TUN boolean. */
 export function makeProfile(routing: RoutingMode, tun: boolean): MergeProfile {
-    if (tun) {
-        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
+    if (routing === 'global') {
+        return { mode: tun ? 'tun-global' : 'mixed-global' };
     }
-    return { mode: routing === 'global' ? 'mixed-global' : 'mixed' };
+    return { mode: tun ? 'tun' : 'mixed' };
 }
 
 type MergeConfigOptions = MergeProfile & {
@@ -41,10 +36,8 @@ function isTunMode(mode: configType): boolean {
 }
 
 async function mergeConfig(identifier: string, options: MergeConfigOptions) {
-    if (isTunMode(options.mode)) {
-        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
-    }
-    const isGlobal = options.mode === 'mixed-global';
+    const isTun = isTunMode(options.mode);
+    const isGlobal = options.mode === 'mixed-global' || options.mode === 'tun-global';
 
     const [
         dbConfigData,
@@ -68,7 +61,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
 
     console.log(options.label);
 
-    const newConfig = buildBaseXrayConfig(isGlobal);
+    const newConfig = buildBaseXrayConfig(isGlobal, isTun);
 
     updateApiConfig(newConfig, apiPort);
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
@@ -76,22 +69,16 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
     await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
 }
 
-export async function setRuleConfig(identifier: string, tun: boolean) {
-    if (tun) {
-        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
-    }
+export function setRuleConfig(identifier: string, tun: boolean) {
     return mergeConfig(identifier, {
-        mode: 'mixed',
-        label: `写入[规则]系统代理配置文件`,
+        mode: tun ? 'tun' : 'mixed',
+        label: `写入[规则]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }
 
-export async function setGlobalConfig(identifier: string, tun: boolean) {
-    if (tun) {
-        throw new Error('TUN mode is not yet supported on the Xray-core engine (deferred to a later phase)');
-    }
+export function setGlobalConfig(identifier: string, tun: boolean) {
     return mergeConfig(identifier, {
-        mode: 'mixed-global',
-        label: `写入[全局]系统代理配置文件`,
+        mode: tun ? 'tun-global' : 'mixed-global',
+        label: `写入[全局]${tun ? 'TUN' : '系统代理'}配置文件`,
     });
 }

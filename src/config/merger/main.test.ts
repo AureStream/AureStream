@@ -131,10 +131,48 @@ describe("config merger (Xray-core, local template)", () => {
     })
   })
 
-  it("rejects TUN mode as not yet supported", async () => {
-    const { setRuleConfig, setGlobalConfig, makeProfile } = await import("./main")
-    await expect(setRuleConfig("sub-a", true)).rejects.toThrow(/TUN mode/)
-    await expect(setGlobalConfig("sub-a", true)).rejects.toThrow(/TUN mode/)
-    expect(() => makeProfile("rule", true)).toThrow(/TUN mode/)
+  it("adds the tun inbound (with CN-direct rules) when tun=true in rule mode", async () => {
+    const { setRuleConfig, makeProfile } = await import("./main")
+    expect(makeProfile("rule", true)).toEqual({ mode: "tun" })
+
+    await setRuleConfig("sub-a", true)
+
+    const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
+    const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
+
+    const tunInbound = written.inbounds.find((ib: any) => ib.protocol === "tun")
+    expect(tunInbound).toBeDefined()
+    expect(tunInbound.settings.gateway).toEqual(["172.19.0.1/30"])
+    expect(tunInbound.settings.autoSystemRoutingTable).toEqual(["0.0.0.0/0", "::/0"])
+    // Local SOCKS inbound stays present alongside tun.
+    expect(written.inbounds.some((ib: any) => ib.tag === "mixed-in")).toBe(true)
+    expect(written.routing.rules).toContainEqual({
+      type: "field",
+      domain: ["geosite:cn"],
+      outboundTag: "direct",
+    })
+  })
+
+  it("global+tun skips CN-direct rules but still adds the tun inbound", async () => {
+    const { setGlobalConfig, makeProfile } = await import("./main")
+    expect(makeProfile("global", true)).toEqual({ mode: "tun-global" })
+
+    await setGlobalConfig("sub-a", true)
+
+    const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
+    const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
+
+    expect(written.inbounds.some((ib: any) => ib.protocol === "tun")).toBe(true)
+    const cnRule = written.routing.rules.find((r: any) => Array.isArray(r.domain) && r.domain.includes("geosite:cn"))
+    expect(cnRule).toBeUndefined()
+  })
+
+  it("does not add a tun inbound in System Proxy mode", async () => {
+    const { setRuleConfig } = await import("./main")
+    await setRuleConfig("sub-a", false)
+
+    const lastWriteCall = writeFileMock.mock.calls[writeFileMock.mock.calls.length - 1]
+    const written = JSON.parse(new TextDecoder().decode(lastWriteCall?.[1]))
+    expect(written.inbounds.some((ib: any) => ib.protocol === "tun")).toBe(false)
   })
 })

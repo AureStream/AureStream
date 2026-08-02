@@ -3,11 +3,11 @@
 //! SCM invokes `service_main` with argv that includes the service arguments
 //! passed by `StartServiceW` in the client. We parse:
 //!   argv[0] = service name (ignored)
-//!   argv[1] = sing-box config path
+//!   argv[1] = core config path
 //!   argv[2] = TUN gateway IP (or "-" to skip DNS override)
-//!   argv[3] = sing-box exe path
+//!   argv[3] = core exe path
 //!
-//! Then apply DNS override, spawn sing-box, report SERVICE_RUNNING, and loop
+//! Then apply DNS override, spawn core, report SERVICE_RUNNING, and loop
 //! on `child.try_wait()` + atomic stop flag at 200ms cadence. On stop/exit,
 //! kill child (if alive), call `dns::restore_all()`, report SERVICE_STOPPED.
 
@@ -22,7 +22,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// `CREATE_NO_WINDOW` — passed via `CommandExt::creation_flags` to stop Windows
-/// from allocating a visible console for console-subsystem children (sing-box).
+/// from allocating a visible console for console-subsystem children (core).
 /// Without this flag a service (which itself has no console) spawning a console
 /// program causes Windows to pop a fresh console window on the user's desktop.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -133,7 +133,7 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     STATUS_HANDLE_RAW.store(handle.0 as usize, Ordering::SeqCst);
     set_state(SERVICE_START_PENDING, 0, 5000);
 
-    // argv[0] = service name; argv[1] = config; argv[2] = gateway; argv[3] = sing-box exe.
+    // argv[0] = service name; argv[1] = config; argv[2] = gateway; argv[3] = core exe.
     if args.len() < 4 {
         dns::log_line(&format!(
             "service_main: expected 4 args, got {}: {:?}",
@@ -158,7 +158,7 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
 
     // Flush the system resolver cache. On a reload (mode switch) the
     // previous config's entries — notably FakeIPs from global mode with
-    // the 600s TTL baked into sing-box — would otherwise keep being
+    // the 600s TTL baked into core — would otherwise keep being
     // returned by the Dnscache service for up to 10 minutes. Running
     // this from SYSTEM context inside the service avoids the elevation
     // requirement that `ipconfig /flushdns` has when invoked by a user
@@ -176,12 +176,12 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         Err(e) => dns::log_line(&format!("ipconfig /flushdns spawn failed: {}", e)),
     }
 
-    // Spawn sing-box. `CREATE_NO_WINDOW` is required — without it the service
+    // Spawn core. `CREATE_NO_WINDOW` is required — without it the service
     // (which has no console) spawning a console-subsystem child causes Windows
     // to pop a fresh terminal on the user's desktop.
-    // stdout/stderr are piped so we can log sing-box output for diagnostics.
+    // stdout/stderr are piped so we can log core output for diagnostics.
     let mut child = match std::process::Command::new(&sidecar)
-        .args(["run", "-c", &config, "--disable-color"])
+        .args(["run", "-c", &config])
         .creation_flags(CREATE_NO_WINDOW)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -189,21 +189,21 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     {
         Ok(c) => c,
         Err(e) => {
-            dns::log_line(&format!("sing-box spawn failed: {}", e));
+            dns::log_line(&format!("core spawn failed: {}", e));
             let (r_ok, r_err) = dns::remove_override(&gateway);
             dns::log_line(&format!("remove_override: ok={} err={}", r_ok, r_err));
             set_state(SERVICE_STOPPED, 1, 0);
             return;
         }
     };
-    dns::log_line(&format!("sing-box spawned pid={}", child.id()));
+    dns::log_line(&format!("core spawned pid={}", child.id()));
 
-    // Spawn reader threads to capture sing-box output into the service log.
+    // Spawn reader threads to capture core output into the service log.
     if let Some(stdout) = child.stdout.take() {
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 if let Ok(l) = line {
-                    dns::log_line(&format!("[sing-box] {}", l));
+                    dns::log_line(&format!("[core] {}", l));
                 }
             }
         });
@@ -212,7 +212,7 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         std::thread::spawn(move || {
             for line in BufReader::new(stderr).lines() {
                 if let Ok(l) = line {
-                    dns::log_line(&format!("[sing-box:err] {}", l));
+                    dns::log_line(&format!("[core:err] {}", l));
                 }
             }
         });
@@ -230,7 +230,7 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         }
         match child.try_wait() {
             Ok(Some(status)) => {
-                dns::log_line(&format!("sing-box exited unexpectedly: {:?}", status));
+                dns::log_line(&format!("core exited unexpectedly: {:?}", status));
                 unexpected_exit_code = Some(status.code().unwrap_or(1));
                 break;
             }

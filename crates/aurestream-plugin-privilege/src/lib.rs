@@ -244,22 +244,6 @@ pub fn free_port(port: u16) -> KillOrphansResult {
     }
 }
 
-#[cfg(target_os = "linux")]
-pub fn reload_via_pkexec(helper_path: &str) -> Result<(), String> {
-    let output = Command::new("pkexec")
-        .args([helper_path, "reload"])
-        .output()
-        .map_err(|e| format!("pkexec reload failed: {}", e))?;
-    if !output.status.success() {
-        return Err(format!(
-            "helper reload non-zero: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    log::info!("[reload] SIGHUP + flush-caches via helper");
-    Ok(())
-}
-
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
     use super::*;

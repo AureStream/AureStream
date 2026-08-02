@@ -256,10 +256,10 @@ impl EngineManager for LinuxEngine {
         }
     }
 
-    /// Xray-core has no SIGHUP-based hot reload, so SystemProxy mode does a
-    /// real stop+start cycle instead (mirrors `WindowsEngine::restart`). TUN
-    /// mode keeps the existing pkexec-helper reload path, deferred/untouched
-    /// this phase.
+    /// Xray-core has no SIGHUP-based hot reload, so both modes do a real
+    /// stop+start cycle instead (mirrors `WindowsEngine::restart`) — TUN mode
+    /// no longer uses the pkexec helper's `reload` verb (which just sent
+    /// SIGHUP, a no-op-to-kill on Xray).
     async fn restart(app: &AppHandle) -> Result<(), String> {
         let (mode, config_path) = {
             let manager = ProcessManager::acquire();
@@ -274,10 +274,6 @@ impl EngineManager for LinuxEngine {
         let Some(mode) = mode else {
             return Err("No running process found".to_string());
         };
-
-        if matches!(mode, ProxyMode::IntoProxy) {
-            return aurestream_plugin_privilege::linux::reload();
-        }
 
         let start_epoch = app
             .state::<crate::engine::state_machine::EngineStateCell>()

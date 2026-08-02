@@ -134,7 +134,3 @@ pub fn restore_dns(iface: &str, original_dns: &str) -> Result<(), String> {
     }
     Ok(())
 }
-
-pub fn reload() -> Result<(), String> {
-    super::reload_via_pkexec(HELPER_PATH)
-}
