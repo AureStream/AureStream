@@ -236,7 +236,13 @@ pub async fn start(app: tauri::AppHandle, path: String, mode: ProxyMode) -> Resu
     }
     let start_epoch = app.state::<EngineStateCell>().snapshot().epoch();
 
-    if config_check::needs_verify(&path) {
+    let is_tun = matches!(mode, ProxyMode::IntoProxy);
+    if !config_check::should_run_sidecar_test(is_tun) {
+        // Windows TUN: non-elevated `xray run -test` cannot create Wintun.
+        ::log::info!(
+            "[start] action={action} skipping non-elevated config check for Windows TUN mode"
+        );
+    } else if config_check::needs_verify(&path) {
         let _step = perf::StepTimer::new("start.config_check");
         if let Err(e) = config_check::verify(&app, &path).await {
             ::log::error!("[start] action={action} config check failed: {}", e);
@@ -361,25 +367,29 @@ pub async fn reload_config(app: tauri::AppHandle) -> Result<String, String> {
 
     #[cfg(any(unix, target_os = "windows"))]
     {
-        let (needs_proxy_reset, config_path) = {
+        let (needs_proxy_reset, is_tun, config_path) = {
             let manager = ProcessManager::acquire();
             let path = manager.config_path.as_ref().map(|p| p.as_str().to_string());
-            let needs_proxy_reset = match manager.mode.as_ref().map(|m| m.as_ref()) {
-                Some(ProxyMode::IntoProxy) => false,
-                Some(ProxyMode::SystemProxy) => true,
+            let (needs_proxy_reset, is_tun) = match manager.mode.as_ref().map(|m| m.as_ref()) {
+                Some(ProxyMode::IntoProxy) => (false, true),
+                Some(ProxyMode::SystemProxy) => (true, false),
                 None => {
                     ::log::warn!("[reload] action={action} rejected: no running process");
                     return Err("No running process found".to_string());
                 }
             };
-            (needs_proxy_reset, path)
+            (needs_proxy_reset, is_tun, path)
         };
 
         let Some(path) = config_path else {
             return Err("No config path for running process".to_string());
         };
 
-        if config_check::needs_verify(&path) {
+        if !config_check::should_run_sidecar_test(is_tun) {
+            ::log::info!(
+                "[reload] action={action} skipping non-elevated config check for Windows TUN mode"
+            );
+        } else if config_check::needs_verify(&path) {
             let _step = perf::StepTimer::new("reload.config_check");
             if let Err(e) = config_check::verify(&app, &path).await {
                 ::log::error!("[reload] action={action} config check failed: {}", e);

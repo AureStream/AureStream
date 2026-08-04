@@ -17,6 +17,8 @@ export const PROXY_BALANCER_TAG = "proxy-balancer"
 
 export const DNS_DIRECT_TAG = "dns-direct"
 export const DNS_PROXY_TAG = "dns-proxy"
+/** Built-in DNS outbound — must handle OS DNS forced to the TUN gateway on Windows. */
+export const DNS_OUT_TAG = "dns-out"
 
 /** Fixed ECS client IP for CN CDN-friendly A/AAAA (no UI this iteration). */
 export const ECS_CLIENT_IP = "222.85.85.85"
@@ -26,15 +28,28 @@ export const ECS_CLIENT_IP = "222.85.85.85"
  *
  * Rule mode: DNS tag routing + IP-first CN split + ads block.
  * Global mode: DNS proxy tag + private LAN direct only.
+ *
+ * Port 53 is always first: Windows TUN service rewrites NIC NameServer to the
+ * TUN gateway IP; without this rule those queries match `geoip:private →
+ * direct` and never reach the DNS module, so the whole tunnel looks "up"
+ * but nothing resolves.
  */
 export function buildRoutingRules(global: boolean = false): Record<string, unknown>[] {
+  const dnsCapture = {
+    type: "field",
+    port: "53",
+    network: "udp,tcp",
+    outboundTag: DNS_OUT_TAG,
+  }
   if (global) {
     return [
+      dnsCapture,
       { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
       { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
     ]
   }
   return [
+    dnsCapture,
     { type: "field", inboundTag: [DNS_DIRECT_TAG], outboundTag: "direct" },
     { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
     { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
@@ -154,6 +169,8 @@ export function buildRuleDnsServers(): unknown[] {
 
 /** IPv4 gateway Xray assigns to the TUN interface (point-to-point prefix). */
 export const TUN_GATEWAY_CIDR = "172.19.0.1/30"
+/** Bare gateway IP — also used as Windows NIC NameServer by the TUN service. */
+export const TUN_GATEWAY_IP = "172.19.0.1"
 
 /**
  * IPv4 space minus RFC1918 private ranges (10/8, 172.16/12, 192.168/16),
@@ -221,6 +238,9 @@ function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<str
       desc: "AureStream TUN",
       mtu: 1500,
       gateway: [TUN_GATEWAY_CIDR],
+      // Windows-only: set the TUN adapter's own NameServer to the gateway so
+      // interface-scoped queries stay inside the tunnel path.
+      dns: [TUN_GATEWAY_IP],
       autoSystemRoutingTable: routeTable,
       // Bind proxy outbounds to the physical NIC so TUN capture doesn't
       // loop Xray's own uplink traffic back into the tunnel (critical on
@@ -229,7 +249,8 @@ function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<str
     },
     sniffing: {
       enabled: true,
-      destOverride: ["http", "tls"],
+      destOverride: ["http", "tls", "quic"],
+      // Keep real destination IP for geoip routing after domain sniff.
       routeOnly: true,
     },
   }
@@ -295,6 +316,8 @@ export function buildBaseXrayConfig(
         },
       },
       { tag: "block", protocol: "blackhole" },
+      // Feeds OS/TUN DNS (port 53) into the top-level `dns` module.
+      { tag: DNS_OUT_TAG, protocol: "dns" },
     ],
     routing: {
       domainStrategy: "IPIfNonMatch",

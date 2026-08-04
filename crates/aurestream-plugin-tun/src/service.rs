@@ -7,25 +7,39 @@
 //!   argv[2] = TUN gateway IP (or "-" to skip DNS override)
 //!   argv[3] = core exe path
 //!
-//! Then apply DNS override, spawn core, report SERVICE_RUNNING, and loop
-//! on `child.try_wait()` + atomic stop flag at 200ms cadence. On stop/exit,
-//! kill child (if alive), call `dns::restore_all()`, report SERVICE_STOPPED.
+//! Startup order (important for network availability):
+//!   1. Spawn core (creates Wintun + routes + answers DNS on the gateway)
+//!   2. Wait until the Xray API port is accepting connections
+//!   3. Only then rewrite physical-NIC DNS to the TUN gateway and flush cache
+//!   4. Report SERVICE_RUNNING
+//!
+//! Applying DNS *before* core is ready blackholes name resolution for the
+//! whole machine (NameServer forced to 172.19.0.1 with nothing answering).
+//! On stop/exit: kill child, remove DNS override, report SERVICE_STOPPED.
 
 #![cfg(target_os = "windows")]
 #![allow(dead_code)]
 
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::process::CommandExt;
-use std::process::Stdio;
+use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 /// `CREATE_NO_WINDOW` — passed via `CommandExt::creation_flags` to stop Windows
 /// from allocating a visible console for console-subsystem children (core).
 /// Without this flag a service (which itself has no console) spawning a console
 /// program causes Windows to pop a fresh console window on the user's desktop.
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Default Xray API listen port when config parsing fails (matches app default).
+const DEFAULT_API_PORT: u16 = 9191;
+
+/// How long to wait for core's API after spawn before failing the service start.
+const CORE_READY_TIMEOUT: Duration = Duration::from_secs(15);
 
 use windows::core::{PCWSTR, PWSTR};
 use windows::Win32::System::Services::{
@@ -101,6 +115,118 @@ unsafe extern "system" fn handler_ex(
     }
 }
 
+/// Parse the first `"listen": "host:port"` value from config JSON text.
+///
+/// Xray's `api.listen` is a host:port string; mixed-in uses separate `listen` +
+/// `port` fields, so the first host:port form is the API. Falls back to
+/// [`DEFAULT_API_PORT`] when missing/unparseable.
+pub(crate) fn parse_api_port_from_config_text(content: &str) -> u16 {
+    let mut rest = content;
+    while let Some(idx) = rest.find("\"listen\"") {
+        rest = &rest[idx + "\"listen\"".len()..];
+        let after = rest.trim_start();
+        let Some(after_colon) = after.strip_prefix(':') else {
+            continue;
+        };
+        let after_colon = after_colon.trim_start();
+        let Some(after_quote) = after_colon.strip_prefix('"') else {
+            continue;
+        };
+        let Some(end) = after_quote.find('"') else {
+            continue;
+        };
+        let value = &after_quote[..end];
+        // host:port only — plain "127.0.0.1" has no usable port suffix.
+        if let Some((_, port_str)) = value.rsplit_once(':') {
+            if let Ok(port) = port_str.parse::<u16>() {
+                if port > 0 {
+                    return port;
+                }
+            }
+        }
+    }
+    DEFAULT_API_PORT
+}
+
+fn api_port_from_config_file(config_path: &str) -> u16 {
+    match std::fs::read_to_string(config_path) {
+        Ok(content) => parse_api_port_from_config_text(&content),
+        Err(e) => {
+            dns::log_line(&format!(
+                "read config for api port failed ({}): {}; using default {}",
+                config_path, e, DEFAULT_API_PORT
+            ));
+            DEFAULT_API_PORT
+        }
+    }
+}
+
+fn probe_localhost_port(port: u16) -> bool {
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+    TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
+}
+
+/// Wait until core accepts connections on `port`, the child exits, stop is
+/// requested, or `timeout` elapses. Bumps SERVICE_START_PENDING while waiting
+/// so SCM does not kill a slow start.
+fn wait_for_core_api(child: &mut Child, port: u16, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if STOP_REQUESTED.load(Ordering::SeqCst) {
+            dns::log_line("stop requested while waiting for core API");
+            return false;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                dns::log_line(&format!(
+                    "core exited before API ready: {:?}",
+                    status
+                ));
+                return false;
+            }
+            Ok(None) => {}
+            Err(e) => {
+                dns::log_line(&format!("try_wait error while waiting for API: {}", e));
+                return false;
+            }
+        }
+        if probe_localhost_port(port) {
+            return true;
+        }
+        // Keep SCM informed we are still starting (long TUN/Wintun init).
+        set_state(
+            SERVICE_START_PENDING,
+            0,
+            timeout.as_millis().min(20_000) as u32,
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    false
+}
+
+fn flush_dns_cache() {
+    match std::process::Command::new("ipconfig")
+        .arg("/flushdns")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+    {
+        Ok(o) if o.status.success() => dns::log_line("ipconfig /flushdns OK"),
+        Ok(o) => dns::log_line(&format!(
+            "ipconfig /flushdns non-zero: {}",
+            String::from_utf8_lossy(&o.stderr).trim()
+        )),
+        Err(e) => dns::log_line(&format!("ipconfig /flushdns spawn failed: {}", e)),
+    }
+}
+
+fn apply_dns_override_after_ready(gateway: &str) {
+    let (ok, err) = dns::apply_override(gateway);
+    dns::log_line(&format!("apply_override: ok={} err={}", ok, err));
+    // Flush after override so apps pick up the TUN gateway NameServer and
+    // drop any pre-TUN negative cache entries.
+    flush_dns_cache();
+}
+
 /// The SCM-invoked service entry point.
 unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // Parse argv.
@@ -131,7 +257,8 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
             }
         };
     STATUS_HANDLE_RAW.store(handle.0 as usize, Ordering::SeqCst);
-    set_state(SERVICE_START_PENDING, 0, 5000);
+    // Long wait hint: core + Wintun init + API probe can exceed the old 5s.
+    set_state(SERVICE_START_PENDING, 0, 20_000);
 
     // argv[0] = service name; argv[1] = config; argv[2] = gateway; argv[3] = core exe.
     if args.len() < 4 {
@@ -146,39 +273,16 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     let config = args[1].clone();
     let gateway = args[2].clone();
     let sidecar = args[3].clone();
+    let api_port = api_port_from_config_file(&config);
 
     dns::log_line(&format!(
-        "service_main: config={} gateway={} sidecar={}",
-        config, gateway, sidecar
+        "service_main: config={} gateway={} sidecar={} api_port={}",
+        config, gateway, sidecar, api_port
     ));
 
-    // Apply DNS override.
-    let (ok, err) = dns::apply_override(&gateway);
-    dns::log_line(&format!("apply_override: ok={} err={}", ok, err));
-
-    // Flush the system resolver cache. On a reload (mode switch) the
-    // previous config's entries — notably FakeIPs from global mode with
-    // the 600s TTL baked into core — would otherwise keep being
-    // returned by the Dnscache service for up to 10 minutes. Running
-    // this from SYSTEM context inside the service avoids the elevation
-    // requirement that `ipconfig /flushdns` has when invoked by a user
-    // process on Windows 10+.
-    match std::process::Command::new("ipconfig")
-        .arg("/flushdns")
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-    {
-        Ok(o) if o.status.success() => dns::log_line("ipconfig /flushdns OK"),
-        Ok(o) => dns::log_line(&format!(
-            "ipconfig /flushdns non-zero: {}",
-            String::from_utf8_lossy(&o.stderr).trim()
-        )),
-        Err(e) => dns::log_line(&format!("ipconfig /flushdns spawn failed: {}", e)),
-    }
-
-    // Spawn core. `CREATE_NO_WINDOW` is required — without it the service
-    // (which has no console) spawning a console-subsystem child causes Windows
-    // to pop a fresh terminal on the user's desktop.
+    // Spawn core FIRST (before DNS override). `CREATE_NO_WINDOW` is required —
+    // without it the service (which has no console) spawning a console-subsystem
+    // child causes Windows to pop a fresh terminal on the user's desktop.
     // stdout/stderr are piped so we can log core output for diagnostics.
     //
     // cwd = sidecar directory so relative asset lookups (if any) and so
@@ -200,8 +304,6 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         Ok(c) => c,
         Err(e) => {
             dns::log_line(&format!("core spawn failed: {}", e));
-            let (r_ok, r_err) = dns::remove_override(&gateway);
-            dns::log_line(&format!("remove_override: ok={} err={}", r_ok, r_err));
             set_state(SERVICE_STOPPED, 1, 0);
             return;
         }
@@ -228,6 +330,23 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         });
     }
 
+    // Wait until Xray API is up (TUN/Wintun + listeners ready) before hijacking
+    // system DNS. Otherwise NameServer=gateway with no responder = total outage.
+    if !wait_for_core_api(&mut child, api_port, CORE_READY_TIMEOUT) {
+        dns::log_line(&format!(
+            "core API :{} not ready within {:?}; aborting start",
+            api_port, CORE_READY_TIMEOUT
+        ));
+        let _ = child.kill();
+        let _ = child.wait();
+        set_state(SERVICE_STOPPED, 1, 0);
+        return;
+    }
+    dns::log_line(&format!("core API :{} ready", api_port));
+
+    // Now safe to point physical NICs at the TUN gateway DNS.
+    apply_dns_override_after_ready(&gateway);
+
     set_state(SERVICE_RUNNING, 0, 0);
 
     // Main loop: 200ms tick on child.try_wait() and STOP_REQUESTED.
@@ -252,12 +371,13 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
                 break;
             }
         }
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(200));
     }
 
-    // Remove only the TUN gateway we inserted at start.
+    // Remove only the TUN gateway we inserted after core was ready.
     let (r_ok, r_err) = dns::remove_override(&gateway);
     dns::log_line(&format!("remove_override: ok={} err={}", r_ok, r_err));
+    flush_dns_cache();
 
     let exit = unexpected_exit_code.unwrap_or(0) as u32;
     set_state(SERVICE_STOPPED, exit, 0);
@@ -283,5 +403,41 @@ pub fn run_dispatcher() -> i32 {
             dns::log_line(&format!("StartServiceCtrlDispatcherW failed: {}", e));
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_api_port_from_typical_xray_config() {
+        let json = r#"{
+          "api": {
+            "tag": "api",
+            "listen": "127.0.0.1:9191",
+            "services": ["HandlerService"]
+          },
+          "inbounds": [
+            {
+              "tag": "mixed-in",
+              "listen": "127.0.0.1",
+              "port": 2345,
+              "protocol": "socks"
+            }
+          ]
+        }"#;
+        assert_eq!(parse_api_port_from_config_text(json), 9191);
+    }
+
+    #[test]
+    fn parse_api_port_custom_and_fallback() {
+        let custom = r#"{"api":{"listen":"127.0.0.1:19291"}}"#;
+        assert_eq!(parse_api_port_from_config_text(custom), 19291);
+        assert_eq!(parse_api_port_from_config_text("{}"), DEFAULT_API_PORT);
+        assert_eq!(
+            parse_api_port_from_config_text(r#"{"inbounds":[{"listen":"0.0.0.0"}]}"#),
+            DEFAULT_API_PORT
+        );
     }
 }

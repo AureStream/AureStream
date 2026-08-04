@@ -51,6 +51,21 @@ pub fn invalidate_cache() {
     log::debug!("[config_check] cache invalidated");
 }
 
+/// Whether `aurestream-core run -test` is safe before start for this mode.
+///
+/// On Windows, Xray's `-test` path initializes the TUN/Wintun inbound (creates
+/// a private namespace and takes the device-installation mutex). That requires
+/// elevation. The pre-start check runs the sidecar as the normal user, so TUN
+/// configs always fail with `Access is denied` and block the real elevated
+/// path via `AureStreamTunService`. Skip the sidecar test for Windows TUN;
+/// the frontend merger + service runtime remain the source of truth.
+pub fn should_run_sidecar_test(is_tun: bool) -> bool {
+    if is_tun && cfg!(windows) {
+        return false;
+    }
+    true
+}
+
 /// Mark config as valid without spawning `aurestream-core check`.
 /// Called after the frontend merger writes `config.json` (trusted path).
 #[tauri::command]
@@ -126,5 +141,20 @@ mod tests {
     #[test]
     fn needs_verify_without_stamp_is_true() {
         assert!(needs_verify("/nonexistent/config.json"));
+    }
+
+    #[test]
+    fn sidecar_test_runs_for_system_proxy() {
+        assert!(should_run_sidecar_test(false));
+    }
+
+    #[test]
+    fn sidecar_test_skipped_for_windows_tun_only() {
+        let run = should_run_sidecar_test(true);
+        if cfg!(windows) {
+            assert!(!run);
+        } else {
+            assert!(run);
+        }
     }
 }
