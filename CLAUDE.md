@@ -52,7 +52,7 @@ cargo build
 
 **Persistence**: `settings.json` (plugin-store), `data.db` (plugin-sql).
 
-**i18n**: `lang/zh.json` (default), `lang/en.json` via `react-i18next`.
+**UI copy**: Chinese-only (no i18n).
 
 **Path alias**: `@/*` → `./src/*`.
 

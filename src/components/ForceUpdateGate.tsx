@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react"
-import { useTranslation } from "react-i18next"
 import { useUpdate } from "../contexts/UpdateContext"
 
 /**
@@ -9,8 +8,6 @@ import { useUpdate } from "../contexts/UpdateContext"
  * - If the check fails (network) or no update: renders children.
  */
 export default function ForceUpdateGate({ children }: { children: ReactNode }) {
-  const { i18n } = useTranslation()
-  const l = (en: string, zh: string) => (i18n.language.startsWith("zh") ? zh : en)
   const { updateAvailable, newVersion, currentVersion, checking, performForceUpdate } = useUpdate()
   const [installing, setInstalling] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,9 +44,9 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
             </svg>
           </div>
 
-          <h2 className="text-lg font-extrabold text-text mb-1.5">{l("Update Required", "必须更新")}</h2>
+          <h2 className="text-lg font-extrabold text-text mb-1.5">{"必须更新"}</h2>
           <p className="text-xs text-text-muted mb-2 leading-relaxed">
-            {l("A new version is available. Please update to continue using the app.", "发现新版本，请更新至最新版本后继续使用。")}
+            {"发现新版本，请更新至最新版本后继续使用。"}
           </p>
           <p className="text-xs font-mono text-text mb-4">
             {currentVersion || "..."} <span className="text-text-muted">→</span> {newVersion || "..."}
@@ -65,12 +62,12 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
             {installing ? (
               <>
                 <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                {l("Updating...", "更新中...")}
+                {"更新中..."}
               </>
             ) : error ? (
-              l("Retry", "重试")
+              "重试"
             ) : (
-              l("Update Now", "立即更新")
+              "立即更新"
             )}
           </button>
         </div>

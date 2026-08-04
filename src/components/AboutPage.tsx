@@ -1,4 +1,3 @@
-import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 import { useUpdate } from "../contexts/UpdateContext"
 import { openUrl } from "@tauri-apps/plugin-opener"
@@ -8,8 +7,6 @@ import { useState, useEffect } from "react"
 import MobileTopBar from "./MobileTopBar"
 
 export default function AboutPage() {
-  const { i18n } = useTranslation()
-  const l = (en: string, zh: string) => (i18n.language.startsWith("zh") ? zh : en)
   const { currentVersion } = useUpdate()
   const navigate = useNavigate()
 
@@ -27,30 +24,30 @@ export default function AboutPage() {
   const features = [
     {
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>,
-      title: l("Secure Tunnel", "安全隧道"),
-      desc: l("Military-grade encryption", "军用级加密保护"),
+      title: "安全隧道",
+      desc: "军用级加密保护",
     },
     {
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
-      title: l("Smart Routing", "智能分流"),
-      desc: l("Rule-based routing", "基于规则的分流"),
+      title: "智能分流",
+      desc: "基于规则的分流",
     },
     {
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
-      title: l("Low Latency", "低延迟"),
-      desc: l("Blazing fast connections", "极速稳定连接"),
+      title: "低延迟",
+      desc: "极速稳定连接",
     },
     {
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
-      title: l("Multi-platform", "多平台"),
-      desc: l("Mac · Win · Linux", "Mac · Win · Linux"),
+      title: "多平台",
+      desc: "Mac · Win · Linux",
     },
   ]
 
   const meta = [
-    { label: l("App", "应用"), value: `v${currentVersion || "..."}` },
-    { label: l("Core", "内核"), value: XRAY_VERSION },
-    { label: l("Platform", "平台"), value: osType },
+    { label: "应用", value: `v${currentVersion || "..."}` },
+    { label: "内核", value: XRAY_VERSION },
+    { label: "平台", value: osType },
   ]
 
   return (
@@ -59,7 +56,7 @@ export default function AboutPage() {
       <div className="pointer-events-none absolute right-[-6rem] top-36 h-60 w-60 rounded-full bg-cyan-200/18 dark:bg-cyan-400/10 blur-3xl" />
 
       <div className="relative z-10 shrink-0">
-        <MobileTopBar onBack={() => navigate("/dashboard")} title={l("About", "关于")} />
+        <MobileTopBar onBack={() => navigate("/dashboard")} title={"关于"} />
       </div>
 
       <div className="relative z-10 flex-1 min-h-0 overflow-hidden px-5 pb-4 pt-1 flex flex-col justify-between gap-4">
@@ -81,14 +78,11 @@ export default function AboutPage() {
 
             <div className="inline-flex items-center justify-center gap-2 rounded-full bg-white/55 dark:bg-white/8 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#6C5CFF]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#6C5CFF]" />
-              {l("Proxy Client", "代理客户端")}
+              {"代理客户端"}
             </div>
             <h1 className="mt-2 text-3xl font-black text-slate-950 dark:text-white tracking-tight text-center">AureStream</h1>
             <p className="mt-1.5 max-w-[300px] text-center text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
-              {l(
-                "A lightweight desktop tunnel with smart routing, built for clarity and speed.",
-                "轻量桌面网络隧道，聚焦智能分流、清晰体验与高速连接。"
-              )}
+              轻量桌面网络隧道，聚焦智能分流、清晰体验与高速连接。
             </p>
           </section>
         </div>
@@ -113,13 +107,13 @@ export default function AboutPage() {
             <div className="relative flex items-center justify-center">
               <div className="text-center">
                 <div className="text-[11px] font-black uppercase tracking-[0.22em] text-[#6C5CFF]">
-                  {l("Essentials", "核心体验")}
+                  {"核心体验"}
                 </div>
                 <h2 className="text-2xl font-black text-slate-950 dark:text-white mt-1">
-                  {l("Secure. Fast. Clear.", "安全、快速、清晰。")}
+                  {"安全、快速、清晰。"}
                 </h2>
                 <p className="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
-                  {l("Powered by Xray-core", "由 Xray-core 内核驱动")}
+                  {"由 Xray-core 内核驱动"}
                 </p>
               </div>
             </div>
@@ -152,7 +146,7 @@ export default function AboutPage() {
           {/* Links */}
           <section className="px-1 py-1">
             <div className="text-center text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-              {l("Open source stack", "开源技术栈")}
+              {"开源技术栈"}
             </div>
 
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -188,7 +182,7 @@ export default function AboutPage() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
               </svg>
-              {l("Made with love · MIT License", "用心制作 · MIT 许可证")}
+              {"用心制作 · MIT 许可证"}
             </div>
           </div>
         </div>

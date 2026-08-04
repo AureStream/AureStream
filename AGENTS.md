@@ -12,7 +12,7 @@ AureStream is a cross-platform proxy/VPN client (Tauri v2 + React + Xray-core si
 
 | Layer | Tech |
 |---|---|
-| Frontend | React 19, TypeScript, Vite 7, Tailwind CSS v4, shadcn/ui (new-york), react-router-dom, i18next |
+| Frontend | React 19, TypeScript, Vite 7, Tailwind CSS v4, shadcn/ui (new-york), react-router-dom |
 | Backend | Rust / Tauri v2, Tokio |
 | Engine | Xray-core sidecar + gRPC API CLI |
 | Package manager | pnpm (ESM) |
@@ -120,7 +120,7 @@ State: React Context (no Redux/Zustand). Auth gate uses `useAuth()` (`user`, `lo
 - Tailwind v4 + CSS variables in `src/index.css` (light/dark).
 - Prefer semantic tokens (`text-muted-foreground`, `bg-card`, …) over hard-coded colors.
 - shadcn/ui new-york style; add via `npx shadcn@latest add <name>` (`components.json`).
-- i18n: `lang/zh.json` (default), `lang/en.json`; use `useTranslation()` from `react-i18next`. Add keys to both locales.
+- UI copy is Chinese-only (no i18n). Prefer plain Chinese strings in components.
 - No font size below 11px. Prefer design-system classes when present (`type-*`, `surface-*`, `btn-*` per `docs/ui-design-system.md`).
 
 ### Rust / Tauri

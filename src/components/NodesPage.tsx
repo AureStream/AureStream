@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 import { getSubscriptionConfig } from "../action/db"
 import { getStoreValue, setStoreValue, getAutoFailoverEnabled, setAutoFailoverEnabled, setLastManualNodeTag } from "../single/store"
@@ -29,9 +28,7 @@ const I = {
 }
 
 export default function NodesPage() {
-  const { i18n } = useTranslation()
   const navigate = useNavigate()
-  const l = (en: string, zh: string) => i18n.language.startsWith('zh') ? zh : en;
 
   const [connectedNodeId, setConnectedNodeId] = useState<string>("")
   const [activeSubId, setActiveSubId] = useState<string>("")
@@ -97,7 +94,7 @@ export default function NodesPage() {
       const pingB = b.ping <= 0 ? 9999 : b.ping
       return pingA - pingB
     }
-    return a.name.localeCompare(b.name, i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US')
+    return a.name.localeCompare(b.name, "zh-CN")
   })
 
   return (
@@ -105,7 +102,7 @@ export default function NodesPage() {
       <div className="w-full shrink-0">
         <MobileTopBar
           onBack={() => navigate("/dashboard")}
-          title={l("Nodes", "节点列表")}
+          title={"节点列表"}
           right={
             <>
               <button
@@ -113,7 +110,7 @@ export default function NodesPage() {
                 disabled={isTestingSpeed}
                 className={`${topBarIconBtnClass} disabled:opacity-50`}
                 aria-label="Speed test"
-                title={l("Test Speed", "延迟测速")}
+                title={"延迟测速"}
               >
                 <span className={isTestingSpeed ? 'animate-pulse' : ''}><I.Activity /></span>
               </button>
@@ -123,8 +120,8 @@ export default function NodesPage() {
                 aria-label="Sort"
                 title={
                   sortBy === "ping"
-                    ? l("Sorted by latency · tap for name", "当前：延迟排序 · 点击切换名称")
-                    : l("Sorted by name · tap for latency", "当前：名称排序 · 点击切换延迟")
+                    ? "当前：延迟排序 · 点击切换名称"
+                    : "当前：名称排序 · 点击切换延迟"
                 }
               >
                 <I.Sort />
@@ -176,7 +173,7 @@ export default function NodesPage() {
                     {isTestingSpeed && node.ping === 0 ? (
                       <span className="animate-pulse text-slate-400">--</span>
                     ) : node.ping < 0 ? (
-                      <span className="text-danger">{l("Timeout", "超时")}</span>
+                      <span className="text-danger">{"超时"}</span>
                     ) : node.ping === 0 ? (
                       <span className="text-slate-400">-- ms</span>
                     ) : (
@@ -207,7 +204,7 @@ export default function NodesPage() {
           {sortedNodes.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-text-muted">
               <I.Activity />
-              <p className="mt-4 text-sm">{l("No nodes found.", "暂无节点")}</p>
+              <p className="mt-4 text-sm">{"暂无节点"}</p>
             </div>
           )}
         </div>

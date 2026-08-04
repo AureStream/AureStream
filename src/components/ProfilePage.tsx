@@ -1,5 +1,4 @@
 import { useState, useEffect, type CSSProperties } from "react"
-import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { getLocalSubscriptions } from "../action/db"
@@ -27,19 +26,15 @@ const I = {
 }
 
 export default function ProfilePage() {
-  const { i18n } = useTranslation()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const l = (en: string, zh: string) => (i18n.language.startsWith("zh") ? zh : en)
 
   const formatDate = (ts: number) => {
     const d = new Date(ts * 1000)
     const y = d.getFullYear()
     const m = String(d.getMonth() + 1).padStart(2, "0")
     const day = String(d.getDate()).padStart(2, "0")
-    return i18n.language.startsWith("zh")
-      ? `${y}年${m}月${day}日`
-      : d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+    return `${y}年${m}月${day}日`
   }
 
   const emailUser = user?.email ?? "User"
@@ -92,19 +87,19 @@ export default function ProfilePage() {
   const balanceText = accountBalance.toFixed(1)
 
   const comingSoon = async (title: string, body: string) => {
-    await message(body, { title, kind: "info", okLabel: l("OK", "确定") })
+    await message(body, { title, kind: "info", okLabel: "确定" })
   }
 
   const handleChangePassword = () =>
-    comingSoon(l("Change Password", "修改密码"), l("Coming soon.", "修改密码功能即将推出，敬请期待。"))
+    comingSoon("修改密码", "修改密码功能即将推出，敬请期待。")
   const handleRecharge = () =>
-    comingSoon(l("Top Up", "充值"), l("Top-up is coming soon.", "充值功能即将推出，敬请期待。"))
+    comingSoon("充值", "充值功能即将推出，敬请期待。")
   const handleDetails = () =>
-    comingSoon(l("Details", "明细"), l("Balance details are coming soon.", "余额明细功能即将推出，敬请期待。"))
+    comingSoon("明细", "余额明细功能即将推出，敬请期待。")
   const handleTrafficBoost = () =>
-    comingSoon(l("Data Add-on", "流量加油"), l("Data add-on is coming soon.", "流量加油功能即将推出，敬请期待。"))
+    comingSoon("流量加油", "流量加油功能即将推出，敬请期待。")
   const handleRenew = () =>
-    comingSoon(l("Renew", "续费"), l("Renewal is coming soon.", "续费功能即将推出，敬请期待。"))
+    comingSoon("续费", "续费功能即将推出，敬请期待。")
 
   const r = 42
   const c = 2 * Math.PI * r
@@ -126,8 +121,8 @@ export default function ProfilePage() {
               }}
               className={topBarIconBtnClass}
               style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
-              aria-label={l("Log Out", "退出登录")}
-              title={l("Log Out", "退出登录")}
+              aria-label={"退出登录"}
+              title={"退出登录"}
             >
               <I.LogOut />
             </button>
@@ -149,7 +144,7 @@ export default function ProfilePage() {
                 onClick={handleChangePassword}
                 className="text-xs font-bold text-slate-600 underline underline-offset-2 cursor-pointer hover:text-[#6C5CFF]"
               >
-                {l("Change Password", "修改密码")}
+                {"修改密码"}
               </button>
             </div>
             <p className="mt-1.5 text-[1rem] font-semibold text-slate-700 truncate">{emailUser}</p>
@@ -164,13 +159,13 @@ export default function ProfilePage() {
             <div className="min-w-0">
               <div className="text-[1.75rem] font-black tabular-nums tracking-tight leading-none">{balanceText}</div>
               <div className="mt-2 flex items-center gap-2 text-base font-bold text-white/95">
-                <span>{l("Account Balance (CNY)", "账户余额 (元)")}</span>
+                <span>{"账户余额 (元)"}</span>
                 <button
                   type="button"
                   onClick={handleDetails}
                   className="underline underline-offset-2 cursor-pointer hover:text-white"
                 >
-                  {l("Details", "明细")}
+                  {"明细"}
                 </button>
               </div>
             </div>
@@ -179,7 +174,7 @@ export default function ProfilePage() {
               onClick={handleRecharge}
               className="shrink-0 h-9 min-w-[4.2rem] px-4 rounded-full bg-gradient-to-r from-[#FFE2BE] to-[#FFC584] text-[#5F350B] text-sm font-black shadow-sm hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
             >
-              {l("Top Up", "充值")}
+              {"充值"}
             </button>
           </div>
         </section>
@@ -208,7 +203,7 @@ export default function ProfilePage() {
                   {remainingUnitLabel ? <span className="text-[0.85rem] font-bold text-slate-700 ml-0.5">{remainingUnitLabel}</span> : null}
                 </div>
                 <div className="mt-2 text-base font-extrabold text-slate-400 leading-tight">
-                  {l("Plan remaining traffic", "套餐剩余流量")}
+                  {"套餐剩余流量"}
                 </div>
               </div>
             </div>
@@ -217,14 +212,14 @@ export default function ProfilePage() {
               <div className="flex items-start justify-center gap-2">
                 <span className="mt-1.5 w-2 h-2 rounded-full bg-slate-300 shrink-0" />
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-400">{l("Plan used traffic", "套餐已使用流量")}</div>
+                  <div className="text-sm font-bold text-slate-400">{"套餐已使用流量"}</div>
                   <div className="mt-1 text-[1.32rem] font-black tabular-nums text-slate-800 leading-none">{usedGB}<span className="text-xs ml-0.5">GB</span></div>
                 </div>
               </div>
               <div className="flex items-start justify-center gap-2">
                 <span className="mt-1.5 w-2 h-2 rounded-full bg-[#28D081] shrink-0" />
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-400">{l("Plan total traffic", "套餐总流量")}</div>
+                  <div className="text-sm font-bold text-slate-400">{"套餐总流量"}</div>
                   <div className="mt-1 text-[1.32rem] font-black tabular-nums text-slate-800 leading-none">{totalDisplay}</div>
                 </div>
               </div>
@@ -233,11 +228,11 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-2 gap-5 pt-0 text-center">
             <div>
-              <div className="text-base font-extrabold text-slate-400 leading-tight">{l("Subscription time", "套餐订阅时间")}</div>
+              <div className="text-base font-extrabold text-slate-400 leading-tight">{"套餐订阅时间"}</div>
               <div className="mt-1 text-[1.05rem] font-black text-slate-800 leading-tight">{subscriptionTimeText}</div>
             </div>
             <div>
-              <div className="text-base font-extrabold text-slate-400 leading-tight">{l("Plan ends", "套餐结束时间")}</div>
+              <div className="text-base font-extrabold text-slate-400 leading-tight">{"套餐结束时间"}</div>
               <div className="mt-1 text-[1.05rem] font-black text-slate-800 leading-tight">{expireText}</div>
             </div>
           </div>
@@ -249,7 +244,7 @@ export default function ProfilePage() {
               className="h-10 px-9 rounded-full bg-gradient-to-r from-[#7357F6] to-[#8155F1] hover:opacity-95 active:scale-[0.98] transition-all text-white text-sm font-black cursor-pointer inline-flex items-center gap-2 shadow-sm shadow-[#6C5CFF]/20"
             >
               <I.Bag />
-              {l("Data Add-on", "流量加油")}
+              {"流量加油"}
             </button>
           </div>
         </section>
@@ -260,7 +255,7 @@ export default function ProfilePage() {
           onClick={handleRenew}
           className="shrink-0 w-full h-11 rounded-full bg-gradient-to-r from-[#FFE0B6] to-[#FFC083] hover:opacity-95 active:scale-[0.98] transition-all text-[#3F2507] font-black text-base cursor-pointer"
         >
-          {l("Renew", "续费")}
+          {"续费"}
         </button>
       </div>
     </div>

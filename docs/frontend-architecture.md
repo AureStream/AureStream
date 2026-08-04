@@ -5,7 +5,7 @@ AureStream 前端采用 React 19 + TypeScript + Vite 7 构建，使用 shadcn/ui
 ## 1. 前端概述
 - **框架**: React 19 + TypeScript + Vite 7
 - **样式**: shadcn/ui (new-york 风格) + Tailwind CSS v4
-- **国际化**: i18next (默认中文，支持英文)
+- **文案**: 中文硬编码（无 i18n）
 - **路径别名**: `@/*` 映射到 `./src/*`
 
 ## 2. 应用入口与启动流程
@@ -66,7 +66,7 @@ AureStream 前端采用 React 19 + TypeScript + Vite 7 构建，使用 shadcn/ui
 | `routing-mode.ts` | `rule` / `global` 模式 |
 | `country-flags.ts` | 节点名 → ISO 国家代码映射 |
 | `typography.ts` | 设计系统排版与工具栏按钮样式（`btn.toolbar*`） |
-| `i18n.ts` | i18next 配置 |
+
 
 ## 6. sing-box API 客户端 (`src/utils/singbox-api/`)
 

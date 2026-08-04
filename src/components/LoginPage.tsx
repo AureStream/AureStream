@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useTranslation } from "react-i18next"
 import { Link, useLocation } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 
@@ -12,7 +11,6 @@ const I = {
 }
 
 export default function LoginPage() {
-  const { t } = useTranslation()
   const { login } = useAuth()
   const location = useLocation()
 
@@ -40,7 +38,7 @@ export default function LoginPage() {
       // redirects to /dashboard — no manual navigate (avoids double navigation).
       await login(email, password)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed")
+      setError(err instanceof Error ? err.message : "登录失败")
     } finally {
       setSubmitting(false)
     }
@@ -49,8 +47,8 @@ export default function LoginPage() {
   return (
     <div className="relative flex h-full w-full flex-col px-10 pb-7 pt-10 animate-fade-in">
       <div className="pt-18 text-center">
-        <p className="text-[26px] font-black leading-tight tracking-tight text-slate-800 dark:text-text">{t("auth_welcome", "欢迎使用 AureStream")}</p>
-        <p className="mt-3 text-[14px] font-semibold text-[#6C5CFF]">{t("auth_welcome_subtitle", "安全、快速、简洁的网络连接体验")}</p>
+        <p className="text-[26px] font-black leading-tight tracking-tight text-slate-800 dark:text-text">欢迎使用 AureStream</p>
+        <p className="mt-3 text-[14px] font-semibold text-[#6C5CFF]">安全、快速、简洁的网络连接体验</p>
       </div>
 
       <div className="absolute left-10 right-10 top-1/2 -translate-y-1/2">
@@ -70,33 +68,33 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <label className="flex h-15 items-center gap-4 rounded-full border border-slate-300/80 bg-white/55 px-5 text-slate-500 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10">
             <I.Mail />
-            <span className="sr-only">{t("email")}</span>
+            <span className="sr-only">邮箱</span>
             <input
               className="min-w-0 flex-1 border-none bg-transparent text-[16px] font-semibold text-slate-700 outline-none placeholder:text-slate-500 dark:text-text dark:placeholder:text-text-muted"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={t("email")}
+              placeholder="邮箱"
               required
             />
           </label>
 
           <label className="flex h-15 items-center gap-4 rounded-full border border-slate-300/80 bg-white/55 px-5 text-slate-500 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10">
             <I.Lock />
-            <span className="sr-only">{t("password")}</span>
+            <span className="sr-only">密码</span>
             <input
               className="min-w-0 flex-1 border-none bg-transparent text-[16px] font-semibold text-slate-700 outline-none placeholder:text-slate-500 dark:text-text dark:placeholder:text-text-muted [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={t("password")}
+              placeholder="密码"
               required
             />
             <button
               type="button"
               onClick={() => setShowPassword((value) => !value)}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-slate-600 dark:text-text-muted dark:hover:text-text"
-              aria-label={showPassword ? t("hide_password", "隐藏密码") : t("show_password", "显示密码")}
+              aria-label={showPassword ? "隐藏密码" : "显示密码"}
             >
               {showPassword ? <I.EyeOff /> : <I.Eye />}
             </button>
@@ -110,10 +108,10 @@ export default function LoginPage() {
             {submitting ? (
               <>
                 <span className="mr-2 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                <span>{t("submitting", "请稍候...")}</span>
+                <span>请稍候...</span>
               </>
             ) : (
-              t("sign_in")
+              "登录"
             )}
           </button>
         </form>
@@ -121,9 +119,9 @@ export default function LoginPage() {
       </div>
 
       <div className="mt-auto text-center text-[14px] font-medium text-slate-800 dark:text-text-secondary">
-        {t("no_account")}{" "}
+        还没有账号？{" "}
         <Link to="/register" className="font-extrabold text-[#6C5CFF] transition-colors hover:text-[#6252F4]">
-          {t("sign_up")}
+          注册
         </Link>
       </div>
     </div>

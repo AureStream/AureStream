@@ -8,7 +8,6 @@ import { ThemeProvider } from "./components/ThemeProvider"
 import { AuthProvider } from "./contexts/AuthContext"
 import { UpdateProvider } from "./contexts/UpdateContext"
 import "./index.css"
-import "./i18n"
 
 function AppShell() {
   const { pathname } = useLocation()

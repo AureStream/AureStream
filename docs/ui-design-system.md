@@ -29,10 +29,8 @@ AureStream 采用现代极简主义设计风格，融合了 shadcn/ui 组件库�
 引入了 10 个轻量级基础 UI 原语 (new-york 风格):
 `badge`, `button`, `card`, `chart`, `progress`, `radio-group`, `scroll-area`, `separator`, `switch`, `tooltip`。
 
-## 6. 国际化 (i18n)
-- 基于 `i18next` 框架构建。
-- 默认中文，同时提供完整的英文支持。
-- 根据系统 Locale 自动回退匹配语言。
+## 6. 文案
+- UI 文案为中文硬编码，不再使用 i18n。
 
 ## 7. 使用规范
 - 新的 UI 代码必须优先使用预定义的 `type-*` 和 `surface-*` 类。
