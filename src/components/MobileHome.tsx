@@ -1,19 +1,30 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { useNavigate } from "react-router-dom"
-import { type ProxyMode } from "../types/proxy-mode"
 import { fetchSubscriptions, type Subscription } from "../api/subscriptions"
 import { stopEngine } from "../utils/vpn-service"
 import { useEngineState } from "../hooks/useEngineState"
 import { useTrafficAccumulator } from "../hooks/useTrafficAccumulator"
 import { connectEngine } from "../lib/connection-flow"
-import { getEnableTun, setEnableTun, getStoreValue, setStoreValue } from "../single/store"
+import {
+  getEnableIpv6,
+  getEnableTun,
+  setEnableIpv6,
+  setEnableTun,
+  getStoreValue,
+  setStoreValue,
+} from "../single/store"
 import { SSI_STORE_KEY, selectedNodeTagStoreKey } from "../types/definition"
 import { insertSubscription, getSubscriptionConfig, getLocalSubscriptions, deleteSubscription, updateLocalSubscriptionMeta } from "../action/db"
 import { syncActiveConnectionConfig, withScheduledConfigSyncSuspended } from "../lib/config-sync"
 import { syncRemoteSubscriptionsToLocal } from "../lib/subscription-sync"
 import { isBootstrapDataFresh } from "../lib/session-bootstrap"
 import { switchProxyMode } from "../lib/mode-switch"
+import {
+  ROUTING_MODE_KEY,
+  normalizeRoutingMode,
+  type RoutingMode,
+} from "../lib/routing-mode"
 import {
   planTrayModeAction,
   uiModeFromEngineState,
@@ -28,6 +39,7 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import { shouldAllowConnectionToggle } from "../lib/home-network-info"
 import { listen } from "@tauri-apps/api/event"
 import MobileTopBar, { topBarIconBtnClass } from "./MobileTopBar"
+import { Switch } from "@/components/ui/switch"
 
 const ONE_GB_BYTES = 1024 * 1024 * 1024
 const ONE_TB_BYTES = 1024 * 1024 * 1024 * 1024
@@ -35,8 +47,9 @@ const ONE_TB_BYTES = 1024 * 1024 * 1024 * 1024
 /* ── Icons ── */
 const I = {
   Globe: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20"/><path d="M2 12h20"/></svg>),
-  Activity: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>),
+  Activity: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>),
   Info: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>),
+  Ipv6: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h4v10H4zM10 7h2l3 10h-2.2l-.5-1.8H11l-.5 1.8H8.3L11.3 7zM18 7h2v10h-2z"/><path d="M11.3 13.2h2.4"/></svg>),
 }
 
 export default function MobileHome() {
@@ -58,17 +71,27 @@ export default function MobileHome() {
       : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
-  const [proxyMode, setProxyMode] = useState<ProxyMode>("rule")
+  /** Smart routing ON = DNS+IP rule split; OFF = global proxy. Independent of TUN/IPv6. */
+  const [smartRouting, setSmartRouting] = useState(true)
+  const [enableTun, setEnableTunState] = useState(false)
+  const [enableIpv6, setEnableIpv6State] = useState(false)
   const [localConnecting, setLocalConnecting] = useState(false)
   const [isInstallingService, setIsInstallingService] = useState(false)
   const isConnected = engineState.kind === "running"
   const isConnecting = isStopping || engineState.kind === "starting" || (localConnecting && !isConnected)
   const canToggleConnection = shouldAllowConnectionToggle(engineState.kind, localConnecting)
+  const routingMode: RoutingMode = smartRouting ? "rule" : "global"
 
   useEffect(() => {
     const initMode = async () => {
-      const tun = await getEnableTun()
-      setProxyMode(tun ? "tun" : "rule")
+      const [tun, ipv6, routingRaw] = await Promise.all([
+        getEnableTun(),
+        getEnableIpv6(),
+        getStoreValue(ROUTING_MODE_KEY, "rule"),
+      ])
+      setEnableTunState(tun)
+      setEnableIpv6State(ipv6)
+      setSmartRouting(normalizeRoutingMode(routingRaw) === "rule")
     }
     initMode()
   }, [])
@@ -82,14 +105,16 @@ export default function MobileHome() {
     }
   }, [engineState.kind])
 
-  // 同步主界面与后台引擎/系统托盘切换后的代理模式状态
+  // Sync TUN toggle with engine/tray (routing + IPv6 stay user preferences).
   useEffect(() => {
     const engineUiMode = uiModeFromEngineState(engineState)
-    if (engineUiMode && proxyMode !== engineUiMode) {
-      setProxyMode(engineUiMode)
-      void withScheduledConfigSyncSuspended(() => setEnableTun(engineUiMode === "tun"))
+    if (!engineUiMode) return
+    const tunFromEngine = engineUiMode === "tun"
+    if (tunFromEngine !== enableTun) {
+      setEnableTunState(tunFromEngine)
+      void withScheduledConfigSyncSuspended(() => setEnableTun(tunFromEngine))
     }
-  }, [engineState, proxyMode])
+  }, [engineState, enableTun])
 
   const [activeNodeId, setActiveNodeId] = useState<string>("")
   const [nodes, setNodes] = useState<any[]>([])
@@ -148,7 +173,9 @@ export default function MobileHome() {
   const connectionOperationRef = useRef(false)
   const engineStateRef = useRef(engineState)
   const subsRef = useRef(subs)
-  const proxyModeRef = useRef(proxyMode)
+  const enableTunRef = useRef(enableTun)
+  const smartRoutingRef = useRef(smartRouting)
+  const enableIpv6Ref = useRef(enableIpv6)
   const nodesLoadedForSubRef = useRef<string>("")
 
   useEffect(() => {
@@ -160,8 +187,16 @@ export default function MobileHome() {
   }, [subs])
 
   useEffect(() => {
-    proxyModeRef.current = proxyMode
-  }, [proxyMode])
+    enableTunRef.current = enableTun
+  }, [enableTun])
+
+  useEffect(() => {
+    smartRoutingRef.current = smartRouting
+  }, [smartRouting])
+
+  useEffect(() => {
+    enableIpv6Ref.current = enableIpv6
+  }, [enableIpv6])
 
   // Reset tray operation guard when the engine settles into a stable state.
   useEffect(() => {
@@ -201,26 +236,27 @@ export default function MobileHome() {
           }
 
           const isTun = plan.targetUiMode === "tun"
+          const routing = smartRoutingRef.current ? "rule" : "global"
           setLocalConnecting(plan.action === "connect" || plan.action === "switch")
           await withScheduledConfigSyncSuspended(async () => {
             if (plan.action === "switch") {
               // Mode switch via stop() + start()
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
-              await switchProxyMode(subId, "rule", isTun)
+              await switchProxyMode(subId, routing, isTun)
             } else if (plan.action === "connect") {
               // Engine not running: use the same guarded connection flow as the main button.
               const subId = (await getStoreValue(SSI_STORE_KEY)) || (subsRef.current[0]?.id ?? "")
-              await connectEngine(subId, "rule", isTun)
+              await connectEngine(subId, routing, isTun)
             }
 
-            setProxyMode(plan.targetUiMode)
+            setEnableTunState(isTun)
             await setEnableTun(isTun)
           })
         }
       } catch (err) {
         console.error("Tray switch engine failed:", err)
-        setProxyMode(proxyModeRef.current)
-        await withScheduledConfigSyncSuspended(() => setEnableTun(proxyModeRef.current === "tun"))
+        setEnableTunState(enableTunRef.current)
+        await withScheduledConfigSyncSuspended(() => setEnableTun(enableTunRef.current))
       } finally {
         setLocalConnecting(false)
         trayOperationRef.current = false
@@ -265,6 +301,9 @@ export default function MobileHome() {
     }
   }
 
+  const resolveSubId = async () =>
+    ((await getStoreValue(SSI_STORE_KEY)) as string) || (subs[0]?.id ?? "")
+
   const handleToggleConnection = async () => {
     if (connectionOperationRef.current || !canToggleConnection) return
     connectionOperationRef.current = true
@@ -273,15 +312,14 @@ export default function MobileHome() {
         setLocalConnecting(true)
         await stopEngine()
       } else {
-        const isTun = proxyMode === "tun"
-        if (isTun) {
+        if (enableTun) {
           const ready = await ensureTunServiceReady()
           if (!ready) return
         }
 
         setLocalConnecting(true)
-        const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-        await connectEngine(subId, "rule", isTun)
+        const subId = await resolveSubId()
+        await connectEngine(subId, routingMode, enableTun)
       }
     } catch (err) {
       console.error("Toggle connection failed:", err)
@@ -291,35 +329,78 @@ export default function MobileHome() {
     }
   }
 
-  const handleSwitchMode = async (newMode: "rule" | "tun") => {
-    if (isConnecting || isInstallingService) return
-    if (proxyMode === newMode) return
-    const isTun = newMode === "tun"
-    const previousMode = proxyMode
+  /** Apply routing/TUN change: persist store, restart engine when already connected. */
+  const applyProxySettings = async (next: {
+    smartRouting?: boolean
+    enableTun?: boolean
+  }) => {
+    const nextSmart = next.smartRouting ?? smartRouting
+    const nextTun = next.enableTun ?? enableTun
+    const nextRouting: RoutingMode = nextSmart ? "rule" : "global"
+    const prevSmart = smartRouting
+    const prevTun = enableTun
 
-    if (isTun) {
+    if (nextTun && !prevTun) {
       const ready = await ensureTunServiceReady()
       if (!ready) return
     }
 
     try {
       await withScheduledConfigSyncSuspended(async () => {
-        if (!isConnected) {
-          setProxyMode(newMode)
-          await setEnableTun(isTun)
-          return
-        }
+        setSmartRouting(nextSmart)
+        setEnableTunState(nextTun)
+        await setStoreValue(ROUTING_MODE_KEY, nextRouting)
+        await setEnableTun(nextTun)
+
+        if (!isConnected) return
 
         setLocalConnecting(true)
-        const subId = (await getStoreValue(SSI_STORE_KEY)) || (subs[0]?.id ?? "")
-        await switchProxyMode(subId, "rule", isTun)
-        setProxyMode(newMode)
-        await setEnableTun(isTun)
+        const subId = await resolveSubId()
+        await switchProxyMode(subId, nextRouting, nextTun)
       })
     } catch (err) {
-      console.error("Switch mode failed:", err)
-      setProxyMode(previousMode)
-      await withScheduledConfigSyncSuspended(() => setEnableTun(previousMode === "tun"))
+      console.error("Apply proxy settings failed:", err)
+      setSmartRouting(prevSmart)
+      setEnableTunState(prevTun)
+      await withScheduledConfigSyncSuspended(async () => {
+        await setStoreValue(ROUTING_MODE_KEY, prevSmart ? "rule" : "global")
+        await setEnableTun(prevTun)
+      })
+    } finally {
+      setLocalConnecting(false)
+    }
+  }
+
+  const handleToggleSmartRouting = async () => {
+    if (isConnecting || isInstallingService) return
+    await applyProxySettings({ smartRouting: !smartRouting })
+  }
+
+  const handleToggleTun = async () => {
+    if (isConnecting || isInstallingService) return
+    await applyProxySettings({ enableTun: !enableTun })
+  }
+
+  const handleToggleIpv6 = async () => {
+    if (isConnecting || isInstallingService) return
+    const next = !enableIpv6
+    const prev = enableIpv6
+    try {
+      await withScheduledConfigSyncSuspended(async () => {
+        setEnableIpv6State(next)
+        await setEnableIpv6(next)
+
+        if (!isConnected) return
+
+        setLocalConnecting(true)
+        const subId = await resolveSubId()
+        // Rebuild config with new DNS/TUN IPv6 strategy (stop + start).
+        await switchProxyMode(subId, routingMode, enableTun)
+      })
+    } catch (err) {
+      console.error("Toggle IPv6 failed:", err)
+      setEnableIpv6State(prev)
+      await withScheduledConfigSyncSuspended(() => setEnableIpv6(prev))
     } finally {
       setLocalConnecting(false)
     }
@@ -658,41 +739,60 @@ export default function MobileHome() {
             </svg>
           </button>
 
-          {/* Mode Switcher Segmented Control */}
-          <div className="bg-transparent border border-slate-200/80 dark:border-white/10 rounded-2xl p-1 w-full flex gap-1">
-            <button
-              onClick={() => handleSwitchMode('rule')}
-              className={`flex-1 py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 transition-colors ${
-                proxyMode === 'rule'
-                  ? 'bg-[#EFECFF] dark:bg-[#6C5CFF]/20 text-[#6C5CFF] font-black'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <I.Activity />
-              <span>{l("Smart Routing", "智能分流")}</span>
-            </button>
+          {/* Independent toggles: smart routing / TUN / IPv6 — one row, name above switch */}
+          <div className="w-full grid grid-cols-3 gap-0.5 py-3 min-h-[72px] items-center">
+            <label className="min-w-0 flex flex-col items-center justify-center gap-2 px-1 py-2.5 cursor-pointer select-none">
+              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-slate-700 dark:text-slate-200">
+                <span className="text-[#6C5CFF] shrink-0"><I.Activity /></span>
+                <span className="truncate">{l("Smart Routing", "智能分流")}</span>
+              </span>
+              <Switch
+                size="sm"
+                checked={smartRouting}
+                disabled={isConnecting || isInstallingService}
+                onCheckedChange={() => void handleToggleSmartRouting()}
+                aria-label={l("Smart Routing", "智能分流")}
+              />
+            </label>
 
-            <button
-              onClick={() => handleSwitchMode('tun')}
-              disabled={isInstallingService}
-              className={`flex-1 py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-1.5 transition-colors ${
-                isInstallingService
-                  ? 'text-slate-400 cursor-wait'
-                  : proxyMode === 'tun'
-                    ? 'bg-[#EFECFF] dark:bg-[#6C5CFF]/20 text-[#6C5CFF] font-black'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              {isInstallingService ? (
-                <svg className="h-4.5 w-4.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <I.Globe />
-              )}
-              <span>{isInstallingService ? l("Installing...", "安装中...") : l("Virtual NIC", "虚拟网卡")}</span>
-            </button>
+            <label className={`min-w-0 flex flex-col items-center justify-center gap-2 px-1 py-2.5 select-none ${isInstallingService ? "cursor-wait" : "cursor-pointer"}`}>
+              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-slate-700 dark:text-slate-200">
+                <span className="text-[#6C5CFF] shrink-0">
+                  {isInstallingService ? (
+                    <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    <I.Globe />
+                  )}
+                </span>
+                <span className="truncate">
+                  {isInstallingService ? l("Installing...", "安装中...") : l("Virtual NIC", "虚拟网卡")}
+                </span>
+              </span>
+              <Switch
+                size="sm"
+                checked={enableTun}
+                disabled={isConnecting || isInstallingService}
+                onCheckedChange={() => void handleToggleTun()}
+                aria-label={l("Virtual NIC", "虚拟网卡")}
+              />
+            </label>
+
+            <label className="min-w-0 flex flex-col items-center justify-center gap-2 px-1 py-2.5 cursor-pointer select-none">
+              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-slate-700 dark:text-slate-200">
+                <span className="text-[#6C5CFF] shrink-0"><I.Ipv6 /></span>
+                <span className="truncate">IPv6</span>
+              </span>
+              <Switch
+                size="sm"
+                checked={enableIpv6}
+                disabled={isConnecting || isInstallingService}
+                onCheckedChange={() => void handleToggleIpv6()}
+                aria-label="IPv6"
+              />
+            </label>
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import {
   getAllowLan,
   getConfiguredDirectDNS,
   getControllerPort,
+  getEnableIpv6,
   getProxyPort,
   isBypassRouterEnabled,
 } from "@/single/store"
@@ -28,6 +29,7 @@ export async function computeMergeCacheKey(
     proxyPort,
     directDns,
     controllerPort,
+    enableIpv6,
   ] = await Promise.all([
     getSubscriptionMergeRevision(input.subscriptionIdentifier),
     getAllowLan(),
@@ -35,12 +37,14 @@ export async function computeMergeCacheKey(
     getProxyPort(),
     getConfiguredDirectDNS(),
     getControllerPort(),
+    getEnableIpv6(),
   ])
 
   return [
     input.subscriptionIdentifier,
     input.routingMode,
     input.enableTun ? "tun" : "system",
+    enableIpv6 ? "ipv6" : "ipv4",
     subRevision,
     allowLan ? "1" : "0",
     bypassRouter ? "1" : "0",

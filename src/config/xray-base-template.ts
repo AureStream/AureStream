@@ -8,14 +8,147 @@ import { TUN_INTERFACE_NAME } from "../types/definition";
 // (infra/conf/{router,dns,tun}.go) for `routing.rules`/`balancers`,
 // `dns.servers`, and the `tun` inbound's `settings.{name,mtu,gateway,
 // autoSystemRoutingTable}`.
+//
+// Rule-mode DNS follows XTLS "routing with DNS" example 1:
+// https://xtls.github.io/document/level-1/routing-with-dns.html
 
-/** Domestic (CN) traffic goes direct; everything else falls through to the balancer. */
-export function buildRoutingRules(): Record<string, unknown>[] {
+/** Must match `PROXY_BALANCER_TAG` in merger/helper.ts (catch-all + DNS proxy). */
+export const PROXY_BALANCER_TAG = "proxy-balancer"
+
+export const DNS_DIRECT_TAG = "dns-direct"
+export const DNS_PROXY_TAG = "dns-proxy"
+
+/** Fixed ECS client IP for CN CDN-friendly A/AAAA (no UI this iteration). */
+export const ECS_CLIENT_IP = "222.85.85.85"
+
+/**
+ * Routing rules before the catch-all balancer rule (appended by the merger).
+ *
+ * Rule mode: DNS tag routing + IP-first CN split + ads block.
+ * Global mode: DNS proxy tag + private LAN direct only.
+ */
+export function buildRoutingRules(global: boolean = false): Record<string, unknown>[] {
+  if (global) {
+    return [
+      { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
+      { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
+    ]
+  }
   return [
+    { type: "field", inboundTag: [DNS_DIRECT_TAG], outboundTag: "direct" },
+    { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
     { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
-    { type: "field", domain: ["geosite:cn"], outboundTag: "direct" },
     { type: "field", ip: ["geoip:cn"], outboundTag: "direct" },
     { type: "field", domain: ["geosite:category-ads-all"], outboundTag: "block" },
+  ]
+}
+
+/**
+ * Full DNS module config.
+ * Rule: XTLS example 1 (google / cn / !cn / unknown + parallel).
+ * Global: simple proxy-side resolvers tagged dns-proxy (no leak via direct).
+ */
+export function buildDnsConfig(
+  global: boolean,
+  enableIpv6: boolean = false,
+): Record<string, unknown> {
+  const queryStrategy = enableIpv6 ? "UseIP" : "UseIPv4"
+  if (global) {
+    return {
+      servers: ["1.1.1.1", "8.8.8.8"],
+      tag: DNS_PROXY_TAG,
+      queryStrategy,
+    }
+  }
+  return {
+    tag: DNS_PROXY_TAG,
+    enableParallelQuery: true,
+    queryStrategy,
+    servers: buildRuleDnsServers(),
+  }
+}
+
+/** Doc example 1 server chain (order matters for fallback / finalQuery). */
+export function buildRuleDnsServers(): unknown[] {
+  return [
+    // Google — always via proxy DNS (avoid CAPTCHA / CN monitoring on 3p embeds).
+    {
+      address: "1.1.1.1",
+      skipFallback: true,
+      domains: ["geosite:google", "geosite:google-cn"],
+    },
+    {
+      address: "8.8.8.8",
+      skipFallback: true,
+      domains: ["geosite:google", "geosite:google-cn"],
+      finalQuery: true,
+    },
+    // Suspected CN: direct domestic DNS with expectIPs; fallback via proxy.
+    {
+      tag: DNS_DIRECT_TAG,
+      address: "114.114.114.114",
+      skipFallback: true,
+      domains: ["geosite:cn"],
+      expectIPs: ["geoip:cn"],
+    },
+    {
+      tag: DNS_DIRECT_TAG,
+      address: "223.5.5.5",
+      skipFallback: true,
+      domains: ["geosite:cn"],
+      expectIPs: ["geoip:cn"],
+    },
+    {
+      address: "1.1.1.1",
+      skipFallback: true,
+      domains: ["geosite:cn"],
+    },
+    {
+      address: "8.8.8.8",
+      skipFallback: true,
+      domains: ["geosite:cn"],
+      finalQuery: true,
+    },
+    // Suspected non-CN: proxy expect !cn, then ECS fallback for misclassified CN CDN.
+    {
+      address: "1.1.1.1",
+      skipFallback: true,
+      domains: ["geosite:geolocation-!cn"],
+      // Xray expects negation as geoip:!cn (not !geoip:cn).
+      expectIPs: ["geoip:!cn"],
+    },
+    {
+      address: "8.8.8.8",
+      skipFallback: true,
+      domains: ["geosite:geolocation-!cn"],
+      expectIPs: ["geoip:!cn"],
+    },
+    {
+      address: "8.8.8.8",
+      clientIp: ECS_CLIENT_IP,
+      skipFallback: true,
+      domains: ["geosite:geolocation-!cn"],
+    },
+    {
+      address: "8.8.4.4",
+      clientIp: ECS_CLIENT_IP,
+      skipFallback: true,
+      domains: ["geosite:geolocation-!cn"],
+      finalQuery: true,
+    },
+    // Unknown domains: China-first via ECS, then plain foreign DNS fallback.
+    {
+      address: "8.8.8.8",
+      clientIp: ECS_CLIENT_IP,
+      expectIPs: ["geoip:cn"],
+    },
+    {
+      address: "8.8.4.4",
+      clientIp: ECS_CLIENT_IP,
+      expectIPs: ["geoip:cn"],
+    },
+    "1.1.1.1",
+    "8.8.8.8",
   ]
 }
 
@@ -68,8 +201,16 @@ const IPV4_EXCLUDING_LAN: string[] = [
  * link-local) is rare enough in practice that this is a known simplification;
  * Xray's own `geoip:private -> direct` rule still routes it correctly, just
  * via an extra TUN hop instead of being excluded at the OS routing level.
+ *
+ * Sniffing uses `routeOnly: true` so the real destination IP is kept for
+ * IP-first geo routing after domain sniff (XTLS realIp transparent guidance).
  */
-function buildTunInbound(bypassRouter: boolean): Record<string, unknown> {
+function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<string, unknown> {
+  const ipv4Table = bypassRouter ? ["0.0.0.0/0"] : [...IPV4_EXCLUDING_LAN]
+  // When IPv6 is off, do not capture ::/0 so traffic stays on the OS stack
+  // (IPv4-only path). When on, include ::/0 and let dual-stack DNS + dial
+  // prefer IPv6 with natural fallback to IPv4 when AAAA is missing/unreachable.
+  const routeTable = enableIpv6 ? [...ipv4Table, "::/0"] : ipv4Table
   return {
     tag: "tun-in",
     protocol: "tun",
@@ -80,30 +221,35 @@ function buildTunInbound(bypassRouter: boolean): Record<string, unknown> {
       desc: "AureStream TUN",
       mtu: 1500,
       gateway: [TUN_GATEWAY_CIDR],
-      autoSystemRoutingTable: bypassRouter
-        ? ["0.0.0.0/0", "::/0"]
-        : [...IPV4_EXCLUDING_LAN, "::/0"],
+      autoSystemRoutingTable: routeTable,
       // Bind proxy outbounds to the physical NIC so TUN capture doesn't
       // loop Xray's own uplink traffic back into the tunnel (critical on
       // Windows full-route TUN).
       autoOutboundsInterface: "auto",
     },
-    sniffing: { enabled: true, destOverride: ["http", "tls"] },
+    sniffing: {
+      enabled: true,
+      destOverride: ["http", "tls"],
+      routeOnly: true,
+    },
   }
 }
 
 /**
- * @param global When true ("全局模式"), skip the CN-direct/ads-block rules so
- * all traffic falls through to the proxy balancer. When false ("规则模式"),
- * domestic traffic and ads are routed away from the balancer.
+ * @param global When true ("全局模式"), skip CN-direct/ads-block rules so
+ * non-LAN traffic falls through to the proxy balancer. When false ("规则模式"),
+ * domestic IPs and ads are routed away from the balancer; DNS uses example 1.
  * @param tun When true, add the `tun` inbound (虚拟网卡模式) alongside the
  * local SOCKS inbound.
  * @param bypassRouter Only meaningful when `tun` is true — see `buildTunInbound`.
+ * @param enableIpv6 When true, dual-stack DNS (UseIP) so AAAA can be used with
+ * IPv4 fallback; when false, force IPv4-only DNS and omit IPv6 TUN routes.
  */
 export function buildBaseXrayConfig(
   global: boolean,
   tun: boolean,
-  bypassRouter: boolean = false
+  bypassRouter: boolean = false,
+  enableIpv6: boolean = false
 ): Record<string, any> {
   const inbounds: Record<string, unknown>[] = [
     {
@@ -116,7 +262,7 @@ export function buildBaseXrayConfig(
     },
   ]
   if (tun) {
-    inbounds.push(buildTunInbound(bypassRouter))
+    inbounds.push(buildTunInbound(bypassRouter, enableIpv6))
   }
 
   return {
@@ -137,17 +283,22 @@ export function buildBaseXrayConfig(
         statsOutboundDownlink: true,
       },
     },
-    dns: {
-      servers: ["223.5.5.5", "8.8.8.8"],
-    },
+    dns: buildDnsConfig(global, enableIpv6),
     inbounds,
     outbounds: [
-      { tag: "direct", protocol: "freedom" },
+      {
+        tag: "direct",
+        protocol: "freedom",
+        settings: {
+          // Mirror DNS family preference on the direct dial path.
+          domainStrategy: enableIpv6 ? "UseIP" : "UseIPv4",
+        },
+      },
       { tag: "block", protocol: "blackhole" },
     ],
     routing: {
       domainStrategy: "IPIfNonMatch",
-      rules: global ? [] : buildRoutingRules(),
+      rules: buildRoutingRules(global),
       balancers: [] as Record<string, unknown>[],
     },
   }

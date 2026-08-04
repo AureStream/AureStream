@@ -1,8 +1,7 @@
 import { getProxyPort } from "../../single/store";
 import { writeConfigFile } from "../helper";
 import type { FragmentSpec, XrayOutbound } from "../subscription-decoder";
-
-const PROXY_BALANCER_TAG = "proxy-balancer";
+import { DNS_DIRECT_TAG, PROXY_BALANCER_TAG } from "../xray-base-template";
 
 function fragmentKey(f: FragmentSpec): string {
     return `${f.packets}|${f.length}|${f.interval}`;
@@ -99,10 +98,43 @@ export function updateApiConfig(newConfig: any, apiPort: number): void {
     }
 }
 
-/** Direct (non-proxied) DNS servers. Xray has no DHCP-sourced DNS server type
- *  (unlike sing-box), so a custom direct DNS just replaces the default list. */
-export function updateDnsSettings(newConfig: any, configuredDirectDNS?: string): void {
-    if (configuredDirectDNS) {
-        newConfig.dns.servers = [configuredDirectDNS];
+/**
+ * Patch DNS family preference and optional user direct DNS.
+ *
+ * Does **not** replace the full server chain (rule mode uses XTLS example-1
+ * multi-server fallback). A configured direct DNS only rewrites `address` on
+ * entries tagged `dns-direct`. `enableIpv6` controls queryStrategy and the
+ * freedom direct outbound's domainStrategy.
+ */
+export function updateDnsSettings(
+    newConfig: any,
+    configuredDirectDNS?: string,
+    enableIpv6: boolean = false,
+): void {
+    if (!newConfig.dns) {
+        newConfig.dns = {};
+    }
+    newConfig.dns.queryStrategy = enableIpv6 ? "UseIP" : "UseIPv4";
+
+    if (configuredDirectDNS && Array.isArray(newConfig.dns.servers)) {
+        const address = configuredDirectDNS.trim();
+        if (address) {
+            newConfig.dns.servers = newConfig.dns.servers.map((server: unknown) => {
+                if (server && typeof server === "object" && (server as { tag?: string }).tag === DNS_DIRECT_TAG) {
+                    return { ...(server as object), address };
+                }
+                return server;
+            });
+        }
+    }
+
+    const direct = Array.isArray(newConfig.outbounds)
+        ? newConfig.outbounds.find((o: any) => o?.tag === "direct" && o?.protocol === "freedom")
+        : undefined;
+    if (direct) {
+        direct.settings = {
+            ...(direct.settings ?? {}),
+            domainStrategy: enableIpv6 ? "UseIP" : "UseIPv4",
+        };
     }
 }

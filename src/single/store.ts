@@ -7,6 +7,7 @@ import {
     DEFAULT_CONTROLLER_PORT,
     DEFAULT_PROXY_PORT,
     ENABLE_BYPASS_ROUTER_STORE_KEY,
+    ENABLE_IPV6_STORE_KEY,
     ENABLE_TUN_STORE_KEY,
     LEGACY_CLASH_API_PORT_STORE_KEY,
     PROXY_PORT_STORE_KEY,
@@ -158,6 +159,16 @@ export async function getEnableTun(): Promise<boolean> {
 
 export async function setEnableTun(value: boolean) {
     await persistStoreKey(ENABLE_TUN_STORE_KEY, value);
+    invalidateConnectionConfigCache();
+}
+
+/** When true, Xray DNS uses dual-stack (IPv6 preferred via UseIP); when false, IPv4-only. */
+export async function getEnableIpv6(): Promise<boolean> {
+    return Boolean(await readStoreKey(ENABLE_IPV6_STORE_KEY));
+}
+
+export async function setEnableIpv6(value: boolean) {
+    await persistStoreKey(ENABLE_IPV6_STORE_KEY, value);
     invalidateConnectionConfigCache();
 }
 

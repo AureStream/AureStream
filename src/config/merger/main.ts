@@ -3,6 +3,7 @@ import {
     getAllowLan,
     getConfiguredDirectDNS,
     getControllerPort,
+    getEnableIpv6,
     getProxyPort,
     isBypassRouterEnabled,
 } from '../../single/store';
@@ -46,6 +47,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         proxyPort,
         apiPort,
         configuredDirectDNS,
+        enableIpv6,
     ] = await Promise.all([
         getSubscriptionConfig(identifier),
         getAllowLan(),
@@ -53,6 +55,7 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         getProxyPort(),
         getControllerPort(),
         getConfiguredDirectDNS(),
+        getEnableIpv6(),
     ]);
 
     if (!dbConfigData || !Array.isArray(dbConfigData.outbounds) || dbConfigData.outbounds.length === 0) {
@@ -61,11 +64,11 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
 
     console.log(options.label);
 
-    const newConfig = buildBaseXrayConfig(isGlobal, isTun, bypassRouter);
+    const newConfig = buildBaseXrayConfig(isGlobal, isTun, bypassRouter, enableIpv6);
 
     updateApiConfig(newConfig, apiPort);
     await configureMixedInbound(newConfig, allowLan, bypassRouter, proxyPort);
-    updateDnsSettings(newConfig, configuredDirectDNS);
+    updateDnsSettings(newConfig, configuredDirectDNS, enableIpv6);
     await updateVPNServerConfigFromDB('config.json', dbConfigData, newConfig);
 }
 

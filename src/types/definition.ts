@@ -21,6 +21,8 @@ export function buildSubscriptionUserAgent(): string {
 }
 export const ALLOWLAN_STORE_KEY = 'allow_lan_key';
 export const ENABLE_TUN_STORE_KEY = 'enable_tun_key';
+/** Prefer dual-stack DNS (IPv6+IPv4); off forces IPv4-only. */
+export const ENABLE_IPV6_STORE_KEY = 'enable_ipv6_key';
 export const SSI_STORE_KEY = "selected_subscription_identifier";
 /** Per-subscription remembered proxy node tag (append identifier). */
 export const SELECTED_NODE_TAG_STORE_PREFIX = "selected_node_tag:";
