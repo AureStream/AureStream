@@ -1,13 +1,156 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Configure Tailwind dark variant to trigger on data-theme="dark" */
+/* Dark variant matches ThemeProvider data-theme attribute */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* ============================================================
+   shadcn/ui tokens (new-york) + AureStream brand primary
+   ============================================================ */
+:root {
+  --radius: 0.625rem;
+
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  /* Brand purple #6C5CFF */
+  --primary: 245 100% 68%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 245 100% 68%;
+  --success: 160 84% 39%;
+  --warning: 38 92% 50%;
+}
+
+[data-theme="dark"] {
+  --background: 240 10% 8%;
+  --foreground: 210 40% 98%;
+  --card: 240 8% 12%;
+  --card-foreground: 210 40% 98%;
+  --popover: 240 8% 12%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 245 100% 72%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 6% 18%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 240 6% 18%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 240 6% 18%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 6% 20%;
+  --input: 240 6% 20%;
+  --ring: 245 100% 72%;
+  --success: 160 72% 45%;
+  --warning: 38 92% 50%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+
+  /* Legacy aliases used by unmigrated pages */
+  --color-bg: hsl(var(--background));
+  --color-bg-alt: hsl(var(--card));
+  --color-bg-mesh: hsl(var(--background));
+  --color-surface: hsl(var(--card) / 0.85);
+  --color-surface-hover: hsl(var(--card));
+  --color-surface-active: hsl(var(--muted));
+  --color-text: hsl(var(--foreground));
+  --color-text-secondary: hsl(var(--muted-foreground));
+  --color-text-muted: hsl(var(--muted-foreground));
+  --color-text-inverse: hsl(var(--primary-foreground));
+  --color-border-light: hsl(var(--border));
+  --color-border-glass: hsl(var(--border) / 0.6);
+  --color-danger: hsl(var(--destructive));
+  /* Old brand "secondary" was purple — map to primary for continuity */
+  --color-brand: hsl(var(--primary));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 12px);
+  --radius-full: 9999px;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+}
+
 @layer base {
-  /* Fluid root scaling: all Tailwind rem units (padding, margin, font, sizing) will scale proportionally based on screen size */
   html {
     font-size: clamp(12px, 1.11vw, 22px);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-transparent text-foreground antialiased;
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app-shell {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
   }
 
   /* Hide browser native password reveal — login/register render their own toggle */
@@ -25,173 +168,21 @@
   }
 }
 
-/* ============================================================
-   AureStream Design System v2 — Tailwind v4 @theme
-   Style: Glassmorphism + Bento Box Grid
-   ============================================================ */
-@theme {
-  /* ── Background ── */
-  --color-bg: #EAF0F6;
-  --color-bg-alt: #FFFFFF;
-  --color-bg-mesh: #E4ECF4;
-  --color-surface: rgba(255, 255, 255, 0.7);
-  --color-surface-hover: rgba(255, 255, 255, 0.9);
-  --color-surface-active: #F3F5F9;
-
-  /* ── Brand ── */
-  --color-primary: #1F1B3E; /* Dark navy for text/icons */
-  --color-primary-hover: #2D275A;
-  --color-primary-light: #E4E5EA;
-  --color-primary-glow: rgba(31, 27, 62, 0.15);
-  --color-secondary: #6C5CFF; /* Soft purple */
-  --ring-from: #E2E8F0;
-  --ring-to: #E2E8F0;
-  --power-icon-color: #CBD5E1;
-
-  /* ── Accent (Tasklyn Pastel Colors) ── */
-  --color-accent-blue: rgba(214, 232, 253, 0.8);
-  --color-accent-blue-text: #1F1B3E;
-  --color-accent-purple: rgba(237, 230, 254, 0.8);
-  --color-accent-purple-text: #1F1B3E;
-  --color-accent-yellow: rgba(251, 226, 210, 0.8);
-  --color-accent-yellow-text: #1F1B3E;
-  --color-accent-green: rgba(209, 250, 229, 0.8);
-  --color-accent-green-text: #065F46;
-
-  /* ── Text ── */
-  --color-text: #1F1B3E;
-  --color-text-secondary: #565A6E;
-  --color-text-muted: #9598A6;
-  --color-text-inverse: #FFFFFF;
-
-  /* ── Border ── */
-  --color-border: rgba(255, 255, 255, 0.5);
-  --color-border-light: rgba(255, 255, 255, 0.8);
-  --color-border-glass: rgba(255, 255, 255, 0.5);
-
-  /* ── Semantic ── */
-  --color-success: #34D399;
-  --color-warning: #FBBF24;
-  --color-danger: #F87171;
-
-  /* ── Sidebar / TopNav ── */
-  --color-sidebar: transparent;
-  --color-sidebar-active: #1F1B3E;
-  --color-sidebar-hover: rgba(0, 0, 0, 0.04);
-
-  /* ── Typography ── */
-  --font-heading: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-
-  /* ── Radius ── */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-xl: 32px;
-  --radius-2xl: 40px;
-  --radius-full: 9999px;
-
-  /* ── Shadows ── */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 8px 32px rgba(31, 27, 62, 0.04);
-  --shadow-xl: 0 20px 50px rgba(31, 27, 62, 0.06);
-  --shadow-card: 0 10px 40px rgba(31, 27, 62, 0.03);
-  --shadow-card-hover: 0 15px 50px rgba(31, 27, 62, 0.05);
-  --shadow-glow-primary: 0 10px 25px rgba(31, 27, 62, 0.2);
-  --shadow-glass: 0 8px 32px rgba(31, 27, 62, 0.03);
-  --shadow-glass-hover: 0 12px 40px rgba(31, 27, 62, 0.05);
-}
-
-/* ============================================================
-   DARK THEME
-   ============================================================ */
-[data-theme="dark"] {
-  --color-bg: #13141C;
-  --color-bg-alt: #1C1D27;
-  --color-bg-mesh: #13141C;
-  --color-surface: rgba(28, 29, 39, 0.7);
-  --color-surface-hover: rgba(35, 37, 50, 0.9);
-  --color-surface-active: #2C2F40;
-  
-  --color-primary: #FFFFFF;
-  --color-primary-hover: #E2E8F0;
-  --color-primary-light: rgba(255, 255, 255, 0.1);
-  --color-primary-glow: rgba(255, 255, 255, 0.15);
-  --color-secondary: #6C5CFF;
-  --ring-from: #2D313F;
-  --ring-to: #2D313F;
-  --power-icon-color: #4A4F63;
-  
-  --color-text: #F8FAFC;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
-  --color-text-inverse: #0F172A;
-  
-  --color-border: rgba(255, 255, 255, 0.05);
-  --color-border-light: rgba(255, 255, 255, 0.1);
-  --color-border-glass: rgba(255, 255, 255, 0.05);
-  
-  --color-sidebar: transparent;
-  --color-sidebar-active: #FFFFFF;
-  --color-sidebar-hover: rgba(255, 255, 255, 0.05);
-  
-  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 15px 50px rgba(0, 0, 0, 0.4);
-}
-
-/* ============================================================
-   GLOBAL RESET & BASE
-   ============================================================ */
-*, *::before, *::after { box-sizing: border-box; }
-html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; overflow-x: hidden; }
-body {
-  margin: 0; padding: 0;
-  font-family: var(--font-body);
-  /* Transparent so the rounded app shell corners show through (custom titlebar). */
-  background-color: transparent;
-  color: var(--color-text);
-  line-height: 1.6;
-  overflow: hidden;
-  width: 100vw;
-  height: 100vh;
-}
-#root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-/* Rounded window shell for the borderless custom-decoration window. */
-.app-shell {
-  border-radius: 12px;
-  overflow: hidden;
-}
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
-}
-code, pre, .font-mono { font-family: var(--font-mono); }
-
-/* ── Scrollbar ── */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-text-muted); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
+::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.45); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.7); }
 
-/* Hide scrollbar globally */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-/* Unified iOS-style active pill */
 @layer utilities {
   .glass-active-pill {
-    @apply bg-white dark:bg-white/10 text-secondary dark:text-white shadow-sm ring-1 ring-border-glass dark:ring-white/20 scale-[1.02] transition-all;
+    @apply bg-card text-primary shadow-sm ring-1 ring-border scale-[1.02] transition-all;
   }
 }
 

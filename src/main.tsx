@@ -15,10 +15,8 @@ function AppShell() {
   const isAboutPage = pathname.startsWith("/dashboard/about")
   const usesImmersivePageBackground = isProfilePage || isAboutPage
 
-  const shellClassName = [
-    "app-shell relative flex h-screen w-screen flex-col overflow-hidden",
-    usesImmersivePageBackground ? "bg-white" : "bg-bg",
-  ].join(" ")
+  const shellClassName =
+    "app-shell relative flex h-screen w-screen flex-col overflow-hidden bg-background"
 
   const immersiveBackgroundClassName = isProfilePage
     ? "absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_12%_0%,rgba(148,130,255,0.18),transparent_42%),linear-gradient(135deg,rgba(245,240,255,0.96),rgba(224,240,255,0.84)_34%,rgba(255,255,255,0)_62%)]"
