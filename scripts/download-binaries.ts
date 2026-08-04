@@ -136,15 +136,29 @@ async function embeddingExternalBinaries(
         // The check-and-claim below is synchronous (no `await` in between),
         // so it's race-safe under Node's single-threaded event loop even
         // with these tasks running concurrently via Promise.all.
+        const resourcesDir = 'src-tauri/resources';
+        !fs.existsSync(resourcesDir) && fs.mkdirSync(resourcesDir, { recursive: true });
         if (!geoDataSaved) {
             geoDataSaved = true;
-            const resourcesDir = 'src-tauri/resources';
-            !fs.existsSync(resourcesDir) && fs.mkdirSync(resourcesDir, { recursive: true });
             for (const geoFile of ['geoip.dat', 'geosite.dat']) {
                 const src = path.join(tmpDir, geoFile);
                 if (fs.existsSync(src)) {
                     fs.copyFileSync(src, path.join(resourcesDir, geoFile));
                 }
+            }
+        }
+
+        // Windows TUN inbound loads wintun.dll from the same directory as
+        // xray/aurestream-core. Official Xray zips ship the matching arch
+        // DLL — stage per-triple so the runtime can pick the right one.
+        if (platform === 'windows') {
+            const wintunSrc = path.join(tmpDir, 'wintun.dll');
+            if (fs.existsSync(wintunSrc)) {
+                const staged = path.join(resourcesDir, `wintun-${targetTriple}.dll`);
+                fs.copyFileSync(wintunSrc, staged);
+                console.log(`  staged ${staged}`);
+            } else {
+                console.warn(`  wintun.dll missing from ${fileName} — Windows TUN will fail without it`);
             }
         }
 

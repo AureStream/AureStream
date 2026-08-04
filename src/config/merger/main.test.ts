@@ -145,6 +145,8 @@ describe("config merger (Xray-core, local template)", () => {
     const tunInbound = written.inbounds.find((ib: any) => ib.protocol === "tun")
     expect(tunInbound).toBeDefined()
     expect(tunInbound.settings.gateway).toEqual(["172.19.0.1/30"])
+    expect(tunInbound.settings.desc).toBe("AureStream TUN")
+    expect(tunInbound.settings.autoOutboundsInterface).toBe("auto")
     // Default (non-bypass-router): LAN ranges excluded from the tunnel.
     expect(tunInbound.settings.autoSystemRoutingTable).not.toContain("0.0.0.0/0")
     expect(tunInbound.settings.autoSystemRoutingTable).toContain("::/0")

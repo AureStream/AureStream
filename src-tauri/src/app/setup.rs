@@ -87,7 +87,7 @@ pub fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>>
 
     if hide_on_launch {
         log::info!("[setup] hide_on_launch is enabled, hiding main window on start");
-        let _ = crate::utils::enter_tray_mode(app.handle());
+        crate::utils::enter_tray_mode(app.handle());
     }
 
     // On Linux/Windows debug builds, register deep links

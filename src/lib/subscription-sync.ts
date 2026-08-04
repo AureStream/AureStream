@@ -48,10 +48,20 @@ export async function syncRemoteSubscriptionsToLocal(
     }
   }
 
+  const localById = new Map(localList.map((sub) => [sub.id, sub]))
+
   for (const sub of remoteSubs) {
     if (localIds.has(sub.id)) {
       // API list is source of truth for traffic / expiry / name.
       await deps.updateLocalSubscriptionMeta(sub)
+      // Re-download when remote URL changed (e.g. test override / plan rotate).
+      const local = localById.get(sub.id)
+      if (local && local.url !== sub.url) {
+        const inserted = await deps.insertSubscription(sub.url, sub.name, sub.id)
+        if (inserted) {
+          await deps.updateLocalSubscriptionMeta(sub)
+        }
+      }
     } else {
       const inserted = await deps.insertSubscription(sub.url, sub.name, sub.id)
       // insertSubscription seeds traffic from subscription-userinfo headers;
@@ -63,22 +73,23 @@ export async function syncRemoteSubscriptionsToLocal(
   }
 
   const updatedLocal = await deps.getLocalSubscriptions()
+  const localIdSet = new Set(updatedLocal.map((sub) => sub.id))
+  // Prefer remote order, but only select ids that actually landed in SQLite
+  // (failed config downloads leave a remote id without local config).
+  const selectableIds = remoteIds.filter((id) => localIdSet.has(id))
+  const fallbackId = selectableIds[0] ?? updatedLocal[0]?.id ?? ""
 
   const currentSelectedId = await deps.getSelectedSubscriptionId()
-  if (
+  const selectedIsValid =
     typeof currentSelectedId === "string" &&
-    currentSelectedId &&
-    !remoteIds.includes(currentSelectedId)
-  ) {
-    await deps.setSelectedSubscriptionId(remoteIds[0] ?? "")
-    if (remoteIds.length > 0) {
+    !!currentSelectedId &&
+    localIdSet.has(currentSelectedId)
+
+  if (!selectedIsValid) {
+    await deps.setSelectedSubscriptionId(fallbackId)
+    if (fallbackId) {
       await deps.syncActiveConnectionConfig("sync-cleanup")
     }
-  } else if (
-    (!currentSelectedId || typeof currentSelectedId !== "string") &&
-    remoteIds.length > 0
-  ) {
-    await deps.setSelectedSubscriptionId(remoteIds[0])
   }
 
   return updatedLocal

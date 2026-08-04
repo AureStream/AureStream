@@ -12,21 +12,63 @@ pub fn sidecar_dir() -> Result<std::path::PathBuf, anyhow::Error> {
         .ok_or_else(|| anyhow::anyhow!("Failed to get the executable directory"))
 }
 
+/// Resolve a Tauri `externalBin` sidecar next to the main executable.
+/// Prefers the production name (`aurestream-core[.exe]`), then any
+/// triple-suffixed sibling left by `tauri dev` / bundling
+/// (`aurestream-core-x86_64-pc-windows-msvc.exe`).
+fn resolve_sidecar_in_dir(exe_dir: &Path, program: &Path) -> std::path::PathBuf {
+    #[cfg(windows)]
+    let plain = exe_dir.join(program).with_extension("exe");
+    #[cfg(not(windows))]
+    let plain = exe_dir.join(program);
+
+    if plain.exists() {
+        return plain;
+    }
+
+    let stem = program
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("aurestream-core");
+    #[cfg(windows)]
+    let prefix = format!("{}-", stem);
+    #[cfg(not(windows))]
+    let prefix = format!("{}-", stem);
+    #[cfg(windows)]
+    let suffix = ".exe";
+    #[cfg(not(windows))]
+    let suffix = "";
+
+    if let Ok(entries) = fs::read_dir(exe_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            if name.starts_with(&prefix) && name.ends_with(suffix) && entry.path().is_file() {
+                return entry.path();
+            }
+        }
+    }
+
+    plain
+}
+
 #[allow(dead_code)] // only called from windows/mod.rs and linux/mod.rs
 pub fn get_sidecar_path(program: &Path) -> Result<String, anyhow::Error> {
     match platform::current_exe()?.parent() {
         #[cfg(windows)]
         Some(exe_dir) => {
-            let raw = exe_dir
-                .join(program)
-                .with_extension("exe")
-                .to_string_lossy()
-                .into_owned();
+            let path = resolve_sidecar_in_dir(exe_dir, program);
+            let raw = path.to_string_lossy().into_owned();
             // Strip \\?\ verbatim prefix so SYSTEM services can spawn the binary
             Ok(strip_verbatim_prefix(&raw).to_string())
         }
         #[cfg(not(windows))]
-        Some(exe_dir) => Ok(exe_dir.join(program).to_string_lossy().into_owned()),
+        Some(exe_dir) => {
+            let path = resolve_sidecar_in_dir(exe_dir, program);
+            Ok(path.to_string_lossy().into_owned())
+        }
         None => Err(anyhow::anyhow!("Failed to get the executable directory")),
     }
 }

@@ -55,6 +55,7 @@ pub fn connection_reg_path(guid: &str) -> String {
 pub fn is_tun_alias(alias: &str) -> bool {
     let lc = alias.to_ascii_lowercase();
     lc.contains("sing-box")
+        || lc.contains("xray")
         || lc.contains("wintun")
         || lc.contains("utun")
         || lc.contains("tap-windows")
@@ -466,6 +467,7 @@ mod tests {
     fn tun_alias_detects_known_tun_adapters() {
         assert!(is_tun_alias("sing-box"));
         assert!(is_tun_alias("sing-box tun"));
+        assert!(is_tun_alias("Xray Tunnel"));
         assert!(is_tun_alias("WinTUN Userspace Tunnel"));
         assert!(is_tun_alias("wintun"));
         assert!(is_tun_alias("TAP-Windows Adapter V9"));
@@ -477,6 +479,7 @@ mod tests {
     fn tun_alias_is_case_insensitive() {
         assert!(is_tun_alias("WINTUN"));
         assert!(is_tun_alias("SING-BOX"));
+        assert!(is_tun_alias("XRAY"));
     }
 
     #[test]

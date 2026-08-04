@@ -20,6 +20,7 @@ import {
   type TrayRequestedMode,
 } from "../lib/tray-mode"
 import { getNodeLatency, initNodeLatency } from "../lib/node-latency"
+import { buildNodeList } from "../lib/nodes-page-model"
 import { probeEngineServiceState, ensureEngineServiceInstalled, invalidateEngineProbeCache } from "../lib/engine-probe"
 import { shouldEnsureTunServiceBeforeModeAction } from "../lib/proxy-mode-transition"
 import { message } from "@tauri-apps/plugin-dialog"
@@ -411,47 +412,16 @@ export default function MobileHome() {
           return
         }
 
-        // Filter out selector, urltest, direct, block, and dns outbounds to get proxy nodes
-        const filtered = config.outbounds.filter((item: any) => {
-          return item.type !== "selector" && item.type !== "urltest" && item.type !== "direct" && item.type !== "block" && item.type !== "dns";
-        });
-
-        // Map to UI node model
-        const mapped = filtered.map((n: any) => {
-          const tag = n.tag || "";
-          let flag = "🌐";
-          let region: "asia" | "america" | "europe" = "asia";
-
-          if (tag.includes("日本") || tag.toLowerCase().includes("jp") || tag.toLowerCase().includes("tokyo")) {
-            flag = "🇯🇵";
-            region = "asia";
-          } else if (tag.includes("新加坡") || tag.toLowerCase().includes("sg") || tag.toLowerCase().includes("singapore")) {
-            flag = "🇸🇬";
-            region = "asia";
-          } else if (tag.includes("香港") || tag.toLowerCase().includes("hk") || tag.toLowerCase().includes("hong kong")) {
-            flag = "🇭🇰";
-            region = "asia";
-          } else if (tag.includes("美国") || tag.toLowerCase().includes("us") || tag.toLowerCase().includes("america") || tag.toLowerCase().includes("los angeles") || tag.toLowerCase().includes("new york")) {
-            flag = "🇺🇸";
-            region = "america";
-          } else if (tag.includes("英国") || tag.toLowerCase().includes("uk") || tag.toLowerCase().includes("london") || tag.toLowerCase().includes("gb")) {
-            flag = "🇬🇧";
-            region = "europe";
-          } else if (tag.toLowerCase().includes("de") || tag.includes("德国") || tag.toLowerCase().includes("frankfurt")) {
-            flag = "🇩🇪";
-            region = "europe";
-          }
-
-          return {
-            id: tag,
-            loc: tag,
-            flag,
-            protocol: n.type || "Shadowsocks",
-            region,
-            server: n.server || "",
-            port: Number(n.server_port) || 0,
-          };
-        });
+        // Shared model supports both sing-box (`type`) and Xray (`protocol`) outbounds.
+        const mapped = buildNodeList(config.outbounds, getNodeLatency).map((n) => ({
+          id: n.id,
+          loc: n.name,
+          flag: n.flag,
+          protocol: n.protocol,
+          region: n.region,
+          server: n.server,
+          port: n.port,
+        }))
         setNodes(mapped);
         nodesLoadedForSubRef.current = activeSubKey
         if (mapped.length > 0) {

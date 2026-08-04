@@ -30,7 +30,10 @@ case "$1" in
             shift 2
             resolvectl dns "$iface" "$@"
         fi
+        # Dev builds may keep the target-triple suffix on the sidecar binary;
+        # match both the short and long process names.
         pkill -x aurestream-core || true
+        pkill -f '/aurestream-core(-[a-z0-9_]+)*$' 2>/dev/null || true
         ;;
     dns-override)
         # $2 = iface, $3 = gateway, $4... = original DNS servers

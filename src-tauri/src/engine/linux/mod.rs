@@ -99,7 +99,7 @@ impl EngineManager for LinuxEngine {
                 let (rx, child) = cmd.spawn().map_err(|e| format!("spawn failed: {}", e))?;
                 let child_pid = child.pid();
                 log::info!(
-                    "[sing-box] spawned pid={} (pkexec) mode=IntoProxy",
+                    "[aurestream-core] spawned pid={} (pkexec) mode=IntoProxy",
                     child_pid
                 );
                 crate::engine::monitor::spawn_process_monitor(

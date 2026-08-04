@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { invoke } from "@tauri-apps/api/core"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { type as osType } from "@tauri-apps/plugin-os"
 import { isTauri } from "@/lib/tauri-env"
@@ -31,6 +30,14 @@ function getAppWindow() {
   }
 }
 
+/**
+ * Custom title-bar controls.
+ *
+ * Close uses `Window.close()` so the Rust `WindowEvent::CloseRequested`
+ * handler (see `src-tauri/src/app/events.rs`) can apply the official Tauri
+ * v2 tray pattern: `prevent_close` + `hide`. Do not call `hide()` here —
+ * that would bypass the minimize-to-tray preference and quit path.
+ */
 export default function TitleBar() {
   const [isMac] = useState(() => {
     try {
@@ -40,16 +47,19 @@ export default function TitleBar() {
     }
   })
   const appWindow = getAppWindow()
+
   const close = () => {
-    if (appWindow) {
-      void appWindow.close().catch(() => {
-        void invoke("quit")
-      })
-      return
-    }
-    void invoke("quit")
+    if (!appWindow) return
+    void appWindow.close().catch((err) => {
+      console.error("[TitleBar] window.close failed:", err)
+    })
   }
-  const minimize = () => void appWindow?.minimize()
+  const minimize = () => {
+    if (!appWindow) return
+    void appWindow.minimize().catch((err) => {
+      console.error("[TitleBar] window.minimize failed:", err)
+    })
+  }
 
   // macOS traffic lights: red close · yellow minimize.
   const lightBtn =

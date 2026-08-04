@@ -244,9 +244,14 @@ static BOOL copyCallerUser(NSXPCConnection *connection, uid_t *uidOut, gid_t *gi
     return YES;
 }
 
-// Derive the absolute path to the caller's bundled sing-box binary from
-// their SecCode.
-static NSString *copyCallerSingBoxPath(NSXPCConnection *connection) {
+// Derive the absolute path to the caller's bundled aurestream-core (Xray)
+// binary from their SecCode.
+//
+// Production:  AureStream.app → Contents/MacOS/aurestream-core
+// tauri dev:   SecCode path is target/debug/aurestream (not a .app); the
+//              sidecar sits next to it as aurestream-core or
+//              aurestream-core-<triple>.
+static NSString *copyCallerCorePath(NSXPCConnection *connection) {
     SecCodeRef code = copyClientSecCode(connection);
     if (code == NULL) {
         return nil;
@@ -270,12 +275,53 @@ static NSString *copyCallerSingBoxPath(NSXPCConnection *connection) {
     }
 
     NSURL *url = (__bridge_transfer NSURL *)bundleURL;
-    NSString *sidecar = [url.path stringByAppendingPathComponent:@"Contents/MacOS/aurestream-core"];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:sidecar]) {
-        NSLog(@"[helper] derived aurestream-core path does not exist: %@", sidecar);
-        return nil;
+    NSString *callerPath = url.path;
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    // 1) Production .app bundle layout
+    NSString *bundled = [callerPath stringByAppendingPathComponent:@"Contents/MacOS/aurestream-core"];
+    if ([fm fileExistsAtPath:bundled]) {
+        return bundled;
     }
-    return sidecar;
+
+    // 2) Caller path is the main binary itself (tauri dev / unpackaged)
+    NSString *dir = [callerPath stringByDeletingLastPathComponent];
+    // If SecCode pointed at the .app directory without Contents (rare), also
+    // try MacOS next to an existing Contents folder one level up.
+    NSString *plain = [dir stringByAppendingPathComponent:@"aurestream-core"];
+    if ([fm fileExistsAtPath:plain]) {
+        return plain;
+    }
+
+    // 3) Triple-suffixed externalBin name from `tauri dev`
+    NSError *listErr = nil;
+    NSArray<NSString *> *names = [fm contentsOfDirectoryAtPath:dir error:&listErr];
+    if (names != nil) {
+        for (NSString *name in names) {
+            if (![name hasPrefix:@"aurestream-core-"]) {
+                continue;
+            }
+            // Skip obvious non-binaries
+            if ([name hasSuffix:@".d"] || [name hasSuffix:@".rlib"] || [name hasSuffix:@".so"]) {
+                continue;
+            }
+            NSString *candidate = [dir stringByAppendingPathComponent:name];
+            BOOL isDir = NO;
+            if ([fm fileExistsAtPath:candidate isDirectory:&isDir] && !isDir) {
+                NSLog(@"[helper] using triple-suffixed core: %@", candidate);
+                return candidate;
+            }
+        }
+    }
+
+    NSLog(@"[helper] derived aurestream-core path does not exist (caller=%@ bundled=%@ sibling=%@)",
+          callerPath, bundled, plain);
+    return nil;
+}
+
+// Back-compat name used by older call sites in this file.
+static NSString *copyCallerSingBoxPath(NSXPCConnection *connection) {
+    return copyCallerCorePath(connection);
 }
 
 // ============================================================================
@@ -503,9 +549,9 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
         reply(0, @"no current XPC connection");
         return;
     }
-    NSString *sidecarPath = copyCallerSingBoxPath(conn);
+    NSString *sidecarPath = copyCallerCorePath(conn);
     if (sidecarPath == nil) {
-        reply(0, @"failed to derive sing-box path from caller SecCode");
+        reply(0, @"failed to derive aurestream-core path from caller SecCode");
         return;
     }
 
@@ -514,7 +560,7 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
     dispatch_sync(_stateQueue, ^{
         if (self->_activePid != 0) {
             pid_t old = self->_activePid;
-            NSLog(@"[helper] reaping prior sing-box pid=%d before new spawn", old);
+            NSLog(@"[helper] reaping prior core pid=%d before new spawn", old);
             if (self->_exitSource) {
                 dispatch_source_cancel(self->_exitSource);
                 self->_exitSource = nil;
@@ -546,7 +592,7 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
 
         posix_spawnattr_t attrs;
         posix_spawnattr_init(&attrs);
-        // Put sing-box in its own process group (pgid == child pid) so we can
+        // Put core in its own process group (pgid == child pid) so we can
         // signal the whole group on stop and never leave a port-holding straggler.
         short flags = POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETPGROUP;
         posix_spawnattr_setflags(&attrs, flags);
@@ -558,6 +604,8 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
         sigaddset(&defaultSignals, SIGINT);
         posix_spawnattr_setsigdefault(&attrs, &defaultSignals);
 
+        // Xray-core CLI: `aurestream-core run -c <config.json>`
+        // (no sing-box-only flags such as --disable-color)
         const char *sidecarC = sidecarPath.UTF8String;
         const char *configC = configPath.UTF8String;
         char *const argv[] = {
@@ -740,22 +788,21 @@ static int killListenersOnPort(int port) {
 // ------------------------------------------------------------------
 // reloadSingBox
 // ------------------------------------------------------------------
+// Xray-core has no SIGHUP hot-reload (default disposition kills the process).
+// The app now does stop+start / startSingBox again instead. Keep the XPC
+// method so older clients don't crash on unknown selector, but refuse the
+// SIGHUP path explicitly.
 - (void)reloadSingBoxWithReply:(void (^)(NSString *))reply {
     __block pid_t target = 0;
     dispatch_sync(_stateQueue, ^{
         target = self->_activePid;
     });
     if (target == 0) {
-        reply(@"no sing-box process is currently running");
+        reply(@"no core process is currently running");
         return;
     }
-    if (kill(target, SIGHUP) != 0) {
-        reply([NSString stringWithFormat:@"kill(%d, SIGHUP) failed: %s",
-               target, strerror(errno)]);
-        return;
-    }
-    NSLog(@"[helper] sent SIGHUP to sing-box pid=%d", target);
-    reply(nil);
+    NSLog(@"[helper] reloadSingBox refused for pid=%d (Xray has no SIGHUP reload; use start again)", target);
+    reply(@"reload via SIGHUP is not supported for Xray-core; call startSingBox again");
 }
 
 // ------------------------------------------------------------------

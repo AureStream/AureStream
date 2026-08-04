@@ -24,4 +24,32 @@ describe("nodes page model", () => {
       port: 443,
     })
   })
+
+  it("supports Xray-style protocol/settings.vnext outbounds", () => {
+    const nodes = buildNodeList(
+      [
+        { protocol: "freedom", tag: "direct" },
+        {
+          protocol: "vless",
+          tag: "节点 A",
+          settings: { vnext: [{ address: "1.2.3.4", port: 443 }] },
+        },
+        {
+          protocol: "vless",
+          tag: "节点 A",
+          settings: { vnext: [{ address: "5.6.7.8", port: 8443 }] },
+        },
+      ],
+      () => 12,
+    )
+
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]).toMatchObject({
+      id: "节点 A",
+      protocol: "VLESS",
+      server: "1.2.3.4",
+      port: 443,
+      ping: 12,
+    })
+  })
 })

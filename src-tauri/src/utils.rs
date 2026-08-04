@@ -58,13 +58,16 @@ pub fn copy_database_files(app: &AppHandle) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-/// Copies `geoip.dat`/`geosite.dat` (bundled via the `resources/**/*` glob —
-/// see `scripts/download-binaries.ts`) next to the `aurestream-core` sidecar
-/// binary. Xray-core looks for these in `XRAY_LOCATION_ASSET` if set, else
-/// falls back to the directory the running executable lives in — copying
-/// them there means every spawn path (Tauri-direct sidecar AND the
-/// privileged-helper/TUN-service spawns, which don't go through Tauri's
-/// `.env()`) finds them with no extra env var plumbing needed anywhere.
+/// Copies `geoip.dat`/`geosite.dat` (and on Windows `wintun.dll`) next to the
+/// `aurestream-core` sidecar. Bundled via the `resources/**/*` glob — see
+/// `scripts/download-binaries.ts`.
+///
+/// Xray-core looks for geo assets in `XRAY_LOCATION_ASSET` if set, else the
+/// directory the running executable lives in. Windows TUN also loads
+/// `wintun.dll` from that same directory. Copying here means every spawn
+/// path (Tauri-direct sidecar AND the privileged-helper/TUN-service spawns,
+/// which don't go through Tauri's `.env()`) finds them with no extra env
+/// plumbing.
 pub fn copy_geo_data_files(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let resource_dir = app.path().resource_dir()?;
     let resources_path = resource_dir.join("resources");
@@ -84,6 +87,41 @@ pub fn copy_geo_data_files(app: &AppHandle) -> Result<(), Box<dyn std::error::Er
             log::error!("Failed to copy {:?} to {:?}: {}", src, dest, e);
         } else {
             log::info!("Copied geo data file to {:?}", dest);
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        // Prefer the triple-specific DLL staged by download-binaries; fall
+        // back to a plain `wintun.dll` if present (manual drop-in).
+        #[cfg(target_arch = "x86_64")]
+        const WINTUN_TRIPLE_NAME: &str = "wintun-x86_64-pc-windows-msvc.dll";
+        #[cfg(target_arch = "aarch64")]
+        const WINTUN_TRIPLE_NAME: &str = "wintun-aarch64-pc-windows-msvc.dll";
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        const WINTUN_TRIPLE_NAME: &str = "wintun.dll";
+
+        let candidates = [WINTUN_TRIPLE_NAME, "wintun.dll"];
+        let mut copied = false;
+        for name in &candidates {
+            let src = resources_path.join(name);
+            if !src.exists() {
+                continue;
+            }
+            let dest = sidecar_dir.join("wintun.dll");
+            match fs::copy(&src, &dest) {
+                Ok(_) => {
+                    log::info!("Copied {} → {:?}", name, dest);
+                    copied = true;
+                    break;
+                }
+                Err(e) => log::error!("Failed to copy {:?} to {:?}: {}", src, dest, e),
+            }
+        }
+        if !copied {
+            log::warn!(
+                "wintun.dll not found in bundle resources — Windows TUN mode will fail until it is present next to aurestream-core"
+            );
         }
     }
 
@@ -126,85 +164,84 @@ pub fn copy_config_to_app_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dest)
 }
 
-/// macOS：Accessory 会隐藏窗口且无 Dock；显示窗口时需切回 Regular。
-pub fn set_macos_activation_for_window(app_handle: &AppHandle, visible: bool) {
+/// macOS: Accessory hides the Dock icon while the window is in the tray;
+/// switch back to Regular before showing the window again.
+fn set_macos_activation_policy(app_handle: &AppHandle, window_visible: bool) {
     #[cfg(target_os = "macos")]
     {
-        let policy = if visible {
+        let policy = if window_visible {
             tauri::ActivationPolicy::Regular
         } else {
             tauri::ActivationPolicy::Accessory
         };
-        let _ = app_handle.set_activation_policy(policy);
+        if let Err(e) = app_handle.set_activation_policy(policy) {
+            log::warn!("[window] set_activation_policy failed: {e}");
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (app_handle, visible);
+        let _ = (app_handle, window_visible);
     }
 }
 
+/// Read the "minimize to tray on close" preference (default: true).
+pub fn minimize_to_tray_enabled(app_handle: &AppHandle) -> bool {
+    use tauri_plugin_store::StoreExt;
+    app_handle
+        .store("settings.json")
+        .ok()
+        .and_then(|store| store.get("minimize_to_tray_key"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
+
+/// Show + focus the main window (tray click / "显示主窗口" / deep link / reopen).
+///
+/// Per Tauri v2 tray pattern: `unminimize` → `show` → `set_focus`.
 pub fn show_main_window(app_handle: &AppHandle) {
-    set_macos_activation_for_window(app_handle, true);
+    set_macos_activation_policy(app_handle, true);
 
-    let Some(w) = app_handle.get_webview_window("main") else {
-        log::warn!("Main window not found while trying to show it");
-        return;
-    };
-
-    #[cfg(target_os = "linux")]
-    if let Err(e) = w.unminimize() {
-        log::warn!("Failed to unminimize main window: {}", e);
-    }
-
-    if let Err(e) = w.show() {
-        log::error!("Failed to show main window: {}", e);
-        return;
-    }
-
-    if let Err(e) = w.set_focus() {
-        log::warn!("Failed to focus main window: {}", e);
-    }
-}
-
-fn hide_window_to_tray(window: &tauri::WebviewWindow) -> tauri::Result<()> {
-    #[cfg(target_os = "linux")]
-    let result = window.minimize();
-
-    #[cfg(not(target_os = "linux"))]
-    let result = window.hide().or_else(|hide_error| {
-        log::warn!(
-            "Failed to hide main window, falling back to minimize: {}",
-            hide_error
-        );
-        window.minimize()
-    });
-
-    if result.is_ok() {
-        set_macos_activation_for_window(window.app_handle(), false);
-    }
-
-    result
-}
-
-pub fn hide_main_window_to_tray(window: &tauri::Window) -> tauri::Result<()> {
-    let app_handle = window.app_handle();
-    let label = window.label().to_string();
-    let Some(webview_window) = app_handle.get_webview_window(&label) else {
-        set_macos_activation_for_window(app_handle, false);
-        return Ok(());
-    };
-    hide_window_to_tray(&webview_window)
-}
-
-pub fn enter_tray_mode(app_handle: &AppHandle) -> tauri::Result<()> {
     let Some(window) = app_handle.get_webview_window("main") else {
-        set_macos_activation_for_window(app_handle, false);
-        return Ok(());
+        log::warn!("[window] main window missing while showing");
+        return;
     };
-    hide_window_to_tray(&window)
+
+    if let Err(e) = window.unminimize() {
+        log::debug!("[window] unminimize: {e}");
+    }
+    if let Err(e) = window.show() {
+        log::error!("[window] show failed: {e}");
+        return;
+    }
+    if let Err(e) = window.set_focus() {
+        log::warn!("[window] set_focus failed: {e}");
+    }
 }
 
-#[allow(dead_code)]
+/// Hide the main window without destroying it (close → tray / hide-on-launch).
+///
+/// Per Tauri v2 tray pattern: `window.hide()` only — do **not** minimize to
+/// the taskbar and do **not** destroy the webview.
+pub fn hide_main_window(app_handle: &AppHandle) {
+    let Some(window) = app_handle.get_webview_window("main") else {
+        log::warn!("[window] main window missing while hiding");
+        set_macos_activation_policy(app_handle, false);
+        return;
+    };
+
+    if let Err(e) = window.hide() {
+        log::error!("[window] hide failed: {e}");
+        return;
+    }
+    set_macos_activation_policy(app_handle, false);
+    log::info!("[window] main window hidden to tray");
+}
+
+/// Alias used by setup hide-on-launch.
+pub fn enter_tray_mode(app_handle: &AppHandle) {
+    hide_main_window(app_handle);
+}
+
 pub fn show_dashboard(app: AppHandle) {
     show_main_window(&app);
 }

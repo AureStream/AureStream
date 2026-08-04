@@ -180,8 +180,18 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // (which has no console) spawning a console-subsystem child causes Windows
     // to pop a fresh terminal on the user's desktop.
     // stdout/stderr are piped so we can log core output for diagnostics.
+    //
+    // cwd = sidecar directory so relative asset lookups (if any) and so
+    // operators inspecting Process Explorer see a sensible working dir.
+    // Xray loads wintun.dll / geo*.dat from the exe directory itself, which
+    // the main app stages next to aurestream-core.exe on startup.
+    let sidecar_dir = std::path::Path::new(&sidecar)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
     let mut child = match std::process::Command::new(&sidecar)
         .args(["run", "-c", &config])
+        .current_dir(&sidecar_dir)
         .creation_flags(CREATE_NO_WINDOW)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

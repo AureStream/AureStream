@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { getDataBaseInstance } from '../single/db';
 import { buildSubscriptionUserAgent, GITHUB_URL, Subscription, SubscriptionConfig } from '../types/definition';
-import { parseSubscriptionBody } from '../config/subscription-decoder';
+import { resolveSubscriptionData } from '../config/subscription-decoder';
 import { apiFetch } from '../api/client';
 
 
@@ -203,19 +203,17 @@ async function rekeySubscriptionIdentifier(
 export async function insertSubscription(url: string, name?: string, customIdentifier?: string): Promise<string | undefined> {
     try {
         const response = await fetchConfigContent(url);
-        let data = response.data;
-        if (!data && response.rawBody) {
-            try {
-                data = parseSubscriptionBody(response.rawBody);
-                console.info(`[import] base64 subscription decoded, ${(data as any)?.outbounds?.length || 0} outbounds`);
-            } catch (e) {
-                console.warn(`[import] base64 decode failed for url=${url}:`, e);
-            }
-        }
-        if (response.status !== 200 || !data) {
-            console.warn(`[import] abort non-200 status=${response.status} url=${url}`);
+        // Prefer resolveSubscriptionData so base64 / plain URI lists work even when
+        // Rust leaves `data` null (or returns non-proxy JSON).
+        const resolved = resolveSubscriptionData(response.data, response.rawBody);
+        if (response.status !== 200 || !resolved) {
+            console.warn(
+                `[import] abort status=${response.status} hasData=${!!response.data} hasRaw=${!!response.rawBody} url=${url}`
+            );
             return undefined;
         }
+        const data = resolved;
+        console.info(`[import] subscription decoded, ${data.outbounds.length} outbounds url=${url}`);
 
         const db = await getDataBaseInstance();
         const resolvedName = (!name || name === '默认配置')
@@ -296,15 +294,8 @@ export async function updateSubscription(identifier: string): Promise<boolean> {
         }
         const url = result[0].subscription_url;
         const response = await fetchConfigContent(url);
-        let data = response.data;
-        if (!data && response.rawBody) {
-            try {
-                data = parseSubscriptionBody(response.rawBody);
-            } catch (_) {
-                // fall through
-            }
-        }
-        if (response.status !== 200 || !data) {
+        const resolved = resolveSubscriptionData(response.data, response.rawBody);
+        if (response.status !== 200 || !resolved) {
             return false;
         }
 
@@ -319,7 +310,7 @@ export async function updateSubscription(identifier: string): Promise<boolean> {
             'UPDATE subscriptions SET official_website = ?, used_traffic = ?, total_traffic = ?, expire_time = ?, last_update_time = ? WHERE identifier = ?',
             [officialWebsite, used_traffic, total_traffic, expire_time, last_update_time, identifier]
         );
-        await db.execute('UPDATE subscription_configs SET config_content = ? WHERE identifier = ?', [JSON.stringify(data), identifier]);
+        await db.execute('UPDATE subscription_configs SET config_content = ? WHERE identifier = ?', [JSON.stringify(resolved), identifier]);
         return true;
     } catch (error) {
         console.error('Error updating subscription:', error);

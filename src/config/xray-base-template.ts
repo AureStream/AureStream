@@ -75,11 +75,18 @@ function buildTunInbound(bypassRouter: boolean): Record<string, unknown> {
     protocol: "tun",
     settings: {
       name: TUN_INTERFACE_NAME,
+      // Windows adapter description (default "Wintun"); kept explicit so
+      // DNS-override heuristics can match "wintun"/"aurestream" aliases.
+      desc: "AureStream TUN",
       mtu: 1500,
       gateway: [TUN_GATEWAY_CIDR],
       autoSystemRoutingTable: bypassRouter
         ? ["0.0.0.0/0", "::/0"]
         : [...IPV4_EXCLUDING_LAN, "::/0"],
+      // Bind proxy outbounds to the physical NIC so TUN capture doesn't
+      // loop Xray's own uplink traffic back into the tunnel (critical on
+      // Windows full-route TUN).
+      autoOutboundsInterface: "auto",
     },
     sniffing: { enabled: true, destOverride: ["http", "tls"] },
   }
