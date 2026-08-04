@@ -4,7 +4,7 @@ Project instructions for coding agents working in AureStream.
 
 ## Project
 
-AureStream is a cross-platform proxy/VPN client (Tauri v2 + React + sing-box sidecar).
+AureStream is a cross-platform proxy/VPN client (Tauri v2 + React + Xray-core sidecar).
 
 **Docs**: `docs/index.md` (architecture, config merger, UI system, build/deploy). Prefer code over docs when they disagree — some wiki pages lag the mobile-shell rewrite on `feat/mobile-ui`.
 
@@ -14,7 +14,7 @@ AureStream is a cross-platform proxy/VPN client (Tauri v2 + React + sing-box sid
 |---|---|
 | Frontend | React 19, TypeScript, Vite 7, Tailwind CSS v4, shadcn/ui (new-york), react-router-dom, i18next |
 | Backend | Rust / Tauri v2, Tokio |
-| Engine | sing-box sidecar + Clash API |
+| Engine | Xray-core sidecar + gRPC API CLI |
 | Package manager | pnpm (ESM) |
 | Tests | Vitest (`pnpm test`) |
 
@@ -28,7 +28,7 @@ pnpm tauri dev           # Full desktop app
 pnpm build               # tsc + vite build
 pnpm test                # vitest run
 pnpm tauri build         # Full Tauri release build
-pnpm download-binaries   # sing-box + rule DBs
+pnpm download-binaries   # Xray-core + geo rule DBs
 pnpm build-tun           # Windows TUN service
 pnpm pre-bundle          # macOS privileged helper
 pnpm release             # binaries + tun + build + tauri build
@@ -46,7 +46,7 @@ Prefix shell commands with `rtk` when available (see RTK section in `CLAUDE.md`)
 
 1. **Frontend → Rust**: `invoke()` (`@tauri-apps/api/core`). Handlers in `src-tauri/src/lib.rs` → `core/`, `commands/`, `engine/`.
 2. **Rust → Frontend**: events (`engine-state`, `tauri-log`, …).
-3. **Frontend → sing-box**: Clash API REST in `src/utils/singbox-api/` (node select, latency, traffic). Do not route these through Tauri IPC.
+3. **Frontend → Xray**: thin wrappers in `src/utils/xray-api/` + Tauri commands (`select_node`, traffic events).
 
 ### Engine
 
@@ -70,7 +70,6 @@ Orchestration in `src/lib/` + merger in `src/config/merger/`:
 - `merge-cache-key.ts` / `merge-cache.ts` — skip rewrite on cache hit unless `force`
 - `connection-flow.ts` — `ensureConnectionConfigReady` then `start`
 - `hot-reload-config.ts` — force merge + `reload_config` while running
-- TUN stack key (`system` / `gvisor` / `mixed`) applied when TUN enabled
 
 ### Persistence
 
@@ -95,13 +94,13 @@ src/
   api/                 # auth + remote subscription HTTP clients
   action/              # local DB CRUD
   components/          # pages + shell (Mobile*, Auth*, Dashboard)
-  config/merger/       # sing-box config generation
+  config/merger/       # Xray config generation
   contexts/            # AuthContext, UpdateContext
   hooks/               # useEngineState, useTrafficAccumulator
   lib/                 # connection, config-sync, session bootstrap, …
   single/              # store + db singletons
   types/
-  utils/singbox-api/   # Clash API
+  utils/xray-api/      # node select + traffic helpers
   utils/vpn-service.ts # engine start/stop IPC wrappers
 ```
 
@@ -142,7 +141,7 @@ State: React Context (no Redux/Zustand). Auth gate uses `useAuth()` (`user`, `lo
 |---|---|
 | Connect / disconnect UX | `src/lib/connection-flow.ts`, `src/hooks/useEngineState.ts`, `src/utils/vpn-service.ts` |
 | Config merge bugs | `src/config/merger/`, `src/lib/config-sync.ts`, `src/lib/connection-config.ts` |
-| Node list / latency | `src/components/NodesPage.tsx`, `src/lib/node-latency.ts`, `src/utils/singbox-api/` |
+| Node list / latency | `src/components/NodesPage.tsx`, `src/lib/node-latency.ts`, `src/utils/xray-api/` |
 | Auth / session | `src/contexts/AuthContext.tsx`, `src/lib/session-bootstrap.ts`, `src/api/auth.ts` |
 | Mobile home UI | `src/components/MobileHome.tsx`, `src/components/MobileTopBar.tsx` |
 | Engine state machine | `src-tauri/src/engine/state_machine.rs` |

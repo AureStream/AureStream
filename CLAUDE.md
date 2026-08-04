@@ -7,13 +7,13 @@ Guidance for Claude Code and other agents in this repository.
 
 ## Quick orientation
 
-AureStream is a cross-platform proxy/VPN client: **Tauri v2** (Rust) + **React/TypeScript** frontend + **sing-box** sidecar.
+AureStream is a cross-platform proxy/VPN client: **Tauri v2** (Rust) + **React/TypeScript** frontend + **Xray-core** sidecar.
 
 | Area | Location |
 |---|---|
 | Frontend | `src/` — React Router app (`/login`, `/register`, `/dashboard/*`) |
 | Config merge | `src/config/merger/`, `src/lib/config-sync.ts`, `connection-flow.ts` |
-| Clash API | `src/utils/singbox-api/` |
+| Xray helpers | `src/utils/xray-api/` |
 | Rust engine | `src-tauri/src/engine/` |
 | Tauri commands | `src-tauri/src/core/`, `src-tauri/src/commands/` |
 | Privilege / TUN / proxy | `crates/aurestream-plugin-*` |
@@ -26,7 +26,7 @@ pnpm tauri dev           # Desktop app
 pnpm build               # tsc + vite build
 pnpm test                # vitest run
 pnpm tauri build         # Full Tauri build
-pnpm download-binaries   # sing-box + rule DBs
+pnpm download-binaries   # Xray-core + geo rule DBs
 pnpm build-tun           # Windows TUN service
 pnpm pre-bundle          # macOS privileged helper
 pnpm release             # binaries + tun + build + tauri build
@@ -42,7 +42,7 @@ cargo build
 
 1. Frontend → Rust: `invoke()` (handlers registered in `src-tauri/src/lib.rs`)
 2. Rust → Frontend: events (`engine-state`, `tauri-log`, …)
-3. Frontend → sing-box: Clash API REST (`src/utils/singbox-api/`) — not via IPC
+3. Frontend → Xray: `src/utils/xray-api/` + Tauri commands (`select_node`, traffic events)
 
 **Engine**: `Idle → Starting → Running → Stopping → Idle` (+ `Failed`) in `state_machine.rs`.
 

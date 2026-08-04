@@ -45,20 +45,3 @@ export function beginLogout(deps: LogoutDeps): void {
     ),
   ])
 }
-
-/** @deprecated Prefer beginLogout for UI paths; kept for tests that await cleanup. */
-export async function completeLogout(deps: LogoutDeps): Promise<void> {
-  const remote = deps.revokeRemoteSession()
-  deps.clearTokens()
-  deps.setUser(null)
-
-  await Promise.allSettled([
-    withTimeout(remote, deps.remoteTimeoutMs ?? 2500),
-    withTimeout(
-      deps.clearLocalUserData().catch((error) => {
-        console.error("[auth] Failed to clear local user data on logout:", error)
-      }),
-      deps.remoteTimeoutMs ?? 2500
-    ),
-  ])
-}

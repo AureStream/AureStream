@@ -2,24 +2,6 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-#[allow(dead_code)]
-pub fn purge_legacy_cache_files(app: &AppHandle) {
-    let Ok(config_dir) = app.path().app_config_dir() else {
-        return;
-    };
-    let legacy_names = ["data.db", "data.db-wal", "data.db-shm"];
-    for name in &legacy_names {
-        let path = config_dir.join(name);
-        if path.exists() {
-            if let Err(e) = fs::remove_file(&path) {
-                log::warn!("Failed to remove legacy cache file {:?}: {}", path, e);
-            } else {
-                log::info!("Removed legacy cache file: {:?}", path);
-            }
-        }
-    }
-}
-
 pub fn copy_database_files(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let resource_dir = app.path().resource_dir()?;
     let resources_path = resource_dir.join("resources");

@@ -4,12 +4,8 @@ import {
   getConfiguredDirectDNS,
   getControllerPort,
   getProxyPort,
-  getStoreValue,
-  getTunStack,
-  getUseDHCP,
   isBypassRouterEnabled,
 } from "@/single/store"
-import { STAGE_VERSION_STORE_KEY } from "@/types/definition"
 import type { RoutingMode } from "@/lib/routing-mode"
 
 export type MergeCacheInput = {
@@ -30,21 +26,15 @@ export async function computeMergeCacheKey(
     allowLan,
     bypassRouter,
     proxyPort,
-    tunStack,
-    useDHCP,
     directDns,
     controllerPort,
-    stageVersion,
   ] = await Promise.all([
     getSubscriptionMergeRevision(input.subscriptionIdentifier),
     getAllowLan(),
     isBypassRouterEnabled(),
     getProxyPort(),
-    getTunStack(),
-    getUseDHCP(),
     getConfiguredDirectDNS(),
     getControllerPort(),
-    getStoreValue(STAGE_VERSION_STORE_KEY, "release"),
   ])
 
   return [
@@ -55,10 +45,7 @@ export async function computeMergeCacheKey(
     allowLan ? "1" : "0",
     bypassRouter ? "1" : "0",
     String(proxyPort),
-    tunStack,
-    useDHCP ? "1" : "0",
     directDns ?? "",
     String(controllerPort),
-    String(stageVersion ?? ""),
   ].join("|")
 }

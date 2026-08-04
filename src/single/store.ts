@@ -10,10 +10,6 @@ import {
     ENABLE_TUN_STORE_KEY,
     LEGACY_CLASH_API_PORT_STORE_KEY,
     PROXY_PORT_STORE_KEY,
-    SKIP_SYSTEM_PROXY_STORE_KEY,
-    TUN_STACK_STORE_KEY,
-    USE_DHCP_STORE_KEY,
-    USER_AGENT_STORE_KEY,
     AUTO_START_STORE_KEY,
     HIDE_ON_LAUNCH_STORE_KEY,
     MINIMIZE_TO_TRAY_STORE_KEY,
@@ -25,9 +21,7 @@ import {
 
 export const LANGUAGE_STORE_KEY = 'language';
 const DIRECT_DNS_STORE_KEY = 'direct_dns';
-const PROXY_DNS_STORE_KEY = 'proxy_dns';
-const DEFAULT_DIRECT_DNS = '223.5.5.5';
-const DEFAULT_PROXY_DNS = '8.8.8.8';
+
 
 export const store = new LazyStore('settings.json', {
     defaults: {},
@@ -202,27 +196,6 @@ export async function setBypassRouterEnabled(value: boolean) {
     invalidateConnectionConfigCache();
 }
 
-export async function getUseDHCP(): Promise<boolean> {
-    const b = await readStoreKey(USE_DHCP_STORE_KEY);
-    if (b === undefined) {
-        return false;
-    }
-    return Boolean(b);
-}
-
-export async function setUseDHCP(value: boolean) {
-    await persistStoreKey(USE_DHCP_STORE_KEY, value);
-    invalidateConnectionConfigCache();
-}
-
-export async function getSkipSystemProxy(): Promise<boolean> {
-    return Boolean(await readStoreKey(SKIP_SYSTEM_PROXY_STORE_KEY));
-}
-
-export async function setSkipSystemProxy(value: boolean) {
-    await persistStoreKey(SKIP_SYSTEM_PROXY_STORE_KEY, value);
-}
-
 export async function setDirectDNS(dnsServers: string) {
     await persistStoreKey(DIRECT_DNS_STORE_KEY, dnsServers);
     invalidateConnectionConfigCache();
@@ -232,32 +205,6 @@ export async function getConfiguredDirectDNS(): Promise<string | undefined> {
     const s = await readStoreKey<string>(DIRECT_DNS_STORE_KEY);
     const trimmed = s?.trim();
     return trimmed || undefined;
-}
-
-export async function getDirectDNS(): Promise<string> {
-    return (await getConfiguredDirectDNS()) ?? DEFAULT_DIRECT_DNS;
-}
-
-/** Get the configured proxy DNS, falling back to the template default. */
-export async function getProxyDnsServer(): Promise<string> {
-    const s = await readStoreKey<string>(PROXY_DNS_STORE_KEY);
-    const trimmed = s?.trim();
-    return trimmed || DEFAULT_PROXY_DNS;
-}
-
-export async function getConfiguredProxyDNS(): Promise<string | undefined> {
-    const s = await readStoreKey<string>(PROXY_DNS_STORE_KEY);
-    const trimmed = s?.trim();
-    return trimmed || undefined;
-}
-
-export async function getUserAgent(): Promise<string> {
-    const ua = await readStoreKey<string>(USER_AGENT_STORE_KEY);
-    return ua || 'default';
-}
-
-export async function setUserAgent(ua: string) {
-    await persistStoreKey(USER_AGENT_STORE_KEY, ua);
 }
 
 export async function getProxyPort(): Promise<number> {
@@ -291,33 +238,6 @@ export async function setControllerPort(port: number): Promise<void> {
         throw new Error('invalid_controller_port');
     }
     await persistStoreKey(CONTROLLER_PORT_STORE_KEY, port, { immediate: true });
-    invalidateConnectionConfigCache();
-}
-
-/** @deprecated Use getControllerPort */
-export const getClashApiPort = getControllerPort;
-/** @deprecated Use setControllerPort */
-export const setClashApiPort = setControllerPort;
-
-export type TunStack = 'system' | 'gvisor' | 'mixed';
-
-export const DEFAULT_TUN_STACK: TunStack = 'gvisor';
-
-const TUN_STACK_VALUES: TunStack[] = ['system', 'gvisor', 'mixed'];
-
-export async function getTunStack(): Promise<TunStack> {
-    const raw = await readStoreKey<string>(TUN_STACK_STORE_KEY);
-    if (raw && TUN_STACK_VALUES.includes(raw as TunStack)) {
-        return raw as TunStack;
-    }
-    return DEFAULT_TUN_STACK;
-}
-
-export async function setTunStack(value: TunStack): Promise<void> {
-    if (!TUN_STACK_VALUES.includes(value)) {
-        throw new Error('invalid_tun_stack');
-    }
-    await persistStoreKey(TUN_STACK_STORE_KEY, value);
     invalidateConnectionConfigCache();
 }
 
