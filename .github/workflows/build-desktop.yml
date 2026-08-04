@@ -1,32 +1,7 @@
-name: Build desktop bundles
+name: Build Windows x64
 
 on:
   workflow_dispatch:
-    inputs:
-      linux-x64:
-        description: "Build Linux x64"
-        type: boolean
-        default: true
-      linux-arm64:
-        description: "Build Linux arm64"
-        type: boolean
-        default: true
-      windows-x64:
-        description: "Build Windows x64"
-        type: boolean
-        default: true
-      windows-arm64:
-        description: "Build Windows arm64"
-        type: boolean
-        default: true
-      macos-aarch64:
-        description: "Build macOS ARM64"
-        type: boolean
-        default: true
-      macos-x64:
-        description: "Build macOS x64"
-        type: boolean
-        default: true
   release:
     types: [published]
 
@@ -34,86 +9,24 @@ permissions:
   contents: write
 
 concurrency:
-  group: build-desktop-${{ github.ref }}
+  group: build-windows-x64-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  RUST_TARGET: x86_64-pc-windows-msvc
+  CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.gen.outputs.matrix }}
-    steps:
-      - name: Compute build matrix
-        id: gen
-        shell: bash
-        run: |
-          full='[
-            {"name":"linux-x64","os":"ubuntu-22.04","rust_target":"x86_64-unknown-linux-gnu"},
-            {"name":"linux-arm64","os":"ubuntu-22.04-arm","rust_target":"aarch64-unknown-linux-gnu"},
-            {"name":"windows-x64","os":"windows-2025","rust_target":"x86_64-pc-windows-msvc"},
-            {"name":"windows-arm64","os":"windows-11-arm","rust_target":"aarch64-pc-windows-msvc"},
-            {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
-            {"name":"macos-x64","os":"macos-15-intel","rust_target":"x86_64-apple-darwin"}
-          ]'
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            matrix=$(echo "$full" | jq -c \
-              --arg linux_x64 "${{ github.event.inputs.linux-x64 }}" \
-              --arg linux_arm64 "${{ github.event.inputs.linux-arm64 }}" \
-              --arg windows_x64 "${{ github.event.inputs.windows-x64 }}" \
-              --arg windows_arm64 "${{ github.event.inputs.windows-arm64 }}" \
-              --arg macos_aarch64 "${{ github.event.inputs.macos-aarch64 }}" \
-              --arg macos_x64 "${{ github.event.inputs.macos-x64 }}" \
-              '{include: [.[] | select(
-                (.name == "linux-x64" and $linux_x64 == "true") or
-                (.name == "linux-arm64" and $linux_arm64 == "true") or
-                (.name == "windows-x64" and $windows_x64 == "true") or
-                (.name == "windows-arm64" and $windows_arm64 == "true") or
-                (.name == "macos-aarch64" and $macos_aarch64 == "true") or
-                (.name == "macos-x64" and $macos_x64 == "true")
-              )]}')
-          else
-            matrix=$(echo "$full" | jq -c '{include: .}')
-          fi
-          echo "matrix=$matrix"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-  build:
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
-
-    runs-on: ${{ matrix.os }}
-
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
-      APPIMAGE_EXTRACT_AND_RUN: "1"
-      NO_STRIP: "true"
+  build-windows-x64:
+    runs-on: windows-2025
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Install Linux dependencies
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            binutils \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl wget file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            rpm \
-            xdg-utils
-          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
-
-      - name: Install NSIS and 7-Zip (Windows)
-        if: runner.os == 'Windows'
+      - name: Install NSIS and 7-Zip
         run: choco install nsis 7zip -y
 
       - name: Setup Node
@@ -130,7 +43,7 @@ jobs:
       - name: Get pnpm store path
         id: pnpm-cache
         shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+        run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm dependencies
         uses: actions/cache@v5
@@ -143,7 +56,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust_target }}
+          targets: ${{ env.RUST_TARGET }}
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -158,30 +71,7 @@ jobs:
         run: pnpm download-binaries
 
       - name: Build Windows TUN service
-        if: runner.os == 'Windows'
-        run: pnpm build-tun --release --target ${{ matrix.rust_target }}
-
-      - name: Build macOS privileged helper
-        if: runner.os == 'macOS'
-        run: |
-          # Empty APPLE_SIGNING_IDENTITY overrides tauri.conf.json ad-hoc "-"; only export when set.
-          if [[ -n "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]]; then
-            export APPLE_SIGNING_IDENTITY='${{ secrets.APPLE_SIGNING_IDENTITY }}'
-          fi
-          pnpm pre-bundle
-
-      - name: Work around ldd crash on static sing-box binary (Linux)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          # sing-box (aurestream-core) is a statically-linked Go binary.
-          # linuxdeploy runs `ldd` on every ELF in the AppDir to discover
-          # shared libraries; ldd exits 1 on static binaries, and the C++
-          # runtime inside linuxdeploy throws std::runtime_error instead
-          # of handling it gracefully.  Replace ldd with a wrapper that
-          # returns success for static ELFs.
-          sudo cp /usr/bin/ldd /usr/bin/ldd.orig
-          sudo cp scripts/ldd-static-safe.sh /usr/bin/ldd
-          sudo chmod +x /usr/bin/ldd
+        run: pnpm build-tun --release --target ${{ env.RUST_TARGET }}
 
       - name: Build Tauri bundle
         uses: tauri-apps/tauri-action@v0
@@ -189,47 +79,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPIMAGE_EXTRACT_AND_RUN: "1"
-          NO_STRIP: "true"
         with:
-          args: >-
-            --target ${{ matrix.rust_target }}
-            ${{ startsWith(matrix.os, 'ubuntu') && '--config src-tauri/tauri.linux.conf.json' || '' }}
-            --verbose
-
-      - name: Sign macOS app bundle for SMJobBless
-        if: runner.os == 'macOS'
-        run: |
-          if [[ -n "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]]; then
-            export APPLE_SIGNING_IDENTITY='${{ secrets.APPLE_SIGNING_IDENTITY }}'
-          fi
-          APP=$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
-          if [[ -n "$APP" ]]; then
-            bash scripts/post-sign-macos-bundle.sh "$APP"
-          fi
+          args: --target ${{ env.RUST_TARGET }} --verbose
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: AureStream-${{ matrix.name }}
+          name: AureStream-windows-x64
           path: |
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.deb
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.rpm
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.AppImage
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/msi/*.msi
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ env.RUST_TARGET }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ env.RUST_TARGET }}/release/bundle/msi/*.msi
           if-no-files-found: warn
 
-      - name: Prepare Release Assets
+      - name: Prepare release assets
         if: github.event_name == 'release'
         shell: bash
         run: |
           mkdir -p release-files
-          find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
-            -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
-            -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o \
-            -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
+          find "src-tauri/target/${RUST_TARGET}/release/bundle" -type f \( \
+            -name '*.exe' -o -name '*.msi' -o -name '*.sig' -o -name '*.zip' \
           \) -exec cp {} release-files/ \;
           ls -la release-files/
 
@@ -242,12 +110,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-update:
-    needs: build
+    needs: build-windows-x64
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Install Node
         uses: actions/setup-node@v6
