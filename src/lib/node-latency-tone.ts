@@ -13,5 +13,5 @@ export function getNodeLatencyTone(ms: number): NodeLatencyTone {
     return { tone: "warning", text: "text-warning", dot: "bg-warning" }
   }
 
-  return { tone: "danger", text: "text-danger", dot: "bg-danger" }
+  return { tone: "danger", text: "text-destructive", dot: "bg-destructive" }
 }

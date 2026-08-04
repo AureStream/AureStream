@@ -1,4 +1,6 @@
+import { ChevronLeft } from "lucide-react"
 import { type CSSProperties, type ReactNode } from "react"
+import { cn } from "@/lib/utils"
 
 interface MobileTopBarProps {
   onBack?: () => void
@@ -8,8 +10,10 @@ interface MobileTopBarProps {
 }
 
 /** Shared top-bar icon button style (matches Home → Profile). */
-export const topBarIconBtnClass =
-  "w-9 h-9 flex items-center justify-center rounded-xl text-text-secondary hover:text-text hover:bg-surface-active/60 transition-colors cursor-pointer shrink-0"
+export const topBarIconBtnClass = cn(
+  "flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl",
+  "text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+)
 
 const noDragStyle = { WebkitAppRegion: "no-drag" } as CSSProperties
 
@@ -20,31 +24,35 @@ const noDragStyle = { WebkitAppRegion: "no-drag" } as CSSProperties
  */
 export default function MobileTopBar({ onBack, title, left, right }: MobileTopBarProps) {
   return (
-    <div className="sticky top-0 z-20 flex items-center h-12 px-2 bg-transparent shrink-0">
-      <div className="relative z-30 flex items-center gap-1 min-w-0 flex-1 justify-start" style={noDragStyle}>
+    <div className="sticky top-0 z-20 flex h-12 shrink-0 items-center bg-transparent px-2">
+      <div
+        className="relative z-30 flex min-w-0 flex-1 items-center justify-start gap-1"
+        style={noDragStyle}
+      >
         {onBack ? (
           <button
             type="button"
             onClick={onBack}
             className={topBarIconBtnClass}
-            aria-label="Back"
+            aria-label="返回"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft className="size-5" />
           </button>
         ) : (
           left
         )}
       </div>
 
-      {title && (
-        <div className="absolute left-1/2 -translate-x-1/2 text-sm font-extrabold text-text truncate max-w-[55%] pointer-events-none">
+      {title ? (
+        <div className="pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-sm font-extrabold text-foreground">
           {title}
         </div>
-      )}
+      ) : null}
 
-      <div className="relative z-30 flex items-center gap-1 flex-1 justify-end" style={noDragStyle}>
+      <div
+        className="relative z-30 flex flex-1 items-center justify-end gap-1"
+        style={noDragStyle}
+      >
         {right}
       </div>
     </div>

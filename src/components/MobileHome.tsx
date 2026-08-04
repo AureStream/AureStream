@@ -567,16 +567,16 @@ export default function MobileHome() {
       <div className="flex-1 flex flex-col justify-between min-h-0 w-full overflow-y-auto no-scrollbar pb-1">
         {/* Row 2: Subscription Card Row */}
         <div className="w-full px-4 pt-1 pb-1 shrink-0">
-          <div className="bg-white/70 dark:bg-bg-alt/70 rounded-2xl px-[25px] py-[15px] border border-slate-200/80 dark:border-white/10 flex flex-col gap-4">
+          <div className="bg-card/80 rounded-2xl px-[25px] py-[15px] border border-border flex flex-col gap-4">
             {/* Top Row: Remaining Traffic + Semicircle Percentage Gauge */}
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5 min-w-0 flex-1 pr-1">
-                <span className="text-base font-extrabold text-slate-600 dark:text-slate-300">{"剩余流量"}</span>
+                <span className="text-base font-extrabold text-muted-foreground">{"剩余流量"}</span>
                 <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-4xl font-black text-slate-900 dark:text-white tracking-tight tabular-nums">{remainingGBValue}</span>
-                  <span className="text-base font-black text-slate-500">GB</span>
+                  <span className="text-4xl font-black text-foreground tracking-tight tabular-nums">{remainingGBValue}</span>
+                  <span className="text-base font-black text-muted-foreground">GB</span>
                 </div>
-                <span className="text-sm font-bold text-slate-400 mt-0.5">
+                <span className="text-sm font-bold text-muted-foreground mt-0.5">
                   {"本月套餐共"} {totalGBText}
                 </span>
               </div>
@@ -596,7 +596,7 @@ export default function MobileHome() {
                     stroke="currentColor"
                     strokeWidth="5"
                     strokeLinecap="round"
-                    className="text-slate-200 dark:text-slate-700"
+                    className="text-border"
                   />
                   <path
                     d="M 12 62 A 48 48 0 0 1 108 62"
@@ -610,32 +610,32 @@ export default function MobileHome() {
                   />
                 </svg>
                 <div className="absolute inset-x-0 top-[42px] flex items-center justify-center">
-                  <span className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{remainingPercent.toFixed(0)}%</span>
+                  <span className="text-xl font-black text-foreground tabular-nums">{remainingPercent.toFixed(0)}%</span>
                 </div>
               </div>
             </div>
 
-            <div className="w-full h-px bg-slate-100 dark:bg-white/5" />
+            <div className="w-full h-px bg-border" />
 
             {/* Bottom Row: Used Traffic + Expire Date */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EFECFF] dark:bg-[#6C5CFF]/20 text-[#6C5CFF] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-primary/12 text-primary flex items-center justify-center shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-black text-slate-400">{"已使用"}</span>
-                  <span className="text-base font-black text-slate-900 dark:text-white truncate">{usedText}</span>
+                  <span className="text-xs font-black text-muted-foreground">{"已使用"}</span>
+                  <span className="text-base font-black text-foreground truncate">{usedText}</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#EFECFF] dark:bg-[#6C5CFF]/20 text-[#6C5CFF] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-primary/12 text-primary flex items-center justify-center shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-black text-slate-400">{"到期时间"}</span>
-                  <span className="text-base font-black text-slate-900 dark:text-white truncate">{expireText}</span>
+                  <span className="text-xs font-black text-muted-foreground">{"到期时间"}</span>
+                  <span className="text-base font-black text-foreground truncate">{expireText}</span>
                 </div>
               </div>
             </div>
@@ -652,13 +652,13 @@ export default function MobileHome() {
                 <span>{formatDuration(connectTime)}</span>
               </div>
             ) : isConnecting ? (
-              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-[#6C5CFF]/10 border border-[#6C5CFF]/20 text-[#6C5CFF] text-base font-black tracking-wide">
-                <span className="w-3 h-3 rounded-full bg-[#6C5CFF]" />
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-base font-black tracking-wide">
+                <span className="w-3 h-3 rounded-full bg-primary" />
                 <span>{"正在连接…"}</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-black tracking-wide">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+              <div className="inline-flex items-center gap-2.5 px-4.5 py-2 rounded-full bg-border border border-border text-foreground/80 text-sm font-black tracking-wide">
+                <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" />
                 <span>{"点击按钮进行连接"}</span>
               </div>
             )}
@@ -668,20 +668,20 @@ export default function MobileHome() {
           <div className="relative flex items-center justify-center">
             <div className={`w-64 h-64 rounded-full border transition-colors duration-300 flex items-center justify-center p-4 ${
               isConnected
-                ? "border-[#6C5CFF]/50 bg-[#EFECFF]/80 dark:bg-[#6C5CFF]/10"
-                : "border-slate-200 dark:border-white/10 bg-transparent"
+                ? "border-primary/50 bg-primary/10"
+                : "border-border bg-transparent"
             }`}>
               <div className={`w-50 h-50 rounded-full border transition-colors duration-300 flex items-center justify-center ${
                 isConnected
-                  ? "border-[#6C5CFF]/25 bg-white/80 dark:bg-bg-alt/80"
-                  : "border-slate-200/90 dark:border-white/10 bg-white/60 dark:bg-bg-alt/40"
+                  ? "border-primary/25 bg-card/80"
+                  : "border-border bg-card/60"
               }`}>
                 <button
                   onClick={handleToggleConnection}
                   disabled={!canToggleConnection}
-                  className="w-36 h-36 rounded-full flex items-center justify-center cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-white/5 active:opacity-80 focus:outline-none"
+                  className="w-36 h-36 rounded-full flex items-center justify-center cursor-pointer transition-colors hover:bg-muted/50 active:opacity-80 focus:outline-none"
                 >
-                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-[#6C5CFF] transition-colors" : "text-slate-300 dark:text-slate-600 transition-colors"}>
+                  <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isConnected ? "text-primary transition-colors" : "text-muted-foreground/50 transition-colors"}>
                     <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
                     <line x1="12" y1="2" x2="12" y2="12" />
                   </svg>
@@ -692,7 +692,7 @@ export default function MobileHome() {
 
           {/* Bottom Protection Hint */}
           <div className="flex flex-col items-center gap-0.5 text-center mt-8">
-            <div className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-200 font-black">
+            <div className="flex items-center gap-1.5 text-sm text-foreground/80 font-black">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>{isConnected ? "数据隧道保护已启用" : "数据隧道保护未启用"}</span>
             </div>
@@ -705,27 +705,27 @@ export default function MobileHome() {
           <button
             type="button"
             onClick={() => navigate("/dashboard/nodes")}
-            className="bg-white/70 dark:bg-bg-alt/70 rounded-2xl p-4 border border-slate-200/80 dark:border-white/10 flex items-center justify-between gap-3.5 w-full text-left cursor-pointer transition-colors hover:bg-white dark:hover:bg-bg-alt"
+            className="bg-card/80 rounded-2xl p-4 border border-border flex items-center justify-between gap-3.5 w-full text-left cursor-pointer transition-colors hover:bg-card"
           >
             <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <span className="text-3xl shrink-0 select-none">{currentNode ? currentNode.flag : "🌐"}</span>
               <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white truncate">
+                <h3 className="text-lg font-black text-foreground truncate">
                   {currentNode ? currentNode.loc : "未选择任何节点"}
                 </h3>
-                <div className="flex items-center justify-between w-full text-xs text-slate-400 dark:text-slate-500 font-semibold">
+                <div className="flex items-center justify-between w-full text-xs text-muted-foreground dark:text-muted-foreground font-semibold">
                   <span className="font-mono font-bold uppercase">
                     {currentNode ? currentNode.protocol : "VLESS"}
                   </span>
                   <span className="flex items-center gap-1 font-mono font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#6C5CFF]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                     {currentNode ? latencyText : "--"}
                   </span>
                 </div>
               </div>
             </div>
 
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground shrink-0">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
@@ -733,8 +733,8 @@ export default function MobileHome() {
           {/* Independent toggles: smart routing / TUN / IPv6 — one row, name above switch */}
           <div className="w-full grid grid-cols-3 gap-0.5 py-3 min-h-[72px] items-center">
             <label className="min-w-0 flex flex-col items-center justify-center gap-2 px-1 py-2.5 cursor-pointer select-none">
-              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-slate-700 dark:text-slate-200">
-                <span className="text-[#6C5CFF] shrink-0"><I.Activity /></span>
+              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-foreground/80">
+                <span className="text-primary shrink-0"><I.Activity /></span>
                 <span className="truncate">{"智能分流"}</span>
               </span>
               <Switch
@@ -747,8 +747,8 @@ export default function MobileHome() {
             </label>
 
             <label className={`min-w-0 flex flex-col items-center justify-center gap-2 px-1 py-2.5 select-none ${isInstallingService ? "cursor-wait" : "cursor-pointer"}`}>
-              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-slate-700 dark:text-slate-200">
-                <span className="text-[#6C5CFF] shrink-0">
+              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-foreground/80">
+                <span className="text-primary shrink-0">
                   {isInstallingService ? (
                     <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" />
@@ -772,8 +772,8 @@ export default function MobileHome() {
             </label>
 
             <label className="min-w-0 flex flex-col items-center justify-center gap-2 px-1 py-2.5 cursor-pointer select-none">
-              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-slate-700 dark:text-slate-200">
-                <span className="text-[#6C5CFF] shrink-0"><I.Ipv6 /></span>
+              <span className="min-w-0 flex items-center justify-center gap-1 text-[11px] font-black leading-tight text-foreground/80">
+                <span className="text-primary shrink-0"><I.Ipv6 /></span>
                 <span className="truncate">IPv6</span>
               </span>
               <Switch
@@ -791,13 +791,13 @@ export default function MobileHome() {
         <div className="w-full px-4 pt-1 pb-3 shrink-0 flex items-center justify-center gap-6">
           <button
             onClick={() => openUrl("https://github.com/BadKid90s/AureStream")}
-            className="flex items-center gap-1.5 text-sm font-extrabold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-sm font-extrabold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             <I.Globe /> 官方网站
           </button>
           <button
             onClick={() => navigate("/dashboard/about")}
-            className="flex items-center gap-1.5 text-sm font-extrabold text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-sm font-extrabold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             <I.Info /> 关于本软件
           </button>

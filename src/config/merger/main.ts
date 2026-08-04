@@ -62,8 +62,6 @@ async function mergeConfig(identifier: string, options: MergeConfigOptions) {
         throw new Error(`Subscription config unavailable for identifier=${identifier}`);
     }
 
-    console.log(options.label);
-
     const newConfig = buildBaseXrayConfig(isGlobal, isTun, bypassRouter, enableIpv6);
 
     updateApiConfig(newConfig, apiPort);

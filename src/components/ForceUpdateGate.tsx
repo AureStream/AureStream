@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react"
+import { ArrowUp, Loader2 } from "lucide-react"
 import { useUpdate } from "../contexts/UpdateContext"
+import { Button } from "@/components/ui/button"
 
 /**
  * Blocks the entire app on launch when an update is available.
@@ -14,10 +16,10 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
 
   if (checking && !updateAvailable) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-secondary border-t-transparent animate-spin" />
-          <span className="text-sm text-text-muted">AureStream</span>
+          <Loader2 className="size-10 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">AureStream</span>
         </div>
       </div>
     )
@@ -36,40 +38,42 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
     }
 
     return (
-      <div className="flex items-center justify-center h-full w-full p-6">
-        <div className="glass-card w-full max-w-[320px] rounded-[24px] p-6 flex flex-col items-center text-center shadow-glass">
-          <div className="w-14 h-14 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center mb-4">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m18 15-6-6-6 6" />
-            </svg>
+      <div className="flex h-full w-full items-center justify-center bg-background p-6">
+        <div className="flex w-full max-w-[320px] flex-col items-center rounded-3xl border border-border bg-card p-6 text-center shadow-sm">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <ArrowUp className="size-7" strokeWidth={2.2} />
           </div>
 
-          <h2 className="text-lg font-extrabold text-text mb-1.5">{"必须更新"}</h2>
-          <p className="text-xs text-text-muted mb-2 leading-relaxed">
-            {"发现新版本，请更新至最新版本后继续使用。"}
+          <h2 className="mb-1.5 text-lg font-extrabold text-foreground">必须更新</h2>
+          <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+            发现新版本，请更新至最新版本后继续使用。
           </p>
-          <p className="text-xs font-mono text-text mb-4">
-            {currentVersion || "..."} <span className="text-text-muted">→</span> {newVersion || "..."}
+          <p className="mb-4 font-mono text-xs text-foreground">
+            {currentVersion || "..."} <span className="text-muted-foreground">→</span>{" "}
+            {newVersion || "..."}
           </p>
 
-          {error && <p className="text-[11px] text-danger mb-3 break-all">{error}</p>}
+          {error ? (
+            <p className="mb-3 break-all text-[11px] text-destructive">{error}</p>
+          ) : null}
 
-          <button
-            onClick={handleUpdate}
+          <Button
+            type="button"
+            className="h-12 w-full rounded-2xl text-sm font-extrabold"
             disabled={installing}
-            className="w-full py-3 rounded-2xl bg-secondary hover:bg-secondary/90 active:scale-[0.98] text-white text-sm font-extrabold shadow-md transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            onClick={() => void handleUpdate()}
           >
             {installing ? (
               <>
-                <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                {"更新中..."}
+                <Loader2 className="size-4 animate-spin" />
+                更新中...
               </>
             ) : error ? (
               "重试"
             ) : (
               "立即更新"
             )}
-          </button>
+          </Button>
         </div>
       </div>
     )

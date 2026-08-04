@@ -133,28 +133,28 @@ export default function ProfilePage() {
       <div className="relative flex-1 min-h-0 w-full px-4 pb-6 pt-5 flex flex-col gap-4">
         {/* User */}
         <section className="shrink-0 flex items-center gap-4 px-5 pb-7 min-h-[6.75rem]">
-          <div className="w-[4.45rem] h-[4.45rem] rounded-full bg-white dark:bg-bg-alt border border-white/70 shadow-sm overflow-hidden shrink-0">
+          <div className="w-[4.45rem] h-[4.45rem] rounded-full bg-card dark:bg-card border border-white/70 shadow-sm overflow-hidden shrink-0">
             <img src="/avatar.svg" alt="" className="w-full h-full object-cover" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-3 flex-wrap">
-              <h2 className="text-[1.5rem] font-black text-slate-800 truncate leading-none tracking-tight">{displayName}</h2>
+              <h2 className="text-[1.5rem] font-black text-foreground truncate leading-none tracking-tight">{displayName}</h2>
               <button
                 type="button"
                 onClick={handleChangePassword}
-                className="text-xs font-bold text-slate-600 underline underline-offset-2 cursor-pointer hover:text-[#6C5CFF]"
+                className="text-xs font-bold text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-primary"
               >
                 {"修改密码"}
               </button>
             </div>
-            <p className="mt-1.5 text-[1rem] font-semibold text-slate-700 truncate">{emailUser}</p>
+            <p className="mt-1.5 text-[1rem] font-semibold text-foreground/80 truncate">{emailUser}</p>
           </div>
         </section>
 
         {/* Balance */}
-        <section className="shrink-0 relative overflow-hidden rounded-[0.7rem] bg-gradient-to-r from-[#7357F6] via-[#7C5EF8] to-[#8155F1] px-5 py-5 text-white shadow-sm min-h-[5.25rem]">
-          <div className="absolute right-12 -top-20 h-48 w-24 rotate-[16deg] rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute right-24 -top-16 h-44 w-20 rotate-[16deg] rounded-full bg-white/6 pointer-events-none" />
+        <section className="shrink-0 relative overflow-hidden rounded-[0.7rem] bg-gradient-to-r from-primary via-primary to-primary px-5 py-5 text-white shadow-sm min-h-[5.25rem]">
+          <div className="absolute right-12 -top-20 h-48 w-24 rotate-[16deg] rounded-full bg-card/10 pointer-events-none" />
+          <div className="absolute right-24 -top-16 h-44 w-20 rotate-[16deg] rounded-full bg-card/6 pointer-events-none" />
           <div className="relative flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[1.75rem] font-black tabular-nums tracking-tight leading-none">{balanceText}</div>
@@ -172,7 +172,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={handleRecharge}
-              className="shrink-0 h-9 min-w-[4.2rem] px-4 rounded-full bg-gradient-to-r from-[#FFE2BE] to-[#FFC584] text-[#5F350B] text-sm font-black shadow-sm hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
+              className="shrink-0 h-9 min-w-[4.2rem] px-4 rounded-full bg-gradient-to-r from-amber-100 to-amber-200 text-amber-950 text-sm font-black shadow-sm hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
             >
               {"充值"}
             </button>
@@ -180,17 +180,17 @@ export default function ProfilePage() {
         </section>
 
         {/* Traffic — fills remaining height */}
-        <section className="flex-1 min-h-0 flex flex-col items-stretch justify-center gap-8 rounded-[0.7rem] bg-white border border-slate-100/80 px-5 pt-11 pb-7 shadow-[0_8px_26px_rgba(31,27,62,0.08)]">
+        <section className="flex-1 min-h-0 flex flex-col items-stretch justify-center gap-8 rounded-[0.7rem] bg-card border border-border px-5 pt-11 pb-7 shadow-sm">
           <div className="grid grid-cols-2 place-items-center gap-4">
             <div className="relative w-[10.25rem] h-[10.25rem] justify-self-center">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
-                <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeWidth="5" className="text-slate-200" />
+                <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeWidth="5" className="text-border" />
                 <circle
                   cx="50"
                   cy="50"
                   r={r}
                   fill="none"
-                  stroke="#28D081"
+                  stroke="hsl(var(--success))"
                   strokeWidth="5"
                   strokeLinecap="round"
                   strokeDasharray={c}
@@ -198,11 +198,11 @@ export default function ProfilePage() {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
-                <div className="text-[1.45rem] font-black tabular-nums text-slate-800 leading-none">
+                <div className="text-[1.45rem] font-black tabular-nums text-foreground leading-none">
                   {remainingGBValue}
-                  {remainingUnitLabel ? <span className="text-[0.85rem] font-bold text-slate-700 ml-0.5">{remainingUnitLabel}</span> : null}
+                  {remainingUnitLabel ? <span className="text-[0.85rem] font-bold text-foreground/80 ml-0.5">{remainingUnitLabel}</span> : null}
                 </div>
-                <div className="mt-2 text-base font-extrabold text-slate-400 leading-tight">
+                <div className="mt-2 text-base font-extrabold text-muted-foreground leading-tight">
                   {"套餐剩余流量"}
                 </div>
               </div>
@@ -210,17 +210,17 @@ export default function ProfilePage() {
 
             <div className="min-w-0 flex flex-col items-center gap-5 justify-self-center w-full max-w-[9rem] text-center">
               <div className="flex items-start justify-center gap-2">
-                <span className="mt-1.5 w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                <span className="mt-1.5 w-2 h-2 rounded-full bg-muted-foreground/40 shrink-0" />
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-400">{"套餐已使用流量"}</div>
-                  <div className="mt-1 text-[1.32rem] font-black tabular-nums text-slate-800 leading-none">{usedGB}<span className="text-xs ml-0.5">GB</span></div>
+                  <div className="text-sm font-bold text-muted-foreground">{"套餐已使用流量"}</div>
+                  <div className="mt-1 text-[1.32rem] font-black tabular-nums text-foreground leading-none">{usedGB}<span className="text-xs ml-0.5">GB</span></div>
                 </div>
               </div>
               <div className="flex items-start justify-center gap-2">
-                <span className="mt-1.5 w-2 h-2 rounded-full bg-[#28D081] shrink-0" />
+                <span className="mt-1.5 w-2 h-2 rounded-full bg-success shrink-0" />
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-400">{"套餐总流量"}</div>
-                  <div className="mt-1 text-[1.32rem] font-black tabular-nums text-slate-800 leading-none">{totalDisplay}</div>
+                  <div className="text-sm font-bold text-muted-foreground">{"套餐总流量"}</div>
+                  <div className="mt-1 text-[1.32rem] font-black tabular-nums text-foreground leading-none">{totalDisplay}</div>
                 </div>
               </div>
             </div>
@@ -228,12 +228,12 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-2 gap-5 pt-0 text-center">
             <div>
-              <div className="text-base font-extrabold text-slate-400 leading-tight">{"套餐订阅时间"}</div>
-              <div className="mt-1 text-[1.05rem] font-black text-slate-800 leading-tight">{subscriptionTimeText}</div>
+              <div className="text-base font-extrabold text-muted-foreground leading-tight">{"套餐订阅时间"}</div>
+              <div className="mt-1 text-[1.05rem] font-black text-foreground leading-tight">{subscriptionTimeText}</div>
             </div>
             <div>
-              <div className="text-base font-extrabold text-slate-400 leading-tight">{"套餐结束时间"}</div>
-              <div className="mt-1 text-[1.05rem] font-black text-slate-800 leading-tight">{expireText}</div>
+              <div className="text-base font-extrabold text-muted-foreground leading-tight">{"套餐结束时间"}</div>
+              <div className="mt-1 text-[1.05rem] font-black text-foreground leading-tight">{expireText}</div>
             </div>
           </div>
 
@@ -241,7 +241,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={handleTrafficBoost}
-              className="h-10 px-9 rounded-full bg-gradient-to-r from-[#7357F6] to-[#8155F1] hover:opacity-95 active:scale-[0.98] transition-all text-white text-sm font-black cursor-pointer inline-flex items-center gap-2 shadow-sm shadow-[#6C5CFF]/20"
+              className="h-10 px-9 rounded-full bg-gradient-to-r from-primary to-primary hover:opacity-95 active:scale-[0.98] transition-all text-white text-sm font-black cursor-pointer inline-flex items-center gap-2 shadow-sm shadow-primary/20"
             >
               <I.Bag />
               {"流量加油"}
@@ -253,7 +253,7 @@ export default function ProfilePage() {
         <button
           type="button"
           onClick={handleRenew}
-          className="shrink-0 w-full h-11 rounded-full bg-gradient-to-r from-[#FFE0B6] to-[#FFC083] hover:opacity-95 active:scale-[0.98] transition-all text-[#3F2507] font-black text-base cursor-pointer"
+          className="shrink-0 w-full h-11 rounded-full bg-gradient-to-r from-amber-100 to-amber-200 hover:opacity-95 active:scale-[0.98] transition-all text-amber-950 font-black text-base cursor-pointer"
         >
           {"续费"}
         </button>

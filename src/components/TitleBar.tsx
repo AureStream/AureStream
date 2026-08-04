@@ -91,21 +91,23 @@ export default function TitleBar() {
 
   // Windows / Linux icon controls.
   const btn =
-    "w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-text hover:bg-surface-active/70 transition-colors cursor-pointer"
+    "flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
   const winControls = (
-    <div className="flex items-center gap-1 shrink-0">
-      <button className={btn} title="Minimize" onClick={minimize}>
+    <div className="flex shrink-0 items-center gap-1">
+      <button type="button" className={btn} title="Minimize" onClick={minimize}>
         <Min />
       </button>
       <button
+        type="button"
         disabled
-        className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted/40 cursor-not-allowed opacity-50"
+        className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-lg text-muted-foreground/40 opacity-50"
         title="Maximize"
       >
         <Max />
       </button>
       <button
-        className="w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-white hover:bg-danger transition-colors cursor-pointer"
+        type="button"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
         title="Close"
         onClick={close}
       >
