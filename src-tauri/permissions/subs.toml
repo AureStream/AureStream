@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-subs"
+description = "Allows AureStream subscription IPC commands"
+commands.allow = [
+  "subs_sync",
+  "subs_list"
+]

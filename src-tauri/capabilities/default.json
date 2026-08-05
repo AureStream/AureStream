@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "allow-auth"
+    "allow-auth",
+    "allow-subs"
   ]
 }

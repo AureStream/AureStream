@@ -7,7 +7,7 @@ pub use error::ApiError;
 pub use subscriptions::Subscription;
 
 use auth::{login, register, verify_register};
-use subscriptions::list_subscriptions;
+use subscriptions::{fetch_subscription_body, list_subscriptions};
 
 pub const DEFAULT_BASE_URL: &str = "https://aurestream-api.chilix.ccwu.cc/api";
 
@@ -50,6 +50,11 @@ impl ApiClient {
         access_token: &str,
     ) -> Result<Vec<Subscription>, ApiError> {
         list_subscriptions(&self.http, &self.base, access_token).await
+    }
+
+    /// Download raw subscription document from a provider URL (not the Worker API).
+    pub async fn fetch_subscription_body(&self, url: &str) -> Result<String, ApiError> {
+        fetch_subscription_body(&self.http, url).await
     }
 }
 

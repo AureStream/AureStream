@@ -42,3 +42,28 @@ pub(crate) async fn list_subscriptions(
 
     Ok(body.subscriptions)
 }
+
+/// HTTP GET the subscription provider URL and return the raw body text.
+pub(crate) async fn fetch_subscription_body(
+    http: &reqwest::Client,
+    url: &str,
+) -> Result<String, ApiError> {
+    let response = http
+        .get(url)
+        .send()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
+
+    if !response.status().is_success() {
+        return Err(ApiError::from_code(
+            "subscription_fetch_failed",
+            response.status().as_u16(),
+            None,
+        ));
+    }
+
+    response
+        .text()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))
+}

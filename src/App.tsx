@@ -2,9 +2,11 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import LoginPage from "@/components/LoginPage";
 import RegisterPage from "@/components/RegisterPage";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { SubsProvider, useSubs } from "@/contexts/SubsContext";
 
 function HomePage() {
   const { user, logout, authLoading } = useAuth();
+  const { subscriptions, nodes, syncing, activeId } = useSubs();
 
   return (
     <div className="home-page">
@@ -14,6 +16,13 @@ function HomePage() {
         <div className="home-session">
           <p>
             已登录：<strong>{user.email}</strong>
+          </p>
+          <p className="home-subs-hint">
+            {syncing
+              ? "正在同步订阅…"
+              : `订阅 ${subscriptions.length} 个 · 节点 ${nodes.length} 个${
+                  activeId ? ` · 当前 ${activeId.slice(0, 8)}…` : ""
+                }`}
           </p>
           <button
             className="auth-btn"
@@ -44,13 +53,15 @@ function HomePage() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-        </Routes>
-      </BrowserRouter>
+      <SubsProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+          </Routes>
+        </BrowserRouter>
+      </SubsProvider>
     </AuthProvider>
   );
 }

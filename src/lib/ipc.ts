@@ -63,4 +63,43 @@ export async function onAuthChanged(
   });
 }
 
+export type SubSummary = {
+  id: string;
+  name: string;
+  trafficUsed: number;
+  trafficTotal: number;
+  expireTime: number;
+};
+
+export type NodeInfo = {
+  tag: string;
+  name: string;
+  protocol: string;
+};
+
+export type SubsUpdatedPayload = {
+  subscriptions: SubSummary[];
+  activeId: string | null;
+  nodes: NodeInfo[];
+};
+
+export const SUBS_UPDATED_EVENT = "subs-updated";
+
+/** Fire-and-forget friendly: returns when sync finishes, but callers should not await before navigate. */
+export async function subsSync(): Promise<SubsUpdatedPayload> {
+  return invoke<SubsUpdatedPayload>("subs_sync");
+}
+
+export async function subsList(): Promise<SubsUpdatedPayload> {
+  return invoke<SubsUpdatedPayload>("subs_list");
+}
+
+export async function onSubsUpdated(
+  handler: (payload: SubsUpdatedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SubsUpdatedPayload>(SUBS_UPDATED_EVENT, (event) => {
+    handler(event.payload);
+  });
+}
+
 export { AuthError };
