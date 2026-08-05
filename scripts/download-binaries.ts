@@ -12,15 +12,14 @@ const __dirname = path.dirname(__filename);
 const BINARY_NAME = 'xray';
 const GITHUB_RELEASE_URL = 'https://github.com/XTLS/Xray-core/releases/download/';
 
-// Xray-core release assets always ship as a zip, on every platform (unlike
-// sing-box's tar.gz-for-unix/zip-for-windows split), and extract flat at the
-// archive root (no versioned subdirectory) — e.g. `Xray-macos-arm64-v8a.zip`
-// contains `xray`, `geoip.dat`, `geosite.dat`, `LICENSE`, `README.md`
-// directly, not `Xray-v26.3.27-macos-arm64-v8a/xray`.
+// Xray-core release assets always ship as a zip, on every platform, and extract
+// flat at the archive root (no versioned subdirectory) — e.g.
+// `Xray-macos-arm64-v8a.zip` contains `xray`, `geoip.dat`, `geosite.dat`, …
 //
-// Supported target architecture mapping: Rust target triple -> Xray asset
-// platform/arch component (verified against the real release asset list via
-// `gh api repos/XTLS/Xray-core/releases/latest`).
+// Sidecar is staged as `aurestream-core-<rust-target-triple>` for Tauri
+// `externalBin` + engine `resolve_sidecar_path`.
+//
+// MVP: system-proxy only — do not stage wintun.dll / TUN helpers.
 const RUST_TARGET_TRIPLES = {
     "darwin": {
         "arm64": { targetTriple: "aarch64-apple-darwin", assetSuffix: "macos-arm64-v8a" },
@@ -46,7 +45,7 @@ async function downloadFile(url: string, dest: string, maxRetries: number = 3): 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
 
             const response = await fetch(url, {
                 signal: controller.signal,
@@ -61,17 +60,16 @@ async function downloadFile(url: string, dest: string, maxRetries: number = 3): 
             }
 
             await streamPipeline(response.body as any, createWriteStream(dest));
-            return; // Success, exit function
+            return;
         } catch (error) {
             lastError = error as Error;
 
-            // Clean up partial download if it exists
             if (fs.existsSync(dest)) {
                 fs.unlinkSync(dest);
             }
 
             if (attempt < maxRetries) {
-                const waitTime = attempt * 1000; // Progressive delay: 1s, 2s, 3s
+                const waitTime = attempt * 1000;
                 console.warn(`Download attempt ${attempt} failed for '${url}': ${lastError.message}. Retrying in ${waitTime}ms...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
@@ -85,8 +83,7 @@ async function extractZip(filePath: string, tmpDir: string): Promise<void> {
     await fs.createReadStream(filePath).pipe(unzipper.Extract({ path: tmpDir })).promise();
 }
 
-/** First platform/arch processed writes geoip.dat/geosite.dat (identical
- *  content across platforms — no point downloading twice-per-arch). */
+/** First platform/arch processed writes geoip.dat/geosite.dat (identical across platforms). */
 let geoDataSaved = false;
 
 async function embeddingExternalBinaries(
@@ -99,43 +96,29 @@ async function embeddingExternalBinaries(
     const { targetTriple, assetSuffix } = target;
     const fileName = `Xray-${assetSuffix}.zip`;
     const downloadUrl = `${GITHUB_RELEASE_URL}${XRAY_VERSION}/${fileName}`;
-    // 为每个任务创建唯一的临时目录
     const tmpDir = path.join(__dirname, 'tmp', `${platform}-${arch}-${Date.now()}-${Math.random().toString(36).substring(7)}`);
     const downloadPath = path.join(tmpDir, fileName);
 
     try {
-        // Create temporary directory
         !fs.existsSync(tmpDir) && fs.mkdirSync(tmpDir, { recursive: true });
 
-        // Download and extract file
         console.log(`Downloading Xray-core ${platform}-${arch}-${XRAY_VERSION}...`);
         await downloadFile(downloadUrl, downloadPath);
         await extractZip(downloadPath, tmpDir);
 
-        // Move binary to target location (flat extraction, no version subdir)
         const extractedFilePath = path.join(tmpDir, `${BINARY_NAME}${extension}`);
         const targetPath = `src-tauri/binaries/aurestream-core-${targetTriple}${extension}`;
 
-        // Ensure target directory exists
         const targetDir = path.dirname(targetPath);
         !fs.existsSync(targetDir) && fs.mkdirSync(targetDir, { recursive: true });
 
-        // Move file and cleanup
         fs.renameSync(extractedFilePath, targetPath);
 
-        // unzipper doesn't restore the Unix executable bit from the zip's
-        // stored permissions (unlike tar, which the old sing-box script used
-        // for unix platforms specifically to avoid this) — every Xray-core
-        // release asset is a zip, on every platform, so this is needed here.
+        // unzipper does not restore the Unix executable bit from zip permissions.
         if (platform !== 'windows') {
             fs.chmodSync(targetPath, 0o755);
         }
 
-        // geoip.dat/geosite.dat ship in every platform's zip with identical
-        // content — grab them once for the routing rules (geosite:cn etc.).
-        // The check-and-claim below is synchronous (no `await` in between),
-        // so it's race-safe under Node's single-threaded event loop even
-        // with these tasks running concurrently via Promise.all.
         const resourcesDir = 'src-tauri/resources';
         !fs.existsSync(resourcesDir) && fs.mkdirSync(resourcesDir, { recursive: true });
         if (!geoDataSaved) {
@@ -148,19 +131,7 @@ async function embeddingExternalBinaries(
             }
         }
 
-        // Windows TUN inbound loads wintun.dll from the same directory as
-        // xray/aurestream-core. Official Xray zips ship the matching arch
-        // DLL — stage per-triple so the runtime can pick the right one.
-        if (platform === 'windows') {
-            const wintunSrc = path.join(tmpDir, 'wintun.dll');
-            if (fs.existsSync(wintunSrc)) {
-                const staged = path.join(resourcesDir, `wintun-${targetTriple}.dll`);
-                fs.copyFileSync(wintunSrc, staged);
-                console.log(`  staged ${staged}`);
-            } else {
-                console.warn(`  wintun.dll missing from ${fileName} — Windows TUN will fail without it`);
-            }
-        }
+        // MVP: skip wintun.dll / TUN staging (system-proxy only).
 
         fs.rmSync(tmpDir, { recursive: true, force: true });
 
@@ -193,10 +164,9 @@ async function downloadEmbeddingExternalBinaries(): Promise<void> {
     await Promise.all(downloadTasks);
 }
 
-// 并行执行所有下载任务
 {
     const scriptStartTime = Date.now();
-    console.log('Starting downloads...\n');
+    console.log('Starting Xray-core downloads (MVP: no TUN assets)...\n');
 
     downloadEmbeddingExternalBinaries().then(() => {
         const totalElapsed = ((Date.now() - scriptStartTime) / 1000).toFixed(2);

@@ -154,31 +154,20 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Download external binaries and databases
+      - name: Download Xray sidecar and geo databases
         run: pnpm download-binaries
 
-      - name: Build Windows TUN service
-        if: runner.os == 'Windows'
-        run: pnpm build-tun --release --target ${{ matrix.rust_target }}
-
-      - name: Build macOS privileged helper
-        if: runner.os == 'macOS'
+      - name: Check frontend + workspace crates
         run: |
-          # Empty APPLE_SIGNING_IDENTITY overrides tauri.conf.json ad-hoc "-"; only export when set.
-          if [[ -n "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]]; then
-            export APPLE_SIGNING_IDENTITY='${{ secrets.APPLE_SIGNING_IDENTITY }}'
-          fi
-          pnpm pre-bundle
+          pnpm build
+          cargo check --workspace
 
-      - name: Work around ldd crash on static sing-box binary (Linux)
+      - name: Work around ldd crash on static Xray binary (Linux)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
-          # sing-box (aurestream-core) is a statically-linked Go binary.
-          # linuxdeploy runs `ldd` on every ELF in the AppDir to discover
-          # shared libraries; ldd exits 1 on static binaries, and the C++
-          # runtime inside linuxdeploy throws std::runtime_error instead
-          # of handling it gracefully.  Replace ldd with a wrapper that
-          # returns success for static ELFs.
+          # aurestream-core (Xray-core) is a statically-linked Go binary.
+          # linuxdeploy runs `ldd` on every ELF in the AppDir; ldd exits 1 on
+          # static binaries and linuxdeploy throws. Wrap ldd for static ELFs.
           sudo cp /usr/bin/ldd /usr/bin/ldd.orig
           sudo cp scripts/ldd-static-safe.sh /usr/bin/ldd
           sudo chmod +x /usr/bin/ldd
@@ -194,19 +183,7 @@ jobs:
         with:
           args: >-
             --target ${{ matrix.rust_target }}
-            ${{ startsWith(matrix.os, 'ubuntu') && '--config src-tauri/tauri.linux.conf.json' || '' }}
             --verbose
-
-      - name: Sign macOS app bundle for SMJobBless
-        if: runner.os == 'macOS'
-        run: |
-          if [[ -n "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]]; then
-            export APPLE_SIGNING_IDENTITY='${{ secrets.APPLE_SIGNING_IDENTITY }}'
-          fi
-          APP=$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
-          if [[ -n "$APP" ]]; then
-            bash scripts/post-sign-macos-bundle.sh "$APP"
-          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

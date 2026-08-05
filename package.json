@@ -10,6 +10,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "download-binaries": "tsx scripts/download-binaries.ts",
+    "release": "pnpm download-binaries && pnpm build && pnpm tauri build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -26,9 +28,12 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/unzipper": "^0.10.11",
     "@vitejs/plugin-react": "^4.6.0",
     "tailwindcss": "^4.1.8",
+    "tsx": "^4.19.0",
     "typescript": "~5.8.3",
+    "unzipper": "^0.12.3",
     "vite": "^7.0.4",
     "vitest": "^4.1.8"
   }

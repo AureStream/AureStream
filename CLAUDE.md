@@ -2,21 +2,23 @@
 
 Guidance for Claude Code and other agents in this repository.
 
-**Canonical project rules**: see [`AGENTS.md`](./AGENTS.md) (kept current for the mobile-shell / auth rewrite).  
-**Full wiki**: [`docs/index.md`](./docs/index.md) — prefer code when docs lag.
+**Canonical project rules**: see [`AGENTS.md`](./AGENTS.md) (v2 MVP).  
+**Design spec**: [`docs/superpowers/specs/2026-08-05-aurestream-v2-boundaries-design.md`](./docs/superpowers/specs/2026-08-05-aurestream-v2-boundaries-design.md)  
+**Wiki**: [`docs/index.md`](./docs/index.md) — prefer code + v2 spec when older wiki pages lag.
 
 ## Quick orientation
 
-AureStream is a cross-platform proxy/VPN client: **Tauri v2** (Rust) + **React/TypeScript** frontend + **Xray-core** sidecar.
+AureStream **v2 MVP**: **Tauri v2** + **React/TypeScript** + **Xray-core** sidecar (`aurestream-core`). System proxy only (no TUN).
 
 | Area | Location |
 |---|---|
-| Frontend | `src/` — React Router app (`/login`, `/register`, `/dashboard/*`) |
-| Config merge | `src/config/merger/`, `src/lib/config-sync.ts`, `connection-flow.ts` |
-| Xray helpers | `src/utils/xray-api/` |
-| Rust engine | `src-tauri/src/engine/` |
-| Tauri commands | `src-tauri/src/core/`, `src-tauri/src/commands/` |
-| Privilege / TUN / proxy | `crates/aurestream-plugin-*` |
+| Frontend | `src/` — `/login`, `/register`, shell `/` `/nodes` `/profile` |
+| Tauri shell / IPC | `src-tauri/` |
+| Auth + subscriptions HTTP | `crates/aurestream-api-client/` |
+| Subscription decode | `crates/aurestream-config/` (`ProxyNode` only) |
+| Engine + Xray dialect | `crates/aurestream-engine/` |
+| System proxy | `crates/aurestream-platform-proxy/` |
+| Archived pre-v2 app | `legacy/` — **do not maintain features here** |
 
 ## Common commands
 
@@ -26,39 +28,25 @@ pnpm tauri dev           # Desktop app
 pnpm build               # tsc + vite build
 pnpm test                # vitest run
 pnpm tauri build         # Full Tauri build
-pnpm download-binaries   # Xray-core + geo rule DBs
-pnpm build-tun           # Windows TUN service
-pnpm pre-bundle          # macOS privileged helper
-pnpm release             # binaries + tun + build + tauri build
+pnpm download-binaries   # Xray → src-tauri/binaries/aurestream-core-* + geo DBs
+pnpm release             # binaries + build + tauri build (no TUN)
 
 # Rust
-cargo check              # from repo root or src-tauri/
-cargo build
+cargo check --workspace
+cargo test --workspace
 ```
 
 ## Architecture snapshot
 
-**Three-tier I/O**
+1. Frontend → Rust: `invoke()` (auth / subs / engine)
+2. Rust → Frontend: events (`auth-changed`, `subs-updated`, `engine-state`, …)
+3. Engine builds Xray JSON via `build_config`, runs sidecar; shell sets/clears system proxy
 
-1. Frontend → Rust: `invoke()` (handlers registered in `src-tauri/src/lib.rs`)
-2. Rust → Frontend: events (`engine-state`, `tauri-log`, …)
-3. Frontend → Xray: `src/utils/xray-api/` + Tauri commands (`select_node`, traffic events)
+**MVP constraints**: no TUN / no privileged helper in default path; `legacy/` is reference only.
 
-**Engine**: `Idle → Starting → Running → Stopping → Idle` (+ `Failed`) in `state_machine.rs`.
+**UI copy**: Chinese-only (no i18n). Path alias: `@/*` → `./src/*`.
 
-**Config**: debounced pre-merge (`config-sync`) → cache key skip → connect (`connection-flow`) / hot reload (`reload_config`).
-
-**UI (current branch)**: auth-gated react-router app; dashboard routes to `MobileHome`, `NodesPage`, `ProfilePage`, `AboutPage`. Contexts: `AuthContext`, `UpdateContext`.
-
-**Persistence**: `settings.json` (plugin-store), `data.db` (plugin-sql).
-
-**UI copy**: Chinese-only (no i18n).
-
-**Path alias**: `@/*` → `./src/*`.
-
-**UI**: shadcn/ui new-york + Tailwind v4 CSS variables in `src/index.css`. Add components with `npx shadcn@latest add <name>`.
-
-For detailed conventions, file map, and “where to look first”, use **AGENTS.md**.
+For detailed conventions and “where to look first”, use **AGENTS.md**.
 
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands

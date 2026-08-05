@@ -35,9 +35,12 @@ src-tauri/gen/
 .gemini/
 .claude/
 
-# External binaries (downloaded at build time)
+# External binaries / geo DBs (downloaded at build time)
 src-tauri/binaries/
+src-tauri/resources/geoip.dat
+src-tauri/resources/geosite.dat
 src-tauri/*.db
+scripts/tmp/
 src-tauri/resources/*.db
 src-tauri/resources/*.dat
 src-tauri/resources/rules/
