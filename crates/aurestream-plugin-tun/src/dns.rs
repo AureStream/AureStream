@@ -93,6 +93,20 @@ pub fn nameserver_with_gateway_first<'a>(current: &'a str, gateway: &'a str) -> 
     servers
 }
 
+/// DNS list used while TUN is up: **only** the hijack resolver.
+///
+/// Do not preserve the NIC's previous NameServer list — domestic fallbacks
+/// like `114.114.114.114` will answer poisoned A records for YouTube/Google
+/// when the tunneled `1.1.1.1`/`8.8.8.8` path is slow and Windows times out.
+pub fn nameserver_tun_hijack_only(hijack: &str) -> Vec<&str> {
+    let g = hijack.trim();
+    if g.is_empty() || g == "-" {
+        Vec::new()
+    } else {
+        vec![g]
+    }
+}
+
 pub fn nameserver_without_gateway<'a>(current: &'a str, gateway: &str) -> Vec<&'a str> {
     let g = gateway.trim();
     parse_nameserver_value(current)
@@ -323,7 +337,7 @@ pub fn apply_override(gateway: &str) -> (usize, usize) {
         if !it.is_candidate_for_dns_override() {
             continue;
         }
-        let servers = nameserver_with_gateway_first(&it.current_dns, g);
+        let servers = nameserver_tun_hijack_only(g);
         match set_interface_dns(&it.guid, &servers) {
             Ok(()) => {
                 log_line(&format!(
@@ -523,6 +537,17 @@ mod tests {
             format_nameserver_value(&servers),
             "198.18.0.1,8.8.8.8,1.1.1.1"
         );
+    }
+
+    #[test]
+    fn nameserver_tun_hijack_only_drops_domestic_fallbacks() {
+        // apply_override must not keep 114 alongside the hijack IP.
+        assert_eq!(
+            format_nameserver_value(&nameserver_tun_hijack_only("1.1.1.1")),
+            "1.1.1.1"
+        );
+        assert!(nameserver_tun_hijack_only("").is_empty());
+        assert!(nameserver_tun_hijack_only("-").is_empty());
     }
 
     #[test]

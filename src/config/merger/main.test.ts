@@ -244,7 +244,7 @@ describe("config merger (Xray-core, local template)", () => {
     expect(written.dns.enableParallelQuery).toBeUndefined()
   })
 
-  it("adds the tun inbound with routeOnly sniffing when tun=true in rule mode", async () => {
+  it("adds the tun inbound with destOverride sniffing when tun=true in rule mode", async () => {
     const { setRuleConfig, makeProfile } = await import("./main")
     expect(makeProfile("rule", true)).toEqual({ mode: "tun" })
 
@@ -263,10 +263,12 @@ describe("config merger (Xray-core, local template)", () => {
     expect(tunInbound.settings.autoSystemRoutingTable).not.toContain("0.0.0.0/0")
     expect(tunInbound.settings.autoSystemRoutingTable).not.toContain("::/0")
     expect(tunInbound.settings.autoSystemRoutingTable.length).toBeGreaterThan(40)
+    // routeOnly must be false: OS DNS can be poisoned; destOverride re-resolves
+    // sniffed SNI via Xray DNS so TLS is not sent to the wrong IP.
     expect(tunInbound.sniffing).toEqual({
       enabled: true,
       destOverride: ["http", "tls", "quic"],
-      routeOnly: true,
+      routeOnly: false,
     })
     // DNS module tags first, then TUN-scoped port-53 capture (avoid dns-out loop).
     expect(written.routing.rules[0]).toEqual({

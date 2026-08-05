@@ -261,8 +261,10 @@ const IPV4_EXCLUDING_LAN: string[] = [
  * Xray's own `geoip:private -> direct` rule still routes it correctly, just
  * via an extra TUN hop instead of being excluded at the OS routing level.
  *
- * Sniffing uses `routeOnly: true` so the real destination IP is kept for
- * IP-first geo routing after domain sniff (XTLS realIp transparent guidance).
+ * Sniffing uses `destOverride` with `routeOnly: false` so sniffed SNI/Host
+ * re-resolves through Xray DNS. Keeping the OS destination IP (`routeOnly:
+ * true`) breaks sites like YouTube when Windows falls back to a polluted
+ * resolver (e.g. 114) and returns a wrong A record.
  */
 function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<string, unknown> {
   const ipv4Table = bypassRouter ? ["0.0.0.0/0"] : [...IPV4_EXCLUDING_LAN]
@@ -298,8 +300,8 @@ function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<str
     sniffing: {
       enabled: true,
       destOverride: ["http", "tls", "quic"],
-      // Keep real destination IP for geoip routing after domain sniff.
-      routeOnly: true,
+      // false: replace dial target with Xray-resolved IP for sniffed domain.
+      routeOnly: false,
     },
   }
 }
