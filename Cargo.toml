@@ -1,3 +1,8 @@
 [workspace]
-members = ["crates/aurestream-api-client", "crates/aurestream-config", "src-tauri"]
+members = [
+    "crates/aurestream-api-client",
+    "crates/aurestream-config",
+    "crates/aurestream-platform-proxy",
+    "src-tauri",
+]
 resolver = "2"
