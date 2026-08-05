@@ -75,7 +75,24 @@ export type NodeInfo = {
   tag: string;
   name: string;
   protocol: string;
+  /** Server host for TCP latency probe. */
+  server?: string;
+  /** Server port for TCP latency probe. */
+  port?: number;
 };
+
+/** TCP connect RTT in ms; rejects on timeout / error. */
+export async function pingTcp(
+  host: string,
+  port: number,
+  timeoutMs?: number,
+): Promise<number> {
+  return invoke<number>("ping_tcp", {
+    host,
+    port,
+    timeoutMs: timeoutMs ?? null,
+  });
+}
 
 export type SubsUpdatedPayload = {
   subscriptions: SubSummary[];

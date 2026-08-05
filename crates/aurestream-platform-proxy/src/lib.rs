@@ -46,43 +46,59 @@ pub fn is_supported() -> bool {
 /// On macOS this is applied to every enabled network service. On Linux the
 /// preferred desktop backend is tried first, then the alternate.
 pub fn set_system_proxy(host: &str, port: u16) -> Result<(), ProxyError> {
-    #[cfg(target_os = "windows")]
-    {
-        windows::set_system_proxy(host, port)
+    log::info!("set_system_proxy {host}:{port}");
+    let result = {
+        #[cfg(target_os = "windows")]
+        {
+            windows::set_system_proxy(host, port)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            macos::set_system_proxy(host, port)
+        }
+        #[cfg(target_os = "linux")]
+        {
+            linux::set_system_proxy(host, port)
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        {
+            let _ = (host, port);
+            Err(ProxyError::Unsupported("this OS has no system-proxy backend"))
+        }
+    };
+    match &result {
+        Ok(()) => log::info!("set_system_proxy ok {host}:{port}"),
+        Err(e) => log::error!("set_system_proxy failed: {e}"),
     }
-    #[cfg(target_os = "macos")]
-    {
-        macos::set_system_proxy(host, port)
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux::set_system_proxy(host, port)
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        let _ = (host, port);
-        Err(ProxyError::Unsupported("this OS has no system-proxy backend"))
-    }
+    result
 }
 
 /// Disable the OS system proxy.
 pub fn clear_system_proxy() -> Result<(), ProxyError> {
-    #[cfg(target_os = "windows")]
-    {
-        windows::clear_system_proxy()
+    log::info!("clear_system_proxy");
+    let result = {
+        #[cfg(target_os = "windows")]
+        {
+            windows::clear_system_proxy()
+        }
+        #[cfg(target_os = "macos")]
+        {
+            macos::clear_system_proxy()
+        }
+        #[cfg(target_os = "linux")]
+        {
+            linux::clear_system_proxy()
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+        {
+            Err(ProxyError::Unsupported("this OS has no system-proxy backend"))
+        }
+    };
+    match &result {
+        Ok(()) => log::info!("clear_system_proxy ok"),
+        Err(e) => log::error!("clear_system_proxy failed: {e}"),
     }
-    #[cfg(target_os = "macos")]
-    {
-        macos::clear_system_proxy()
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux::clear_system_proxy()
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        Err(ProxyError::Unsupported("this OS has no system-proxy backend"))
-    }
+    result
 }
 
 #[cfg(test)]

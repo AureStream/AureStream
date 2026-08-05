@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-network"
+description = "Allows TCP latency probe for node speed test"
+commands.allow = ["ping_tcp"]

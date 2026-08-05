@@ -1,8 +1,8 @@
 import { FormEvent, useState } from "react"
 import { Link, Navigate, useLocation } from "react-router-dom"
 import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react"
+import { useAlert } from "@/contexts/AlertContext"
 import { useAuth } from "@/contexts/AuthContext"
-import { AuthError } from "@/lib/auth-errors"
 import { AuthMobileField } from "@/components/auth-mobile-field"
 import { cn } from "@/lib/utils"
 
@@ -10,6 +10,7 @@ const REMEMBER_KEY = "aurestream.auth.remember"
 
 export default function LoginPage() {
   const { user, authLoading, login } = useAuth()
+  const { showErrorFromUnknown, showInfo } = useAlert()
   const location = useLocation()
 
   const [email, setEmail] = useState("")
@@ -22,8 +23,6 @@ export default function LoginPage() {
       return false
     }
   })
-  const [error, setError] = useState("")
-  const [info, setInfo] = useState("")
   const [successMessage] = useState(() => {
     const state = location.state as { message?: string } | null
     return state?.message ?? ""
@@ -35,7 +34,6 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    setError("")
     try {
       try {
         localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0")
@@ -44,12 +42,12 @@ export default function LoginPage() {
       }
       await login(email.trim(), password)
     } catch (err) {
-      setError(err instanceof AuthError ? err.message : "登录失败")
+      showErrorFromUnknown(err, "登录失败", "登录失败")
     }
   }
 
   const handleForgot = () => {
-    setInfo("忘记密码功能即将推出，敬请期待。")
+    showInfo("忘记密码功能即将推出，敬请期待。")
   }
 
   return (
@@ -60,19 +58,9 @@ export default function LoginPage() {
             登录
           </h1>
 
-          {error ? (
-            <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-              {error}
-            </div>
-          ) : null}
           {successMessage ? (
             <div className="mb-3 rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-xs font-medium text-success">
               {successMessage}
-            </div>
-          ) : null}
-          {info && !error ? (
-            <div className="mb-3 rounded-xl border border-[#eceef1] bg-[#f1f2f4] px-3 py-2 text-xs font-medium text-[#6b7280]">
-              {info}
             </div>
           ) : null}
 

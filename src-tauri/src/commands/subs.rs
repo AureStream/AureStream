@@ -96,6 +96,7 @@ pub async fn subs_sync(
         retry_after: None,
     })?;
 
+    log::info!("subs_sync begin");
     let client = api_client();
     let remote = client
         .list_subscriptions(&token)
@@ -117,7 +118,7 @@ pub async fn subs_sync(
                 if let Some(prev) = previous.bodies.get(&sub.id) {
                     bodies.insert(sub.id.clone(), prev.clone());
                 }
-                let _ = err;
+                log::warn!("subs_sync body fetch failed id={}: {err}", sub.id);
             }
         }
     }
@@ -134,6 +135,13 @@ pub async fn subs_sync(
         nodes,
         bodies,
     };
+
+    log::info!(
+        "subs_sync ok subs={} nodes={} active={:?}",
+        snapshot.subscriptions.len(),
+        snapshot.nodes.len(),
+        snapshot.active_id
+    );
 
     subs.replace(snapshot.clone()).map_err(|e| SubsIpcError {
         code: e,

@@ -1,30 +1,31 @@
-import type { ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import AppShell from "@/components/AppShell";
-import HomePage from "@/components/HomePage";
-import LoginPage from "@/components/LoginPage";
-import NodesPage from "@/components/NodesPage";
-import ProfilePage from "@/components/ProfilePage";
-import RegisterPage from "@/components/RegisterPage";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { EngineProvider } from "@/contexts/EngineContext";
-import { SubsProvider } from "@/contexts/SubsContext";
+import type { ReactNode } from "react"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
+import AppShell from "@/components/AppShell"
+import HomePage from "@/components/HomePage"
+import LoginPage from "@/components/LoginPage"
+import NodesPage from "@/components/NodesPage"
+import ProfilePage from "@/components/ProfilePage"
+import RegisterPage from "@/components/RegisterPage"
+import { AlertProvider } from "@/contexts/AlertContext"
+import { AuthProvider, useAuth } from "@/contexts/AuthContext"
+import { EngineProvider } from "@/contexts/EngineContext"
+import { SubsProvider } from "@/contexts/SubsContext"
 
 /** Auth route gate only — never waits on subs sync / sessionReady. */
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user } = useAuth()
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace />
   }
-  return children;
+  return children
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user } = useAuth()
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/" replace />
   }
-  return children;
+  return children
 }
 
 function AppRoutes() {
@@ -59,21 +60,23 @@ function AppRoutes() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  );
+  )
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <SubsProvider>
-        <EngineProvider>
-          <BrowserRouter>
-            <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-background">
-              <AppRoutes />
-            </div>
-          </BrowserRouter>
-        </EngineProvider>
-      </SubsProvider>
-    </AuthProvider>
-  );
+    <AlertProvider>
+      <AuthProvider>
+        <SubsProvider>
+          <EngineProvider>
+            <BrowserRouter>
+              <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-background">
+                <AppRoutes />
+              </div>
+            </BrowserRouter>
+          </EngineProvider>
+        </SubsProvider>
+      </AuthProvider>
+    </AlertProvider>
+  )
 }

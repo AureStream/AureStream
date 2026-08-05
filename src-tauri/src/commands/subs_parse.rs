@@ -4,7 +4,7 @@ use aurestream_config::decode_subscription_body;
 
 use crate::state::NodeInfo;
 
-/// Extract `{ tag, name, protocol }` using the same decode path as engine start.
+/// Extract `{ tag, name, protocol, server, port }` using the same decode path as engine start.
 ///
 /// Falls back to an empty list when the body is not a recognized URI list
 /// (Clash YAML / pre-shaped JSON are out of MVP decode scope).
@@ -16,6 +16,8 @@ pub fn extract_nodes_from_body(body: &str) -> Vec<NodeInfo> {
                 tag: n.tag,
                 name: n.name,
                 protocol: n.protocol,
+                server: n.server,
+                port: n.port,
             })
             .collect(),
         Err(_) => Vec::new(),
@@ -37,9 +39,13 @@ trojan://secret@example.com:443#JP%20Node
         assert_eq!(nodes[0].protocol, "vless");
         assert_eq!(nodes[0].tag, "HK-1");
         assert_eq!(nodes[0].name, "HK-1");
+        assert_eq!(nodes[0].server, "example.com");
+        assert_eq!(nodes[0].port, 443);
         assert_eq!(nodes[1].protocol, "trojan");
         assert_eq!(nodes[1].tag, "JP Node");
         assert_eq!(nodes[1].name, "JP Node");
+        assert_eq!(nodes[1].server, "example.com");
+        assert_eq!(nodes[1].port, 443);
     }
 
     #[test]

@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAlert } from "@/contexts/AlertContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   onSubsUpdated,
@@ -50,6 +51,7 @@ function applyPayload(
 
 export function SubsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { showErrorFromUnknown } = useAlert();
   const [subscriptions, setSubscriptions] = useState<SubSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
@@ -82,13 +84,14 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       .then((payload) => {
         applyPayload(payload, setSubscriptions, setActiveId, setNodes);
       })
-      .catch(() => {
-        // Keep last good cache.
+      .catch((err) => {
+        // Keep last good cache; surface error in dialog.
+        showErrorFromUnknown(err, "订阅同步失败", "同步失败");
       })
       .finally(() => {
         setSyncing(false);
       });
-  }, [user]);
+  }, [user, showErrorFromUnknown]);
 
   // Mount / login / restore: hydrate cache then background sync. Never blocks Home.
   useEffect(() => {
@@ -119,7 +122,11 @@ export function SubsProvider({ children }: { children: ReactNode }) {
           applyPayload(payload, setSubscriptions, setActiveId, setNodes);
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (!cancelled) {
+          showErrorFromUnknown(err, "订阅同步失败", "同步失败");
+        }
+      })
       .finally(() => {
         if (!cancelled) setSyncing(false);
       });
@@ -127,7 +134,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, showErrorFromUnknown]);
 
   return (
     <SubsContext.Provider

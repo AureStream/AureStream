@@ -5,9 +5,15 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:tray:default",
     "opener:default",
     "allow-auth",
     "allow-subs",
-    "allow-engine"
+    "allow-engine",
+    "allow-network"
   ]
 }

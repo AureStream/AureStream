@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod engine;
+pub mod network;
 pub mod subs;
 pub mod subs_parse;
 
@@ -9,4 +10,5 @@ pub use auth::{
 pub use engine::{
     engine_get_state, engine_select_node, engine_start, engine_stop, EngineAppState,
 };
+pub use network::ping_tcp;
 pub use subs::{subs_list, subs_sync};

@@ -63,6 +63,7 @@ pub async fn auth_login(
             status: 0,
             retry_after: None,
         })?;
+    log::info!("auth_login ok email={}", user.email);
     emit_auth_changed(&app, Some(user.clone()));
     Ok(user)
 }
@@ -91,6 +92,7 @@ pub async fn auth_verify(email: String, code: String) -> Result<User, AuthIpcErr
 #[tauri::command]
 pub async fn auth_logout(app: AppHandle, state: State<'_, AuthState>) -> Result<(), String> {
     state.clear()?;
+    log::info!("auth_logout");
     emit_auth_changed(&app, None);
     Ok(())
 }
@@ -110,6 +112,10 @@ pub fn auth_restore(app: AppHandle, state: State<'_, AuthState>) -> Result<(), S
 
 pub fn spawn_initial_restore(app: &AppHandle, state: &AuthState) {
     let user = state.restore_from_disk();
+    log::info!(
+        "auth_restore session={}",
+        if user.is_some() { "present" } else { "none" }
+    );
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         emit_auth_changed(&handle, user);

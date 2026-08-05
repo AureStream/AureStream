@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react"
 import { Link, Navigate } from "react-router-dom"
 import { Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from "lucide-react"
+import { useAlert } from "@/contexts/AlertContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { AuthError } from "@/lib/auth-errors"
 import { AuthMobileField } from "@/components/auth-mobile-field"
@@ -18,6 +19,7 @@ const primaryBtnClass = cn(
 
 export default function RegisterPage() {
   const { user, authLoading, register, verifyAndLogin } = useAuth()
+  const { showError, showErrorFromUnknown, showInfo, showAlert } = useAlert()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -25,8 +27,6 @@ export default function RegisterPage() {
   const [code, setCode] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [error, setError] = useState("")
-  const [info, setInfo] = useState("")
   const [codeSent, setCodeSent] = useState(false)
   const [resendIn, setResendIn] = useState(0)
   const [sendingCode, setSendingCode] = useState(false)
@@ -56,12 +56,10 @@ export default function RegisterPage() {
 
   const handleSendCode = async () => {
     if (sendingCode || authLoading || resendIn > 0) return
-    setError("")
-    setInfo("")
 
     const validationError = validateCredentials()
     if (validationError) {
-      setError(validationError)
+      showError(validationError, "无法发送验证码")
       return
     }
 
@@ -69,14 +67,18 @@ export default function RegisterPage() {
     try {
       const pending = await register(email.trim(), password)
       setCodeSent(true)
-      setInfo(`验证码已发送至 ${pending.email}，${pending.expires_in} 秒内有效`)
+      showAlert({
+        kind: "success",
+        title: "验证码已发送",
+        message: `验证码已发送至 ${pending.email}，${pending.expires_in} 秒内有效`,
+      })
       startResendCooldown(DEFAULT_RESEND_COOLDOWN)
       setCode("")
     } catch (err) {
       if (err instanceof AuthError && err.code === "resend_too_soon") {
         startResendCooldown(err.retryAfter ?? DEFAULT_RESEND_COOLDOWN)
       }
-      setError(err instanceof AuthError ? err.message : "验证码发送失败")
+      showErrorFromUnknown(err, "验证码发送失败", "发送失败")
     } finally {
       setSendingCode(false)
     }
@@ -84,30 +86,28 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    setError("")
-    setInfo("")
 
     const validationError = validateCredentials()
     if (validationError) {
-      setError(validationError)
+      showError(validationError, "无法注册")
       return
     }
 
     if (!codeSent) {
-      setError("请先获取邮箱验证码")
+      showError("请先获取邮箱验证码", "无法注册")
       return
     }
 
     const normalized = code.replace(/\s/g, "")
     if (!/^\d{6}$/.test(normalized)) {
-      setError("请输入 6 位数字验证码")
+      showError("请输入 6 位数字验证码", "无法注册")
       return
     }
 
     try {
       await verifyAndLogin(email.trim(), password, normalized)
     } catch (err) {
-      setError(err instanceof AuthError ? err.message : "验证失败")
+      showErrorFromUnknown(err, "验证失败", "注册失败")
     }
   }
 
@@ -127,15 +127,16 @@ export default function RegisterPage() {
             注册
           </h1>
 
-          {error ? (
-            <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-              {error}
-            </div>
-          ) : null}
-          {info && !error ? (
-            <div className="mb-3 rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-xs font-medium text-success">
-              {info}
-            </div>
+          {codeSent ? (
+            <button
+              type="button"
+              onClick={() =>
+                showInfo("验证码已发送，请查收邮箱。若未收到可在冷却结束后重新发送。")
+              }
+              className="mb-3 rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-left text-xs font-medium text-success"
+            >
+              验证码已发送，点击查看说明
+            </button>
           ) : null}
 
           <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-2.5">
@@ -149,7 +150,6 @@ export default function RegisterPage() {
                 if (codeSent) {
                   setCodeSent(false)
                   setCode("")
-                  setInfo("")
                 }
               }}
               placeholder="邮箱地址"

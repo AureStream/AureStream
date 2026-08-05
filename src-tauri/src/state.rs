@@ -13,10 +13,17 @@ const SESSION_FILE: &str = "auth-session.json";
 const SUBS_FILE: &str = "subs.json";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NodeInfo {
     pub tag: String,
     pub name: String,
     pub protocol: String,
+    /// Server host for TCP latency probe (and display).
+    #[serde(default)]
+    pub server: String,
+    /// Server port for TCP latency probe.
+    #[serde(default)]
+    pub port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom"
+import { useAlert } from "@/contexts/AlertContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
@@ -29,6 +30,7 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const { user, authLoading, logout } = useAuth()
   const { subscriptions, activeId, syncing } = useSubs()
+  const { showErrorFromUnknown } = useAlert()
 
   const emailUser = user?.email ?? "User"
   const displayName = emailUser.split("@")[0]
@@ -49,8 +51,12 @@ export default function ProfilePage() {
   const expireText = hasSub ? formatDate(sub!.expireTime) : "--"
 
   const handleLogout = async () => {
-    await logout()
-    navigate("/login", { replace: true })
+    try {
+      await logout()
+      navigate("/login", { replace: true })
+    } catch (err) {
+      showErrorFromUnknown(err, "退出登录失败", "退出失败")
+    }
   }
 
   return (

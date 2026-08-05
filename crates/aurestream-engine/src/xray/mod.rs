@@ -4,13 +4,15 @@ mod config;
 
 pub use config::write_xray_config;
 
+use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aurestream_config::ProxyNode;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
 use tokio::time::{sleep, timeout, Instant};
@@ -24,6 +26,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SIDECAR_NAME: &str = "aurestream-core";
 const GEOIP_FILE: &str = "geoip.dat";
 const GEOSITE_FILE: &str = "geosite.dat";
+/// Sidecar log file stem prefix — matches shell `logging::CORE_LOG_PREFIX`.
+const CORE_LOG_PREFIX: &str = "aurestream-core";
 
 struct Runtime {
     sm: StateMachine,
@@ -37,6 +41,8 @@ pub struct XrayEngine {
     inner: Mutex<Runtime>,
     sidecar_override: Option<PathBuf>,
     asset_override: Option<PathBuf>,
+    /// Directory for `aurestream-core-YYYY-MM-DD.log` (OS app log dir).
+    log_dir: Option<PathBuf>,
 }
 
 impl XrayEngine {
@@ -50,6 +56,7 @@ impl XrayEngine {
             }),
             sidecar_override: None,
             asset_override: None,
+            log_dir: None,
         }
     }
 
@@ -63,6 +70,12 @@ impl XrayEngine {
     /// Prefer an explicit asset directory containing `geoip.dat` / `geosite.dat`.
     pub fn with_asset_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.asset_override = Some(path.into());
+        self
+    }
+
+    /// Write sidecar stdout/stderr into `{log_dir}/aurestream-core-YYYY-MM-DD.log`.
+    pub fn with_log_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.log_dir = Some(path.into());
         self
     }
 
@@ -117,6 +130,7 @@ impl Engine for XrayEngine {
     async fn start(&self, config: &Path) -> Result<(), EngineError> {
         let sidecar = self.resolve_sidecar()?;
         let asset_dir = self.resolve_assets(&sidecar);
+        let core_log = self.log_dir.as_ref().map(|d| prepare_core_log_path(d));
         let config_str = config
             .to_str()
             .ok_or_else(|| EngineError::io("config path is not valid UTF-8"))?
@@ -132,6 +146,18 @@ impl Engine for XrayEngine {
             guard.api_port = Some(api);
             (socks, api)
         };
+
+        log::info!(
+            "start sidecar={} config={} socks={} api={} core_log={}",
+            sidecar.display(),
+            config.display(),
+            socks_port,
+            api_port,
+            core_log
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<none>".into())
+        );
 
         let mut cmd = Command::new(&sidecar);
         cmd.args(["run", "-c", &config_str])
@@ -153,6 +179,7 @@ impl Engine for XrayEngine {
             Ok(c) => c,
             Err(e) => {
                 let reason = format!("spawn sidecar {}: {e}", sidecar.display());
+                log::error!("{reason}");
                 let mut guard = self.lock();
                 let _ = guard.sm.transition(EngineState::Failed {
                     reason: reason.clone(),
@@ -164,7 +191,7 @@ impl Engine for XrayEngine {
         let ready = wait_until_ready(socks_port, api_port, &mut child).await;
 
         if !ready {
-            let detail = collect_child_failure(&mut child).await;
+            let detail = collect_child_failure(&mut child, core_log.as_deref()).await;
             let asset_hint = match &asset_dir {
                 Some(p) => format!("assets={}", p.display()),
                 None => "assets=<not found>".into(),
@@ -177,6 +204,7 @@ impl Engine for XrayEngine {
             } else {
                 format!("sidecar failed: {detail}")
             };
+            log::error!("{reason}");
             let mut guard = self.lock();
             let _ = guard.sm.transition(EngineState::Failed {
                 reason: reason.clone(),
@@ -184,13 +212,13 @@ impl Engine for XrayEngine {
             return Err(EngineError::not_ready(reason));
         }
 
-        // Drop pipes so a chatty sidecar cannot fill buffers and stall.
-        drop(child.stdout.take());
-        drop(child.stderr.take());
+        // Keep draining stdout/stderr into the core log (or discard) so pipes never block.
+        attach_sidecar_log_pumps(&mut child, core_log);
 
         let mut guard = self.lock();
         guard.child = Some(child);
         guard.sm.transition(EngineState::Running)?;
+        log::info!("sidecar running socks=:{socks_port} api=:{api_port}");
         Ok(())
     }
 
@@ -216,6 +244,7 @@ impl Engine for XrayEngine {
         };
 
         if let Some(ref mut c) = child {
+            log::info!("stopping sidecar");
             let _ = c.kill().await;
             let _ = c.wait().await;
         }
@@ -223,6 +252,7 @@ impl Engine for XrayEngine {
         let mut guard = self.lock();
         if matches!(guard.sm.state(), EngineState::Stopping) {
             guard.sm.transition(EngineState::Idle)?;
+            log::info!("sidecar stopped");
         }
         Ok(())
     }
@@ -258,7 +288,7 @@ async fn probe_port(port: u16) -> bool {
 }
 
 /// Kill the child (if still alive) and return a short stderr/stdout snippet.
-async fn collect_child_failure(child: &mut Child) -> String {
+async fn collect_child_failure(child: &mut Child, core_log: Option<&Path>) -> String {
     let mut stderr_buf = Vec::new();
     let mut stdout_buf = Vec::new();
 
@@ -272,20 +302,96 @@ async fn collect_child_failure(child: &mut Child) -> String {
     let _ = child.kill().await;
     let status = child.wait().await.ok();
 
+    let err = String::from_utf8_lossy(&stderr_buf);
+    let out = String::from_utf8_lossy(&stdout_buf);
+    if let Some(path) = core_log {
+        for line in err.lines() {
+            write_core_line(path, "stderr", line);
+        }
+        for line in out.lines() {
+            write_core_line(path, "stdout", line);
+        }
+    }
+
     let mut parts = Vec::new();
     if let Some(st) = status {
         if !st.success() {
             parts.push(format!("exit={st}"));
         }
     }
-    let err = String::from_utf8_lossy(&stderr_buf);
-    let out = String::from_utf8_lossy(&stdout_buf);
     let combined = format!("{err}\n{out}");
     let snip = last_useful_line(&combined);
     if !snip.is_empty() {
         parts.push(snip);
     }
     parts.join(" — ")
+}
+
+/// `{log_dir}/aurestream-core-YYYY-MM-DD.log` (local calendar day).
+fn prepare_core_log_path(log_dir: &Path) -> PathBuf {
+    let _ = fs::create_dir_all(log_dir);
+    let date = chrono::Local::now().format("%Y-%m-%d");
+    let path = log_dir.join(format!("{CORE_LOG_PREFIX}-{date}.log"));
+    let _ = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path);
+    path
+}
+
+fn format_timestamp_local() -> String {
+    let now = chrono::Local::now();
+    format!(
+        "{}.{:03}",
+        now.format("%Y-%m-%d %H:%M:%S"),
+        now.timestamp_subsec_millis()
+    )
+}
+
+/// Unified core log line: `YYYY-MM-DD HH:MM:SS.mmm CORE [stdout|stderr] …`
+fn write_core_line(path: &Path, stream: &str, line: &str) {
+    let trimmed = line.trim_end_matches(['\r', '\n']);
+    if trimmed.is_empty() {
+        return;
+    }
+    let row = format!(
+        "{} CORE [{}] {}\n",
+        format_timestamp_local(),
+        stream,
+        trimmed
+    );
+    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = f.write_all(row.as_bytes());
+    }
+}
+
+fn attach_sidecar_log_pumps(child: &mut Child, core_log: Option<PathBuf>) {
+    if let Some(stdout) = child.stdout.take() {
+        let path = core_log.clone();
+        tokio::spawn(async move {
+            pump_pipe_to_core_log(stdout, "stdout", path).await;
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        let path = core_log;
+        tokio::spawn(async move {
+            pump_pipe_to_core_log(stderr, "stderr", path).await;
+        });
+    }
+}
+
+async fn pump_pipe_to_core_log<R>(reader: R, stream: &'static str, core_log: Option<PathBuf>)
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut lines = BufReader::new(reader).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        if let Some(ref path) = core_log {
+            write_core_line(path, stream, &line);
+        }
+        // Mirror important core noise into the app logger at debug.
+        log::debug!("core/{stream}: {line}");
+    }
 }
 
 fn last_useful_line(text: &str) -> String {

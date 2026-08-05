@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
+import { getNodeLatency, subscribeNodeLatencies } from "@/lib/node-latency"
+import { getNodeLatencyTone } from "@/lib/node-latency-tone"
 import { loadProxyPrefs, setSmartRoutingPref } from "@/lib/proxy-prefs"
 import { cn } from "@/lib/utils"
 
@@ -106,6 +108,14 @@ export default function HomePage() {
       : "未选择节点")
   const nodeProtocol = selected?.protocol || "—"
 
+  // Re-read cache when latencies update (e.g. after Nodes page speed test).
+  const [latencyVersion, setLatencyVersion] = useState(0)
+  useEffect(() => subscribeNodeLatencies(() => setLatencyVersion((n) => n + 1)), [])
+  const selectedLatency = useMemo(() => {
+    if (!selected?.tag) return undefined
+    return getNodeLatency(selected.tag)
+  }, [selected?.tag, latencyVersion])
+
   const sub =
     (activeId && subscriptions.find((s) => s.id === activeId)) || subscriptions[0] || null
   const hasSub = Boolean(sub)
@@ -124,11 +134,17 @@ export default function HomePage() {
     if (connected) return { kind: "on" as const, text: durationText }
     if (busy && engine.state === "starting") return { kind: "busy" as const, text: "正在连接…" }
     if (busy && engine.state === "stopping") return { kind: "busy" as const, text: "正在断开…" }
-    if (failed) return { kind: "fail" as const, text: engine.reason ? `连接失败：${engine.reason}` : "连接失败" }
+    // Detail is shown via global error dialog; keep status line short.
+    if (failed) return { kind: "fail" as const, text: "连接失败" }
     return { kind: "off" as const, text: "点击按钮进行连接" }
   })()
 
   const canToggle = !busy && (connected || !nodesEmpty)
+
+  const handleToggle = () => {
+    if (connected) void stop()
+    else void start()
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white animate-fade-in dark:bg-background">
@@ -254,10 +270,7 @@ export default function HomePage() {
                 >
                   <button
                     type="button"
-                    onClick={() => {
-                      if (connected) void stop()
-                      else void start()
-                    }}
+                    onClick={() => void handleToggle()}
                     disabled={!canToggle}
                     aria-label={connected ? "断开连接" : "连接"}
                     className={cn(
@@ -345,6 +358,10 @@ export default function HomePage() {
                     <span className="shrink-0">点击切换</span>
                   </div>
                 </div>
+                {/* Fixed-width latency slot (same as Nodes page) */}
+                <span className="flex w-[3.75rem] shrink-0 items-center justify-end font-mono text-xs font-bold tabular-nums">
+                  <HomeLatencyBadge ms={selectedLatency} />
+                </span>
                 <svg
                   width="16"
                   height="16"
@@ -434,5 +451,21 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function HomeLatencyBadge({ ms }: { ms: number | undefined }) {
+  if (ms === undefined || ms === 0) {
+    return <span className="text-[#b0b8c4]">-- ms</span>
+  }
+  if (ms < 0) {
+    return <span className="text-destructive">超时</span>
+  }
+  const tone = getNodeLatencyTone(ms)
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={cn("size-1.5 shrink-0 rounded-full", tone.dot)} />
+      <span className={tone.text}>{ms}ms</span>
+    </span>
   )
 }

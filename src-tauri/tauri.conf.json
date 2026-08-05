@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "AureStream",
         "width": 375,
         "height": 667,

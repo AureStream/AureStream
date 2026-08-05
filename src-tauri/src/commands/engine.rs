@@ -61,8 +61,13 @@ impl EngineAppState {
             reason: None,
             selected_node: selected.clone(),
         };
+        let mut engine = XrayEngine::new();
+        if let Ok(log_dir) = crate::logging::app_log_dir(app) {
+            engine = engine.with_log_dir(log_dir);
+        }
+
         Ok(Self {
-            engine: std::sync::Arc::new(XrayEngine::new()),
+            engine: std::sync::Arc::new(engine),
             selected_node: Mutex::new(selected),
             last_emitted: Mutex::new(initial),
             gate: AsyncMutex::new(()),
@@ -96,7 +101,7 @@ impl EngineAppState {
         )
     }
 
-    fn last_payload(&self) -> EngineStatePayload {
+    pub fn last_payload(&self) -> EngineStatePayload {
         self.last_emitted
             .lock()
             .map(|g| g.clone())
@@ -105,6 +110,10 @@ impl EngineAppState {
                 reason: None,
                 selected_node: self.selected_node(),
             })
+    }
+
+    pub fn engine_state_raw(&self) -> EngineState {
+        self.engine.state()
     }
 
     fn record_emitted(&self, payload: &EngineStatePayload) {
@@ -161,6 +170,7 @@ fn write_selection(path: &PathBuf, value: &SelectionFile) -> Result<(), String> 
 fn emit_engine_state(app: &AppHandle, engine_state: &EngineAppState, payload: &EngineStatePayload) {
     engine_state.record_emitted(payload);
     let _ = app.emit(ENGINE_STATE_EVENT, payload.clone());
+    crate::tray::on_engine_payload(app, &payload.state);
 }
 
 fn emit_from(app: &AppHandle, engine_state: &EngineAppState, state: EngineState) {
@@ -228,8 +238,11 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
     }
     find_proxy_node(&nodes, node_tag)
         .or_else(|| {
-            // Deterministic default: first decoded node when tag is empty.
-            if node_tag.is_empty() {
+            // Empty tag or stale selection (e.g. previous subscription) → first node.
+            if node_tag.is_empty() || !nodes.is_empty() {
+                log::warn!(
+                    "resolve_proxy_node: tag `{node_tag}` missing, falling back to first node"
+                );
                 nodes.first().cloned()
             } else {
                 None
@@ -240,6 +253,7 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
 
 /// Spec §4.2.6: clear proxy, stop engine, emit Failed (recorded for get_state).
 async fn fail_cleanup(app: &AppHandle, engine_state: &EngineAppState, reason: String) {
+    log::error!("engine fail_cleanup: {reason}");
     let _ = clear_system_proxy();
     let _ = engine_state.engine.stop().await;
     emit_failed(app, engine_state, reason);
@@ -329,6 +343,7 @@ pub async fn engine_select_node(
     // Validate node exists in decoded cache (before taking the gate).
     let node = resolve_proxy_node(&subs, &tag)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
+    log::info!("select_node tag={}", node.tag);
 
     let _guard = engine.gate.lock().await;
 
@@ -364,6 +379,7 @@ pub async fn engine_start(
 
     let node = resolve_proxy_node(&subs, &requested)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
+    log::info!("engine_start node={}", node.tag);
 
     let _guard = engine.gate.lock().await;
     start_with_node(&app, &engine, &node).await?;
@@ -377,6 +393,7 @@ pub async fn engine_stop(
     engine: State<'_, EngineAppState>,
 ) -> Result<EngineStatePayload, String> {
     let _guard = engine.gate.lock().await;
+    log::info!("engine_stop");
 
     emit_from(&app, &engine, EngineState::Stopping);
 
@@ -396,6 +413,54 @@ pub async fn engine_stop(
 
     emit_from(&app, &engine, EngineState::Idle);
     Ok(engine.last_payload())
+}
+
+/// Tray / shell: start system-proxy capture (requires auth + cached nodes).
+pub async fn tray_start_system(app: &AppHandle) -> Result<(), String> {
+    let auth = app
+        .try_state::<AuthState>()
+        .ok_or_else(|| "auth_state_missing".to_string())?;
+    let subs = app
+        .try_state::<SubsState>()
+        .ok_or_else(|| "subs_state_missing".to_string())?;
+    let engine = app
+        .try_state::<EngineAppState>()
+        .ok_or_else(|| "engine_state_missing".to_string())?;
+
+    require_auth(&auth)?;
+
+    let requested = engine.selected_node().unwrap_or_default();
+    let node = resolve_proxy_node(&subs, &requested)?;
+    engine.set_selected_node(Some(node.tag.clone()))?;
+
+    let _guard = engine.gate.lock().await;
+    start_with_node(app, &engine, &node).await?;
+    Ok(())
+}
+
+/// Tray / shell: clear system proxy and stop sidecar.
+pub async fn tray_stop(app: &AppHandle) -> Result<(), String> {
+    let Some(engine) = app.try_state::<EngineAppState>() else {
+        let _ = clear_system_proxy();
+        return Ok(());
+    };
+
+    let _guard = engine.gate.lock().await;
+    let state = engine.last_payload().state;
+    if state == "idle" {
+        let _ = clear_system_proxy();
+        return Ok(());
+    }
+
+    emit_from(app, &engine, EngineState::Stopping);
+    let _ = clear_system_proxy();
+    if let Err(e) = engine.engine.stop().await {
+        let reason = e.to_string();
+        emit_failed(app, &engine, reason.clone());
+        return Err(reason);
+    }
+    emit_from(app, &engine, EngineState::Idle);
+    Ok(())
 }
 
 #[cfg(test)]
