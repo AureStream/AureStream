@@ -1,5 +1,15 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-import { type User, login as apiLogin, register as apiRegister, revokeRemoteSession, clearTokens, refreshToken, hasTokens } from "../api/auth"
+import {
+  type User,
+  type RegisterPendingResult,
+  login as apiLogin,
+  register as apiRegister,
+  verifyRegister as apiVerifyRegister,
+  revokeRemoteSession,
+  clearTokens,
+  refreshToken,
+  hasTokens,
+} from "../api/auth"
 import { apiFetch } from "../api/client"
 import { beginLogout } from "../lib/auth-session"
 import { clearLocalUserData } from "../lib/auth-cleanup"
@@ -11,7 +21,10 @@ interface AuthState {
   /** True only after auth is known and subscription bootstrap finished (or no session). */
   sessionReady: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  /** Send email verification code (does not create user). */
+  register: (email: string, password: string) => Promise<RegisterPendingResult>
+  /** Verify code, create user, then log in and bootstrap session. */
+  verifyAndLogin: (email: string, password: string, code: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -20,7 +33,8 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   sessionReady: false,
   login: async () => {},
-  register: async () => {},
+  register: async () => ({ email: "", expires_in: 0 }),
+  verifyAndLogin: async () => {},
   logout: async () => {},
 })
 
@@ -128,8 +142,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(async (email: string, password: string) => {
-    await apiRegister(email, password)
+    return apiRegister(email, password)
   }, [])
+
+  const verifyAndLogin = useCallback(
+    async (email: string, password: string, code: string) => {
+      await apiVerifyRegister(email, code)
+      await login(email, password)
+    },
+    [login],
+  )
 
   const logout = useCallback(async () => {
     resetSessionBootstrapState()
@@ -144,7 +166,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionReady, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, sessionReady, login, register, verifyAndLogin, logout }}
+    >
       {children}
     </AuthContext.Provider>
   )

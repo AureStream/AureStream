@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? "https://aurestream.chilix.qzz.io/api"
+/** Production Worker API (OpenAPI servers[0] + `/api` prefix used by clients). */
+export const API_BASE =
+  import.meta.env.VITE_API_URL ?? "https://aurestream-api.chilix.ccwu.cc/api"
 
 let accessToken: string | null = localStorage.getItem("aurestream_access_token")
 let refreshToken: string | null = localStorage.getItem("aurestream_refresh_token")
