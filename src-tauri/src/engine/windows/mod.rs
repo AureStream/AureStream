@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
+pub(crate) mod outbound_if;
 pub(crate) mod watchdog;
 
 pub struct WindowsEngine;
@@ -33,6 +34,36 @@ impl EngineManager for WindowsEngine {
             // Resolve the paths using the standard Tauri v2 sidecar layout
             let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
                 .unwrap_or_else(|| "-".to_string());
+
+            // Xray `autoOutboundsInterface: "auto"` fails on multi-NIC / Hyper-V
+            // hosts (0x490). Bind outbounds to the real default-route NIC before
+            // the elevated service starts core.
+            match outbound_if::resolve_default_outbound_interface() {
+                Ok(iface) => {
+                    match crate::engine::config_patch::patch_tun_config_outbounds_interface(
+                        &config_path,
+                        &iface,
+                    ) {
+                        Ok(true) => log::info!(
+                            "[win] patched TUN autoOutboundsInterface -> '{}'",
+                            iface
+                        ),
+                        Ok(false) => log::info!(
+                            "[win] TUN autoOutboundsInterface already '{}'",
+                            iface
+                        ),
+                        Err(e) => log::warn!(
+                            "[win] failed to patch TUN outbounds interface '{}': {}",
+                            iface,
+                            e
+                        ),
+                    }
+                }
+                Err(e) => log::warn!(
+                    "[win] could not resolve default outbound interface (keeping config as-is): {}",
+                    e
+                ),
+            }
 
             let core_path_str =
                 crate::engine::helper::get_sidecar_path(std::path::Path::new("aurestream-core"))

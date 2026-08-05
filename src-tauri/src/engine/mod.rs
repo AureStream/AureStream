@@ -1,4 +1,5 @@
 pub mod config_check;
+pub mod config_patch;
 pub mod helper;
 pub mod log;
 pub mod monitor;

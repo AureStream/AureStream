@@ -99,6 +99,18 @@ describe("config merger (Xray-core, local template)", () => {
       network: "udp,tcp",
       outboundTag: "dns-out",
     })
+    // Link-local / NetBIOS noise dropped before private-IP direct.
+    expect(written.routing.rules[1]).toEqual({
+      type: "field",
+      ip: ["169.254.0.0/16", "fe80::/10"],
+      outboundTag: "block",
+    })
+    expect(written.routing.rules[2]).toEqual({
+      type: "field",
+      port: "137,138",
+      network: "udp",
+      outboundTag: "block",
+    })
     expect(written.routing.rules).toContainEqual({
       type: "field",
       inboundTag: ["dns-direct"],
@@ -260,6 +272,11 @@ describe("config merger (Xray-core, local template)", () => {
       port: "53",
       network: "udp,tcp",
       outboundTag: "dns-out",
+    })
+    expect(written.routing.rules[1]).toEqual({
+      type: "field",
+      ip: ["169.254.0.0/16", "fe80::/10"],
+      outboundTag: "block",
     })
     // Local SOCKS inbound stays present alongside tun.
     expect(written.inbounds.some((ib: any) => ib.tag === "mixed-in")).toBe(true)

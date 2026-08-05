@@ -41,15 +41,33 @@ export function buildRoutingRules(global: boolean = false): Record<string, unkno
     network: "udp,tcp",
     outboundTag: DNS_OUT_TAG,
   }
+  // Drop link-local / NetBIOS broadcast noise that can flood TUN on Windows
+  // (seen as tens of thousands of 169.254.x → :137/:138 → direct entries)
+  // before private-IP direct rules. Does not affect real LAN RFC1918 traffic.
+  const dropLinkLocalNoise = [
+    {
+      type: "field",
+      ip: ["169.254.0.0/16", "fe80::/10"],
+      outboundTag: "block",
+    },
+    {
+      type: "field",
+      port: "137,138",
+      network: "udp",
+      outboundTag: "block",
+    },
+  ]
   if (global) {
     return [
       dnsCapture,
+      ...dropLinkLocalNoise,
       { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
       { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
     ]
   }
   return [
     dnsCapture,
+    ...dropLinkLocalNoise,
     { type: "field", inboundTag: [DNS_DIRECT_TAG], outboundTag: "direct" },
     { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
     { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
@@ -245,6 +263,11 @@ function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<str
       // Bind proxy outbounds to the physical NIC so TUN capture doesn't
       // loop Xray's own uplink traffic back into the tunnel (critical on
       // Windows full-route TUN).
+      //
+      // Default is "auto"; on Windows the engine rewrites this to the real
+      // default-route NIC friendly name before starting AureStreamTunService
+      // because Xray's auto-detect fails on multi-NIC / Hyper-V hosts
+      // (`Failed to find matching adapter name`, 0x490).
       autoOutboundsInterface: "auto",
     },
     sniffing: {
