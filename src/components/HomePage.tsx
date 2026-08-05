@@ -4,12 +4,7 @@ import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
-import {
-  loadProxyPrefs,
-  setEnableIpv6Pref,
-  setEnableTunPref,
-  setSmartRoutingPref,
-} from "@/lib/proxy-prefs"
+import { loadProxyPrefs, setSmartRoutingPref } from "@/lib/proxy-prefs"
 import { cn } from "@/lib/utils"
 
 const PrefIcons = {
@@ -351,7 +346,7 @@ export default function HomePage() {
                   />
                 </label>
 
-                <label className="flex min-w-0 cursor-pointer select-none flex-col items-center justify-center gap-1.5 px-0.5">
+                <label className="flex min-w-0 cursor-not-allowed select-none flex-col items-center justify-center gap-1.5 px-0.5 opacity-45">
                   <span className="flex min-w-0 items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-[#6b7280]">
                     <span className="shrink-0 text-[var(--auth-accent)]">
                       <PrefIcons.Globe />
@@ -361,16 +356,12 @@ export default function HomePage() {
                   <Switch
                     size="sm"
                     checked={enableTun}
-                    disabled={prefsDisabled}
-                    onCheckedChange={(v) => {
-                      setEnableTun(v)
-                      setEnableTunPref(v)
-                    }}
-                    aria-label="虚拟网卡"
+                    disabled
+                    aria-label="虚拟网卡（暂不可用）"
                   />
                 </label>
 
-                <label className="flex min-w-0 cursor-pointer select-none flex-col items-center justify-center gap-1.5 px-0.5">
+                <label className="flex min-w-0 cursor-not-allowed select-none flex-col items-center justify-center gap-1.5 px-0.5 opacity-45">
                   <span className="flex min-w-0 items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-[#6b7280]">
                     <span className="shrink-0 text-[var(--auth-accent)]">
                       <PrefIcons.Ipv6 />
@@ -380,12 +371,8 @@ export default function HomePage() {
                   <Switch
                     size="sm"
                     checked={enableIpv6}
-                    disabled={prefsDisabled}
-                    onCheckedChange={(v) => {
-                      setEnableIpv6(v)
-                      setEnableIpv6Pref(v)
-                    }}
-                    aria-label="IPv6"
+                    disabled
+                    aria-label="IPv6（暂不可用）"
                   />
                 </label>
               </div>
