@@ -1,8 +1,37 @@
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
+import { Switch } from "@/components/ui/switch"
+import {
+  loadProxyPrefs,
+  setEnableIpv6Pref,
+  setEnableTunPref,
+  setSmartRoutingPref,
+} from "@/lib/proxy-prefs"
 import { cn } from "@/lib/utils"
+
+const PrefIcons = {
+  Activity: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  ),
+  Globe: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20" />
+      <path d="M2 12h20" />
+    </svg>
+  ),
+  Ipv6: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 7h4v10H4zM10 7h2l3 10h-2.2l-.5-1.8H11l-.5 1.8H8.3L11.3 7zM18 7h2v10h-2z" />
+      <path d="M11.3 13.2h2.4" />
+    </svg>
+  ),
+}
 
 const ONE_GB = 1024 * 1024 * 1024
 const ONE_TB = 1024 * 1024 * 1024 * 1024
@@ -21,16 +50,38 @@ export default function HomePage() {
   const { nodes, subscriptions, activeId, syncing } = useSubs()
   const { engine, start, stop } = useEngine()
 
+  const [smartRouting, setSmartRouting] = useState(true)
+  // TUN / IPv6 not wired in v2 MVP — keep switches visible but disabled off.
+  const enableTun = false
+  const enableIpv6 = false
+
+  useEffect(() => {
+    const prefs = loadProxyPrefs()
+    setSmartRouting(prefs.smartRouting)
+  }, [])
+
   const busy = engine.state === "starting" || engine.state === "stopping"
   const connected = engine.state === "running"
   const failed = engine.state === "failed"
   const nodesEmpty = nodes.length === 0
+  const prefsDisabled = busy
+  /** Connected (or connecting) shows node entry; idle shows preference switches. */
+  const showNodeEntry = connected || engine.state === "starting"
 
   const selected =
     nodes.find((n) => n.tag === engine.selectedNode) ??
     (engine.selectedNode
       ? { tag: engine.selectedNode, name: engine.selectedNode, protocol: "" }
-      : null)
+      : null) ??
+    (nodes.length > 0 ? nodes[0] : null)
+
+  const nodeTitle = selected?.name
+    ?? (nodesEmpty
+      ? syncing
+        ? "订阅同步中"
+        : "暂无节点"
+      : "未选择节点")
+  const nodeProtocol = selected?.protocol || "—"
 
   const sub =
     (activeId && subscriptions.find((s) => s.id === activeId)) || subscriptions[0] || null
@@ -38,9 +89,8 @@ export default function HomePage() {
   const trafficTotal = hasSub && sub!.trafficTotal > 1 ? sub!.trafficTotal : ONE_TB
   const trafficUsed = hasSub ? sub!.trafficUsed : 0
   const remainingBytes = Math.max(0, trafficTotal - trafficUsed)
-  const remainingGB = hasSub ? (remainingBytes / ONE_GB).toFixed(4) : "--"
-  const usedText = hasSub ? `${(trafficUsed / ONE_GB).toFixed(4)} GB` : "--"
-  const totalGBText = hasSub ? `${(trafficTotal / ONE_GB).toFixed(2)} GB` : "--"
+  const usedGB = hasSub ? (trafficUsed / ONE_GB).toFixed(2) : "--"
+  const remainingGB = hasSub ? (remainingBytes / ONE_GB).toFixed(2) : "--"
   const expireText = hasSub ? formatDate(sub!.expireTime) : "--"
   const remainingPercent =
     hasSub && trafficTotal > 0
@@ -58,7 +108,7 @@ export default function HomePage() {
   const canToggle = !busy && (connected || !nodesEmpty)
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-white animate-fade-in dark:bg-background">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white animate-fade-in dark:bg-background">
       <MobileTopBar
         right={
           <button
@@ -75,24 +125,24 @@ export default function HomePage() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar px-5 pb-2 pt-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 pb-3 pt-0">
         {/* Traffic card */}
-        <section className="shrink-0 rounded-[1.25rem] bg-[#f1f2f4] px-5 py-3.5 dark:bg-muted">
+        <section className="shrink-0 rounded-[1.15rem] bg-[#f1f2f4] px-4 py-3.5 dark:bg-muted">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-[#6b7280]">剩余流量</p>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-[1.75rem] font-bold tracking-tight text-[#1a1d21] tabular-nums dark:text-foreground">
-                  {remainingGB}
+              <p className="text-xs font-medium text-[#6b7280]">使用流量</p>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-[1.5rem] font-bold tracking-tight text-[#1a1d21] tabular-nums dark:text-foreground">
+                  {usedGB}
                 </span>
-                <span className="text-sm font-semibold text-[#9aa0a6]">GB</span>
+                <span className="text-xs font-semibold text-[#9aa0a6]">GB</span>
               </div>
-              <p className="mt-1 text-xs font-medium text-[#9aa0a6]">
-                本月套餐共 {totalGBText}
+              <p className="mt-1 text-[11px] font-medium leading-snug text-[#9aa0a6]">
+                到期时间 {expireText}
               </p>
             </div>
 
-            <div className="relative h-[4.75rem] w-28 shrink-0">
+            <div className="relative h-[4.75rem] w-[7.25rem] shrink-0">
               <svg className="h-full w-full overflow-visible" viewBox="0 0 120 74" aria-hidden>
                 <defs>
                   <linearGradient id="trafficGaugeGradient" x1="12" y1="62" x2="108" y2="14" gradientUnits="userSpaceOnUse">
@@ -119,73 +169,62 @@ export default function HomePage() {
                   strokeDashoffset={100 - remainingPercent}
                 />
               </svg>
-              <div className="absolute inset-x-0 top-[40px] flex items-center justify-center">
-                <span className="text-base font-bold tabular-nums text-[#1a1d21] dark:text-foreground">
-                  {remainingPercent.toFixed(0)}%
+              {/* Label + value stay inside the semicircle under the arc */}
+              <div className="pointer-events-none absolute inset-x-[10%] bottom-[4px] flex flex-col items-center">
+                <span className="text-[10px] font-semibold leading-none text-[#6b7280]">
+                  剩余流量
                 </span>
+                <div className="mt-1 flex items-baseline gap-0.5 leading-none">
+                  <span className="text-[13px] font-bold tabular-nums text-[#1a1d21] dark:text-foreground">
+                    {remainingGB}
+                  </span>
+                  <span className="text-[9px] font-semibold text-[#9aa0a6]">GB</span>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#e5e7eb] pt-3 dark:border-border">
-            <div>
-              <p className="text-xs font-medium text-[#9aa0a6]">已使用</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-[#1a1d21] dark:text-foreground">
-                {usedText}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-[#9aa0a6]">到期时间</p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-[#1a1d21] dark:text-foreground">
-                {expireText}
-              </p>
             </div>
           </div>
         </section>
 
-        {/* Connection */}
-        <section className="flex shrink-0 flex-col items-center pt-5 pb-3">
-          <div className="mb-5 flex min-h-[32px] items-center justify-center">
+        {/* Connection — middle band; slightly above vertical center */}
+        <section className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 py-4 pb-8">
+          <div className="flex h-7 items-center justify-center">
             {statusLine.kind === "on" ? (
-              <div className="inline-flex items-center gap-2.5 text-xl font-semibold text-[var(--auth-accent)]">
-                <span className="size-2.5 rounded-full bg-[var(--auth-accent)]" />
+              <div className="inline-flex items-center gap-2 text-base font-semibold text-[var(--auth-accent)]">
+                <span className="size-2 rounded-full bg-[var(--auth-accent)]" />
                 <span>{statusLine.text}</span>
               </div>
             ) : statusLine.kind === "busy" ? (
-              <div className="inline-flex items-center gap-2 text-lg font-medium text-[#8b93a0]">
-                <span className="size-2.5 animate-pulse rounded-full bg-[var(--auth-accent)]" />
+              <div className="inline-flex items-center gap-2 text-sm font-medium text-[#8b93a0]">
+                <span className="size-2 animate-pulse rounded-full bg-[var(--auth-accent)]" />
                 <span>{statusLine.text}</span>
               </div>
             ) : statusLine.kind === "fail" ? (
               <div className="inline-flex max-w-[280px] items-center gap-2 text-center text-sm font-medium text-destructive">
-                <span className="size-2.5 shrink-0 rounded-full bg-destructive" />
+                <span className="size-2 shrink-0 rounded-full bg-destructive" />
                 <span className="line-clamp-2">{statusLine.text}</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-2 text-lg font-medium text-[#8b93a0]">
-                <span className="size-2.5 rounded-full bg-[#c5ccd6]" />
+              <div className="inline-flex items-center gap-2 text-sm font-medium text-[#8b93a0]">
+                <span className="size-2 rounded-full bg-[#c5ccd6]" />
                 <span>{statusLine.text}</span>
               </div>
             )}
           </div>
 
           <div className="relative flex items-center justify-center">
-            <div
-              className={cn(
-                "relative flex h-[14rem] w-[14rem] items-center justify-center rounded-full border transition-colors duration-300",
-                connected
-                  ? "border-[var(--auth-accent)]/40 bg-[var(--auth-accent)]/12"
-                  : "border-[#e6ebf2] bg-transparent",
-              )}
-            >
+            {/* Equal ring gaps: outer 10.75 → middle 8.75 → inner 6.75 (1rem each side) */}
+            {/* Outer ring — stays neutral */}
+            <div className="relative flex h-[10.75rem] w-[10.75rem] items-center justify-center rounded-full border-[1.5px] border-[#e6ebf2] bg-transparent">
+              {/* Middle ring — color changes when connected */}
               <div
                 className={cn(
-                  "flex h-[10.75rem] w-[10.75rem] items-center justify-center rounded-full border transition-colors duration-300",
+                  "flex h-[8.75rem] w-[8.75rem] items-center justify-center rounded-full border-[1.5px] transition-colors duration-300",
                   connected
-                    ? "border-[var(--auth-accent)]/35 bg-[var(--auth-accent)]/10"
+                    ? "border-[var(--auth-accent)] bg-[var(--auth-accent)]/10"
                     : "border-[#e8edf4] bg-transparent",
                 )}
               >
+                {/* Inner power button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -195,7 +234,7 @@ export default function HomePage() {
                   disabled={!canToggle}
                   aria-label={connected ? "断开连接" : "连接"}
                   className={cn(
-                    "relative flex h-[7.25rem] w-[7.25rem] items-center justify-center rounded-full border border-[#e8edf4] bg-white text-[#a0aab8] transition-all duration-300",
+                    "relative flex h-[6.75rem] w-[6.75rem] items-center justify-center rounded-full border border-[#e8edf4] bg-white text-[#a0aab8] transition-all duration-300",
                     "hover:text-[#7a8494]",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--auth-accent)]/35",
                     "disabled:cursor-not-allowed disabled:opacity-50",
@@ -204,8 +243,8 @@ export default function HomePage() {
                   )}
                 >
                   <svg
-                    width="52"
-                    height="52"
+                    width="42"
+                    height="42"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -221,10 +260,10 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="mt-5 flex items-center justify-center gap-1.5 text-sm font-medium text-[#8b93a0]">
+          <div className="flex h-5 items-center justify-center gap-1.5 text-xs font-medium text-[#8b93a0]">
             <svg
-              width="15"
-              height="15"
+              width="14"
+              height="14"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -247,69 +286,132 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Node / bottom slot */}
-        <div className="mx-auto mt-16 flex w-full max-w-[340px] shrink-0 flex-col">
-          <section className="flex h-[4.75rem] w-full items-center justify-center px-1.5">
-            <button
-              type="button"
-              onClick={() => navigate("/nodes")}
-              className="flex h-full w-full max-w-[300px] items-center gap-3 rounded-[1.25rem] border border-[#eceef1] bg-white px-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#fafafa] dark:border-border dark:bg-card dark:hover:bg-muted/40"
-            >
-              <span className="text-2xl leading-none select-none" aria-hidden>
-                🌐
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-semibold text-[#1a1d21] dark:text-foreground">
-                  {selected
-                    ? selected.name
-                    : nodesEmpty
-                      ? syncing
-                        ? "订阅同步中"
-                        : "暂无节点"
-                      : "选择节点"}
-                </p>
-                <div className="mt-0.5 flex items-center justify-between text-xs font-medium text-[#9aa0a6]">
-                  <span className="font-mono uppercase">
-                    {selected?.protocol || "系统代理"}
-                  </span>
-                  <span className="font-mono">{nodes.length > 0 ? `${nodes.length}` : "--"}</span>
-                </div>
-              </div>
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.25"
-                className="shrink-0 text-[#9aa0a6]"
+        {/* Bottom stack: node (connected) / prefs (disconnected) + version */}
+        <div className="mx-auto flex w-full max-w-[340px] shrink-0 flex-col gap-5 pb-1">
+          <div className="flex h-[4.25rem] w-full items-center justify-center">
+            {showNodeEntry ? (
+              <button
+                type="button"
+                onClick={() => navigate("/nodes")}
+                aria-label={`当前节点 ${nodeTitle}，点击选择节点`}
+                className={cn(
+                  "flex h-[3.75rem] w-full items-center gap-3 rounded-[1.15rem] border px-3.5 text-left transition-colors",
+                  "border-[var(--auth-accent)]/25 bg-[var(--auth-accent)]/8",
+                  "hover:bg-[var(--auth-accent)]/12 active:scale-[0.99]",
+                  "dark:border-[var(--auth-accent)]/30 dark:bg-[var(--auth-accent)]/10",
+                )}
               >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-          </section>
-        </div>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-lg leading-none shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-card" aria-hidden>
+                  🌐
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="truncate text-[15px] font-semibold text-[#1a1d21] dark:text-foreground"
+                    title={nodeTitle}
+                  >
+                    {nodeTitle}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-[#9aa0a6]">
+                    <span className="truncate font-mono uppercase">{nodeProtocol}</span>
+                    <span className="text-[#d0d4da]">·</span>
+                    <span className="shrink-0">点击切换</span>
+                  </div>
+                </div>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.25"
+                  className="shrink-0 text-[var(--auth-accent)]"
+                  aria-hidden
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            ) : (
+              <div className="grid h-full w-full max-w-[300px] grid-cols-3 content-center gap-1">
+                <label className="flex min-w-0 cursor-pointer select-none flex-col items-center justify-center gap-1.5 px-0.5">
+                  <span className="flex min-w-0 items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-[#6b7280]">
+                    <span className="shrink-0 text-[var(--auth-accent)]">
+                      <PrefIcons.Activity />
+                    </span>
+                    <span className="truncate">智能分流</span>
+                  </span>
+                  <Switch
+                    size="sm"
+                    checked={smartRouting}
+                    disabled={prefsDisabled}
+                    onCheckedChange={(v) => {
+                      setSmartRouting(v)
+                      setSmartRoutingPref(v)
+                    }}
+                    aria-label="智能分流"
+                  />
+                </label>
 
-        <div className="min-h-1 flex-1" aria-hidden />
-        <footer className="mx-auto w-full max-w-[340px] shrink-0 pb-0 pt-0.5">
-          <div className="mx-auto flex max-w-[220px] items-center gap-3">
-            <div className="h-px flex-1 bg-[#eceef1]" />
-            <div className="flex items-center gap-1.5">
-              <img
-                src="/logo.png"
-                alt=""
-                className="size-4 rounded-[4px] object-cover opacity-80"
-                draggable={false}
-              />
-              <span className="text-[11px] font-medium tracking-wide text-[#9aa0a6]">
-                AureStream
-              </span>
-              <span className="text-[11px] text-[#d0d4da]">·</span>
-              <span className="text-[11px] font-medium tabular-nums text-[#b0b8c4]">v0.3.5</span>
-            </div>
-            <div className="h-px flex-1 bg-[#eceef1]" />
+                <label className="flex min-w-0 cursor-pointer select-none flex-col items-center justify-center gap-1.5 px-0.5">
+                  <span className="flex min-w-0 items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-[#6b7280]">
+                    <span className="shrink-0 text-[var(--auth-accent)]">
+                      <PrefIcons.Globe />
+                    </span>
+                    <span className="truncate">虚拟网卡</span>
+                  </span>
+                  <Switch
+                    size="sm"
+                    checked={enableTun}
+                    disabled={prefsDisabled}
+                    onCheckedChange={(v) => {
+                      setEnableTun(v)
+                      setEnableTunPref(v)
+                    }}
+                    aria-label="虚拟网卡"
+                  />
+                </label>
+
+                <label className="flex min-w-0 cursor-pointer select-none flex-col items-center justify-center gap-1.5 px-0.5">
+                  <span className="flex min-w-0 items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-[#6b7280]">
+                    <span className="shrink-0 text-[var(--auth-accent)]">
+                      <PrefIcons.Ipv6 />
+                    </span>
+                    <span className="truncate">IPv6</span>
+                  </span>
+                  <Switch
+                    size="sm"
+                    checked={enableIpv6}
+                    disabled={prefsDisabled}
+                    onCheckedChange={(v) => {
+                      setEnableIpv6(v)
+                      setEnableIpv6Pref(v)
+                    }}
+                    aria-label="IPv6"
+                  />
+                </label>
+              </div>
+            )}
           </div>
-        </footer>
+
+          <footer className="pb-0.5">
+            <div className="mx-auto flex max-w-[220px] items-center gap-3">
+              <div className="h-px flex-1 bg-[#eceef1]" />
+              <div className="flex items-center gap-1.5">
+                <img
+                  src="/logo.png"
+                  alt=""
+                  className="size-3.5 rounded-[4px] object-cover opacity-80"
+                  draggable={false}
+                />
+                <span className="text-[11px] font-medium tracking-wide text-[#9aa0a6]">
+                  AureStream
+                </span>
+                <span className="text-[11px] text-[#d0d4da]">·</span>
+                <span className="text-[11px] font-medium tabular-nums text-[#b0b8c4]">v0.3.5</span>
+              </div>
+              <div className="h-px flex-1 bg-[#eceef1]" />
+            </div>
+          </footer>
+        </div>
       </div>
     </div>
   )

@@ -68,7 +68,7 @@ export default function App() {
       <SubsProvider>
         <EngineProvider>
           <BrowserRouter>
-            <div className="h-full w-full overflow-hidden bg-white dark:bg-background">
+            <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-background">
               <AppRoutes />
             </div>
           </BrowserRouter>
