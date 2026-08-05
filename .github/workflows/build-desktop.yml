@@ -6,11 +6,11 @@ on:
       linux-x64:
         description: "Build Linux x64"
         type: boolean
-        default: true
+        default: false
       linux-arm64:
         description: "Build Linux arm64"
         type: boolean
-        default: true
+        default: false
       windows-x64:
         description: "Build Windows x64"
         type: boolean
@@ -18,15 +18,15 @@ on:
       windows-arm64:
         description: "Build Windows arm64"
         type: boolean
-        default: true
+        default: false
       macos-aarch64:
         description: "Build macOS ARM64"
         type: boolean
-        default: true
+        default: false
       macos-x64:
         description: "Build macOS x64"
         type: boolean
-        default: true
+        default: false
   release:
     types: [published]
 
@@ -136,7 +136,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          # pnpm-lock.yaml is gitignored in this repo; key off package.json instead.
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('package.json') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
@@ -155,7 +156,23 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Download Xray sidecar and geo databases
+        env:
+          AURESTREAM_RUST_TARGET: ${{ matrix.rust_target }}
         run: pnpm download-binaries
+
+      - name: Verify staged sidecar for matrix target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            bin="src-tauri/binaries/aurestream-core-${{ matrix.rust_target }}.exe"
+          else
+            bin="src-tauri/binaries/aurestream-core-${{ matrix.rust_target }}"
+          fi
+          test -f "$bin"
+          test -f src-tauri/resources/geoip.dat
+          test -f src-tauri/resources/geosite.dat
+          ls -la "$bin" src-tauri/resources/geoip.dat src-tauri/resources/geosite.dat
 
       - name: Check frontend + workspace crates
         run: |

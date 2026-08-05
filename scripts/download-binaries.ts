@@ -144,11 +144,43 @@ async function embeddingExternalBinaries(
     }
 }
 
-async function downloadEmbeddingExternalBinaries(): Promise<void> {
+function parseTargetFilter(argv: string[]): string | undefined {
+    const envTarget = process.env.AURESTREAM_RUST_TARGET?.trim();
+    if (envTarget) {
+        return envTarget;
+    }
+    const idx = argv.indexOf('--target');
+    if (idx >= 0 && argv[idx + 1]) {
+        return argv[idx + 1].trim();
+    }
+    const eq = argv.find((a) => a.startsWith('--target='));
+    return eq ? eq.slice('--target='.length).trim() : undefined;
+}
+
+function knownTargetTriples(): Set<string> {
+    const triples = new Set<string>();
+    for (const archs of Object.values(RUST_TARGET_TRIPLES)) {
+        for (const target of Object.values(archs)) {
+            triples.add(target.targetTriple);
+        }
+    }
+    return triples;
+}
+
+async function downloadEmbeddingExternalBinaries(targetFilter?: string): Promise<void> {
+    if (targetFilter && !knownTargetTriples().has(targetFilter)) {
+        throw new Error(
+            `Unknown rust target '${targetFilter}'. Expected one of: ${[...knownTargetTriples()].join(', ')}`
+        );
+    }
+
     const downloadTasks: Promise<void>[] = [];
 
     for (const [platform, archs] of Object.entries(RUST_TARGET_TRIPLES)) {
         for (const [arch, target] of Object.entries(archs)) {
+            if (targetFilter && target.targetTriple !== targetFilter) {
+                continue;
+            }
             const extension = platform === 'windows' ? '.exe' : '';
             downloadTasks.push(
                 embeddingExternalBinaries(
@@ -161,14 +193,23 @@ async function downloadEmbeddingExternalBinaries(): Promise<void> {
         }
     }
 
+    if (downloadTasks.length === 0) {
+        throw new Error('No download tasks selected');
+    }
+
     await Promise.all(downloadTasks);
 }
 
 {
     const scriptStartTime = Date.now();
-    console.log('Starting Xray-core downloads (MVP: no TUN assets)...\n');
+    const targetFilter = parseTargetFilter(process.argv.slice(2));
+    console.log(
+        targetFilter
+            ? `Starting Xray-core download for ${targetFilter} (MVP: no TUN assets)...\n`
+            : 'Starting Xray-core downloads for all targets (MVP: no TUN assets)...\n'
+    );
 
-    downloadEmbeddingExternalBinaries().then(() => {
+    downloadEmbeddingExternalBinaries(targetFilter).then(() => {
         const totalElapsed = ((Date.now() - scriptStartTime) / 1000).toFixed(2);
         console.log(`\n✓ All downloads completed! Total time: ${totalElapsed}s`);
         process.exit(0);
