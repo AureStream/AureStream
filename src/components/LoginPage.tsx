@@ -53,30 +53,30 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-y-auto no-scrollbar bg-white px-8 animate-fade-in dark:bg-background">
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center py-8">
-        <div className="flex w-full max-w-[320px] flex-col">
-          <h1 className="mb-7 text-center text-[1.75rem] font-bold tracking-tight text-[#1a1d21] dark:text-foreground">
+    <div className="relative flex h-full w-full flex-col overflow-y-auto no-scrollbar bg-white px-6 animate-fade-in dark:bg-background">
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center py-6">
+        <div className="flex w-full max-w-[288px] flex-col">
+          <h1 className="mb-5 text-center text-[1.45rem] font-bold tracking-tight text-[#1a1d21] dark:text-foreground">
             登录
           </h1>
 
           {error ? (
-            <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive">
+            <div className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
               {error}
             </div>
           ) : null}
           {successMessage ? (
-            <div className="mb-4 rounded-2xl border border-success/20 bg-success/10 px-4 py-2.5 text-sm font-medium text-success">
+            <div className="mb-3 rounded-xl border border-success/20 bg-success/10 px-3 py-2 text-xs font-medium text-success">
               {successMessage}
             </div>
           ) : null}
           {info && !error ? (
-            <div className="mb-4 rounded-2xl border border-[#eceef1] bg-[#f1f2f4] px-4 py-2.5 text-sm font-medium text-[#6b7280]">
+            <div className="mb-3 rounded-xl border border-[#eceef1] bg-[#f1f2f4] px-3 py-2 text-xs font-medium text-[#6b7280]">
               {info}
             </div>
           ) : null}
 
-          <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-3.5">
+          <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-2.5">
             <AuthMobileField
               id="login-email"
               type="email"
@@ -103,32 +103,32 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="shrink-0 rounded-full p-1 text-[#9aa0a6] transition-colors hover:text-[#1a1d21]"
+                  className="shrink-0 rounded-full p-0.5 text-[#9aa0a6] transition-colors hover:text-[#1a1d21]"
                   aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showPassword ? (
-                    <EyeOff className="size-[18px]" strokeWidth={1.75} />
+                    <EyeOff className="size-4" strokeWidth={1.75} />
                   ) : (
-                    <Eye className="size-[18px]" strokeWidth={1.75} />
+                    <Eye className="size-4" strokeWidth={1.75} />
                   )}
                 </button>
               }
             />
 
             <div className="flex items-center justify-between px-0.5 pt-0.5">
-              <label className="flex cursor-pointer items-center gap-2 select-none">
+              <label className="flex cursor-pointer items-center gap-1.5 select-none">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="size-4 shrink-0 rounded border-[#cfd3d8] accent-[var(--auth-accent)]"
+                  className="size-3.5 shrink-0 rounded border-[#cfd3d8] accent-[var(--auth-accent)]"
                 />
-                <span className="text-[13px] font-medium text-[#6b7280]">记住我</span>
+                <span className="text-xs font-medium text-[#6b7280]">记住我</span>
               </label>
               <button
                 type="button"
                 onClick={handleForgot}
-                className="text-[13px] font-semibold text-[var(--auth-accent)] transition-opacity hover:opacity-80"
+                className="text-xs font-semibold text-[var(--auth-accent)] transition-opacity hover:opacity-80"
               >
                 忘记密码
               </button>
@@ -138,16 +138,16 @@ export default function LoginPage() {
               type="submit"
               disabled={authLoading}
               className={cn(
-                "mt-1 flex h-[3.25rem] w-full items-center justify-center gap-2 rounded-full",
-                "bg-[var(--auth-accent)] text-[15px] font-semibold text-white",
-                "shadow-[0_8px_20px_rgba(108,92,255,0.22)]",
+                "mt-0.5 flex h-11 w-full items-center justify-center gap-2 rounded-full",
+                "bg-[var(--auth-accent)] text-[13px] font-semibold text-white",
+                "shadow-[0_6px_16px_rgba(108,92,255,0.2)]",
                 "transition-all active:scale-[0.98]",
                 "disabled:pointer-events-none disabled:opacity-60",
               )}
             >
               {authLoading ? (
                 <>
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-3.5 animate-spin" />
                   请稍候...
                 </>
               ) : (
@@ -156,17 +156,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mt-5 flex items-center gap-2.5">
             <div className="h-px flex-1 bg-[#eceef1]" />
-            <span className="text-[12px] font-medium text-[#9aa0a6]">还没有账号？</span>
+            <span className="text-[11px] font-medium text-[#9aa0a6]">还没有账号？</span>
             <div className="h-px flex-1 bg-[#eceef1]" />
           </div>
 
           <Link
             to="/register"
             className={cn(
-              "mt-3.5 flex h-12 w-full items-center justify-center rounded-full",
-              "bg-[#f1f2f4] text-[14px] font-semibold text-[#1a1d21]",
+              "mt-2.5 flex h-10 w-full items-center justify-center rounded-full",
+              "bg-[#f1f2f4] text-[13px] font-semibold text-[#1a1d21]",
               "transition-colors hover:bg-[#e8eaed]",
               "dark:bg-muted dark:text-foreground",
             )}
@@ -176,7 +176,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <p className="mx-auto w-full max-w-[320px] shrink-0 pb-6 pt-2 text-center text-[11px] leading-relaxed text-[#9aa0a6]">
+      <p className="mx-auto w-full max-w-[288px] shrink-0 pb-5 pt-1.5 text-center text-[10px] leading-relaxed text-[#9aa0a6]">
         登录即表示你同意我们的
         <br />
         <span className="font-semibold text-[var(--auth-accent)]">服务条款</span>
