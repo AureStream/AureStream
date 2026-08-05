@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-engine"
+description = "Allows AureStream engine start/stop/select IPC commands"
+commands.allow = [
+  "engine_start",
+  "engine_stop",
+  "engine_select_node",
+  "engine_get_state"
+]

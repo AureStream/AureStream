@@ -102,4 +102,38 @@ export async function onSubsUpdated(
   });
 }
 
+export type EngineStatePayload = {
+  state: string;
+  reason?: string;
+  selectedNode?: string;
+};
+
+export const ENGINE_STATE_EVENT = "engine-state";
+
+export async function engineStart(nodeTag?: string): Promise<EngineStatePayload> {
+  return invoke<EngineStatePayload>("engine_start", {
+    nodeTag: nodeTag ?? null,
+  });
+}
+
+export async function engineStop(): Promise<EngineStatePayload> {
+  return invoke<EngineStatePayload>("engine_stop");
+}
+
+export async function engineSelectNode(nodeTag: string): Promise<EngineStatePayload> {
+  return invoke<EngineStatePayload>("engine_select_node", { nodeTag });
+}
+
+export async function engineGetState(): Promise<EngineStatePayload> {
+  return invoke<EngineStatePayload>("engine_get_state");
+}
+
+export async function onEngineState(
+  handler: (payload: EngineStatePayload) => void,
+): Promise<UnlistenFn> {
+  return listen<EngineStatePayload>(ENGINE_STATE_EVENT, (event) => {
+    handler(event.payload);
+  });
+}
+
 export { AuthError };

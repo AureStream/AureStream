@@ -212,6 +212,9 @@ name = "aurestream"
 version = "0.3.5"
 dependencies = [
  "aurestream-api-client",
+ "aurestream-config",
+ "aurestream-engine",
+ "aurestream-platform-proxy",
  "base64 0.22.1",
  "serde",
  "serde_json",

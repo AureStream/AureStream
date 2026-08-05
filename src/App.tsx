@@ -2,11 +2,17 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import LoginPage from "@/components/LoginPage";
 import RegisterPage from "@/components/RegisterPage";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { EngineProvider, useEngine } from "@/contexts/EngineContext";
 import { SubsProvider, useSubs } from "@/contexts/SubsContext";
 
 function HomePage() {
   const { user, logout, authLoading } = useAuth();
   const { subscriptions, nodes, syncing, activeId } = useSubs();
+  const { engine, start, stop } = useEngine();
+
+  const busy =
+    engine.state === "starting" || engine.state === "stopping";
+  const connected = engine.state === "running";
 
   return (
     <div className="home-page">
@@ -24,14 +30,32 @@ function HomePage() {
                   activeId ? ` · 当前 ${activeId.slice(0, 8)}…` : ""
                 }`}
           </p>
-          <button
-            className="auth-btn"
-            type="button"
-            disabled={authLoading}
-            onClick={() => void logout()}
-          >
-            {authLoading ? "退出中…" : "退出登录"}
-          </button>
+          <p className="home-subs-hint">
+            引擎：{engine.state}
+            {engine.selectedNode ? ` · ${engine.selectedNode}` : ""}
+            {engine.reason ? ` · ${engine.reason}` : ""}
+          </p>
+          <div className="home-links">
+            <button
+              className="auth-btn"
+              type="button"
+              disabled={busy || (!connected && nodes.length === 0)}
+              onClick={() => {
+                if (connected) void stop();
+                else void start();
+              }}
+            >
+              {busy ? "处理中…" : connected ? "断开" : "连接"}
+            </button>
+            <button
+              className="auth-btn"
+              type="button"
+              disabled={authLoading}
+              onClick={() => void logout()}
+            >
+              {authLoading ? "退出中…" : "退出登录"}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="home-session">
@@ -54,13 +78,15 @@ export default function App() {
   return (
     <AuthProvider>
       <SubsProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-          </Routes>
-        </BrowserRouter>
+        <EngineProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+            </Routes>
+          </BrowserRouter>
+        </EngineProvider>
       </SubsProvider>
     </AuthProvider>
   );
