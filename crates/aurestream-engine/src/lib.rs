@@ -4,7 +4,7 @@ mod state;
 mod xray;
 
 pub use state::{EngineState, StateMachine};
-pub use xray::{resolve_sidecar_path, SharedXrayEngine, XrayEngine};
+pub use xray::{resolve_asset_dir, resolve_sidecar_path, SharedXrayEngine, XrayEngine};
 
 use std::fmt;
 use std::path::Path;

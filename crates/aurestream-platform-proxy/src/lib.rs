@@ -1,16 +1,20 @@
 //! OS system proxy set/clear for AureStream MVP.
 //!
 //! # API
+//! - [`is_supported`] — `true` on Windows / macOS / Linux
 //! - [`set_system_proxy`] — enable HTTP(S)/SOCKS system proxy at `host:port`
 //! - [`clear_system_proxy`] — disable the system proxy
 //!
-//! Windows (primary): WinINET + RAS. macOS: `networksetup`. Linux: GNOME
-//! `gsettings` or KDE `kwriteconfig`.
+//! # Platforms
+//! | OS | Backend |
+//! |---|---|
+//! | Windows | WinINET + RAS (LAN + dial-up/VPN connections) |
+//! | macOS | `networksetup` on **all enabled** network services |
+//! | Linux | GNOME `gsettings` and/or KDE `kwriteconfig` (with fallback) |
 //!
-//! # Manual verification (Windows / WinINET)
-//! On a Windows host (e.g. `10.20.41.26`):
+//! # Manual verification
 //! 1. Call `set_system_proxy("127.0.0.1", 17890)`.
-//! 2. Confirm IE / WinINET / Settings → Proxy shows `127.0.0.1:17890`.
+//! 2. Confirm OS proxy UI shows `127.0.0.1:17890` (HTTP/HTTPS/SOCKS).
 //! 3. Call `clear_system_proxy()` and confirm proxy is off (direct).
 
 mod error;
@@ -26,7 +30,21 @@ mod linux;
 pub use error::ProxyError;
 pub use helpers::{default_bypass, format_proxy_addr};
 
+/// Whether this build target has a system-proxy backend.
+///
+/// MVP desktop targets (Windows, macOS, Linux) all return `true`.
+pub fn is_supported() -> bool {
+    cfg!(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+    ))
+}
+
 /// Enable the OS system proxy pointing at `host:port`.
+///
+/// On macOS this is applied to every enabled network service. On Linux the
+/// preferred desktop backend is tried first, then the alternate.
 pub fn set_system_proxy(host: &str, port: u16) -> Result<(), ProxyError> {
     #[cfg(target_os = "windows")]
     {
@@ -64,5 +82,15 @@ pub fn clear_system_proxy() -> Result<(), ProxyError> {
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         Err(ProxyError::Unsupported("this OS has no system-proxy backend"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desktop_targets_report_supported() {
+        assert!(is_supported());
     }
 }

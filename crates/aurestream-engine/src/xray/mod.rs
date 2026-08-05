@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aurestream_config::ProxyNode;
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
 use tokio::time::{sleep, timeout, Instant};
@@ -21,6 +22,8 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SIDECAR_NAME: &str = "aurestream-core";
+const GEOIP_FILE: &str = "geoip.dat";
+const GEOSITE_FILE: &str = "geosite.dat";
 
 struct Runtime {
     sm: StateMachine,
@@ -33,6 +36,7 @@ struct Runtime {
 pub struct XrayEngine {
     inner: Mutex<Runtime>,
     sidecar_override: Option<PathBuf>,
+    asset_override: Option<PathBuf>,
 }
 
 impl XrayEngine {
@@ -45,6 +49,7 @@ impl XrayEngine {
                 api_port: None,
             }),
             sidecar_override: None,
+            asset_override: None,
         }
     }
 
@@ -53,6 +58,12 @@ impl XrayEngine {
         let mut eng = Self::new();
         eng.sidecar_override = Some(path.into());
         eng
+    }
+
+    /// Prefer an explicit asset directory containing `geoip.dat` / `geosite.dat`.
+    pub fn with_asset_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.asset_override = Some(path.into());
+        self
     }
 
     fn resolve_sidecar(&self) -> Result<PathBuf, EngineError> {
@@ -66,6 +77,15 @@ impl XrayEngine {
             )));
         }
         resolve_sidecar_path()
+    }
+
+    fn resolve_assets(&self, sidecar: &Path) -> Option<PathBuf> {
+        if let Some(p) = &self.asset_override {
+            if dir_has_geo_assets(p) {
+                return Some(p.clone());
+            }
+        }
+        resolve_asset_dir(sidecar)
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Runtime> {
@@ -96,6 +116,7 @@ impl Engine for XrayEngine {
 
     async fn start(&self, config: &Path) -> Result<(), EngineError> {
         let sidecar = self.resolve_sidecar()?;
+        let asset_dir = self.resolve_assets(&sidecar);
         let config_str = config
             .to_str()
             .ok_or_else(|| EngineError::io("config path is not valid UTF-8"))?
@@ -112,14 +133,23 @@ impl Engine for XrayEngine {
             (socks, api)
         };
 
-        let mut child = match Command::new(&sidecar)
-            .args(["run", "-c", &config_str])
+        let mut cmd = Command::new(&sidecar);
+        cmd.args(["run", "-c", &config_str])
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .spawn()
-        {
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        // Xray resolves geoip.dat / geosite.dat via XRAY_LOCATION_ASSET (else cwd).
+        if let Some(ref assets) = asset_dir {
+            cmd.env("XRAY_LOCATION_ASSET", assets);
+            // cwd fallback for older builds / relative asset lookups.
+            cmd.current_dir(assets);
+        } else if let Some(parent) = sidecar.parent() {
+            cmd.current_dir(parent);
+        }
+
+        let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
                 let reason = format!("spawn sidecar {}: {e}", sidecar.display());
@@ -134,17 +164,29 @@ impl Engine for XrayEngine {
         let ready = wait_until_ready(socks_port, api_port, &mut child).await;
 
         if !ready {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            let reason = format!(
-                "startup timeout: socks :{socks_port} / api :{api_port} not ready"
-            );
+            let detail = collect_child_failure(&mut child).await;
+            let asset_hint = match &asset_dir {
+                Some(p) => format!("assets={}", p.display()),
+                None => "assets=<not found>".into(),
+            };
+            let reason = if detail.is_empty() {
+                format!(
+                    "startup timeout: socks :{socks_port} / api :{api_port} not ready ({asset_hint}; sidecar={})",
+                    sidecar.display()
+                )
+            } else {
+                format!("sidecar failed: {detail}")
+            };
             let mut guard = self.lock();
             let _ = guard.sm.transition(EngineState::Failed {
                 reason: reason.clone(),
             });
             return Err(EngineError::not_ready(reason));
         }
+
+        // Drop pipes so a chatty sidecar cannot fill buffers and stall.
+        drop(child.stdout.take());
+        drop(child.stderr.take());
 
         let mut guard = self.lock();
         guard.child = Some(child);
@@ -213,6 +255,61 @@ async fn probe_port(port: u16) -> bool {
         timeout(PROBE_CONNECT_TIMEOUT, TcpStream::connect(addr)).await,
         Ok(Ok(_))
     )
+}
+
+/// Kill the child (if still alive) and return a short stderr/stdout snippet.
+async fn collect_child_failure(child: &mut Child) -> String {
+    let mut stderr_buf = Vec::new();
+    let mut stdout_buf = Vec::new();
+
+    if let Some(mut err) = child.stderr.take() {
+        let _ = timeout(Duration::from_millis(400), err.read_to_end(&mut stderr_buf)).await;
+    }
+    if let Some(mut out) = child.stdout.take() {
+        let _ = timeout(Duration::from_millis(200), out.read_to_end(&mut stdout_buf)).await;
+    }
+
+    let _ = child.kill().await;
+    let status = child.wait().await.ok();
+
+    let mut parts = Vec::new();
+    if let Some(st) = status {
+        if !st.success() {
+            parts.push(format!("exit={st}"));
+        }
+    }
+    let err = String::from_utf8_lossy(&stderr_buf);
+    let out = String::from_utf8_lossy(&stdout_buf);
+    let combined = format!("{err}\n{out}");
+    let snip = last_useful_line(&combined);
+    if !snip.is_empty() {
+        parts.push(snip);
+    }
+    parts.join(" — ")
+}
+
+fn last_useful_line(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .rev()
+        .find(|l| {
+            // Prefer the actual failure line over the banner.
+            !l.starts_with("Xray ")
+                && !l.contains("Penetrates Everything")
+                && !l.contains("anti-censorship")
+                && !l.contains("Reading config:")
+        })
+        .or_else(|| {
+            text.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .last()
+        })
+        .unwrap_or("")
+        .chars()
+        .take(400)
+        .collect()
 }
 
 fn parse_ports_from_config(path: &Path) -> Option<(u16, u16)> {
@@ -296,5 +393,94 @@ fn resolve_sidecar_in_dir(exe_dir: &Path) -> Option<PathBuf> {
     None
 }
 
+fn dir_has_geo_assets(dir: &Path) -> bool {
+    dir.join(GEOIP_FILE).is_file() || dir.join(GEOSITE_FILE).is_file()
+}
+
+/// Find the directory that holds Xray geo assets (`geoip.dat` / `geosite.dat`).
+///
+/// Search order:
+/// 1. `AURESTREAM_ASSET_DIR` / `XRAY_LOCATION_ASSET`
+/// 2. Next to the sidecar binary
+/// 3. `resources/` next to the sidecar / current exe (Tauri bundle + `tauri dev`)
+/// 4. Dev-tree `src-tauri/resources`
+pub fn resolve_asset_dir(sidecar: &Path) -> Option<PathBuf> {
+    for key in ["AURESTREAM_ASSET_DIR", "XRAY_LOCATION_ASSET"] {
+        if let Ok(p) = std::env::var(key) {
+            let path = PathBuf::from(p);
+            if dir_has_geo_assets(&path) {
+                return Some(path);
+            }
+        }
+    }
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Some(parent) = sidecar.parent() {
+        candidates.push(parent.to_path_buf());
+        candidates.push(parent.join("resources"));
+        // Bundle layout sometimes nests as `…/Resources/resources/`.
+        candidates.push(parent.join("resources").join("resources"));
+        if let Some(grand) = parent.parent() {
+            candidates.push(grand.join("resources"));
+            candidates.push(grand.join("resources").join("resources"));
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.to_path_buf());
+            candidates.push(dir.join("resources"));
+            candidates.push(dir.join("resources").join("resources"));
+        }
+    }
+
+    candidates.extend([
+        PathBuf::from("src-tauri/resources"),
+        PathBuf::from("../src-tauri/resources"),
+        PathBuf::from("../../src-tauri/resources"),
+        PathBuf::from("resources"),
+    ]);
+
+    for dir in candidates {
+        if dir_has_geo_assets(&dir) {
+            return Some(dir);
+        }
+    }
+    None
+}
+
 /// Shared handle type for AppState (Task 9).
 pub type SharedXrayEngine = Arc<XrayEngine>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dir_has_geo_assets_false_for_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!dir_has_geo_assets(dir.path()));
+    }
+
+    #[test]
+    fn resolve_asset_dir_finds_geoip_next_to_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let sidecar = dir.path().join("aurestream-core");
+        std::fs::write(&sidecar, b"x").unwrap();
+        std::fs::write(dir.path().join(GEOIP_FILE), b"geo").unwrap();
+        let found = resolve_asset_dir(&sidecar).expect("asset dir");
+        assert_eq!(found, dir.path());
+    }
+
+    #[test]
+    fn last_useful_line_skips_banner() {
+        let text = "\
+Xray 26.3.27 (Xray, Penetrates Everything.) abc
+A unified platform for anti-censorship.
+Failed to start: main: failed to load config files: geoip.dat
+";
+        let line = last_useful_line(text);
+        assert!(line.contains("Failed to start"), "{line}");
+    }
+}

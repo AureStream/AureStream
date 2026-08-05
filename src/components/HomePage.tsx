@@ -40,6 +40,33 @@ function formatDate(ts: number) {
   return `${y}年${m}月${day}日`
 }
 
+function formatDuration(totalSeconds: number) {
+  const s = Math.max(0, Math.floor(totalSeconds))
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0")
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0")
+  const ss = String(s % 60).padStart(2, "0")
+  return `${hh}:${mm}:${ss}`
+}
+
+/** Live HH:MM:SS while connected; resets on disconnect. */
+function useConnectionDuration(connected: boolean) {
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (connected) {
+      setStartedAt(Date.now())
+      setNow(Date.now())
+      const id = window.setInterval(() => setNow(Date.now()), 1000)
+      return () => window.clearInterval(id)
+    }
+    setStartedAt(null)
+  }, [connected])
+
+  if (!connected || startedAt == null) return 0
+  return Math.max(0, Math.floor((now - startedAt) / 1000))
+}
+
 export default function HomePage() {
   const navigate = useNavigate()
   const { nodes, subscriptions, activeId, syncing } = useSubs()
@@ -60,8 +87,9 @@ export default function HomePage() {
   const failed = engine.state === "failed"
   const nodesEmpty = nodes.length === 0
   const prefsDisabled = busy
-  /** Connected (or connecting) shows node entry; idle shows preference switches. */
-  const showNodeEntry = connected || engine.state === "starting"
+  /** Only after a successful connection; otherwise show preference switches. */
+  const showNodeEntry = connected
+  const durationText = formatDuration(useConnectionDuration(connected))
 
   const selected =
     nodes.find((n) => n.tag === engine.selectedNode) ??
@@ -93,7 +121,7 @@ export default function HomePage() {
       : 0
 
   const statusLine = (() => {
-    if (connected) return { kind: "on" as const, text: "已连接" }
+    if (connected) return { kind: "on" as const, text: durationText }
     if (busy && engine.state === "starting") return { kind: "busy" as const, text: "正在连接…" }
     if (busy && engine.state === "stopping") return { kind: "busy" as const, text: "正在断开…" }
     if (failed) return { kind: "fail" as const, text: engine.reason ? `连接失败：${engine.reason}` : "连接失败" }
@@ -180,109 +208,114 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Connection — middle band; slightly above vertical center */}
-        <section className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 py-4 pb-8">
-          <div className="flex h-7 items-center justify-center">
-            {statusLine.kind === "on" ? (
-              <div className="inline-flex items-center gap-2 text-base font-semibold text-[var(--auth-accent)]">
-                <span className="size-2 rounded-full bg-[var(--auth-accent)]" />
-                <span>{statusLine.text}</span>
-              </div>
-            ) : statusLine.kind === "busy" ? (
-              <div className="inline-flex items-center gap-2 text-sm font-medium text-[#8b93a0]">
-                <span className="size-2 animate-pulse rounded-full bg-[var(--auth-accent)]" />
-                <span>{statusLine.text}</span>
-              </div>
-            ) : statusLine.kind === "fail" ? (
-              <div className="inline-flex max-w-[280px] items-center gap-2 text-center text-sm font-medium text-destructive">
-                <span className="size-2 shrink-0 rounded-full bg-destructive" />
-                <span className="line-clamp-2">{statusLine.text}</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 text-sm font-medium text-[#8b93a0]">
-                <span className="size-2 rounded-full bg-[#c5ccd6]" />
-                <span>{statusLine.text}</span>
-              </div>
-            )}
-          </div>
+        {/* Connection band — vertically centered between traffic card and bottom node/prefs */}
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+          <section className="flex shrink-0 flex-col items-center gap-4 py-1">
+            <div className="flex h-7 items-center justify-center">
+              {statusLine.kind === "on" ? (
+                <div
+                  className="inline-flex items-center gap-2 text-base font-semibold tabular-nums tracking-wide text-[var(--auth-accent)]"
+                  aria-live="polite"
+                  aria-label={`已连接 ${statusLine.text}`}
+                >
+                  <span className="size-2 rounded-full bg-[var(--auth-accent)]" />
+                  <span>{statusLine.text}</span>
+                </div>
+              ) : statusLine.kind === "busy" ? (
+                <div className="inline-flex items-center gap-2 text-sm font-medium text-[#8b93a0]">
+                  <span className="size-2 animate-pulse rounded-full bg-[var(--auth-accent)]" />
+                  <span>{statusLine.text}</span>
+                </div>
+              ) : statusLine.kind === "fail" ? (
+                <div className="inline-flex max-w-[280px] items-center gap-2 text-center text-sm font-medium text-destructive">
+                  <span className="size-2 shrink-0 rounded-full bg-destructive" />
+                  <span className="line-clamp-2">{statusLine.text}</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 text-sm font-medium text-[#8b93a0]">
+                  <span className="size-2 rounded-full bg-[#c5ccd6]" />
+                  <span>{statusLine.text}</span>
+                </div>
+              )}
+            </div>
 
-          <div className="relative flex items-center justify-center">
-            {/* Equal ring gaps: outer 10.75 → middle 8.75 → inner 6.75 (1rem each side) */}
-            {/* Outer ring — stays neutral */}
-            <div className="relative flex h-[10.75rem] w-[10.75rem] items-center justify-center rounded-full border-[1.5px] border-[#e6ebf2] bg-transparent">
-              {/* Middle ring — color changes when connected */}
-              <div
-                className={cn(
-                  "flex h-[8.75rem] w-[8.75rem] items-center justify-center rounded-full border-[1.5px] transition-colors duration-300",
-                  connected
-                    ? "border-[var(--auth-accent)] bg-[var(--auth-accent)]/10"
-                    : "border-[#e8edf4] bg-transparent",
-                )}
-              >
-                {/* Inner power button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (connected) void stop()
-                    else void start()
-                  }}
-                  disabled={!canToggle}
-                  aria-label={connected ? "断开连接" : "连接"}
+            <div className="relative flex items-center justify-center">
+              {/* Equal ring gaps: outer 10.75 → middle 8.75 → inner 6.75 (1rem each side) */}
+              {/* Outer ring — stays neutral; only the middle band picks up connect color */}
+              <div className="relative flex h-[10.75rem] w-[10.75rem] items-center justify-center rounded-full border-[1.5px] border-[#e6ebf2] bg-transparent">
+                <div
                   className={cn(
-                    "relative flex h-[6.75rem] w-[6.75rem] items-center justify-center rounded-full border border-[#e8edf4] bg-white text-[#a0aab8] transition-all duration-300",
-                    "hover:text-[#7a8494]",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--auth-accent)]/35",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
-                    "active:scale-[0.97]",
-                    busy && !connected && "animate-pulse",
+                    "flex h-[8.75rem] w-[8.75rem] items-center justify-center rounded-full border-[1.5px] transition-colors duration-300",
+                    connected
+                      ? // Same solid accent for border + fill (no lighter tinted wash)
+                        "border-[var(--auth-accent)] bg-[var(--auth-accent)]"
+                      : "border-[#e8edf4] bg-transparent",
                   )}
                 >
-                  <svg
-                    width="42"
-                    height="42"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.15"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (connected) void stop()
+                      else void start()
+                    }}
+                    disabled={!canToggle}
+                    aria-label={connected ? "断开连接" : "连接"}
+                    className={cn(
+                      "relative flex h-[6.75rem] w-[6.75rem] items-center justify-center rounded-full border border-[#e8edf4] bg-white text-[#a0aab8] transition-all duration-300",
+                      "hover:text-[#7a8494]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--auth-accent)]/35",
+                      "disabled:cursor-not-allowed disabled:opacity-50",
+                      "active:scale-[0.97]",
+                      busy && !connected && "animate-pulse",
+                    )}
                   >
-                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-                    <line x1="12" y1="2" x2="12" y2="12" />
-                  </svg>
-                </button>
+                    <svg
+                      width="42"
+                      height="42"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.15"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                      <line x1="12" y1="2" x2="12" y2="12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex h-5 items-center justify-center gap-1.5 text-xs font-medium text-[#8b93a0]">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className={cn(connected ? "text-[var(--auth-accent)]" : "text-[#b0b8c4]")}
-              aria-hidden
-            >
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              {connected ? <path d="m9 12 2 2 4-4" /> : null}
-            </svg>
-            <span>
-              {connected
-                ? "数据隧道保护已启用"
-                : nodesEmpty
-                  ? syncing
-                    ? "订阅同步中…"
-                    : "暂无可用节点"
-                  : "数据隧道保护未启用"}
-            </span>
-          </div>
-        </section>
+            <div className="flex h-5 items-center justify-center gap-1.5 text-xs font-medium text-[#8b93a0]">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={cn(connected ? "text-[var(--auth-accent)]" : "text-[#b0b8c4]")}
+                aria-hidden
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                {connected ? <path d="m9 12 2 2 4-4" /> : null}
+              </svg>
+              <span>
+                {connected
+                  ? "数据隧道保护已启用"
+                  : nodesEmpty
+                    ? syncing
+                      ? "订阅同步中…"
+                      : "暂无可用节点"
+                    : "数据隧道保护未启用"}
+              </span>
+            </div>
+          </section>
+        </div>
 
-        {/* Bottom stack: node (connected) / prefs (disconnected) + version */}
-        <div className="mx-auto flex w-full max-w-[340px] shrink-0 flex-col gap-5 pb-1">
+        {/* Bottom: node (connected) / prefs (idle) + version */}
+        <div className="mx-auto flex w-full max-w-[300px] shrink-0 flex-col gap-8 px-1 pb-3 pt-1">
           <div className="flex h-[4.25rem] w-full items-center justify-center">
             {showNodeEntry ? (
               <button
@@ -379,7 +412,7 @@ export default function HomePage() {
             )}
           </div>
 
-          <footer className="pb-0.5">
+          <footer>
             <div className="mx-auto flex max-w-[220px] items-center gap-3">
               <div className="h-px flex-1 bg-[#eceef1]" />
               <div className="flex items-center gap-1.5">

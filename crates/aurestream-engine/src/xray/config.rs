@@ -104,8 +104,22 @@ pub fn build_xray_config_value(
                     "outboundTag": "api"
                 },
                 {
+                    // Explicit private CIDRs — no geoip.dat required for MVP direct bypass.
+                    // (geo assets are still resolved at runtime for future geosite rules.)
                     "type": "field",
-                    "ip": ["geoip:private"],
+                    "ip": [
+                        "0.0.0.0/8",
+                        "10.0.0.0/8",
+                        "127.0.0.0/8",
+                        "169.254.0.0/16",
+                        "172.16.0.0/12",
+                        "192.168.0.0/16",
+                        "224.0.0.0/4",
+                        "240.0.0.0/4",
+                        "::1/128",
+                        "fc00::/7",
+                        "fe80::/10"
+                    ],
                     "outboundTag": "direct"
                 },
                 {

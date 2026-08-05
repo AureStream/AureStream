@@ -159,7 +159,12 @@ fn unset_proxy() -> Result<(), ProxyError> {
 
 pub fn set_system_proxy(host: &str, port: u16) -> Result<(), ProxyError> {
     let host = require_host(host)?;
-    let server = format_proxy_addr(host, port);
+    // Scheme-qualified list so WinINET routes HTTP, HTTPS, and SOCKS to the
+    // same mixed inbound (Xray listens for both on one port).
+    let server = format!(
+        "http={0};https={0};socks={0}",
+        format_proxy_addr(host, port)
+    );
     set_global_proxy(&server, default_bypass())
 }
 
