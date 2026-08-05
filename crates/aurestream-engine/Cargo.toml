@@ -1,0 +1,13 @@
+[package]
+name = "aurestream-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Engine trait, state machine, and Xray sidecar runner for AureStream MVP"
+
+[dependencies]
+aurestream-config = { path = "../aurestream-config" }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time", "net", "io-util", "sync"] }
+
+[dev-dependencies]
+tempfile = "3"

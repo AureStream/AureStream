@@ -240,6 +240,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurestream-engine"
+version = "0.1.0"
+dependencies = [
+ "aurestream-config",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "aurestream-platform-proxy"
 version = "0.1.0"
 dependencies = [
@@ -4094,6 +4104,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

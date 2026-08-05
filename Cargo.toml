@@ -2,6 +2,7 @@
 members = [
     "crates/aurestream-api-client",
     "crates/aurestream-config",
+    "crates/aurestream-engine",
     "crates/aurestream-platform-proxy",
     "src-tauri",
 ]
