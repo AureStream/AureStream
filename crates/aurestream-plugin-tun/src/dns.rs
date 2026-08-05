@@ -509,25 +509,25 @@ mod tests {
 
     #[test]
     fn nameserver_with_gateway_first_preserves_existing_dns() {
-        let servers = nameserver_with_gateway_first("8.8.8.8,1.1.1.1", "172.19.0.1");
+        let servers = nameserver_with_gateway_first("8.8.8.8,1.1.1.1", "198.18.0.1");
         assert_eq!(
             format_nameserver_value(&servers),
-            "172.19.0.1,8.8.8.8,1.1.1.1"
+            "198.18.0.1,8.8.8.8,1.1.1.1"
         );
     }
 
     #[test]
     fn nameserver_with_gateway_first_deduplicates_gateway() {
-        let servers = nameserver_with_gateway_first("8.8.8.8,172.19.0.1,1.1.1.1", "172.19.0.1");
+        let servers = nameserver_with_gateway_first("8.8.8.8,198.18.0.1,1.1.1.1", "198.18.0.1");
         assert_eq!(
             format_nameserver_value(&servers),
-            "172.19.0.1,8.8.8.8,1.1.1.1"
+            "198.18.0.1,8.8.8.8,1.1.1.1"
         );
     }
 
     #[test]
     fn nameserver_without_gateway_removes_only_gateway() {
-        let servers = nameserver_without_gateway("172.19.0.1,8.8.8.8,1.1.1.1", "172.19.0.1");
+        let servers = nameserver_without_gateway("198.18.0.1,8.8.8.8,1.1.1.1", "198.18.0.1");
         assert_eq!(format_nameserver_value(&servers), "8.8.8.8,1.1.1.1");
     }
 

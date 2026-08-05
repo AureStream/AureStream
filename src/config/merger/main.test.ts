@@ -92,34 +92,35 @@ describe("config merger (Xray-core, local template)", () => {
     })
     // IP-first CN split (no geosite:cn domain direct — laggy list can mis-route).
     expect(written.outbounds.some((o: any) => o.tag === "dns-out" && o.protocol === "dns")).toBe(true)
-    // Port-53 capture must precede private-IP direct or Windows TUN DNS dies.
+    // DNS module tags before TUN port-53 capture (prevents dns-out loop).
     expect(written.routing.rules[0]).toEqual({
       type: "field",
+      inboundTag: ["dns-direct"],
+      outboundTag: "direct",
+    })
+    expect(written.routing.rules[1]).toEqual({
+      type: "field",
+      inboundTag: ["dns-proxy"],
+      balancerTag: "proxy-balancer",
+    })
+    expect(written.routing.rules[2]).toEqual({
+      type: "field",
+      inboundTag: ["tun-in"],
       port: "53",
       network: "udp,tcp",
       outboundTag: "dns-out",
     })
     // Link-local / NetBIOS noise dropped before private-IP direct.
-    expect(written.routing.rules[1]).toEqual({
+    expect(written.routing.rules[3]).toEqual({
       type: "field",
       ip: ["169.254.0.0/16", "fe80::/10"],
       outboundTag: "block",
     })
-    expect(written.routing.rules[2]).toEqual({
+    expect(written.routing.rules[4]).toEqual({
       type: "field",
       port: "137,138",
       network: "udp",
       outboundTag: "block",
-    })
-    expect(written.routing.rules).toContainEqual({
-      type: "field",
-      inboundTag: ["dns-direct"],
-      outboundTag: "direct",
-    })
-    expect(written.routing.rules).toContainEqual({
-      type: "field",
-      inboundTag: ["dns-proxy"],
-      balancerTag: "proxy-balancer",
     })
     expect(written.routing.rules).toContainEqual({
       type: "field",
@@ -254,8 +255,8 @@ describe("config merger (Xray-core, local template)", () => {
 
     const tunInbound = written.inbounds.find((ib: any) => ib.protocol === "tun")
     expect(tunInbound).toBeDefined()
-    expect(tunInbound.settings.gateway).toEqual(["172.19.0.1/30"])
-    expect(tunInbound.settings.dns).toEqual(["172.19.0.1"])
+    expect(tunInbound.settings.gateway).toEqual(["198.18.0.1/30"])
+    expect(tunInbound.settings.dns).toEqual(["1.1.1.1", "8.8.8.8"])
     expect(tunInbound.settings.desc).toBe("AureStream TUN")
     expect(tunInbound.settings.autoOutboundsInterface).toBe("auto")
     // Default (non-bypass-router, IPv6 off): LAN ranges excluded; no ::/0 capture.
@@ -267,13 +268,25 @@ describe("config merger (Xray-core, local template)", () => {
       destOverride: ["http", "tls", "quic"],
       routeOnly: true,
     })
+    // DNS module tags first, then TUN-scoped port-53 capture (avoid dns-out loop).
     expect(written.routing.rules[0]).toEqual({
       type: "field",
+      inboundTag: ["dns-direct"],
+      outboundTag: "direct",
+    })
+    expect(written.routing.rules[1]).toEqual({
+      type: "field",
+      inboundTag: ["dns-proxy"],
+      balancerTag: "proxy-balancer",
+    })
+    expect(written.routing.rules[2]).toEqual({
+      type: "field",
+      inboundTag: ["tun-in"],
       port: "53",
       network: "udp,tcp",
       outboundTag: "dns-out",
     })
-    expect(written.routing.rules[1]).toEqual({
+    expect(written.routing.rules[3]).toEqual({
       type: "field",
       ip: ["169.254.0.0/16", "fe80::/10"],
       outboundTag: "block",

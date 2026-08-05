@@ -31,8 +31,10 @@ impl EngineManager for WindowsEngine {
                 return Err("TUN 服务未安装，请先点击安装虚拟网卡服务".into());
             }
 
-            // Resolve the paths using the standard Tauri v2 sidecar layout
-            let gateway = crate::engine::helper::extract_tun_gateway_from_config(&config_path)
+            // Resolve the paths using the standard Tauri v2 sidecar layout.
+            // Argv[2] is the OS DNS hijack IP (tun.settings.dns[0], e.g. 1.1.1.1),
+            // NOT the TUN gateway address — see extract_tun_dns_hijack_from_config.
+            let dns_hijack = crate::engine::helper::extract_tun_dns_hijack_from_config(&config_path)
                 .unwrap_or_else(|| "-".to_string());
 
             // Xray `autoOutboundsInterface: "auto"` fails on multi-NIC / Hyper-V
@@ -70,7 +72,7 @@ impl EngineManager for WindowsEngine {
                     .map_err(|e| format!("Failed to get sidecar path: {}", e))?;
 
             let config_path_str = config_path.as_str();
-            let args = [config_path_str, &gateway, &core_path_str];
+            let args = [config_path_str, &dns_hijack, &core_path_str];
 
             log::info!("[win] starting AureStreamTunService with args: {:?}", args);
             scm::start_service_with_args(&args)

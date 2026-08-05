@@ -1,5 +1,8 @@
-/** XTLS/Xray-core release tag (includes the "v" prefix, e.g. "v26.3.27"). */
-export const XRAY_VERSION = "v26.3.27";
+/**
+ * XTLS/Xray-core release tag (includes the "v" prefix).
+ * Windows TUN `gateway` / `autoSystemRoutingTable` require >= v26.4.13.
+ */
+export const XRAY_VERSION = "v26.7.28";
 
 export const GITHUB_URL = 'https://github.com/BadKid90s/AureStream';
 export const TUN_INTERFACE_NAME = 'utun233';

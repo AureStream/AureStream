@@ -80,10 +80,14 @@ fn strip_verbatim_prefix(s: &str) -> &str {
 
 /// Extracts the IPv4 gateway address from an Xray-core `tun` inbound
 /// (`inbounds[].protocol == "tun"`, `settings.gateway: string[]`, each entry
-/// a CIDR like `"172.19.0.1/30"`). Returns the bare IP, no prefix length.
+/// a CIDR like `"198.18.0.1/30"`). Returns the bare IP, no prefix length.
 pub fn extract_tun_gateway_from_config(config_path: &str) -> Option<String> {
     let content = fs::read_to_string(config_path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    extract_tun_gateway_from_value(&v)
+}
+
+fn extract_tun_gateway_from_value(v: &serde_json::Value) -> Option<String> {
     let inbounds = v.get("inbounds")?.as_array()?;
     for inb in inbounds {
         if inb.get("protocol").and_then(serde_json::Value::as_str) != Some("tun") {
@@ -107,4 +111,34 @@ pub fn extract_tun_gateway_from_config(config_path: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// OS NameServer hijack target for TUN mode.
+///
+/// Prefers `settings.dns[0]` (XTLS TUN docs: routable resolvers like `1.1.1.1`)
+/// so queries enter the TUN stack and hit `port:53 → dns-out`. Falls back to
+/// the gateway bare IP for older configs that still set `dns: [gateway]`.
+pub fn extract_tun_dns_hijack_from_config(config_path: &str) -> Option<String> {
+    let content = fs::read_to_string(config_path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let inbounds = v.get("inbounds")?.as_array()?;
+    for inb in inbounds {
+        if inb.get("protocol").and_then(serde_json::Value::as_str) != Some("tun") {
+            continue;
+        }
+        if let Some(dns) = inb
+            .get("settings")
+            .and_then(|s| s.get("dns"))
+            .and_then(serde_json::Value::as_array)
+        {
+            for d in dns {
+                let Some(ip) = d.as_str() else { continue };
+                // Bare IPv4 only — skip DoH URLs / IPv6 for the Windows NameServer list.
+                if ip.contains('.') && !ip.contains(':') && !ip.contains('/') && !ip.is_empty() {
+                    return Some(ip.to_string());
+                }
+            }
+        }
+    }
+    extract_tun_gateway_from_value(&v)
 }

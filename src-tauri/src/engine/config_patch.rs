@@ -113,7 +113,7 @@ mod tests {
                 "protocol": "tun",
                 "settings": {
                     "autoOutboundsInterface": "auto",
-                    "gateway": ["172.19.0.1/30"]
+                    "gateway": ["198.18.0.1/30"]
                 }
             }],
             "outbounds": [

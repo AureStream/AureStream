@@ -4,17 +4,19 @@
 //! passed by `StartServiceW` in the client. We parse:
 //!   argv[0] = service name (ignored)
 //!   argv[1] = core config path
-//!   argv[2] = TUN gateway IP (or "-" to skip DNS override)
+//!   argv[2] = OS DNS hijack IP from tun.settings.dns[0] (e.g. 1.1.1.1),
+//!             or "-" to skip DNS override. Not the TUN gateway address.
 //!   argv[3] = core exe path
 //!
 //! Startup order (important for network availability):
-//!   1. Spawn core (creates Wintun + routes + answers DNS on the gateway)
+//!   1. Spawn core (creates Wintun + routes; port-53 → dns-out ready)
 //!   2. Wait until the Xray API port is accepting connections
-//!   3. Only then rewrite physical-NIC DNS to the TUN gateway and flush cache
+//!   3. Only then rewrite physical-NIC DNS to tun.settings.dns[0] and flush
 //!   4. Report SERVICE_RUNNING
 //!
 //! Applying DNS *before* core is ready blackholes name resolution for the
-//! whole machine (NameServer forced to 172.19.0.1 with nothing answering).
+//! whole machine (NameServer forced to e.g. 1.1.1.1 with nothing answering
+//! via port-53 → dns-out yet).
 //! On stop/exit: kill child, remove DNS override, report SERVICE_STOPPED.
 
 #![cfg(target_os = "windows")]

@@ -29,14 +29,26 @@ export const ECS_CLIENT_IP = "222.85.85.85"
  * Rule mode: DNS tag routing + IP-first CN split + ads block.
  * Global mode: DNS proxy tag + private LAN direct only.
  *
- * Port 53 is always first: Windows TUN service rewrites NIC NameServer to the
- * TUN gateway IP; without this rule those queries match `geoip:private →
- * direct` and never reach the DNS module, so the whole tunnel looks "up"
- * but nothing resolves.
+ * Order matters (XTLS DNS docs): `dns-direct` / `dns-proxy` inboundTag rules
+ * MUST precede the port-53 → dns-out capture. Otherwise the built-in DNS
+ * module's own upstream queries (UDP/53 to 1.1.1.1 etc.) match dns-out again
+ * and loop — OS sees bogus A records (e.g. www.google.com → Meta IPs).
+ *
+ * Port-53 capture is scoped to `tun-in` so only OS DNS hijacked into TUN
+ * (NameServer = settings.dns[0]) enters the DNS module.
  */
 export function buildRoutingRules(global: boolean = false): Record<string, unknown>[] {
+  // Built-in DNS module traffic (dns.tag / per-server tag) — route first.
+  const dnsModuleRoutes = global
+    ? [{ type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG }]
+    : [
+        { type: "field", inboundTag: [DNS_DIRECT_TAG], outboundTag: "direct" },
+        { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
+      ]
+  // OS DNS from TUN only (Windows NameServer hijack → 1.1.1.1:53 via tun-in).
   const dnsCapture = {
     type: "field",
+    inboundTag: ["tun-in"],
     port: "53",
     network: "udp,tcp",
     outboundTag: DNS_OUT_TAG,
@@ -59,17 +71,16 @@ export function buildRoutingRules(global: boolean = false): Record<string, unkno
   ]
   if (global) {
     return [
+      ...dnsModuleRoutes,
       dnsCapture,
       ...dropLinkLocalNoise,
-      { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
       { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
     ]
   }
   return [
+    ...dnsModuleRoutes,
     dnsCapture,
     ...dropLinkLocalNoise,
-    { type: "field", inboundTag: [DNS_DIRECT_TAG], outboundTag: "direct" },
-    { type: "field", inboundTag: [DNS_PROXY_TAG], balancerTag: PROXY_BALANCER_TAG },
     { type: "field", ip: ["geoip:private"], outboundTag: "direct" },
     { type: "field", ip: ["geoip:cn"], outboundTag: "direct" },
     { type: "field", domain: ["geosite:category-ads-all"], outboundTag: "block" },
@@ -185,10 +196,23 @@ export function buildRuleDnsServers(): unknown[] {
   ]
 }
 
-/** IPv4 gateway Xray assigns to the TUN interface (point-to-point prefix). */
-export const TUN_GATEWAY_CIDR = "172.19.0.1/30"
-/** Bare gateway IP — also used as Windows NIC NameServer by the TUN service. */
-export const TUN_GATEWAY_IP = "172.19.0.1"
+/**
+ * IPv4 gateway Xray assigns to the TUN interface (point-to-point prefix).
+ * Use RFC 2544 benchmark range (198.18.0.0/15) — uncommon on corp LANs,
+ * unlike 172.19.0.0/16 which often overlaps routed 172.16/12 space.
+ */
+export const TUN_GATEWAY_CIDR = "198.18.0.1/30"
+/** Bare gateway IP (TUN interface address). */
+export const TUN_GATEWAY_IP = "198.18.0.1"
+
+/**
+ * DNS servers written to the TUN adapter (`settings.dns`, Windows) and used as
+ * the OS NameServer hijack target. Per XTLS TUN docs these should be routable
+ * resolvers (e.g. 1.1.1.1), NOT the TUN gateway IP — queries to a local
+ * interface address often never enter the TUN stack, so `dns-out` never sees them.
+ * Port-53 → dns-out still hijacks the actual resolution into the built-in DNS module.
+ */
+export const TUN_DNS_SERVERS = ["1.1.1.1", "8.8.8.8"] as const
 
 /**
  * IPv4 space minus RFC1918 private ranges (10/8, 172.16/12, 192.168/16),
@@ -256,9 +280,10 @@ function buildTunInbound(bypassRouter: boolean, enableIpv6: boolean): Record<str
       desc: "AureStream TUN",
       mtu: 1500,
       gateway: [TUN_GATEWAY_CIDR],
-      // Windows-only: set the TUN adapter's own NameServer to the gateway so
-      // interface-scoped queries stay inside the tunnel path.
-      dns: [TUN_GATEWAY_IP],
+      // Windows-only (XTLS TUN docs): DNS servers on the TUN adapter. Use
+      // public resolvers so OS queries are routed into TUN; port-53 → dns-out
+      // then feeds the built-in DNS module (do not set this to the gateway IP).
+      dns: [...TUN_DNS_SERVERS],
       autoSystemRoutingTable: routeTable,
       // Bind proxy outbounds to the physical NIC so TUN capture doesn't
       // loop Xray's own uplink traffic back into the tunnel (critical on
