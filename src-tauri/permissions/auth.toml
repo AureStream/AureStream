@@ -1,0 +1,10 @@
+[[permission]]
+identifier = "allow-auth"
+description = "Allows AureStream auth IPC commands"
+commands.allow = [
+  "auth_login",
+  "auth_register",
+  "auth_verify",
+  "auth_logout",
+  "auth_restore"
+]
