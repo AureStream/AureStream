@@ -1,4 +1,7 @@
 pub mod config_check;
+// Only referenced by the Windows TUN start path; keep available under `test`
+// so unit tests still compile on Linux/macOS CI hosts.
+#[cfg(any(test, target_os = "windows"))]
 pub mod config_patch;
 pub mod helper;
 pub mod log;
