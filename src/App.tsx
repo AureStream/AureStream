@@ -1,76 +1,64 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import type { ReactNode } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import AppShell from "@/components/AppShell";
+import HomePage from "@/components/HomePage";
 import LoginPage from "@/components/LoginPage";
+import NodesPage from "@/components/NodesPage";
+import ProfilePage from "@/components/ProfilePage";
 import RegisterPage from "@/components/RegisterPage";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { EngineProvider, useEngine } from "@/contexts/EngineContext";
-import { SubsProvider, useSubs } from "@/contexts/SubsContext";
+import { EngineProvider } from "@/contexts/EngineContext";
+import { SubsProvider } from "@/contexts/SubsContext";
 
-function HomePage() {
-  const { user, logout, authLoading } = useAuth();
-  const { subscriptions, nodes, syncing, activeId } = useSubs();
-  const { engine, start, stop } = useEngine();
+/** Auth route gate only — never waits on subs sync / sessionReady. */
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
 
-  const busy =
-    engine.state === "starting" || engine.state === "stopping";
-  const connected = engine.state === "running";
+function GuestOnly({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+}
 
+function AppRoutes() {
   return (
-    <div className="home-page">
-      <h1 className="home-brand">AureStream</h1>
-      <p className="home-subtitle">事件驱动首页（无鉴权门闸）</p>
-      {user ? (
-        <div className="home-session">
-          <p>
-            已登录：<strong>{user.email}</strong>
-          </p>
-          <p className="home-subs-hint">
-            {syncing
-              ? "正在同步订阅…"
-              : `订阅 ${subscriptions.length} 个 · 节点 ${nodes.length} 个${
-                  activeId ? ` · 当前 ${activeId.slice(0, 8)}…` : ""
-                }`}
-          </p>
-          <p className="home-subs-hint">
-            引擎：{engine.state}
-            {engine.selectedNode ? ` · ${engine.selectedNode}` : ""}
-            {engine.reason ? ` · ${engine.reason}` : ""}
-          </p>
-          <div className="home-links">
-            <button
-              className="auth-btn"
-              type="button"
-              disabled={busy || (!connected && nodes.length === 0)}
-              onClick={() => {
-                if (connected) void stop();
-                else void start();
-              }}
-            >
-              {busy ? "处理中…" : connected ? "断开" : "连接"}
-            </button>
-            <button
-              className="auth-btn"
-              type="button"
-              disabled={authLoading}
-              onClick={() => void logout()}
-            >
-              {authLoading ? "退出中…" : "退出登录"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="home-session">
-          <p>当前未登录</p>
-          <div className="home-links">
-            <Link className="auth-link" to="/login">
-              登录
-            </Link>
-            <Link className="auth-link" to="/register">
-              注册
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          <GuestOnly>
+            <LoginPage />
+          </GuestOnly>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <GuestOnly>
+            <RegisterPage />
+          </GuestOnly>
+        }
+      />
+      <Route
+        element={
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        }
+      >
+        <Route path="/" element={<HomePage />} />
+        <Route path="/nodes" element={<NodesPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
@@ -80,11 +68,7 @@ export default function App() {
       <SubsProvider>
         <EngineProvider>
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-            </Routes>
+            <AppRoutes />
           </BrowserRouter>
         </EngineProvider>
       </SubsProvider>

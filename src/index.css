@@ -2,18 +2,23 @@
 
 :root {
   color-scheme: light;
-  --bg: #f3f6f4;
-  --bg-accent: #e7eee9;
-  --ink: #14201a;
-  --muted: #5b6b62;
-  --card: #ffffff;
-  --line: #d5ddd7;
-  --brand: #1f6b4a;
+  --bg: #f2f5f3;
+  --bg-deep: #e6ece8;
+  --bg-accent: #dfe8e2;
+  --ink: #132018;
+  --muted: #5a6b61;
+  --card: #fbfcfb;
+  --line: #cfd9d2;
+  --brand: #1a5f43;
+  --brand-soft: #2d7a58;
   --brand-ink: #ffffff;
   --danger-bg: #fdecea;
   --danger-ink: #9b1c1c;
-  --ok-bg: #e8f5ee;
+  --ok-bg: #e5f3eb;
   --ok-ink: #146c43;
+  --shell-max: 28rem;
+  --nav-h: 3.75rem;
+  --header-h: 3rem;
   font-family: "IBM Plex Sans", "Noto Sans SC", "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--ink);
@@ -28,9 +33,12 @@ body,
 
 body {
   background:
-    radial-gradient(circle at top left, #dce8e0 0%, transparent 42%),
-    linear-gradient(160deg, #f7faf8 0%, #eef3f0 55%, #e4ebe6 100%);
+    radial-gradient(ellipse 80% 50% at 10% -10%, #d5e4db 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, #e8efe9 0%, transparent 45%),
+    linear-gradient(165deg, #f7faf8 0%, #eef3f0 48%, #e3ebe6 100%);
 }
+
+/* ——— Auth (existing) ——— */
 
 .home-page,
 .auth-page {
@@ -57,18 +65,6 @@ body {
   margin: 0.5rem 0 0;
   color: var(--muted);
   font-size: 0.95rem;
-}
-
-.home-session {
-  margin-top: 1.5rem;
-  text-align: center;
-}
-
-.home-links {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-top: 0.75rem;
 }
 
 .auth-card {
@@ -177,4 +173,269 @@ body {
 .auth-alert-ok {
   background: var(--ok-bg);
   color: var(--ok-ink);
+}
+
+/* ——— App shell ——— */
+
+.app-shell {
+  min-height: 100vh;
+  max-width: var(--shell-max);
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: var(--header-h) 1fr var(--nav-h);
+  box-sizing: border-box;
+}
+
+.app-shell-header {
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.app-shell-brand {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+}
+
+.app-shell-main {
+  overflow: auto;
+  padding: 1.25rem 1.25rem 1.5rem;
+  box-sizing: border-box;
+}
+
+.app-shell-nav {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.app-shell-nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.app-shell-nav-link.is-active {
+  color: var(--brand);
+}
+
+/* ——— Shared page ——— */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 100%;
+}
+
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.home-inline-sync {
+  margin: 0;
+  color: var(--brand-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.home-inline-sync.subtle {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ——— Home ——— */
+
+.home-hero {
+  padding-top: 0.5rem;
+}
+
+.home-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.home-title {
+  margin: 0.4rem 0 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--brand);
+}
+
+.home-lead {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 18rem;
+}
+
+.home-status {
+  margin-top: 0.5rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+}
+
+.home-status.is-on {
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
+  background: color-mix(in srgb, var(--ok-bg) 55%, var(--card));
+}
+
+.home-status-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.home-node {
+  margin: 0.45rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.home-reason {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  color: var(--danger-ink);
+}
+
+.home-connect {
+  margin-top: auto;
+  border: 0;
+  border-radius: 1rem;
+  padding: 1.05rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--brand);
+  color: var(--brand-ink);
+  letter-spacing: 0.02em;
+}
+
+.home-connect.is-on {
+  background: var(--ink);
+}
+
+.home-connect:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ——— Nodes ——— */
+
+.node-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.node-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.node-item:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+}
+
+.node-item.is-selected {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--ok-bg) 60%, var(--card));
+}
+
+.node-item:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.node-item-name {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.node-item-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ——— Profile ——— */
+
+.profile-block {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+}
+
+.profile-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.profile-value {
+  margin: 0.4rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.profile-meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.profile-logout {
+  margin-top: auto;
+  width: 100%;
 }
