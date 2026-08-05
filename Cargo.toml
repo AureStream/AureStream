@@ -1,8 +1,3 @@
 [workspace]
-members = [
-    "src-tauri",
-    "crates/aurestream-plugin-proxy",
-    "crates/aurestream-plugin-tun",
-    "crates/aurestream-plugin-privilege"
-]
+members = []
 resolver = "2"
