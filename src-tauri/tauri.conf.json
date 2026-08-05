@@ -13,9 +13,13 @@
     "windows": [
       {
         "title": "AureStream",
-        "width": 400,
-        "height": 750,
-        "resizable": true,
+        "width": 375,
+        "height": 667,
+        "minWidth": 375,
+        "minHeight": 667,
+        "maxWidth": 375,
+        "maxHeight": 667,
+        "resizable": false,
         "visible": true
       }
     ],
