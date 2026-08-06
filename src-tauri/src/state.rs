@@ -87,14 +87,17 @@ impl AuthState {
     }
 
     pub fn clear(&self) -> Result<(), String> {
-        if self.path.exists() {
-            fs::remove_file(&self.path).map_err(|e| format!("remove session: {e}"))?;
-        }
+        // Take the lock for the whole operation: a refresh landing between the
+        // file delete and the memory clear would see `Some(session)` and write
+        // the file back, resurrecting a session the user ended.
         let mut guard = self
             .inner
             .lock()
             .map_err(|_| "auth state lock poisoned".to_string())?;
         *guard = None;
+        if self.path.exists() {
+            fs::remove_file(&self.path).map_err(|e| format!("remove session: {e}"))?;
+        }
         Ok(())
     }
 
@@ -299,6 +302,58 @@ mod tests {
         // can never be renewed again.
         let reloaded = AuthState::with_path(path).unwrap();
         assert_eq!(reloaded.refresh_token().unwrap(), "new-refresh");
+    }
+
+    #[test]
+    fn clear_removes_file_and_memory_atomically() {
+        // `clear` must null memory and delete the file under one lock hold:
+        // a refresh observing `Some(session)` after the file was removed would
+        // write it straight back and resurrect the session.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.json");
+        let auth = std::sync::Arc::new(session_at(&path, "old-access", "old-refresh"));
+
+        // Hammer both sides so the delete/lock interleaving is actually sampled
+        // rather than left to chance on one pass.
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let writer = {
+            let auth = auth.clone();
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    let _ = auth.update_tokens(&RefreshedTokens {
+                        access_token: "new-access".into(),
+                        refresh_token: "new-refresh".into(),
+                        expires_in: 7200,
+                    });
+                }
+            })
+        };
+
+        for _ in 0..500 {
+            auth.save(AuthTokens {
+                access_token: "old-access".into(),
+                refresh_token: "old-refresh".into(),
+                expires_in: 7200,
+                user: User {
+                    id: "u1".into(),
+                    email: "a@b.c".into(),
+                    created_at: 0,
+                },
+            })
+            .unwrap();
+            auth.clear().unwrap();
+            assert!(
+                !path.exists(),
+                "session file resurrected by a concurrent refresh"
+            );
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        writer.join().unwrap();
+
+        // Once cleared, no concurrent refresh may bring the session back.
+        assert!(auth.access_token().is_none());
+        assert!(!path.exists(), "session file resurrected after logout");
     }
 
     #[test]

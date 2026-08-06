@@ -110,6 +110,25 @@ pub(crate) async fn refresh(
         .map_err(|_| ApiError::from_code("request_failed", 0, None))
 }
 
+pub(crate) async fn logout(
+    http: &reqwest::Client,
+    base: &str,
+    refresh_token: &str,
+) -> Result<(), ApiError> {
+    let url = format!("{base}/auth/logout");
+    let response = http
+        .post(&url)
+        .json(&RefreshRequest { refresh_token })
+        .send()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
+
+    if !response.status().is_success() {
+        return Err(ApiError::from_response(response).await);
+    }
+    Ok(())
+}
+
 pub(crate) async fn register(
     http: &reqwest::Client,
     base: &str,

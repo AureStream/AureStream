@@ -91,6 +91,14 @@ pub async fn auth_verify(email: String, code: String) -> Result<User, AuthIpcErr
 
 #[tauri::command]
 pub async fn auth_logout(app: AppHandle, state: State<'_, AuthState>) -> Result<(), String> {
+    // Revoke server-side first, while the token is still readable. Best-effort:
+    // the refresh token is valid for 30 days, so failing to revoke leaves a
+    // live credential — but a network error must never block local logout.
+    if let Some(refresh_token) = state.refresh_token() {
+        if let Err(e) = api_client().logout(&refresh_token).await {
+            log::warn!("auth_logout: server-side revoke failed: {e}");
+        }
+    }
     state.clear()?;
     log::info!("auth_logout");
     emit_auth_changed(&app, None);

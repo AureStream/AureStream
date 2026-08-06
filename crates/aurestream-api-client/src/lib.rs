@@ -6,7 +6,7 @@ pub use auth::{AuthTokens, RefreshedTokens, RegisterPending, User};
 pub use error::ApiError;
 pub use subscriptions::Subscription;
 
-use auth::{login, refresh, register, verify_register};
+use auth::{login, logout, refresh, register, verify_register};
 use subscriptions::{fetch_subscription_body, list_subscriptions};
 
 pub const DEFAULT_BASE_URL: &str = "https://aurestream-api.chilix.ccwu.cc/api";
@@ -41,6 +41,12 @@ impl ApiClient {
     /// invalidated server-side, so the result must be persisted.
     pub async fn refresh(&self, refresh_token: &str) -> Result<RefreshedTokens, ApiError> {
         refresh(&self.http, &self.base, refresh_token).await
+    }
+
+    /// Revoke a refresh token server-side. Best-effort: the local session must
+    /// be cleared regardless of the outcome.
+    pub async fn logout(&self, refresh_token: &str) -> Result<(), ApiError> {
+        logout(&self.http, &self.base, refresh_token).await
     }
 
     pub async fn register(&self, email: &str, password: &str) -> Result<RegisterPending, ApiError> {

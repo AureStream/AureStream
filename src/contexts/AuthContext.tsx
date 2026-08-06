@@ -51,7 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       unlisten = await onAuthChanged((payload) => {
         if (!cancelled) {
-          setUser(payload.user);
+          // Startup emits `auth-changed` twice (setup spawn + authRestore) with
+          // equal-but-distinct user objects. Keep the existing reference when
+          // the identity is unchanged, so effects keyed on `user` don't re-run
+          // and fire a second concurrent subs sync.
+          setUser((prev) =>
+            prev && payload.user && prev.id === payload.user.id
+              ? prev
+              : payload.user,
+          );
         }
       });
       // Fire-and-forget restore: must not gate children on completion.
