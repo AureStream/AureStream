@@ -40,7 +40,7 @@ use system_configuration::dynamic_store::{
     SCDynamicStore, SCDynamicStoreBuilder, SCDynamicStoreCallBackContext,
 };
 
-use super::{active_override_snapshot, reapply_on_active_primary};
+use super::tun_ops::{active_override_snapshot, reapply_on_active_primary};
 
 static STARTED: OnceLock<()> = OnceLock::new();
 

@@ -15,7 +15,7 @@ use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use super::{not_installed_error, TunError, TunServiceState};
+use super::{TunError, TunServiceState};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(25);
 const POLL: Duration = Duration::from_millis(150);

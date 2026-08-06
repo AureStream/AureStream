@@ -113,9 +113,7 @@ mod exit_bridge {
     }
 }
 
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub use exit_bridge::ensure_exit_callback;
+
 
 // ---------------------------------------------------------------------------
 // Safe wrappers (macOS)
