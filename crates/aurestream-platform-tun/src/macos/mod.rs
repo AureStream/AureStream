@@ -93,9 +93,17 @@ pub fn start_tun(
     let api_port = parse_api_port(config_path).unwrap_or(10809);
     if !wait_api(api_port) {
         let _ = helper::api::stop_sing_box();
+        let hint = helper_log_tail(&log_path, 8);
         return Err(TunError::failed(
             "tun_start_timeout",
-            format!("虚拟网卡内核启动超时（API :{api_port} 未就绪）"),
+            format!(
+                "虚拟网卡内核启动超时（API :{api_port} 未就绪）{}",
+                if hint.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n--- helper 日志 ---\n{hint}")
+                }
+            ),
         ));
     }
 
@@ -115,6 +123,11 @@ pub fn stop_tun() -> Result<(), TunError> {
     // or from sync drop). Use the sync stop sequence.
     tun_ops::stop_tun_sync().map_err(|e| TunError::failed("helper_stop", e))?;
     Ok(())
+}
+
+/// Remove SMJobBless helper from `/Library/PrivilegedHelperTools` (may prompt admin).
+pub fn uninstall_helper() -> Result<(), String> {
+    privilege::uninstall_privileged_helper()
 }
 
 fn stage_geo_next_to_core(core: &Path, assets: &Path) {
@@ -168,4 +181,12 @@ fn wait_api(port: u16) -> bool {
         std::thread::sleep(POLL);
     }
     false
+}
+
+fn helper_log_tail(path: &str, max_lines: usize) -> String {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return String::new();
+    };
+    let lines: Vec<&str> = raw.lines().rev().take(max_lines).collect();
+    lines.into_iter().rev().collect::<Vec<_>>().join("\n")
 }

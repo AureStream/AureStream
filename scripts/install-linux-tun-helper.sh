@@ -43,6 +43,7 @@ install -d -m 755 '$(dirname "$POLICY_DST")'
 install -m 644 '$HELPER_SRC/com.root.aurestream.policy' '$POLICY_DST'
 install -d -m 755 '$(dirname "$RULE_DST")'
 install -m 644 '$HELPER_SRC/49-aurestream.rules' '$RULE_DST'
+'$HELPER_DST' install-orphan-timer 2>/dev/null || true
 "
 
 echo "OK: helper installed."

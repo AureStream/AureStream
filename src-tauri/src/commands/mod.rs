@@ -9,7 +9,7 @@ pub use auth::{
 };
 pub use engine::{
     engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
-    EngineAppState,
+    engine_uninstall_helper, EngineAppState,
 };
 pub use network::ping_tcp;
 pub use subs::{subs_list, subs_sync};

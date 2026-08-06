@@ -1,8 +1,10 @@
+import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAlert } from "@/contexts/AlertContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
+import { engineProbeTun, engineUninstallHelper } from "@/lib/ipc"
 
 const ONE_GB = 1024 * 1024 * 1024
 const ONE_TB = 1024 * 1024 * 1024 * 1024
@@ -30,7 +32,43 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const { user, authLoading, logout } = useAuth()
   const { subscriptions, activeId, syncing } = useSubs()
-  const { showErrorFromUnknown } = useAlert()
+  const { showErrorFromUnknown, showInfo } = useAlert()
+  const [tunHelperReady, setTunHelperReady] = useState(false)
+  const [uninstallingHelper, setUninstallingHelper] = useState(false)
+
+  const refreshTunHelper = useCallback(async () => {
+    try {
+      const s = await engineProbeTun()
+      setTunHelperReady(s === "ready" || s === "running")
+    } catch {
+      setTunHelperReady(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshTunHelper()
+  }, [refreshTunHelper])
+
+  const handleUninstallHelper = async () => {
+    const ok = window.confirm(
+      "将卸载虚拟网卡特权组件：\n• macOS：SMJobBless Helper\n• Windows：TUN 系统服务\n• Linux：pkexec Helper + polkit\n\n卸载后需重新开启虚拟网卡才会再次安装。\n\n确定继续？",
+    )
+    if (!ok) return
+    setUninstallingHelper(true)
+    try {
+      await engineUninstallHelper()
+      setTunHelperReady(false)
+      showInfo(
+        "虚拟网卡组件已卸载。删除本应用前建议先执行此操作；若直接删除应用，各平台也会在后台自动清理残留组件。",
+        "卸载完成",
+      )
+      void refreshTunHelper()
+    } catch (err) {
+      showErrorFromUnknown(err, "卸载虚拟网卡组件失败", "卸载失败")
+    } finally {
+      setUninstallingHelper(false)
+    }
+  }
 
   const emailUser = user?.email ?? "User"
   const displayName = emailUser.split("@")[0]
@@ -188,7 +226,17 @@ export default function ProfilePage() {
         </section>
 
         {/* Bottom action — same breathing room as home footer stack */}
-        <div className="mx-auto mt-auto flex w-full max-w-[340px] shrink-0 flex-col gap-5 pt-3 pb-1">
+        <div className="mx-auto mt-auto flex w-full max-w-[340px] shrink-0 flex-col gap-2.5 pt-3 pb-1">
+          {tunHelperReady ? (
+            <button
+              type="button"
+              onClick={() => void handleUninstallHelper()}
+              disabled={uninstallingHelper || authLoading}
+              className="h-11 w-full cursor-pointer rounded-full border border-[#eceef1] bg-white text-[14px] font-semibold text-[#6b7280] transition-all hover:bg-[#f8f9fb] active:scale-[0.98] disabled:opacity-60 dark:border-border dark:bg-card dark:text-muted-foreground"
+            >
+              {uninstallingHelper ? "卸载中…" : "卸载虚拟网卡组件"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void handleLogout()}

@@ -156,6 +156,11 @@ export async function engineProbeTun(): Promise<"notInstalled" | "ready" | "runn
   return invoke<string>("engine_probe_tun");
 }
 
+/** Uninstall elevated TUN helper/service (macOS / Windows). May prompt admin once. */
+export async function engineUninstallHelper(): Promise<void> {
+  await invoke("engine_uninstall_helper");
+}
+
 export async function engineStop(): Promise<EngineStatePayload> {
   return invoke<EngineStatePayload>("engine_stop");
 }

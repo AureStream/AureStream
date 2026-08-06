@@ -211,15 +211,21 @@ pub fn ensure_helper_installed() -> Result<(), String> {
 
     // Check version first — if an upgrade is needed, SMJobBless handles both
     // install and upgrade in one authorization, avoiding a double password prompt.
+    let installed_path = std::path::Path::new(BLESSED_HELPER_PATH);
     let bundled_ver = read_helper_cfbundle_version(&bundled_path);
-    let installed_ver = read_helper_cfbundle_version(std::path::Path::new(BLESSED_HELPER_PATH));
+    let installed_ver = read_helper_cfbundle_version(installed_path);
+    // Same CFBundleVersion can still ship different binaries if the version was
+    // not bumped (e.g. July helper still passed `--disable-color` to Xray while
+    // the Aug app bundle already dropped it). Compare size as a cheap signal.
+    let size_mismatch = helper_file_len(&bundled_path) != helper_file_len(installed_path);
     let needs_upgrade = match (&bundled_ver, &installed_ver) {
-        (Some(b), Some(i)) => b != i,
+        (Some(b), Some(i)) if b != i => true,
+        (Some(_), Some(_)) if size_mismatch && installed_path.is_file() => true,
         _ => false,
     };
     if needs_upgrade {
         log::info!(
-            "[helper] CFBundleVersion bundled={:?} installed={:?}; upgrading via SMJobBless",
+            "[helper] upgrade needed via SMJobBless (bundled_ver={:?} installed_ver={:?} size_mismatch={size_mismatch})",
             bundled_ver,
             installed_ver
         );
@@ -280,4 +286,8 @@ fn read_helper_cfbundle_version(path: &std::path::Path) -> Option<String> {
         .position(|w| w == close)?;
     let bytes = &after_key[value_start..value_start + close_rel];
     std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+}
+
+fn helper_file_len(path: &std::path::Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }

@@ -283,6 +283,13 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // Long wait hint: core + Wintun init + API probe can exceed the old 5s.
     set_state(SERVICE_START_PENDING, 0, 20_000);
 
+    // Main app deleted → self-uninstall (same idea as macOS helper orphan cleanup).
+    if super::scm::orphan_check_and_cleanup() {
+        dns::log_line("service_main: aborted — orphan cleanup removed tun-service");
+        set_state(SERVICE_STOPPED, 1, 0);
+        return;
+    }
+
     // argv[0] = service name; argv[1] = config; argv[2] = gateway; argv[3] = core exe.
     if args.len() < 4 {
         dns::log_line(&format!(

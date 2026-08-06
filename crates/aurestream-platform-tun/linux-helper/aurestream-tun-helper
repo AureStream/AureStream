@@ -7,6 +7,98 @@ HELPER_DIR="/usr/lib/AureStream"
 SELF="${HELPER_DIR}/aurestream-tun-helper"
 POLKIT_ACTION="/usr/share/polkit-1/actions/com.root.aurestream.policy"
 POLKIT_RULE="/etc/polkit-1/rules.d/49-aurestream.rules"
+ORPHAN_TIMER_UNIT="aurestream-tun-orphan.timer"
+ORPHAN_SERVICE_UNIT="aurestream-tun-orphan.service"
+SYSTEMD_DIR="/etc/systemd/system"
+
+# Return 0 if the AureStream main app (or package) still appears installed.
+is_main_app_present() {
+    # Running main process
+    if pgrep -x aurestream >/dev/null 2>&1; then
+        return 0
+    fi
+    # Common install layouts (deb/rpm /opt /usr)
+    for p in \
+        /usr/bin/aurestream \
+        /usr/bin/AureStream \
+        /opt/AureStream/aurestream \
+        /opt/AureStream/bin/aurestream \
+        /usr/lib/AureStream/aurestream \
+        /usr/share/applications/aurestream.desktop \
+        /usr/share/applications/AureStream.desktop
+    do
+        if [ -e "$p" ]; then
+            return 0
+        fi
+    done
+    # dpkg/rpm package still registered
+    if command -v dpkg-query >/dev/null 2>&1; then
+        if dpkg-query -W -f='${Status}' aurestream 2>/dev/null | grep -q "install ok installed"; then
+            return 0
+        fi
+        if dpkg-query -W -f='${Status}' AureStream 2>/dev/null | grep -q "install ok installed"; then
+            return 0
+        fi
+    fi
+    if command -v rpm >/dev/null 2>&1; then
+        if rpm -q aurestream >/dev/null 2>&1 || rpm -q AureStream >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+do_uninstall() {
+    "$0" stop-tun 2>/dev/null || true
+    # Drop orphan timer if present
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl disable --now "$ORPHAN_TIMER_UNIT" 2>/dev/null || true
+        rm -f "${SYSTEMD_DIR}/${ORPHAN_TIMER_UNIT}" "${SYSTEMD_DIR}/${ORPHAN_SERVICE_UNIT}"
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+    rm -f "$SELF" "$POLKIT_ACTION" "$POLKIT_RULE"
+    rmdir "$HELPER_DIR" 2>/dev/null || true
+    exit 0
+}
+
+# If main app is gone, remove this helper (no-op when app still present).
+do_orphan_check() {
+    if is_main_app_present; then
+        echo "main app present — keep helper"
+        exit 0
+    fi
+    echo "main app missing — uninstalling orphan helper" >&2
+    do_uninstall
+}
+
+install_orphan_timer() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+    cat > "${SYSTEMD_DIR}/${ORPHAN_SERVICE_UNIT}" <<EOF
+[Unit]
+Description=AureStream TUN helper orphan cleanup
+ConditionPathExists=${SELF}
+
+[Service]
+Type=oneshot
+ExecStart=${SELF} orphan-check
+EOF
+    cat > "${SYSTEMD_DIR}/${ORPHAN_TIMER_UNIT}" <<EOF
+[Unit]
+Description=Periodic AureStream TUN helper orphan check
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now "$ORPHAN_TIMER_UNIT" 2>/dev/null || true
+}
 
 case "$1" in
     start-tun)
@@ -23,6 +115,8 @@ case "$1" in
             echo "sidecar not found: $sidecar" >&2
             exit 3
         fi
+        # Best-effort: ensure orphan timer is armed after first privileged use.
+        install_orphan_timer 2>/dev/null || true
         if [ -n "$asset_dir" ] && [ -d "$asset_dir" ]; then
             export XRAY_LOCATION_ASSET="$asset_dir"
             cd "$asset_dir" || true
@@ -75,13 +169,17 @@ case "$1" in
         resolvectl flush-caches 2>/dev/null || true
         ;;
     uninstall)
-        "$0" stop-tun 2>/dev/null || true
-        rm -f "$SELF" "$POLKIT_ACTION" "$POLKIT_RULE"
-        rmdir "$HELPER_DIR" 2>/dev/null || true
+        do_uninstall
+        ;;
+    orphan-check)
+        do_orphan_check
+        ;;
+    install-orphan-timer)
+        install_orphan_timer
         exit 0
         ;;
     *)
-        echo "Usage: $0 {start-tun|stop-tun|dns-override|dns-restore|uninstall}" >&2
+        echo "Usage: $0 {start-tun|stop-tun|dns-override|dns-restore|uninstall|orphan-check|install-orphan-timer}" >&2
         exit 1
         ;;
 esac

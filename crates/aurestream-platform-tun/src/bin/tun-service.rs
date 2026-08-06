@@ -33,6 +33,11 @@ fn main() {
                 std::process::exit(1);
             }
         },
+        Some("orphan-check") => {
+            // Exit 0 always: task scheduler should not flap on "app still present".
+            let _cleaned = aurestream_platform_tun::windows_orphan_check();
+            std::process::exit(0);
+        }
         _ => {
             let code = aurestream_platform_tun::windows_service_run_dispatcher();
             std::process::exit(code);

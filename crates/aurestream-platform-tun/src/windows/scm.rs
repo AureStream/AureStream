@@ -56,6 +56,122 @@ pub fn installed_hash_marker() -> PathBuf {
     program_data_dir().join("binary.sha256")
 }
 
+/// Path to the main app executable recorded on first TUN start / install.
+/// Used by orphan cleanup when the user deletes AureStream without uninstalling the service.
+pub fn app_root_marker() -> PathBuf {
+    program_data_dir().join("app-exe.path")
+}
+
+/// Remember where the main app lives (best-effort; non-fatal).
+pub fn write_app_exe_marker(app_exe: &Path) {
+    let dir = program_data_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(app_root_marker(), app_exe.to_string_lossy().as_bytes());
+}
+
+fn read_app_exe_marker() -> Option<PathBuf> {
+    let raw = std::fs::read_to_string(app_root_marker()).ok()?;
+    let p = PathBuf::from(raw.trim());
+    if p.as_os_str().is_empty() {
+        None
+    } else {
+        Some(p)
+    }
+}
+
+/// True if AureStream main binary still appears installed.
+pub fn is_main_app_present() -> bool {
+    if let Some(p) = read_app_exe_marker() {
+        if p.is_file() {
+            return true;
+        }
+    }
+    // Common NSIS / MSI / portable layouts.
+    let candidates = [
+        r"C:\Program Files\AureStream\AureStream.exe",
+        r"C:\Program Files\AureStream\aurestream.exe",
+        r"C:\Program Files (x86)\AureStream\AureStream.exe",
+        r"C:\Program Files (x86)\AureStream\aurestream.exe",
+    ];
+    for c in candidates {
+        if Path::new(c).is_file() {
+            return true;
+        }
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        for name in ["AureStream.exe", "aurestream.exe"] {
+            let p = PathBuf::from(&local).join("AureStream").join(name);
+            if p.is_file() {
+                return true;
+            }
+        }
+    }
+    // Still running?
+    if let Ok(out) = std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq AureStream.exe", "/NH"])
+        .output()
+    {
+        let s = String::from_utf8_lossy(&out.stdout);
+        if s.to_ascii_lowercase().contains("aurestream.exe") {
+            return true;
+        }
+    }
+    if let Ok(out) = std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq aurestream.exe", "/NH"])
+        .output()
+    {
+        let s = String::from_utf8_lossy(&out.stdout);
+        if s.to_ascii_lowercase().contains("aurestream.exe") {
+            return true;
+        }
+    }
+    false
+}
+
+const ORPHAN_TASK_NAME: &str = "AureStreamTunOrphanCleanup";
+
+/// Register a daily scheduled task that runs `tun-service.exe orphan-check` (elevated install path).
+pub fn install_orphan_task() {
+    let exe = installed_exe_path();
+    if !exe.is_file() {
+        return;
+    }
+    let tr = format!("\"{}\" orphan-check", exe.display());
+    let _ = std::process::Command::new("schtasks")
+        .args([
+            "/Create",
+            "/TN",
+            ORPHAN_TASK_NAME,
+            "/TR",
+            &tr,
+            "/SC",
+            "MINUTE",
+            "/MO",
+            "30",
+            "/RU",
+            "SYSTEM",
+            "/F",
+        ])
+        .output();
+    super::dns::log_line("install_orphan_task: registered (best-effort)");
+}
+
+fn remove_orphan_task() {
+    let _ = std::process::Command::new("schtasks")
+        .args(["/Delete", "/TN", ORPHAN_TASK_NAME, "/F"])
+        .output();
+}
+
+/// If main app is gone, uninstall the TUN service. Returns true when cleaned up (caller should abort).
+pub fn orphan_check_and_cleanup() -> bool {
+    if is_main_app_present() {
+        return false;
+    }
+    super::dns::log_line("orphan_check: main app missing — uninstalling tun-service");
+    let _ = uninstall();
+    true
+}
+
 // ============================== hash =================================
 
 pub fn compute_file_sha256(path: &Path) -> std::io::Result<String> {
@@ -376,6 +492,7 @@ pub fn ensure_installed(bundled_exe: &Path) -> Result<(), String> {
     drop(svc);
 
     write_marker(&bundled_hash).map_err(|e| format!("write marker: {}", e))?;
+    install_orphan_task();
     super::dns::log_line(&format!(
         "ensure_installed: OK ({} -> {})",
         bundled_exe.display(),
@@ -390,11 +507,13 @@ const SERVICE_ALL_ACCESS_LOCAL: u32 = 0xF01FF;
 
 /// Elevated: stop + delete + rm binary + rm marker. Idempotent.
 pub fn uninstall() -> Result<(), String> {
+    remove_orphan_task();
     if let Ok(scm) = open_scm(SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE) {
         let _ = stop_and_delete(&scm);
     }
     let _ = std::fs::remove_file(installed_exe_path());
     let _ = std::fs::remove_file(installed_hash_marker());
+    let _ = std::fs::remove_file(app_root_marker());
     super::dns::log_line("uninstall: done");
     Ok(())
 }

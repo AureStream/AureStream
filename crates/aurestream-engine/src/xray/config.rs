@@ -253,14 +253,35 @@ pub fn build_xray_config_value_with_options(
             "ip": ["geoip:private"],
             "outboundTag": "direct"
         }));
+        // Google/YouTube must hit proxy *before* geoip:cn. In CN, gstatic/googleapis often
+        // resolve to domestic CDN IPs; IPIfNonMatch would otherwise send them direct and
+        // break/slow YouTube + Google static assets.
         rules.push(json!({
             "type": "field",
-            "ip": ["geoip:cn"],
+            "domain": [
+                "geosite:google",
+                "geosite:youtube",
+                "domain:googleapis.com",
+                "domain:gstatic.com",
+                "domain:googlevideo.com",
+                "domain:youtube.com",
+                "domain:youtu.be",
+                "domain:ytimg.com",
+                "domain:ggpht.com",
+                "domain:youtube-nocookie.com",
+                "domain:withyoutube.com"
+            ],
+            "outboundTag": proxy_tag
+        }));
+        // Domain CN list before IP CN list so pure domain hits win under IPIfNonMatch.
+        rules.push(json!({
+            "type": "field",
+            "domain": ["geosite:cn"],
             "outboundTag": "direct"
         }));
         rules.push(json!({
             "type": "field",
-            "domain": ["geosite:cn"],
+            "ip": ["geoip:cn"],
             "outboundTag": "direct"
         }));
         rules.push(json!({

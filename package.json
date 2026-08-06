@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build-tun": "tsx scripts/build-tun-service.ts",
-    "pre-bundle": "tsx scripts/prebundle.ts"
+    "pre-bundle": "tsx scripts/prebundle.ts",
+    "sign-macos-bundle": "tsx scripts/sign-macos-bundle.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

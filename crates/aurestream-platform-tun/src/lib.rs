@@ -156,6 +156,13 @@ pub fn windows_scm_uninstall() -> Result<(), String> {
     windows::scm::uninstall()
 }
 
+/// Windows: orphan cleanup entry for scheduled task / CLI (`tun-service orphan-check`).
+/// Returns `true` if the service was uninstalled because the main app is gone.
+#[cfg(target_os = "windows")]
+pub fn windows_orphan_check() -> bool {
+    windows::scm::orphan_check_and_cleanup()
+}
+
 #[cfg(target_os = "windows")]
 pub fn windows_service_run_dispatcher() -> i32 {
     windows::service::run_dispatcher()
@@ -166,6 +173,34 @@ pub fn windows_service_run_dispatcher() -> i32 {
 pub fn windows_uninstall_service() -> Result<(), TunError> {
     let bundled = windows::resolve_tun_service_path()?;
     windows::elevate_uninstall(&bundled)
+}
+
+/// Uninstall the elevated TUN helper/service (best-effort stop first).
+///
+/// - **macOS**: SMJobBless helper via XPC (falls back to admin shell).
+/// - **Windows**: elevated `tun-service uninstall` (UAC).
+/// - **Linux**: `pkexec … uninstall` (polkit password; also used by deb postrm).
+pub fn uninstall_elevated() -> Result<(), TunError> {
+    let _ = stop_tun();
+    #[cfg(target_os = "macos")]
+    {
+        return macos::uninstall_helper().map_err(|e| TunError::failed("helper_uninstall", e));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return windows_uninstall_service();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return linux::uninstall_helper();
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        Err(TunError::failed(
+            "helper_uninstall",
+            "当前平台没有可卸载的虚拟网卡组件。",
+        ))
+    }
 }
 
 /// Stop TUN capture and restore DNS (best-effort).
@@ -358,6 +393,34 @@ mod linux {
         }
 
         *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
+        Ok(())
+    }
+
+    /// pkexec uninstall of helper + polkit files (may prompt password).
+    pub fn uninstall_helper() -> Result<(), TunError> {
+        let helper = helper_path();
+        if !helper.is_file() {
+            log::info!("[tun/linux] helper not installed, nothing to uninstall");
+            return Ok(());
+        }
+        log::info!("[tun/linux] pkexec uninstall {}", helper.display());
+        let output = Command::new("pkexec")
+            .arg(helper.as_os_str())
+            .arg("uninstall")
+            .output()
+            .map_err(|e| TunError::failed("helper_uninstall", format!("pkexec spawn failed: {e}")))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(TunError::failed(
+                "helper_uninstall",
+                format!(
+                    "卸载虚拟网卡 Helper 失败（需授权）: {}{}",
+                    stderr.trim(),
+                    stdout.trim()
+                ),
+            ));
+        }
         Ok(())
     }
 

@@ -6,5 +6,6 @@ commands.allow = [
   "engine_stop",
   "engine_select_node",
   "engine_get_state",
-  "engine_probe_tun"
+  "engine_probe_tun",
+  "engine_uninstall_helper"
 ]

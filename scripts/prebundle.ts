@@ -66,6 +66,8 @@ const buildSlice = (arch: string, target: string): string => {
     "-framework",
     "Foundation",
     "-framework",
+    "CoreServices",
+    "-framework",
     "Security",
     "-lbsm",
     "-Xlinker",

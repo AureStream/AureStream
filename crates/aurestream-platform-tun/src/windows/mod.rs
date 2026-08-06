@@ -111,6 +111,10 @@ pub fn ensure_installed() -> Result<TunServiceState, TunError> {
             })?;
         }
     }
+    // Record main app path ASAP so orphan cleanup can find us after delete.
+    if let Ok(exe) = std::env::current_exe() {
+        scm::write_app_exe_marker(&exe);
+    }
     Ok(probe())
 }
 
@@ -158,6 +162,22 @@ pub fn start_tun(
     // Stage geo assets next to core if provided (service cwd = core dir).
     if let Some(assets) = asset_dir {
         stage_geo_next_to_core(core_path, assets);
+    }
+
+    // Record main app path for orphan cleanup (sidecar sits next to AureStream.exe).
+    if let Some(app_exe) = core_path
+        .parent()
+        .map(|d| d.join("AureStream.exe"))
+        .filter(|p| p.is_file())
+        .or_else(|| {
+            core_path
+                .parent()
+                .map(|d| d.join("aurestream.exe"))
+                .filter(|p| p.is_file())
+        })
+        .or_else(|| std::env::current_exe().ok().filter(|p| p.is_file()))
+    {
+        scm::write_app_exe_marker(&app_exe);
     }
 
     log::info!("[tun/win] StartService config={config} dns={dns} core={core}");

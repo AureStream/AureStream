@@ -574,6 +574,34 @@ pub fn engine_probe_tun() -> String {
     }
 }
 
+/// Uninstall elevated TUN helper/service (macOS SMJobBless / Windows SCM).
+/// Stops TUN first. May prompt for admin / UAC once.
+#[tauri::command]
+pub async fn engine_uninstall_helper(
+    app: AppHandle,
+    engine: State<'_, EngineAppState>,
+) -> Result<(), String> {
+    let _guard = engine.gate.lock().await;
+    log::info!("engine_uninstall_helper");
+
+    let was_tun = matches!(engine.capture_mode(), CaptureMode::Tun);
+    if was_tun {
+        emit_from(&app, &engine, EngineState::Stopping);
+        let _ = clear_system_proxy();
+    }
+
+    platform_tun::uninstall_elevated().map_err(|e| e.to_string())?;
+
+    if was_tun {
+        let _ = engine.engine.finish_external_stop();
+        engine.set_capture_mode(CaptureMode::Off);
+        emit_from(&app, &engine, EngineState::Idle);
+    }
+
+    log::info!("engine_uninstall_helper ok");
+    Ok(())
+}
+
 /// Stop: clear system proxy first, then stop sidecar → emit Idle.
 #[tauri::command]
 pub async fn engine_stop(

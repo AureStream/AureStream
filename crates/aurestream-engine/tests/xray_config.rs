@@ -142,6 +142,26 @@ fn xray_build_config_with_tun_inbound() {
         assert_eq!(s.get("skipFallback"), Some(&Value::Bool(true)));
     }
     let rules = cfg["routing"]["rules"].as_array().unwrap();
+    let google_rule_idx = rules.iter().position(|r| {
+        r.get("domain")
+            .and_then(|d| d.as_array())
+            .is_some_and(|a| a.iter().any(|x| x.as_str() == Some("geosite:google")))
+            && r.get("outboundTag").and_then(|t| t.as_str()) != Some("direct")
+            && r.get("outboundTag").and_then(|t| t.as_str()) != Some("block")
+    });
+    let geoip_cn_idx = rules.iter().position(|r| {
+        r.get("ip")
+            .and_then(|d| d.as_array())
+            .is_some_and(|a| a.iter().any(|x| x.as_str() == Some("geoip:cn")))
+    });
+    assert!(
+        google_rule_idx.is_some(),
+        "smart_routing must force geosite:google via proxy (gstatic CN IP false direct)"
+    );
+    assert!(
+        geoip_cn_idx.is_some_and(|ci| google_rule_idx.unwrap() < ci),
+        "google/youtube proxy rule must precede geoip:cn"
+    );
     assert!(
         rules.iter().any(|r| {
             r.get("inboundTag")

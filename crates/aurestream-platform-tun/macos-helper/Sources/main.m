@@ -27,6 +27,7 @@
 // process-termination handler without polling.
 
 #import <Foundation/Foundation.h>
+#import <CoreServices/CoreServices.h>
 #import <Security/Security.h>
 #import <bsm/libbsm.h>
 #include <arpa/inet.h>
@@ -1015,6 +1016,96 @@ static int runHelperUninstallFromCommandLine(pid_t waitPid) {
 // Entry point
 // ============================================================================
 
+// ============================================================================
+// Orphan cleanup — if the main app was dragged to Trash / deleted, remove the
+// privileged helper so it does not linger as root forever. macOS .app drag-
+// uninstall has no postrm hook; this is the supported cleanup path.
+// ============================================================================
+
+static BOOL isAureStreamMainAppPresent(void) {
+    // Launch Services registry (covers /Applications and user-installed copies).
+    CFArrayRef urls = LSCopyApplicationURLsForBundleIdentifier(
+        CFSTR("com.root.aurestream"), NULL);
+    if (urls != NULL) {
+        CFIndex count = CFArrayGetCount(urls);
+        CFRelease(urls);
+        if (count > 0) {
+            return YES;
+        }
+    }
+
+    // Fallback common paths (LS may not have registered a brand-new copy yet).
+    NSArray<NSString *> *candidates = @[
+        @"/Applications/AureStream.app",
+        [NSHomeDirectory() stringByAppendingPathComponent:@"Applications/AureStream.app"],
+    ];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    for (NSString *path in candidates) {
+        if ([fm fileExistsAtPath:path]) {
+            return YES;
+        }
+    }
+
+    // Dev / sideload: any running process whose executable path ends with
+    // /AureStream.app/Contents/MacOS/aurestream or bare `aurestream` binary name
+    // next to a .app bundle. Cheap pgrep is enough for orphan detection.
+    FILE *fp = popen("/bin/pgrep -x aurestream >/dev/null 2>&1; echo $?", "r");
+    if (fp) {
+        char line[8] = {0};
+        if (fgets(line, sizeof(line), fp)) {
+            pclose(fp);
+            if (atoi(line) == 0) {
+                return YES;
+            }
+        } else {
+            pclose(fp);
+        }
+    }
+    return NO;
+}
+
+static void scheduleOrphanAppCleanup(void) {
+    // First check after a short delay (avoid racing SMJobBless + first launch).
+    // Then re-check every 30 minutes while the daemon lives.
+    dispatch_queue_t q = dispatch_get_global_queue(QOS_CLASS_UTILITY, 0);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(120 * NSEC_PER_SEC)), q, ^{
+        void (^check)(void) = ^{
+            if (isAureStreamMainAppPresent()) {
+                return;
+            }
+            NSLog(@"[helper] main app com.root.aurestream not found — self-uninstalling orphan helper");
+            char pidStr[16];
+            snprintf(pidStr, sizeof(pidStr), "%d", getpid());
+            char *const spawnArgv[] = {
+                (char *)kBlessedHelperPath.UTF8String,
+                (char *)"uninstall",
+                pidStr,
+                NULL
+            };
+            pid_t child = 0;
+            int rc = posix_spawn(&child, kBlessedHelperPath.UTF8String, NULL, NULL, spawnArgv, NULL);
+            if (rc != 0) {
+                NSLog(@"[helper] orphan self-uninstall spawn failed: %s", strerror(rc));
+                return;
+            }
+            NSLog(@"[helper] orphan self-uninstall child pid=%d", child);
+            exit(0);
+        };
+        check();
+        dispatch_source_t timer = dispatch_source_create(
+            DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);
+        dispatch_source_set_timer(
+            timer,
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30 * 60 * NSEC_PER_SEC)),
+            (uint64_t)(30 * 60 * NSEC_PER_SEC),
+            (uint64_t)(60 * NSEC_PER_SEC));
+        dispatch_source_set_event_handler(timer, check);
+        dispatch_resume(timer);
+        // Intentionally never cancelled — lives for the helper process lifetime.
+        (void)timer;
+    });
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         if (argc >= 2 && strcmp(argv[1], "uninstall") == 0) {
@@ -1030,6 +1121,7 @@ int main(int argc, const char *argv[]) {
             [[NSXPCListener alloc] initWithMachServiceName:@"com.root.aurestream.helper"];
         listener.delegate = delegate;
         [listener resume];
+        scheduleOrphanAppCleanup();
         [[NSRunLoop currentRunLoop] run];
     }
     return 0;
