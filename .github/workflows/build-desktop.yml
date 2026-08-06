@@ -166,6 +166,12 @@ jobs:
           AURESTREAM_RUST_TARGET: ${{ matrix.rust_target }}
         run: pnpm build-tun
 
+      - name: Build macOS privileged helper
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: pnpm pre-bundle
+
       - name: Verify staged sidecar for matrix target
         shell: bash
         run: |

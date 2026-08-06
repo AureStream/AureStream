@@ -63,6 +63,12 @@
           "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-platform-tun/linux-helper/49-aurestream.rules"
         }
       }
+    },
+    "macOS": {
+      "infoPlist": "Info.privileged-helper.plist",
+      "files": {
+        "Library/LaunchServices/com.root.aurestream.helper": "target/helper/com.root.aurestream.helper"
+      }
     }
   },
   "plugins": {}

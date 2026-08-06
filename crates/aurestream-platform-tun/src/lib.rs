@@ -2,7 +2,7 @@
 //!
 //! - **Linux**: pkexec + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm).
 //! - **Windows**: SCM service `AureStreamTunService` (`tun-service.exe`, one-time UAC).
-//! - **macOS**: stub until SMJobBless helper lands.
+//! - **macOS**: SMJobBless helper `com.root.aurestream.helper` (signed bundle).
 
 use std::fmt;
 use std::path::Path;
@@ -91,12 +91,17 @@ pub fn probe() -> TunServiceState {
 ///
 /// - Linux: helper must already be on disk (deb/rpm / install script).
 /// - Windows: may prompt UAC once to install/upgrade `tun-service`.
+/// - macOS: may prompt once via SMJobBless to install privileged helper.
 pub fn ensure_installed() -> Result<TunServiceState, TunError> {
     #[cfg(target_os = "windows")]
     {
         return windows::ensure_installed();
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        return macos::ensure_installed();
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let state = probe();
         match state {
@@ -129,7 +134,11 @@ pub fn start_tun(
     {
         return windows::start_tun(config_path, core_path, dns, asset_dir);
     }
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    #[cfg(target_os = "macos")]
+    {
+        return macos::start_tun(config_path, core_path, dns, asset_dir);
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
         let _ = (config_path, core_path, dns, asset_dir);
         Err(not_installed_error())
@@ -599,14 +608,4 @@ mod linux {
 mod windows;
 
 #[cfg(target_os = "macos")]
-mod macos {
-    use super::*;
-
-    pub fn probe() -> TunServiceState {
-        TunServiceState::NotInstalled
-    }
-
-    pub fn stop_tun() -> Result<(), TunError> {
-        Ok(())
-    }
-}
+mod macos;

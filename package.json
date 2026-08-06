@@ -14,7 +14,8 @@
     "release": "pnpm download-binaries && pnpm build && pnpm tauri build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build-tun": "tsx scripts/build-tun-service.ts"
+    "build-tun": "tsx scripts/build-tun-service.ts",
+    "pre-bundle": "tsx scripts/prebundle.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
