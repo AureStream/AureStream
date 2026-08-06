@@ -19,7 +19,7 @@ const GITHUB_RELEASE_URL = 'https://github.com/XTLS/Xray-core/releases/download/
 // Sidecar is staged as `aurestream-core-<rust-target-triple>` for Tauri
 // `externalBin` + engine `resolve_sidecar_path`.
 //
-// MVP: system-proxy only — do not stage wintun.dll / TUN helpers.
+// Wintun is staged for Windows TUN (Xray loads wintun.dll next to core).
 const RUST_TARGET_TRIPLES = {
     "darwin": {
         "arm64": { targetTriple: "aarch64-apple-darwin", assetSuffix: "macos-arm64-v8a" },
@@ -131,7 +131,25 @@ async function embeddingExternalBinaries(
             }
         }
 
-        // MVP: skip wintun.dll / TUN staging (system-proxy only).
+        // Stage wintun.dll next to resources for Windows TUN (copy beside core at runtime).
+        if (platform === 'windows') {
+            const wintunSrc = path.join(tmpDir, 'wintun.dll');
+            // Official Xray zip may not ship wintun; try common names / skip if absent.
+            const candidates = ['wintun.dll', path.join('wintun', 'bin', 'amd64', 'wintun.dll'), path.join('wintun', 'bin', 'arm64', 'wintun.dll')];
+            let found: string | null = null;
+            for (const c of candidates) {
+                const full = path.isAbsolute(c) ? c : path.join(tmpDir, c);
+                if (fs.existsSync(full)) { found = full; break; }
+            }
+            if (found) {
+                fs.copyFileSync(found, path.join(resourcesDir, 'wintun.dll'));
+                // Also next to staged core for service cwd.
+                fs.copyFileSync(found, path.join(targetDir, 'wintun.dll'));
+                console.log('staged wintun.dll');
+            } else {
+                console.warn('wintun.dll not in Xray archive — place manually in src-tauri/resources/wintun.dll for TUN');
+            }
+        }
 
         fs.rmSync(tmpDir, { recursive: true, force: true });
 

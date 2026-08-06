@@ -1,10 +1,12 @@
 //! OS-level TUN capture (virtual NIC).
 //!
-//! Linux: pkexec + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm).
-//! Windows / macOS: probe stubs until Phase 1–2 helper ports land.
+//! - **Linux**: pkexec + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm).
+//! - **Windows**: SCM service `AureStreamTunService` (`tun-service.exe`, one-time UAC).
+//! - **macOS**: stub until SMJobBless helper lands.
 
 use std::fmt;
 use std::path::Path;
+#[cfg(target_os = "linux")]
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -48,13 +50,16 @@ impl fmt::Display for TunError {
 
 impl std::error::Error for TunError {}
 
-/// Saved DNS restore info for the active TUN session (Linux).
+/// Saved DNS restore info for the active TUN session (Linux user-space path).
+#[cfg(target_os = "linux")]
 static DNS_RESTORE: Mutex<Option<(String, String)>> = Mutex::new(None);
 
+#[cfg(target_os = "linux")]
 fn set_dns_restore(info: Option<(String, String)>) {
     *DNS_RESTORE.lock().unwrap_or_else(|e| e.into_inner()) = info;
 }
 
+#[cfg(target_os = "linux")]
 fn take_dns_restore() -> Option<(String, String)> {
     DNS_RESTORE
         .lock()
@@ -82,46 +87,69 @@ pub fn probe() -> TunServiceState {
     }
 }
 
-/// Ensure helper is installed when possible.
+/// Ensure elevated helper/service is installed when possible.
+///
+/// - Linux: helper must already be on disk (deb/rpm / install script).
+/// - Windows: may prompt UAC once to install/upgrade `tun-service`.
 pub fn ensure_installed() -> Result<TunServiceState, TunError> {
-    let state = probe();
-    match state {
-        TunServiceState::Ready | TunServiceState::Running => Ok(state),
-        TunServiceState::NotInstalled => Err(not_installed_error()),
+    #[cfg(target_os = "windows")]
+    {
+        return windows::ensure_installed();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let state = probe();
+        match state {
+            TunServiceState::Ready | TunServiceState::Running => Ok(state),
+            TunServiceState::NotInstalled => Err(not_installed_error()),
+        }
     }
 }
 
-/// Start TUN capture: elevated core + (Linux) DNS hijack after readiness.
+/// Start TUN capture: elevated core + DNS hijack after readiness.
 ///
-/// On Linux the helper `exec`s Xray as root via pkexec. Caller must NOT also
-/// spawn a user-space core. After this returns Ok, mixed/API ports should be
-/// ready for probing.
+/// Caller must NOT also spawn a user-space core (`Engine::start`). After Ok,
+/// mixed/API ports should accept connections.
 ///
-/// `dns_hijack`: OS DNS override target. Prefer a public resolver that is
-/// routed into the TUN (default `1.1.1.1` on all platforms). Do not use the
+/// `dns_hijack`: OS DNS override target (default `1.1.1.1`). Do not use the
 /// TUN gateway IP — host DNS to `198.18.0.1:53` is refused.
-/// `asset_dir`: directory with `geoip.dat` / `geosite.dat` (exported as
-/// `XRAY_LOCATION_ASSET` for the elevated core).
+/// `asset_dir`: geo assets (and on Windows, optionally `wintun.dll`).
 pub fn start_tun(
     config_path: &Path,
     core_path: &Path,
     dns_hijack: Option<&str>,
     asset_dir: Option<&Path>,
 ) -> Result<(), TunError> {
+    let dns = dns_hijack.unwrap_or("1.1.1.1");
     #[cfg(target_os = "linux")]
     {
-        return linux::start_tun(
-            config_path,
-            core_path,
-            dns_hijack.unwrap_or("1.1.1.1"),
-            asset_dir,
-        );
+        return linux::start_tun(config_path, core_path, dns, asset_dir);
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     {
-        let _ = (config_path, core_path, dns_hijack, asset_dir);
+        return windows::start_tun(config_path, core_path, dns, asset_dir);
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        let _ = (config_path, core_path, dns, asset_dir);
         Err(not_installed_error())
     }
+}
+
+/// Windows service binary entry helpers (used by `tun-service` bin).
+#[cfg(target_os = "windows")]
+pub fn windows_scm_ensure_installed(bundled: &Path) -> Result<(), String> {
+    windows::scm::ensure_installed(bundled)
+}
+
+#[cfg(target_os = "windows")]
+pub fn windows_scm_uninstall() -> Result<(), String> {
+    windows::scm::uninstall()
+}
+
+#[cfg(target_os = "windows")]
+pub fn windows_service_run_dispatcher() -> i32 {
+    windows::service::run_dispatcher()
 }
 
 /// Stop TUN capture and restore DNS (best-effort).
@@ -568,17 +596,7 @@ mod linux {
 }
 
 #[cfg(target_os = "windows")]
-mod windows {
-    use super::*;
-
-    pub fn probe() -> TunServiceState {
-        TunServiceState::NotInstalled
-    }
-
-    pub fn stop_tun() -> Result<(), TunError> {
-        Ok(())
-    }
-}
+mod windows;
 
 #[cfg(target_os = "macos")]
 mod macos {

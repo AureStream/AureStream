@@ -344,7 +344,7 @@ fn humanize_tray_error(err: &str) -> String {
         || s.contains("polkit Helper")
         || s.contains("aurestream-tun-helper")
     {
-        return "虚拟网卡组件尚未安装。Linux 请使用 deb/rpm 安装包，或运行 scripts/install-linux-tun-helper.sh；也可暂时使用系统代理。".into();
+        return "虚拟网卡组件尚未安装。Linux 请用 deb/rpm 或 scripts/install-linux-tun-helper.sh；Windows 请使用带 tun-service 的安装包（首次会请求管理员权限）；也可暂时使用系统代理。".into();
     }
     // Strip error code prefixes like `tun_not_installed: ...`
     if let Some((_, msg)) = s.split_once(": ") {

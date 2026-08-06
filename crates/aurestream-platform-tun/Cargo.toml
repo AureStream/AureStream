@@ -4,10 +4,36 @@ version = "0.1.0"
 edition = "2021"
 description = "OS TUN capture layer for AureStream (helpers / elevated start)"
 
+[lib]
+name = "aurestream_platform_tun"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tun-service"
+path = "src/bin/tun-service.rs"
+required-features = []
+
 [dependencies]
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [target.'cfg(windows)'.dependencies]
-# Reserved for SCM service client (Phase 1 full port)
+sha2 = "0.10"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Services",
+    "Win32_System_Registry",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_IO",
+    "Win32_UI_Shell",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+] }
+
+[target.'cfg(windows)'.dev-dependencies]
+tempfile = "3"

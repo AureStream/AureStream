@@ -291,6 +291,9 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "sha2",
+ "tempfile",
+ "windows 0.62.2",
 ]
 
 [[package]]

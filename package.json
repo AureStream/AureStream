@@ -13,7 +13,8 @@
     "download-binaries": "tsx scripts/download-binaries.ts",
     "release": "pnpm download-binaries && pnpm build && pnpm tauri build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build-tun": "tsx scripts/build-tun-service.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

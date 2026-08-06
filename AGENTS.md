@@ -14,7 +14,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 
 - **New features only in the v2 tree**: root `src/`, `src-tauri/`, and `crates/aurestream-*`.
 - **`legacy/` is archived / read-only reference.** Do **not** fix bugs or add features there.
-- **Default capture path = system proxy**. TUN is optional (`mode: "tun"`, Home 虚拟网卡). **Linux elevated helper is implemented** (`pkexec` + polkit); Windows/macOS helpers still Phase 1–2. Without a helper, TUN start returns a clear install error. AppImage does not install `/usr` helpers — use deb/rpm or `scripts/install-linux-tun-helper.sh` for dev.
+- **Default capture path = system proxy**. TUN is optional (`mode: "tun"`, Home 虚拟网卡). **Linux** (`pkexec` + polkit) and **Windows** (SCM `AureStreamTunService` / `tun-service.exe`, one-time UAC) elevated paths are implemented; macOS still Phase 2. Without a helper/service, TUN start returns a clear install error. AppImage does not install `/usr` helpers — use deb/rpm or `scripts/install-linux-tun-helper.sh` for dev. Windows: `pnpm build-tun` stages `tun-service-*.exe`; need `wintun.dll` next to core.
 - Engine config dialect lives in `aurestream-engine` (`build_config`); `aurestream-config` only decodes → `ProxyNode`.
 
 ### Current product surface (implemented)
@@ -23,6 +23,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 - Node list, TCP latency probe + sort, home shows selected-node latency
 - Connect / disconnect via Xray sidecar + OS system proxy (Win / macOS / Linux)
 - **Linux TUN**: `aurestream-platform-tun` + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm / dev install script)
+- **Windows TUN**: SCM service via `tun-service.exe` (UAC install once; NameServer hijack to `1.1.1.1` after core ready)
 - System tray (show window, system proxy / TUN toggle when helper ready, quit)
 - Unified app/core logs; errors via in-app modal (`app-alert` from Rust)
 
@@ -51,6 +52,7 @@ pnpm tauri build         # Full Tauri release build
 pnpm download-binaries   # Xray-core → src-tauri/binaries/aurestream-core-* + geo DBs
 pnpm release             # download-binaries + build + tauri build
 ./scripts/install-linux-tun-helper.sh   # Linux dev: install pkexec helper + polkit
+pnpm build-tun           # Windows: build tun-service.exe into src-tauri/binaries/
 
 # Rust (workspace root)
 cargo check --workspace
@@ -70,7 +72,7 @@ AureStream/
     aurestream-config/            # Decode subscription → ProxyNode only
     aurestream-engine/            # Engine trait + XrayEngine + state machine
     aurestream-platform-proxy/    # OS system proxy set/clear
-    aurestream-platform-tun/      # TUN capture + Linux helper (Win/mac later)
+    aurestream-platform-tun/      # TUN: Linux helper + Windows tun-service (mac later)
   legacy/                         # Pre-v2 monolith (unmaintained)
   scripts/download-binaries.ts    # Fetch Xray as aurestream-core
   scripts/install-linux-tun-helper.sh
