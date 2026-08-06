@@ -109,11 +109,14 @@ pub fn start_tun(
 ) -> Result<(), TunError> {
     #[cfg(target_os = "linux")]
     {
-        // Linux: hijack system DNS to TUN gateway so queries hit tun-in :53.
+        // Linux: hijack system DNS to a public resolver that is routed into the
+        // TUN (same idea as Windows). Xray does not accept host DNS on the TUN
+        // gateway IP itself (198.18.0.1:53 → connection refused); queries to
+        // 1.1.1.1 enter utun233 via autoSystemRoutingTable and are handled.
         return linux::start_tun(
             config_path,
             core_path,
-            dns_hijack.unwrap_or("198.18.0.1"),
+            dns_hijack.unwrap_or("1.1.1.1"),
             asset_dir,
         );
     }
@@ -361,10 +364,9 @@ mod linux {
     }
 
     fn dns_hijack_or_gateway(dns_hijack: &str) -> String {
-        // Linux/macOS strategy: point system DNS at the TUN gateway so queries
-        // land on tun-in :53 → dns-out (legacy verified path).
+        // Prefer an explicit hijack target. Empty → public resolver (routed via TUN).
         if dns_hijack.is_empty() {
-            TUN_GATEWAY_IP.into()
+            "1.1.1.1".into()
         } else {
             dns_hijack.to_string()
         }

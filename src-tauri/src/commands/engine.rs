@@ -391,12 +391,14 @@ async fn start_steps(
                 .begin_external_start(engine_state.socks_port, engine_state.api_port)
                 .map_err(|e| e.to_string())?;
 
-            // Linux/macOS: system DNS → TUN gateway (198.18.0.1).
-            // Windows (later): public resolver hijack.
-            #[cfg(target_os = "windows")]
-            let dns_hijack = Some("1.1.1.1");
-            #[cfg(not(target_os = "windows"))]
+            // DNS hijack target written into the OS resolver.
+            // Linux (verified on Xray 26.7+): public resolver via TUN routes —
+            // gateway IP 198.18.0.1 does not accept host DNS (conn refused).
+            // macOS still prefers gateway when its helper lands; Windows uses public DNS.
+            #[cfg(target_os = "macos")]
             let dns_hijack = Some("198.18.0.1");
+            #[cfg(not(target_os = "macos"))]
+            let dns_hijack = Some("1.1.1.1");
 
             if let Err(e) = platform_tun::start_tun(
                 &engine_state.config_path,
