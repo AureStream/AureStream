@@ -6,7 +6,11 @@ import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
 import { getNodeLatency, subscribeNodeLatencies } from "@/lib/node-latency"
 import { getNodeLatencyTone } from "@/lib/node-latency-tone"
-import { loadProxyPrefs, setSmartRoutingPref } from "@/lib/proxy-prefs"
+import {
+  loadProxyPrefs,
+  setEnableTunPref,
+  setSmartRoutingPref,
+} from "@/lib/proxy-prefs"
 import { cn } from "@/lib/utils"
 
 const PrefIcons = {
@@ -75,14 +79,22 @@ export default function HomePage() {
   const { engine, start, stop } = useEngine()
 
   const [smartRouting, setSmartRouting] = useState(true)
-  // TUN / IPv6 not wired in v2 MVP — keep switches visible but disabled off.
-  const enableTun = false
+  const [enableTun, setEnableTun] = useState(false)
+  // IPv6 not wired yet — keep visible but disabled off.
   const enableIpv6 = false
 
   useEffect(() => {
     const prefs = loadProxyPrefs()
     setSmartRouting(prefs.smartRouting)
+    setEnableTun(prefs.enableTun)
   }, [])
+
+  // Reflect engine capture mode when running (tray may have switched).
+  useEffect(() => {
+    if (engine.state !== "running") return
+    if (engine.captureMode === "tun") setEnableTun(true)
+    if (engine.captureMode === "system") setEnableTun(false)
+  }, [engine.state, engine.captureMode])
 
   const busy = engine.state === "starting" || engine.state === "stopping"
   const connected = engine.state === "running"
@@ -142,8 +154,22 @@ export default function HomePage() {
   const canToggle = !busy && (connected || !nodesEmpty)
 
   const handleToggle = () => {
-    if (connected) void stop()
-    else void start()
+    if (connected) {
+      void stop()
+      return
+    }
+    // Mutual exclusion: TUN vs system proxy.
+    const mode = enableTun ? "tun" : "system"
+    void start({
+      mode,
+      smartRouting,
+      nodeTag: selected?.tag,
+    })
+  }
+
+  const handleToggleTun = (next: boolean) => {
+    setEnableTun(next)
+    setEnableTunPref(next)
   }
 
   return (
@@ -396,7 +422,7 @@ export default function HomePage() {
                   />
                 </label>
 
-                <label className="flex min-w-0 cursor-not-allowed select-none flex-col items-center justify-center gap-1.5 px-0.5 opacity-45">
+                <label className="flex min-w-0 cursor-pointer select-none flex-col items-center justify-center gap-1.5 px-0.5">
                   <span className="flex min-w-0 items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-[#6b7280]">
                     <span className="shrink-0 text-[var(--auth-accent)]">
                       <PrefIcons.Globe />
@@ -406,8 +432,9 @@ export default function HomePage() {
                   <Switch
                     size="sm"
                     checked={enableTun}
-                    disabled
-                    aria-label="虚拟网卡（暂不可用）"
+                    disabled={prefsDisabled}
+                    onCheckedChange={handleToggleTun}
+                    aria-label="虚拟网卡"
                   />
                 </label>
 

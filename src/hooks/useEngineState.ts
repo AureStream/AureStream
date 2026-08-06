@@ -5,7 +5,7 @@ import {
   type EngineStatePayload,
 } from "@/lib/ipc";
 
-const IDLE: EngineStatePayload = { state: "idle" };
+const IDLE: EngineStatePayload = { state: "idle", captureMode: "off" };
 
 /**
  * Event-driven engine state. Never gates on sessionReady / sync.

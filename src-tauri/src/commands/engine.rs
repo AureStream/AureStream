@@ -10,8 +10,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use aurestream_config::{decode_subscription_body, ProxyNode};
-use aurestream_engine::{Engine, EngineState, SharedXrayEngine, XrayEngine};
+use aurestream_engine::{BuildOptions, Engine, EngineState, SharedXrayEngine, XrayEngine};
 use aurestream_platform_proxy::{clear_system_proxy, set_system_proxy};
+use aurestream_platform_tun::{self as platform_tun, TunServiceState};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
@@ -36,6 +37,8 @@ struct SelectionFile {
 pub struct EngineAppState {
     engine: SharedXrayEngine,
     selected_node: Mutex<Option<String>>,
+    /// Active OS capture path (Off / SystemProxy / Tun).
+    capture_mode: Mutex<CaptureMode>,
     /// Last payload emitted on `engine-state` (source of truth for `engine_get_state`).
     last_emitted: Mutex<EngineStatePayload>,
     /// Single-flight gate for start/stop/select-restart orchestration.
@@ -60,6 +63,7 @@ impl EngineAppState {
             state: "idle".into(),
             reason: None,
             selected_node: selected.clone(),
+            capture_mode: CaptureMode::Off.as_str().into(),
         };
         let mut engine = XrayEngine::new();
         if let Ok(log_dir) = crate::logging::app_log_dir(app) {
@@ -69,6 +73,7 @@ impl EngineAppState {
         Ok(Self {
             engine: std::sync::Arc::new(engine),
             selected_node: Mutex::new(selected),
+            capture_mode: Mutex::new(CaptureMode::Off),
             last_emitted: Mutex::new(initial),
             gate: AsyncMutex::new(()),
             selection_path,
@@ -109,6 +114,7 @@ impl EngineAppState {
                 state: "idle".into(),
                 reason: None,
                 selected_node: self.selected_node(),
+                capture_mode: self.capture_mode().as_str().into(),
             })
     }
 
@@ -134,6 +140,48 @@ impl EngineAppState {
             state: state_str,
             reason,
             selected_node: self.selected_node(),
+            capture_mode: self.capture_mode().as_str().into(),
+        }
+    }
+
+    pub fn capture_mode(&self) -> CaptureMode {
+        self.capture_mode
+            .lock()
+            .map(|g| *g)
+            .unwrap_or(CaptureMode::Off)
+    }
+
+    pub fn set_capture_mode(&self, mode: CaptureMode) {
+        if let Ok(mut g) = self.capture_mode.lock() {
+            *g = mode;
+        }
+    }
+}
+
+/// OS traffic capture path presented to UI / tray.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CaptureMode {
+    #[default]
+    Off,
+    SystemProxy,
+    Tun,
+}
+
+impl CaptureMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CaptureMode::Off => "off",
+            CaptureMode::SystemProxy => "system",
+            CaptureMode::Tun => "tun",
+        }
+    }
+
+    pub fn parse(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "system" | "systemproxy" | "system_proxy" => CaptureMode::SystemProxy,
+            "tun" | "virtual" | "nic" => CaptureMode::Tun,
+            _ => CaptureMode::Off,
         }
     }
 }
@@ -146,6 +194,8 @@ pub struct EngineStatePayload {
     pub reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_node: Option<String>,
+    /// `off` | `system` | `tun`
+    pub capture_mode: String,
 }
 
 fn read_selection(path: &PathBuf) -> Result<Option<String>, String> {
@@ -170,7 +220,7 @@ fn write_selection(path: &PathBuf, value: &SelectionFile) -> Result<(), String> 
 fn emit_engine_state(app: &AppHandle, engine_state: &EngineAppState, payload: &EngineStatePayload) {
     engine_state.record_emitted(payload);
     let _ = app.emit(ENGINE_STATE_EVENT, payload.clone());
-    crate::tray::on_engine_payload(app, &payload.state);
+    crate::tray::on_engine_payload(app, &payload.state, &payload.capture_mode);
 }
 
 fn emit_from(app: &AppHandle, engine_state: &EngineAppState, state: EngineState) {
@@ -185,6 +235,7 @@ fn emit_failed(app: &AppHandle, engine_state: &EngineAppState, reason: impl Into
             state: "failed".into(),
             reason: Some(reason.into()),
             selected_node: engine_state.selected_node(),
+            capture_mode: engine_state.capture_mode().as_str().into(),
         },
     );
 }
@@ -255,20 +306,34 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
 async fn fail_cleanup(app: &AppHandle, engine_state: &EngineAppState, reason: String) {
     log::error!("engine fail_cleanup: {reason}");
     let _ = clear_system_proxy();
+    let _ = platform_tun::stop_tun();
     let _ = engine_state.engine.stop().await;
+    engine_state.set_capture_mode(CaptureMode::Off);
     emit_failed(app, engine_state, reason);
+}
+
+fn build_options_for(mode: CaptureMode, engine_state: &EngineAppState, smart_routing: bool) -> BuildOptions {
+    let mut opts = match mode {
+        CaptureMode::Tun => BuildOptions::tun(engine_state.socks_port, engine_state.api_port),
+        _ => BuildOptions::system_proxy(engine_state.socks_port, engine_state.api_port),
+    };
+    opts.smart_routing = smart_routing;
+    opts
 }
 
 /// Core start steps after `starting` has been emitted. Errors bubble to caller for fail_cleanup.
 async fn start_steps(
     engine_state: &EngineAppState,
     node: &ProxyNode,
+    mode: CaptureMode,
+    smart_routing: bool,
 ) -> Result<(), String> {
-    // If already running / leftover process, stop first (no dialect in this layer).
+    // Tear down previous capture first (mode switch = stop → rebuild → start).
     match engine_state.engine.state() {
         EngineState::Idle | EngineState::Failed { .. } => {}
         _ => {
             let _ = clear_system_proxy();
+            let _ = platform_tun::stop_tun();
             engine_state
                 .engine
                 .stop()
@@ -277,24 +342,55 @@ async fn start_steps(
         }
     }
 
+    let opts = build_options_for(mode, engine_state, smart_routing);
     engine_state
         .engine
-        .build_config(
-            &engine_state.config_path,
-            node,
-            engine_state.socks_port,
-            engine_state.api_port,
-        )
+        .build_config_with_options(&engine_state.config_path, node, opts)
         .map_err(|e| e.to_string())?;
 
-    engine_state
-        .engine
-        .start(&engine_state.config_path)
-        .await
-        .map_err(|e| e.to_string())?;
+    match mode {
+        CaptureMode::SystemProxy => {
+            engine_state
+                .engine
+                .start(&engine_state.config_path)
+                .await
+                .map_err(|e| e.to_string())?;
+            set_system_proxy(PROXY_HOST, engine_state.socks_port)
+                .map_err(|e| format!("set_system_proxy: {e}"))?;
+            engine_state.set_capture_mode(CaptureMode::SystemProxy);
+        }
+        CaptureMode::Tun => {
+            // Clear system proxy so capture is exclusive to TUN.
+            let _ = clear_system_proxy();
 
-    set_system_proxy(PROXY_HOST, engine_state.socks_port)
-        .map_err(|e| format!("set_system_proxy: {e}"))?;
+            let core = aurestream_engine::resolve_sidecar_path()
+                .map_err(|e| e.to_string())?;
+
+            // Elevated helper must be present; otherwise fail with install guidance.
+            platform_tun::start_tun(
+                &engine_state.config_path,
+                &core,
+                Some("1.1.1.1"),
+            )
+            .map_err(|e| e.message.clone())?;
+
+            // Helper owns capture; still run readiness via local API if core is user-space
+            // attached. When helper spawns core itself, start() is a no-op readiness probe path.
+            // Current Phase-0 helpers return before spawn — this line is for future Ready helpers
+            // that only elevate privileges while app owns the sidecar process.
+            engine_state
+                .engine
+                .start(&engine_state.config_path)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let _ = clear_system_proxy();
+            engine_state.set_capture_mode(CaptureMode::Tun);
+        }
+        CaptureMode::Off => {
+            return Err("invalid_capture_mode".into());
+        }
+    }
 
     Ok(())
 }
@@ -303,11 +399,12 @@ async fn start_with_node(
     app: &AppHandle,
     engine_state: &EngineAppState,
     node: &ProxyNode,
+    mode: CaptureMode,
+    smart_routing: bool,
 ) -> Result<(), String> {
     emit_from(app, engine_state, EngineState::Starting);
 
-    // Any failure after Starting must fail_cleanup so UI leaves「处理中…」.
-    match start_steps(engine_state, node).await {
+    match start_steps(engine_state, node, mode, smart_routing).await {
         Ok(()) => {
             emit_from(app, engine_state, EngineState::Running);
             Ok(())
@@ -350,7 +447,11 @@ pub async fn engine_select_node(
     let was_running = matches!(engine.engine.state(), EngineState::Running)
         || engine.last_payload().state == "running";
     if was_running {
-        start_with_node(&app, &engine, &node).await?;
+        let mode = match engine.capture_mode() {
+            CaptureMode::Off => CaptureMode::SystemProxy,
+            m => m,
+        };
+        start_with_node(&app, &engine, &node, mode, true).await?;
     } else {
         let mut payload = engine.last_payload();
         payload.selected_node = engine.selected_node();
@@ -360,7 +461,10 @@ pub async fn engine_select_node(
     Ok(engine.last_payload())
 }
 
-/// Start: resolve ProxyNode → build_config → start → system proxy → emit Running.
+/// Start: resolve ProxyNode → build_config → start → capture (system proxy or TUN).
+///
+/// `mode`: `"system"` (default) | `"tun"`.
+/// `smart_routing`: optional; default true (rule split).
 #[tauri::command]
 pub async fn engine_start(
     app: AppHandle,
@@ -368,6 +472,8 @@ pub async fn engine_start(
     subs: State<'_, SubsState>,
     engine: State<'_, EngineAppState>,
     node_tag: Option<String>,
+    mode: Option<String>,
+    smart_routing: Option<bool>,
 ) -> Result<EngineStatePayload, String> {
     require_auth(&auth)?;
 
@@ -379,11 +485,34 @@ pub async fn engine_start(
 
     let node = resolve_proxy_node(&subs, &requested)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
-    log::info!("engine_start node={}", node.tag);
+
+    let capture = match mode.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(m) => CaptureMode::parse(m),
+        None => CaptureMode::SystemProxy,
+    };
+    if matches!(capture, CaptureMode::Off) {
+        return Err("mode_required".into());
+    }
+    let smart = smart_routing.unwrap_or(true);
+    log::info!(
+        "engine_start node={} mode={} smart_routing={smart}",
+        node.tag,
+        capture.as_str()
+    );
 
     let _guard = engine.gate.lock().await;
-    start_with_node(&app, &engine, &node).await?;
+    start_with_node(&app, &engine, &node, capture, smart).await?;
     Ok(engine.last_payload())
+}
+
+/// Probe elevated TUN helper (for UI enablement / error copy).
+#[tauri::command]
+pub fn engine_probe_tun() -> String {
+    match platform_tun::probe() {
+        TunServiceState::NotInstalled => "notInstalled".into(),
+        TunServiceState::Ready => "ready".into(),
+        TunServiceState::Running => "running".into(),
+    }
 }
 
 /// Stop: clear system proxy first, then stop sidecar → emit Idle.
@@ -398,19 +527,24 @@ pub async fn engine_stop(
     emit_from(&app, &engine, EngineState::Stopping);
 
     if let Err(e) = clear_system_proxy() {
-        // Still attempt stop so we do not leave a blackhole.
+        let _ = platform_tun::stop_tun();
         let _ = engine.engine.stop().await;
+        engine.set_capture_mode(CaptureMode::Off);
         let reason = format!("clear_system_proxy: {e}");
         emit_failed(&app, &engine, reason.clone());
         return Err(reason);
     }
 
+    let _ = platform_tun::stop_tun();
+
     if let Err(e) = engine.engine.stop().await {
+        engine.set_capture_mode(CaptureMode::Off);
         let reason = e.to_string();
         emit_failed(&app, &engine, reason.clone());
         return Err(reason);
     }
 
+    engine.set_capture_mode(CaptureMode::Off);
     emit_from(&app, &engine, EngineState::Idle);
     Ok(engine.last_payload())
 }
@@ -434,7 +568,30 @@ pub async fn tray_start_system(app: &AppHandle) -> Result<(), String> {
     engine.set_selected_node(Some(node.tag.clone()))?;
 
     let _guard = engine.gate.lock().await;
-    start_with_node(app, &engine, &node).await?;
+    start_with_node(app, &engine, &node, CaptureMode::SystemProxy, true).await?;
+    Ok(())
+}
+
+/// Tray / shell: start TUN capture when helper is available.
+pub async fn tray_start_tun(app: &AppHandle) -> Result<(), String> {
+    let auth = app
+        .try_state::<AuthState>()
+        .ok_or_else(|| "auth_state_missing".to_string())?;
+    let subs = app
+        .try_state::<SubsState>()
+        .ok_or_else(|| "subs_state_missing".to_string())?;
+    let engine = app
+        .try_state::<EngineAppState>()
+        .ok_or_else(|| "engine_state_missing".to_string())?;
+
+    require_auth(&auth)?;
+
+    let requested = engine.selected_node().unwrap_or_default();
+    let node = resolve_proxy_node(&subs, &requested)?;
+    engine.set_selected_node(Some(node.tag.clone()))?;
+
+    let _guard = engine.gate.lock().await;
+    start_with_node(app, &engine, &node, CaptureMode::Tun, true).await?;
     Ok(())
 }
 
@@ -454,11 +611,14 @@ pub async fn tray_stop(app: &AppHandle) -> Result<(), String> {
 
     emit_from(app, &engine, EngineState::Stopping);
     let _ = clear_system_proxy();
+    let _ = platform_tun::stop_tun();
     if let Err(e) = engine.engine.stop().await {
+        engine.set_capture_mode(CaptureMode::Off);
         let reason = e.to_string();
         emit_failed(app, &engine, reason.clone());
         return Err(reason);
     }
+    engine.set_capture_mode(CaptureMode::Off);
     emit_from(app, &engine, EngineState::Idle);
     Ok(())
 }
@@ -473,6 +633,7 @@ mod tests {
             state: "failed".into(),
             reason: Some("build_config boom".into()),
             selected_node: Some("n1".into()),
+            capture_mode: "off".into(),
         };
         assert_eq!(payload.state, "failed");
         assert_eq!(payload.reason.as_deref(), Some("build_config boom"));

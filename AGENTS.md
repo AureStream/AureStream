@@ -14,7 +14,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 
 - **New features only in the v2 tree**: root `src/`, `src-tauri/`, and `crates/aurestream-*`.
 - **`legacy/` is archived / read-only reference.** Do **not** fix bugs or add features there.
-- **Default capture path = system proxy** — no TUN / privileged helper / `build-tun` in the default release path until the TUN plan is implemented and product-enabled.
+- **Default capture path = system proxy**. TUN mode is wired at the config/IPC/UI layer (`mode: "tun"`, `captureMode` events, Home 虚拟网卡 switch); elevated helpers (`platform-tun`) are still Phase 1–3 — without them TUN start shows a clear install error. Do not bind TUN helpers into unconditional `pnpm release` until product-enabled.
 - Engine config dialect lives in `aurestream-engine` (`build_config`); `aurestream-config` only decodes → `ProxyNode`.
 
 ### Current product surface (implemented)

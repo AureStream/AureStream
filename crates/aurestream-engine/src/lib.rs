@@ -4,7 +4,9 @@ mod state;
 mod xray;
 
 pub use state::{EngineState, StateMachine};
-pub use xray::{resolve_asset_dir, resolve_sidecar_path, SharedXrayEngine, XrayEngine};
+pub use xray::{
+    resolve_asset_dir, resolve_sidecar_path, BuildOptions, SharedXrayEngine, XrayEngine,
+};
 
 use std::fmt;
 use std::path::Path;
@@ -80,6 +82,19 @@ pub trait Engine: Send {
         node: &ProxyNode,
         socks_port: u16,
         api_port: u16,
+    ) -> Result<(), EngineError> {
+        self.build_config_with_options(
+            path,
+            node,
+            BuildOptions::system_proxy(socks_port, api_port),
+        )
+    }
+
+    fn build_config_with_options(
+        &self,
+        path: &Path,
+        node: &ProxyNode,
+        opts: BuildOptions,
     ) -> Result<(), EngineError>;
 
     fn start(

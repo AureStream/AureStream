@@ -2,7 +2,11 @@
 
 mod config;
 
+pub use config::{write_xray_config_with_options, BuildOptions};
+// keep compatibility helper available to dependents
+#[allow(unused_imports)]
 pub use config::write_xray_config;
+#[allow(unused_imports)]
 
 use std::fs;
 use std::io::Write;
@@ -113,17 +117,16 @@ impl Default for XrayEngine {
 }
 
 impl Engine for XrayEngine {
-    fn build_config(
+    fn build_config_with_options(
         &self,
         path: &Path,
         node: &ProxyNode,
-        socks_port: u16,
-        api_port: u16,
+        opts: BuildOptions,
     ) -> Result<(), EngineError> {
-        write_xray_config(path, node, socks_port, api_port)?;
+        write_xray_config_with_options(path, node, opts)?;
         let mut guard = self.lock();
-        guard.socks_port = Some(socks_port);
-        guard.api_port = Some(api_port);
+        guard.socks_port = Some(opts.socks_port);
+        guard.api_port = Some(opts.api_port);
         Ok(())
     }
 

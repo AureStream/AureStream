@@ -17,6 +17,7 @@ aurestream-api-client = { path = "../crates/aurestream-api-client" }
 aurestream-config = { path = "../crates/aurestream-config" }
 aurestream-engine = { path = "../crates/aurestream-engine" }
 aurestream-platform-proxy = { path = "../crates/aurestream-platform-proxy" }
+aurestream-platform-tun = { path = "../crates/aurestream-platform-tun" }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-log = "2"

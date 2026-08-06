@@ -1,0 +1,13 @@
+[package]
+name = "aurestream-platform-tun"
+version = "0.1.0"
+edition = "2021"
+description = "OS TUN capture layer for AureStream (helpers / elevated start)"
+
+[dependencies]
+log = "0.4"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+# Reserved for SCM service client (Phase 1 full port)

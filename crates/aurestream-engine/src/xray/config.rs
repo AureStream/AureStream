@@ -9,6 +9,96 @@ use serde_json::{json, Value};
 use crate::EngineError;
 
 const PROXY_TAG_FALLBACK: &str = "proxy";
+const TUN_INTERFACE_NAME: &str = "utun233";
+const TUN_GATEWAY_CIDR: &str = "198.18.0.1/30";
+const TUN_DNS_SERVERS: &[&str] = &["1.1.1.1", "8.8.8.8"];
+
+/// IPv4 complement of private/LAN ranges for `autoSystemRoutingTable`
+/// (route everything except 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16).
+const IPV4_EXCLUDING_LAN: &[&str] = &[
+    "0.0.0.0/5",
+    "8.0.0.0/7",
+    "11.0.0.0/8",
+    "12.0.0.0/6",
+    "16.0.0.0/4",
+    "32.0.0.0/3",
+    "64.0.0.0/3",
+    "96.0.0.0/4",
+    "112.0.0.0/5",
+    "120.0.0.0/6",
+    "124.0.0.0/7",
+    "126.0.0.0/8",
+    "128.0.0.0/3",
+    "160.0.0.0/5",
+    "168.0.0.0/8",
+    "169.0.0.0/9",
+    "169.128.0.0/10",
+    "169.192.0.0/11",
+    "169.224.0.0/12",
+    "169.240.0.0/13",
+    "169.248.0.0/14",
+    "169.252.0.0/15",
+    "169.255.0.0/16",
+    "170.0.0.0/7",
+    "172.0.0.0/12",
+    "172.32.0.0/11",
+    "172.64.0.0/10",
+    "172.128.0.0/9",
+    "173.0.0.0/8",
+    "174.0.0.0/7",
+    "176.0.0.0/4",
+    "192.0.0.0/9",
+    "192.128.0.0/11",
+    "192.160.0.0/13",
+    "192.169.0.0/16",
+    "192.170.0.0/15",
+    "192.172.0.0/14",
+    "192.176.0.0/12",
+    "192.192.0.0/10",
+    "193.0.0.0/8",
+    "194.0.0.0/7",
+    "196.0.0.0/6",
+    "200.0.0.0/5",
+    "208.0.0.0/4",
+    "224.0.0.0/3",
+];
+
+/// Options for Xray dialect generation (MVP system proxy + TUN).
+#[derive(Debug, Clone, Copy)]
+pub struct BuildOptions {
+    pub socks_port: u16,
+    pub api_port: u16,
+    pub enable_tun: bool,
+    pub enable_ipv6: bool,
+    /// When true with TUN: route 0.0.0.0/0 into tunnel (bypass-router). Default false excludes LAN.
+    pub bypass_router: bool,
+    /// When true: geosite:cn direct (rule mode). When false: global proxy for non-LAN.
+    pub smart_routing: bool,
+}
+
+impl BuildOptions {
+    pub fn system_proxy(socks_port: u16, api_port: u16) -> Self {
+        Self {
+            socks_port,
+            api_port,
+            enable_tun: false,
+            enable_ipv6: false,
+            bypass_router: false,
+            smart_routing: true,
+        }
+    }
+
+    pub fn tun(socks_port: u16, api_port: u16) -> Self {
+        Self {
+            socks_port,
+            api_port,
+            enable_tun: true,
+            enable_ipv6: false,
+            bypass_router: false,
+            smart_routing: true,
+        }
+    }
+}
 
 pub fn write_xray_config(
     path: &Path,
@@ -16,7 +106,15 @@ pub fn write_xray_config(
     socks_port: u16,
     api_port: u16,
 ) -> Result<(), EngineError> {
-    let cfg = build_xray_config_value(node, socks_port, api_port)?;
+    write_xray_config_with_options(path, node, BuildOptions::system_proxy(socks_port, api_port))
+}
+
+pub fn write_xray_config_with_options(
+    path: &Path,
+    node: &ProxyNode,
+    opts: BuildOptions,
+) -> Result<(), EngineError> {
+    let cfg = build_xray_config_value_with_options(node, opts)?;
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).map_err(|e| {
@@ -36,6 +134,13 @@ pub fn build_xray_config_value(
     socks_port: u16,
     api_port: u16,
 ) -> Result<Value, EngineError> {
+    build_xray_config_value_with_options(node, BuildOptions::system_proxy(socks_port, api_port))
+}
+
+pub fn build_xray_config_value_with_options(
+    node: &ProxyNode,
+    opts: BuildOptions,
+) -> Result<Value, EngineError> {
     let (proxy_outbound, fragment_outbound) = map_proxy_outbound(node)?;
     let proxy_tag = proxy_outbound
         .get("tag")
@@ -48,17 +153,141 @@ pub fn build_xray_config_value(
     if let Some(frag) = fragment_outbound {
         outbounds.push(frag);
     }
+    if opts.enable_tun {
+        // Built-in DNS outbound for OS DNS captured on tun-in :53.
+        outbounds.push(json!({
+            "tag": "dns-out",
+            "protocol": "dns",
+            "settings": {}
+        }));
+    }
+    let domain_strategy = if opts.enable_ipv6 { "UseIP" } else { "UseIPv4" };
     outbounds.push(json!({
         "tag": "direct",
         "protocol": "freedom",
-        "settings": { "domainStrategy": "UseIPv4" }
+        "settings": { "domainStrategy": domain_strategy }
     }));
     outbounds.push(json!({
         "tag": "block",
         "protocol": "blackhole"
     }));
 
-    Ok(json!({
+    let mut inbounds = vec![
+        json!({
+            "tag": "mixed-in",
+            "listen": "127.0.0.1",
+            "port": opts.socks_port,
+            "protocol": "mixed",
+            "settings": { "udp": true },
+            "sniffing": {
+                "enabled": true,
+                "destOverride": ["http", "tls", "quic"],
+                "routeOnly": false
+            }
+        }),
+        json!({
+            "tag": "api",
+            "listen": "127.0.0.1",
+            "port": opts.api_port,
+            "protocol": "dokodemo-door",
+            "settings": { "address": "127.0.0.1" }
+        }),
+    ];
+
+    if opts.enable_tun {
+        inbounds.push(build_tun_inbound(opts.bypass_router, opts.enable_ipv6));
+    }
+
+    let mut rules = vec![json!({
+        "type": "field",
+        "inboundTag": ["api"],
+        "outboundTag": "api"
+    })];
+
+    if opts.enable_tun {
+        // DNS module tag routes must precede port-53 capture (XTLS DNS docs).
+        if opts.smart_routing {
+            rules.push(json!({
+                "type": "field",
+                "inboundTag": ["dns-direct"],
+                "outboundTag": "direct"
+            }));
+        }
+        rules.push(json!({
+            "type": "field",
+            "inboundTag": ["dns-proxy"],
+            "outboundTag": proxy_tag.clone()
+        }));
+        rules.push(json!({
+            "type": "field",
+            "inboundTag": ["tun-in"],
+            "port": "53",
+            "network": "udp,tcp",
+            "outboundTag": "dns-out"
+        }));
+        // Drop link-local / NetBIOS noise on TUN.
+        rules.push(json!({
+            "type": "field",
+            "ip": ["169.254.0.0/16", "fe80::/10"],
+            "outboundTag": "block"
+        }));
+        rules.push(json!({
+            "type": "field",
+            "port": "137,138",
+            "network": "udp",
+            "outboundTag": "block"
+        }));
+    }
+
+    rules.push(json!({
+        "type": "field",
+        "ip": [
+            "0.0.0.0/8",
+            "10.0.0.0/8",
+            "127.0.0.0/8",
+            "169.254.0.0/16",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "224.0.0.0/4",
+            "240.0.0.0/4",
+            "::1/128",
+            "fc00::/7",
+            "fe80::/10"
+        ],
+        "outboundTag": "direct"
+    }));
+
+    if opts.smart_routing {
+        // Prefer geosite/geoip when assets present; harmless if missing at dial time for non-matching.
+        rules.push(json!({
+            "type": "field",
+            "ip": ["geoip:private"],
+            "outboundTag": "direct"
+        }));
+        rules.push(json!({
+            "type": "field",
+            "ip": ["geoip:cn"],
+            "outboundTag": "direct"
+        }));
+        rules.push(json!({
+            "type": "field",
+            "domain": ["geosite:cn"],
+            "outboundTag": "direct"
+        }));
+        rules.push(json!({
+            "type": "field",
+            "domain": ["geosite:category-ads-all"],
+            "outboundTag": "block"
+        }));
+    }
+
+    rules.push(json!({
+        "type": "field",
+        "network": "tcp,udp",
+        "outboundTag": proxy_tag
+    }));
+
+    let mut root = json!({
         "log": { "loglevel": "warning" },
         "api": {
             "tag": "api",
@@ -73,63 +302,84 @@ pub fn build_xray_config_value(
                 "statsOutboundDownlink": true
             }
         },
-        "inbounds": [
-            {
-                "tag": "mixed-in",
-                "listen": "127.0.0.1",
-                "port": socks_port,
-                "protocol": "mixed",
-                "settings": { "udp": true },
-                "sniffing": {
-                    "enabled": true,
-                    "destOverride": ["http", "tls", "quic"],
-                    "routeOnly": false
-                }
-            },
-            {
-                "tag": "api",
-                "listen": "127.0.0.1",
-                "port": api_port,
-                "protocol": "dokodemo-door",
-                "settings": { "address": "127.0.0.1" }
-            }
-        ],
+        "inbounds": inbounds,
         "outbounds": outbounds,
         "routing": {
             "domainStrategy": "AsIs",
-            "rules": [
-                {
-                    "type": "field",
-                    "inboundTag": ["api"],
-                    "outboundTag": "api"
-                },
-                {
-                    // Explicit private CIDRs — no geoip.dat required for MVP direct bypass.
-                    // (geo assets are still resolved at runtime for future geosite rules.)
-                    "type": "field",
-                    "ip": [
-                        "0.0.0.0/8",
-                        "10.0.0.0/8",
-                        "127.0.0.0/8",
-                        "169.254.0.0/16",
-                        "172.16.0.0/12",
-                        "192.168.0.0/16",
-                        "224.0.0.0/4",
-                        "240.0.0.0/4",
-                        "::1/128",
-                        "fc00::/7",
-                        "fe80::/10"
-                    ],
-                    "outboundTag": "direct"
-                },
-                {
-                    "type": "field",
-                    "network": "tcp,udp",
-                    "outboundTag": proxy_tag
-                }
-            ]
+            "rules": rules
         }
-    }))
+    });
+
+    if opts.enable_tun {
+        root["dns"] = build_dns_config(opts.smart_routing, opts.enable_ipv6);
+    }
+
+    Ok(root)
+}
+
+fn build_tun_inbound(bypass_router: bool, enable_ipv6: bool) -> Value {
+    let mut route_table: Vec<Value> = if bypass_router {
+        vec![Value::String("0.0.0.0/0".into())]
+    } else {
+        IPV4_EXCLUDING_LAN
+            .iter()
+            .map(|s| Value::String((*s).into()))
+            .collect()
+    };
+    if enable_ipv6 {
+        route_table.push(Value::String("::/0".into()));
+    }
+
+    json!({
+        "tag": "tun-in",
+        "protocol": "tun",
+        "settings": {
+            "name": TUN_INTERFACE_NAME,
+            "desc": "AureStream TUN",
+            "mtu": 1500,
+            "gateway": [TUN_GATEWAY_CIDR],
+            "dns": TUN_DNS_SERVERS,
+            "autoSystemRoutingTable": route_table,
+            "autoOutboundsInterface": "auto"
+        },
+        "sniffing": {
+            "enabled": true,
+            "destOverride": ["http", "tls", "quic"],
+            "routeOnly": false
+        }
+    })
+}
+
+fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
+    let query_strategy = if enable_ipv6 { "UseIP" } else { "UseIPv4" };
+    if !smart_routing {
+        return json!({
+            "servers": ["1.1.1.1", "8.8.8.8"],
+            "tag": "dns-proxy",
+            "queryStrategy": query_strategy
+        });
+    }
+    // Simplified rule DNS (Phase 0): CN via direct-tagged servers, else proxy.
+    json!({
+        "tag": "dns-proxy",
+        "queryStrategy": query_strategy,
+        "servers": [
+            {
+                "tag": "dns-direct",
+                "address": "223.5.5.5",
+                "domains": ["geosite:cn"],
+                "expectIPs": ["geoip:cn"]
+            },
+            {
+                "tag": "dns-direct",
+                "address": "114.114.114.114",
+                "domains": ["geosite:cn"],
+                "expectIPs": ["geoip:cn"]
+            },
+            "1.1.1.1",
+            "8.8.8.8"
+        ]
+    })
 }
 
 fn map_proxy_outbound(node: &ProxyNode) -> Result<(Value, Option<Value>), EngineError> {
@@ -311,7 +561,6 @@ fn map_hysteria2(tag: &str, node: &ProxyNode) -> Result<Value, EngineError> {
             }]
         }
     });
-    // Hysteria2 typically needs TLS.
     let mut stream = build_stream_settings(node).unwrap_or_else(|| json!({}));
     if stream.get("security").is_none() {
         stream["security"] = Value::String("tls".into());

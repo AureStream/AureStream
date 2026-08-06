@@ -8,8 +8,8 @@ mod window_util;
 
 use commands::{
     auth_login, auth_logout, auth_register, auth_restore, auth_verify, spawn_initial_restore,
-    engine_get_state, engine_select_node, engine_start, engine_stop, EngineAppState, ping_tcp,
-    subs_list, subs_sync,
+    engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
+    EngineAppState, ping_tcp, subs_list, subs_sync,
 };
 use state::{AuthState, SubsState};
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -71,6 +71,7 @@ pub fn run() {
             engine_stop,
             engine_select_node,
             engine_get_state,
+            engine_probe_tun,
             ping_tcp,
         ])
         .build(tauri::generate_context!())
@@ -95,8 +96,9 @@ pub fn run() {
                     }
                 }
                 RunEvent::Exit => {
-                    log::info!("app exiting — clearing system proxy");
+                    log::info!("app exiting — clearing system proxy + tun");
                     let _ = aurestream_platform_proxy::clear_system_proxy();
+                    let _ = aurestream_platform_tun::stop_tun();
                 }
                 _ => {}
             }

@@ -4,6 +4,7 @@ members = [
     "crates/aurestream-config",
     "crates/aurestream-engine",
     "crates/aurestream-platform-proxy",
+    "crates/aurestream-platform-tun",
     "src-tauri",
 ]
 resolver = "2"

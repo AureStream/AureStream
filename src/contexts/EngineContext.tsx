@@ -15,16 +15,22 @@ import {
   type EngineStatePayload,
 } from "@/lib/ipc"
 
+export type StartOptions = {
+  nodeTag?: string
+  mode?: "system" | "tun"
+  smartRouting?: boolean
+}
+
 type EngineContextValue = {
   /** Source of truth from `engine-state` events (plus one-shot hydrate). */
   engine: EngineStatePayload
-  start: (nodeTag?: string) => Promise<void>
+  start: (nodeTagOrOpts?: string | StartOptions) => Promise<void>
   stop: () => Promise<void>
   selectNode: (nodeTag: string) => Promise<void>
 }
 
 const EngineContext = createContext<EngineContextValue>({
-  engine: { state: "idle" },
+  engine: { state: "idle", captureMode: "off" },
   start: async () => {},
   stop: async () => {},
   selectNode: async () => {},
@@ -68,9 +74,9 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   }, [engine.state, engine.reason, presentError])
 
   const start = useCallback(
-    async (nodeTag?: string) => {
+    async (nodeTagOrOpts?: string | StartOptions) => {
       try {
-        await engineStart(nodeTag)
+        await engineStart(nodeTagOrOpts)
       } catch (err) {
         presentError(err, "连接失败", "连接失败")
       }

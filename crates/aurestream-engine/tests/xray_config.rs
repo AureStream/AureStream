@@ -93,6 +93,55 @@ fn xray_build_config_single_outbound_no_tun() {
 }
 
 #[test]
+fn xray_build_config_with_tun_inbound() {
+    use aurestream_engine::BuildOptions;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config-tun.json");
+    let engine = XrayEngine::new();
+    let mut opts = BuildOptions::tun(17890, 17891);
+    opts.smart_routing = true;
+    engine
+        .build_config_with_options(&path, &sample_vless_node(), opts)
+        .expect("build_config tun");
+
+    let cfg: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let inbounds = cfg["inbounds"].as_array().expect("inbounds");
+    let tun = inbounds
+        .iter()
+        .find(|ib| ib.get("protocol").and_then(|p| p.as_str()) == Some("tun"))
+        .expect("tun inbound required");
+    assert_eq!(tun["tag"], "tun-in");
+    assert_eq!(tun["settings"]["name"], "utun233");
+    assert!(
+        cfg["outbounds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o.get("tag").and_then(|t| t.as_str()) == Some("dns-out")),
+        "dns-out required for TUN DNS capture"
+    );
+    assert!(cfg.get("dns").is_some(), "dns module required for TUN");
+    let rules = cfg["routing"]["rules"].as_array().unwrap();
+    assert!(
+        rules.iter().any(|r| {
+            r.get("inboundTag")
+                .and_then(|t| t.as_array())
+                .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("tun-in")))
+                && r.get("port").and_then(|p| p.as_str()) == Some("53")
+        }),
+        "port-53 capture on tun-in required"
+    );
+    // mixed inbound retained for local probe / system proxy fallback
+    assert!(inbounds.iter().any(|ib| {
+        matches!(
+            ib.get("protocol").and_then(|p| p.as_str()),
+            Some("mixed") | Some("socks")
+        )
+    }));
+}
+
+#[test]
 fn xray_build_config_includes_api_listen() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.json");

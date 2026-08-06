@@ -119,18 +119,41 @@ export async function onSubsUpdated(
   });
 }
 
+export type CaptureMode = "off" | "system" | "tun";
+
 export type EngineStatePayload = {
   state: string;
   reason?: string;
   selectedNode?: string;
+  /** `off` | `system` | `tun` */
+  captureMode?: CaptureMode | string;
 };
 
 export const ENGINE_STATE_EVENT = "engine-state";
 
-export async function engineStart(nodeTag?: string): Promise<EngineStatePayload> {
+export type EngineStartOptions = {
+  nodeTag?: string;
+  /** default `system` */
+  mode?: "system" | "tun";
+  smartRouting?: boolean;
+};
+
+export async function engineStart(
+  nodeTagOrOpts?: string | EngineStartOptions,
+): Promise<EngineStatePayload> {
+  const opts: EngineStartOptions =
+    typeof nodeTagOrOpts === "string" || nodeTagOrOpts === undefined
+      ? { nodeTag: nodeTagOrOpts }
+      : nodeTagOrOpts;
   return invoke<EngineStatePayload>("engine_start", {
-    nodeTag: nodeTag ?? null,
+    nodeTag: opts.nodeTag ?? null,
+    mode: opts.mode ?? "system",
+    smartRouting: opts.smartRouting ?? null,
   });
+}
+
+export async function engineProbeTun(): Promise<"notInstalled" | "ready" | "running" | string> {
+  return invoke<string>("engine_probe_tun");
 }
 
 export async function engineStop(): Promise<EngineStatePayload> {

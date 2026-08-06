@@ -120,10 +120,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let system = CheckMenuItemBuilder::with_id(ID_SYSTEM, "系统代理")
         .checked(system_checked)
         .build(app)?;
-    // TUN not implemented in MVP — still listed in the exclusive group, but disabled.
     let tun = CheckMenuItemBuilder::with_id(ID_TUN, "虚拟网卡")
         .checked(tun_checked)
-        .enabled(false)
+        .enabled(true)
         .build(app)?;
 
     let sep2 = PredefinedMenuItem::separator(app)?;
@@ -196,12 +195,10 @@ fn on_menu_event(app: &AppHandle, id: &str) {
             });
         }
         ID_TUN => {
-            // MVP: TUN path is not implemented. Keep exclusive group structure only.
-            emit_info_alert(
-                app,
-                "暂不可用",
-                "虚拟网卡功能尚未开放，当前版本请使用系统代理。",
-            );
+            let handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                on_toggle_tun(handle).await;
+            });
         }
         ID_QUIT => {
             let handle = app.clone();
@@ -228,7 +225,8 @@ async fn on_toggle_system_proxy(app: AppHandle) {
             aurestream_engine::EngineState::Running
         );
 
-    if running || matches!(tray.mode(), CaptureMode::SystemProxy) {
+    // Already on system proxy → stop. If on TUN, switch by stopping then starting system.
+    if running && matches!(tray.mode(), CaptureMode::SystemProxy) {
         log::info!("tray: stop system proxy");
         match engine::tray_stop(&app).await {
             Ok(()) => {
@@ -242,6 +240,10 @@ async fn on_toggle_system_proxy(app: AppHandle) {
         return;
     }
 
+    if running {
+        let _ = engine::tray_stop(&app).await;
+    }
+
     log::info!("tray: start system proxy");
     match engine::tray_start_system(&app).await {
         Ok(()) => {
@@ -251,12 +253,58 @@ async fn on_toggle_system_proxy(app: AppHandle) {
         Err(e) => {
             tray.set_mode(CaptureMode::Off);
             refresh_menu(&app);
-            // Engine start failures already emit `engine-state` failed → UI dialog.
-            // Pre-start errors (auth / subs) need an explicit alert + show window.
             show_main_window(&app);
             if is_pre_start_error(&e) {
                 emit_error_alert(&app, "连接失败", humanize_tray_error(&e));
             }
+        }
+    }
+}
+
+async fn on_toggle_tun(app: AppHandle) {
+    let Some(engine) = app.try_state::<EngineAppState>() else {
+        log::warn!("tray: EngineAppState missing");
+        return;
+    };
+    let Some(tray) = app.try_state::<TrayState>() else {
+        return;
+    };
+
+    let running = engine.last_payload().state == "running"
+        || matches!(
+            engine.engine_state_raw(),
+            aurestream_engine::EngineState::Running
+        );
+
+    if running && matches!(tray.mode(), CaptureMode::Tun) {
+        log::info!("tray: stop tun");
+        match engine::tray_stop(&app).await {
+            Ok(()) => {
+                tray.set_mode(CaptureMode::Off);
+                refresh_menu(&app);
+            }
+            Err(e) => {
+                emit_error_alert(&app, "断开失败", humanize_tray_error(&e));
+            }
+        }
+        return;
+    }
+
+    if running {
+        let _ = engine::tray_stop(&app).await;
+    }
+
+    log::info!("tray: start tun");
+    match engine::tray_start_tun(&app).await {
+        Ok(()) => {
+            tray.set_mode(CaptureMode::Tun);
+            refresh_menu(&app);
+        }
+        Err(e) => {
+            tray.set_mode(CaptureMode::Off);
+            refresh_menu(&app);
+            show_main_window(&app);
+            emit_error_alert(&app, "虚拟网卡", humanize_tray_error(&e));
         }
     }
 }
@@ -271,6 +319,8 @@ fn is_pre_start_error(err: &str) -> bool {
         || s == "subs_state_missing"
         || s == "engine_state_missing"
         || s.starts_with("node_not_found:")
+        || s.contains("tun_not_installed")
+        || s.contains("虚拟网卡")
 }
 
 fn humanize_tray_error(err: &str) -> String {
@@ -289,6 +339,15 @@ fn humanize_tray_error(err: &str) -> String {
     }
     if s.starts_with("sidecar failed:") {
         return format!("内核启动失败：{}", s.trim_start_matches("sidecar failed:"));
+    }
+    if s.contains("tun_not_installed") || s.contains("虚拟网卡服务尚未安装") {
+        return "虚拟网卡组件尚未安装，请使用系统代理，或安装带 TUN 组件的发行包。".into();
+    }
+    // Strip error code prefixes like `tun_not_installed: ...`
+    if let Some((_, msg)) = s.split_once(": ") {
+        if !msg.is_empty() {
+            return msg.to_string();
+        }
     }
     s.to_string()
 }
@@ -326,25 +385,24 @@ pub fn refresh_menu(app: &AppHandle) {
 }
 
 /// Sync tray checkmarks when the engine emits a new state (Running / Idle / Failed).
-pub fn on_engine_payload(app: &AppHandle, state: &str) {
+pub fn on_engine_payload(app: &AppHandle, state: &str, capture_mode: &str) {
     let Some(tray) = app.try_state::<TrayState>() else {
         return;
     };
     let next = match state {
-        "running" | "starting" => CaptureMode::SystemProxy,
-        _ => {
-            // Don't clear Tun if we ever activate it; MVP only has system.
-            match tray.mode() {
-                CaptureMode::Tun if state == "running" => CaptureMode::Tun,
-                _ => CaptureMode::Off,
+        "running" | "starting" => match capture_mode {
+            "tun" => CaptureMode::Tun,
+            "system" => CaptureMode::SystemProxy,
+            _ => {
+                // Prefer last tray mode during starting if capture not yet set.
+                match tray.mode() {
+                    CaptureMode::Tun => CaptureMode::Tun,
+                    _ => CaptureMode::SystemProxy,
+                }
             }
-        }
+        },
+        _ => CaptureMode::Off,
     };
-    // starting keeps SystemProxy checked for immediate feedback
-    if state == "starting" {
-        tray.set_mode(CaptureMode::SystemProxy);
-    } else {
-        tray.set_mode(next);
-    }
+    tray.set_mode(next);
     refresh_menu(app);
 }
