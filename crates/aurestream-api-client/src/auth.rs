@@ -23,6 +23,23 @@ pub struct RegisterPending {
     pub expires_in: u64,
 }
 
+/// `POST /auth/refresh` response. Unlike login it carries no `user` — the
+/// caller keeps the one it already has.
+///
+/// The server rotates: the refresh token sent is deleted server-side, so
+/// `refresh_token` here MUST be persisted or the session becomes unrenewable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefreshedTokens {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: u64,
+}
+
+#[derive(Debug, Serialize)]
+struct RefreshRequest<'a> {
+    refresh_token: &'a str,
+}
+
 #[derive(Debug, Serialize)]
 struct LoginRequest<'a> {
     email: &'a str,
@@ -66,6 +83,29 @@ pub(crate) async fn login(
 
     response
         .json::<AuthTokens>()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))
+}
+
+pub(crate) async fn refresh(
+    http: &reqwest::Client,
+    base: &str,
+    refresh_token: &str,
+) -> Result<RefreshedTokens, ApiError> {
+    let url = format!("{base}/auth/refresh");
+    let response = http
+        .post(&url)
+        .json(&RefreshRequest { refresh_token })
+        .send()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
+
+    if !response.status().is_success() {
+        return Err(ApiError::from_response(response).await);
+    }
+
+    response
+        .json::<RefreshedTokens>()
         .await
         .map_err(|_| ApiError::from_code("request_failed", 0, None))
 }

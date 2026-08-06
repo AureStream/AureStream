@@ -50,12 +50,27 @@ function applyPayload(
 }
 
 export function SubsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { showErrorFromUnknown } = useAlert();
   const [subscriptions, setSubscriptions] = useState<SubSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [syncing, setSyncing] = useState(false);
+
+  // Rust refreshes expired access tokens and retries, so a token error here
+  // means the session is unrecoverable — sign out instead of showing an error
+  // the user cannot act on.
+  const handleSyncError = useCallback(
+    (err: unknown) => {
+      const code = (err as { code?: string } | null)?.code;
+      if (code === "invalid_token" || code === "not_authenticated") {
+        void logout();
+        return;
+      }
+      showErrorFromUnknown(err, "订阅同步失败", "同步失败");
+    },
+    [logout, showErrorFromUnknown],
+  );
 
   // Event bus is the source of truth for updates.
   useEffect(() => {
@@ -86,12 +101,12 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         // Keep last good cache; surface error in dialog.
-        showErrorFromUnknown(err, "订阅同步失败", "同步失败");
+        handleSyncError(err);
       })
       .finally(() => {
         setSyncing(false);
       });
-  }, [user, showErrorFromUnknown]);
+  }, [user, handleSyncError]);
 
   // Mount / login / restore: hydrate cache then background sync. Never blocks Home.
   useEffect(() => {
@@ -124,7 +139,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         if (!cancelled) {
-          showErrorFromUnknown(err, "订阅同步失败", "同步失败");
+          handleSyncError(err);
         }
       })
       .finally(() => {
@@ -134,7 +149,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user, showErrorFromUnknown]);
+  }, [user, handleSyncError]);
 
   return (
     <SubsContext.Provider

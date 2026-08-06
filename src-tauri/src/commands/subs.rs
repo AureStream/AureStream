@@ -83,6 +83,11 @@ pub fn subs_list(subs: State<'_, SubsState>) -> Result<SubsUpdatedPayload, Strin
     Ok(SubsUpdatedPayload::from(&snap))
 }
 
+/// True for API errors that a token refresh could plausibly fix.
+fn is_expired_token(err: &ApiError) -> bool {
+    err.status == 401 && err.code == "invalid_token"
+}
+
 /// Pull Worker subscription list, download each provider body, persist, emit `subs-updated`.
 #[tauri::command]
 pub async fn subs_sync(
@@ -98,10 +103,24 @@ pub async fn subs_sync(
 
     log::info!("subs_sync begin");
     let client = api_client();
-    let remote = client
-        .list_subscriptions(&token)
-        .await
-        .map_err(SubsIpcError::from)?;
+
+    // Access tokens live 2h; on expiry refresh once and retry rather than
+    // forcing the user back through login.
+    let remote = match client.list_subscriptions(&token).await {
+        Ok(remote) => remote,
+        Err(err) if is_expired_token(&err) => {
+            log::info!("subs_sync: access token expired, refreshing");
+            let fresh = auth
+                .refresh_access_token(&client, &token)
+                .await
+                .map_err(SubsIpcError::from)?;
+            client
+                .list_subscriptions(&fresh)
+                .await
+                .map_err(SubsIpcError::from)?
+        }
+        Err(err) => return Err(SubsIpcError::from(err)),
+    };
 
     let previous = subs.snapshot().unwrap_or_default();
     let summaries: Vec<SubSummary> = remote.iter().map(to_summary).collect();

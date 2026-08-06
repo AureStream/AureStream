@@ -2,11 +2,11 @@ mod auth;
 mod error;
 mod subscriptions;
 
-pub use auth::{AuthTokens, RegisterPending, User};
+pub use auth::{AuthTokens, RefreshedTokens, RegisterPending, User};
 pub use error::ApiError;
 pub use subscriptions::Subscription;
 
-use auth::{login, register, verify_register};
+use auth::{login, refresh, register, verify_register};
 use subscriptions::{fetch_subscription_body, list_subscriptions};
 
 pub const DEFAULT_BASE_URL: &str = "https://aurestream-api.chilix.ccwu.cc/api";
@@ -35,6 +35,12 @@ impl ApiClient {
 
     pub async fn login(&self, email: &str, password: &str) -> Result<AuthTokens, ApiError> {
         login(&self.http, &self.base, email, password).await
+    }
+
+    /// Exchange a refresh token for a new token pair. The old refresh token is
+    /// invalidated server-side, so the result must be persisted.
+    pub async fn refresh(&self, refresh_token: &str) -> Result<RefreshedTokens, ApiError> {
+        refresh(&self.http, &self.base, refresh_token).await
     }
 
     pub async fn register(&self, email: &str, password: &str) -> Result<RegisterPending, ApiError> {

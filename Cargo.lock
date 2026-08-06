@@ -242,6 +242,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-log",
  "tauri-plugin-opener",
+ "tempfile",
  "tokio",
 ]
 
