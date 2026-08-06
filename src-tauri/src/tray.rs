@@ -63,14 +63,13 @@ const ID_SYSTEM: &str = "tray_mode_system";
 const ID_TUN: &str = "tray_mode_tun";
 const ID_QUIT: &str = "tray_quit";
 
-/// Which OS capture path the tray presents as active (MVP: only SystemProxy is real).
+/// Which OS capture path the tray presents as active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[allow(dead_code)] // `Tun` reserved for when virtual NIC is enabled.
 pub enum CaptureMode {
     #[default]
     Off,
     SystemProxy,
-    /// Reserved — TUN is not wired in MVP; menu item stays unchecked / non-activating.
+    /// Elevated TUN (Linux helper ready; Windows/macOS when helpers land).
     Tun,
 }
 
@@ -340,8 +339,12 @@ fn humanize_tray_error(err: &str) -> String {
     if s.starts_with("sidecar failed:") {
         return format!("内核启动失败：{}", s.trim_start_matches("sidecar failed:"));
     }
-    if s.contains("tun_not_installed") || s.contains("虚拟网卡服务尚未安装") {
-        return "虚拟网卡组件尚未安装，请使用系统代理，或安装带 TUN 组件的发行包。".into();
+    if s.contains("tun_not_installed")
+        || s.contains("虚拟网卡服务尚未安装")
+        || s.contains("polkit Helper")
+        || s.contains("aurestream-tun-helper")
+    {
+        return "虚拟网卡组件尚未安装。Linux 请使用 deb/rpm 安装包，或运行 scripts/install-linux-tun-helper.sh；也可暂时使用系统代理。".into();
     }
     // Strip error code prefixes like `tun_not_installed: ...`
     if let Some((_, msg)) = s.split_once(": ") {

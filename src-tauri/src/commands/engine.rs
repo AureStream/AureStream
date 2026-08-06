@@ -305,9 +305,17 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
 /// Spec §4.2.6: clear proxy, stop engine, emit Failed (recorded for get_state).
 async fn fail_cleanup(app: &AppHandle, engine_state: &EngineAppState, reason: String) {
     log::error!("engine fail_cleanup: {reason}");
+    let was_tun = matches!(engine_state.capture_mode(), CaptureMode::Tun)
+        || reason.contains("tun")
+        || reason.contains("虚拟网卡")
+        || reason.contains("pkexec");
     let _ = clear_system_proxy();
     let _ = platform_tun::stop_tun();
-    let _ = engine_state.engine.stop().await;
+    if was_tun {
+        let _ = engine_state.engine.finish_external_stop();
+    } else {
+        let _ = engine_state.engine.stop().await;
+    }
     engine_state.set_capture_mode(CaptureMode::Off);
     emit_failed(app, engine_state, reason);
 }
@@ -332,13 +340,22 @@ async fn start_steps(
     match engine_state.engine.state() {
         EngineState::Idle | EngineState::Failed { .. } => {}
         _ => {
+            let prev_tun = matches!(engine_state.capture_mode(), CaptureMode::Tun);
             let _ = clear_system_proxy();
             let _ = platform_tun::stop_tun();
-            engine_state
-                .engine
-                .stop()
-                .await
-                .map_err(|e| e.to_string())?;
+            if prev_tun {
+                engine_state
+                    .engine
+                    .finish_external_stop()
+                    .map_err(|e| e.to_string())?;
+            } else {
+                engine_state
+                    .engine
+                    .stop()
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            engine_state.set_capture_mode(CaptureMode::Off);
         }
     }
 
@@ -365,23 +382,35 @@ async fn start_steps(
 
             let core = aurestream_engine::resolve_sidecar_path()
                 .map_err(|e| e.to_string())?;
+            let asset_dir = aurestream_engine::resolve_asset_dir(&core);
 
-            // Elevated helper must be present; otherwise fail with install guidance.
-            platform_tun::start_tun(
-                &engine_state.config_path,
-                &core,
-                Some("1.1.1.1"),
-            )
-            .map_err(|e| e.message.clone())?;
-
-            // Helper owns capture; still run readiness via local API if core is user-space
-            // attached. When helper spawns core itself, start() is a no-op readiness probe path.
-            // Current Phase-0 helpers return before spawn — this line is for future Ready helpers
-            // that only elevate privileges while app owns the sidecar process.
+            // Elevated path owns the core process (pkexec/helper). Do not also
+            // spawn a user-space sidecar via Engine::start.
             engine_state
                 .engine
-                .start(&engine_state.config_path)
-                .await
+                .begin_external_start(engine_state.socks_port, engine_state.api_port)
+                .map_err(|e| e.to_string())?;
+
+            // Linux/macOS: system DNS → TUN gateway (198.18.0.1).
+            // Windows (later): public resolver hijack.
+            #[cfg(target_os = "windows")]
+            let dns_hijack = Some("1.1.1.1");
+            #[cfg(not(target_os = "windows"))]
+            let dns_hijack = Some("198.18.0.1");
+
+            if let Err(e) = platform_tun::start_tun(
+                &engine_state.config_path,
+                &core,
+                dns_hijack,
+                asset_dir.as_deref(),
+            ) {
+                let _ = engine_state.engine.fail_external_start(e.message.clone());
+                return Err(e.message);
+            }
+
+            engine_state
+                .engine
+                .finish_external_start()
                 .map_err(|e| e.to_string())?;
 
             let _ = clear_system_proxy();
@@ -526,9 +555,15 @@ pub async fn engine_stop(
 
     emit_from(&app, &engine, EngineState::Stopping);
 
+    let was_tun = matches!(engine.capture_mode(), CaptureMode::Tun);
+
     if let Err(e) = clear_system_proxy() {
         let _ = platform_tun::stop_tun();
-        let _ = engine.engine.stop().await;
+        if was_tun {
+            let _ = engine.engine.finish_external_stop();
+        } else {
+            let _ = engine.engine.stop().await;
+        }
         engine.set_capture_mode(CaptureMode::Off);
         let reason = format!("clear_system_proxy: {e}");
         emit_failed(&app, &engine, reason.clone());
@@ -537,7 +572,14 @@ pub async fn engine_stop(
 
     let _ = platform_tun::stop_tun();
 
-    if let Err(e) = engine.engine.stop().await {
+    if was_tun {
+        if let Err(e) = engine.engine.finish_external_stop() {
+            engine.set_capture_mode(CaptureMode::Off);
+            let reason = e.to_string();
+            emit_failed(&app, &engine, reason.clone());
+            return Err(reason);
+        }
+    } else if let Err(e) = engine.engine.stop().await {
         engine.set_capture_mode(CaptureMode::Off);
         let reason = e.to_string();
         emit_failed(&app, &engine, reason.clone());
@@ -610,9 +652,17 @@ pub async fn tray_stop(app: &AppHandle) -> Result<(), String> {
     }
 
     emit_from(app, &engine, EngineState::Stopping);
+    let was_tun = matches!(engine.capture_mode(), CaptureMode::Tun);
     let _ = clear_system_proxy();
     let _ = platform_tun::stop_tun();
-    if let Err(e) = engine.engine.stop().await {
+    if was_tun {
+        if let Err(e) = engine.engine.finish_external_stop() {
+            engine.set_capture_mode(CaptureMode::Off);
+            let reason = e.to_string();
+            emit_failed(app, &engine, reason.clone());
+            return Err(reason);
+        }
+    } else if let Err(e) = engine.engine.stop().await {
         engine.set_capture_mode(CaptureMode::Off);
         let reason = e.to_string();
         emit_failed(app, &engine, reason.clone());

@@ -1,0 +1,87 @@
+#!/bin/sh
+# AureStream TUN helper — privileged ops via pkexec.
+# Installed to /usr/lib/AureStream/aurestream-tun-helper by deb/rpm.
+set -e
+
+HELPER_DIR="/usr/lib/AureStream"
+SELF="${HELPER_DIR}/aurestream-tun-helper"
+POLKIT_ACTION="/usr/share/polkit-1/actions/com.root.aurestream.policy"
+POLKIT_RULE="/etc/polkit-1/rules.d/49-aurestream.rules"
+
+case "$1" in
+    start-tun)
+        # $2 = sidecar path, $3 = config path, $4 = optional asset dir (geoip/geosite)
+        # DNS is applied separately AFTER core readiness (dns-override).
+        sidecar="$2"
+        config="$3"
+        asset_dir="${4:-}"
+        if [ -z "$sidecar" ] || [ -z "$config" ]; then
+            echo "start-tun requires sidecar and config paths" >&2
+            exit 2
+        fi
+        if [ ! -x "$sidecar" ] && [ ! -f "$sidecar" ]; then
+            echo "sidecar not found: $sidecar" >&2
+            exit 3
+        fi
+        if [ -n "$asset_dir" ] && [ -d "$asset_dir" ]; then
+            export XRAY_LOCATION_ASSET="$asset_dir"
+            cd "$asset_dir" || true
+        else
+            side_dir=$(dirname "$sidecar")
+            if [ -d "$side_dir" ]; then
+                export XRAY_LOCATION_ASSET="$side_dir"
+                cd "$side_dir" || true
+            fi
+        fi
+        exec "$sidecar" run -c "$config"
+        ;;
+    stop-tun)
+        # $2 = iface (optional), $3... = original DNS servers (optional)
+        if [ -n "$2" ] && [ -n "$3" ]; then
+            iface="$2"
+            shift 2
+            resolvectl dns "$iface" "$@" 2>/dev/null || true
+            resolvectl flush-caches 2>/dev/null || true
+        fi
+        pkill -x aurestream-core 2>/dev/null || true
+        pkill -f '/aurestream-core(-[a-z0-9_]+)*$' 2>/dev/null || true
+        # also match debug path binaries
+        pkill -f 'target/.*/aurestream-core' 2>/dev/null || true
+        exit 0
+        ;;
+    dns-override)
+        # $2 = iface, $3 = gateway, $4... = original DNS (ignored for apply; kept for restore)
+        iface="$2"
+        gateway="$3"
+        if [ -z "$iface" ] || [ -z "$gateway" ]; then
+            echo "dns-override requires iface and gateway" >&2
+            exit 2
+        fi
+        resolvectl dns "$iface" "$gateway"
+        resolvectl flush-caches 2>/dev/null || true
+        ;;
+    dns-restore)
+        iface="$2"
+        shift 2
+        if [ -z "$iface" ]; then
+            echo "dns-restore requires iface" >&2
+            exit 2
+        fi
+        if [ "$#" -eq 0 ]; then
+            resolvectl revert "$iface" 2>/dev/null || true
+        else
+            resolvectl dns "$iface" "$@"
+        fi
+        resolvectl flush-caches 2>/dev/null || true
+        ;;
+    uninstall)
+        "$0" stop-tun 2>/dev/null || true
+        rm -f "$SELF" "$POLKIT_ACTION" "$POLKIT_RULE"
+        rmdir "$HELPER_DIR" 2>/dev/null || true
+        exit 0
+        ;;
+    *)
+        echo "Usage: $0 {start-tun|stop-tun|dns-override|dns-restore|uninstall}" >&2
+        exit 1
+        ;;
+esac

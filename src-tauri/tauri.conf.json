@@ -43,7 +43,27 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "resources/main.desktop",
+        "files": {
+          "/usr/lib/AureStream/aurestream-tun-helper": "../crates/aurestream-platform-tun/linux-helper/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "../crates/aurestream-platform-tun/linux-helper/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-platform-tun/linux-helper/49-aurestream.rules"
+        },
+        "postInstallScript": "resources/linux/deb-postinst.sh",
+        "postRemoveScript": "resources/linux/deb-postrm.sh"
+      },
+      "rpm": {
+        "desktopTemplate": "resources/main.desktop",
+        "files": {
+          "/usr/lib/AureStream/aurestream-tun-helper": "../crates/aurestream-platform-tun/linux-helper/aurestream-tun-helper",
+          "/usr/share/polkit-1/actions/com.root.aurestream.policy": "../crates/aurestream-platform-tun/linux-helper/com.root.aurestream.policy",
+          "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-platform-tun/linux-helper/49-aurestream.rules"
+        }
+      }
+    }
   },
   "plugins": {}
 }

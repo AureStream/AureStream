@@ -8,13 +8,13 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 
 **Source of truth**: code under `src/`, `src-tauri/`, `crates/`.  
 **Wiki index**: [`docs/index.md`](./docs/index.md) — prefer code when wiki pages lag.  
-**TUN roadmap** (not shipped yet): [`docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md`](./docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md)
+**TUN roadmap**: [`docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md`](./docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md)
 
 ### Hard rules
 
 - **New features only in the v2 tree**: root `src/`, `src-tauri/`, and `crates/aurestream-*`.
 - **`legacy/` is archived / read-only reference.** Do **not** fix bugs or add features there.
-- **Default capture path = system proxy**. TUN mode is wired at the config/IPC/UI layer (`mode: "tun"`, `captureMode` events, Home 虚拟网卡 switch); elevated helpers (`platform-tun`) are still Phase 1–3 — without them TUN start shows a clear install error. Do not bind TUN helpers into unconditional `pnpm release` until product-enabled.
+- **Default capture path = system proxy**. TUN is optional (`mode: "tun"`, Home 虚拟网卡). **Linux elevated helper is implemented** (`pkexec` + polkit); Windows/macOS helpers still Phase 1–2. Without a helper, TUN start returns a clear install error. AppImage does not install `/usr` helpers — use deb/rpm or `scripts/install-linux-tun-helper.sh` for dev.
 - Engine config dialect lives in `aurestream-engine` (`build_config`); `aurestream-config` only decodes → `ProxyNode`.
 
 ### Current product surface (implemented)
@@ -22,7 +22,8 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 - Auth (login / email-code register) + subscription sync
 - Node list, TCP latency probe + sort, home shows selected-node latency
 - Connect / disconnect via Xray sidecar + OS system proxy (Win / macOS / Linux)
-- System tray (show window, system proxy toggle, TUN menu stub, quit)
+- **Linux TUN**: `aurestream-platform-tun` + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm / dev install script)
+- System tray (show window, system proxy / TUN toggle when helper ready, quit)
 - Unified app/core logs; errors via in-app modal (`app-alert` from Rust)
 
 ## Stack
@@ -32,7 +33,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 | Frontend | React 19, TypeScript, Vite 7, Tailwind CSS v4, react-router-dom |
 | Shell | Tauri v2, Tokio, tray-icon |
 | Engine | Xray-core sidecar (`aurestream-core`) via `aurestream-engine` |
-| Platform | `aurestream-platform-proxy` (set/clear system proxy) |
+| Platform | `aurestream-platform-proxy` (system proxy); `aurestream-platform-tun` (TUN helpers) |
 | API | `aurestream-api-client` (Worker auth + subscriptions) |
 | Package manager | pnpm (ESM) |
 | Tests | Vitest (`pnpm test`), Cargo tests in crates |
@@ -48,7 +49,8 @@ pnpm build               # tsc + vite build
 pnpm test                # vitest run
 pnpm tauri build         # Full Tauri release build
 pnpm download-binaries   # Xray-core → src-tauri/binaries/aurestream-core-* + geo DBs
-pnpm release             # download-binaries + build + tauri build (no TUN)
+pnpm release             # download-binaries + build + tauri build
+./scripts/install-linux-tun-helper.sh   # Linux dev: install pkexec helper + polkit
 
 # Rust (workspace root)
 cargo check --workspace
@@ -68,8 +70,10 @@ AureStream/
     aurestream-config/            # Decode subscription → ProxyNode only
     aurestream-engine/            # Engine trait + XrayEngine + state machine
     aurestream-platform-proxy/    # OS system proxy set/clear
+    aurestream-platform-tun/      # TUN capture + Linux helper (Win/mac later)
   legacy/                         # Pre-v2 monolith (unmaintained)
   scripts/download-binaries.ts    # Fetch Xray as aurestream-core
+  scripts/install-linux-tun-helper.sh
   docs/
     index.md                      # Wiki index
     superpowers/plans/            # Active plans (e.g. TUN three-platform)
@@ -87,7 +91,7 @@ AureStream/
 
 UI → auth/subs IPC → `aurestream-api-client` → events  
 UI / tray → `engine_start` / `engine_stop` / `engine_select_node` → `aurestream-engine`  
-On Running / Idle|Failed, shell orchestrates `aurestream-platform-proxy`.
+Capture: `SystemProxy` → `platform-proxy`; `Tun` → elevated helper owns core (`begin_external_start` / `finish_external_*`, no user-space double-spawn).
 
 ### Frontend
 
@@ -115,9 +119,9 @@ UI copy: Chinese-only (no i18n).
 
 ### Safety / product constraints
 
-- Start/stop must clear system proxy on failure/stop.
+- Start/stop must clear system proxy on failure/stop; TUN stop must restore DNS (best-effort).
 - Do not commit secrets, signing certs, or local `.env` values.
-- Do not land TUN / privileged helpers in the default release path without following the TUN plan and an explicit product decision.
+- Linux TUN packaging: deb/rpm map helper + polkit under `src-tauri/tauri.conf.json` `bundle.linux`; AppImage is not a supported TUN install path.
 
 ## Where to look first
 

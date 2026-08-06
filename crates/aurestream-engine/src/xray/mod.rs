@@ -116,6 +116,51 @@ impl Default for XrayEngine {
     }
 }
 
+impl XrayEngine {
+    /// Transition Starting without spawning (elevated helper owns the process).
+    pub fn begin_external_start(&self, socks_port: u16, api_port: u16) -> Result<(), EngineError> {
+        let mut guard = self.lock();
+        guard.sm.transition(EngineState::Starting)?;
+        guard.socks_port = Some(socks_port);
+        guard.api_port = Some(api_port);
+        // Drop any leftover user-space child handle.
+        if let Some(mut child) = guard.child.take() {
+            let _ = child.start_kill();
+        }
+        Ok(())
+    }
+
+    /// Mark Running after external (elevated) core is ready.
+    pub fn finish_external_start(&self) -> Result<(), EngineError> {
+        let mut guard = self.lock();
+        guard.sm.transition(EngineState::Running)?;
+        Ok(())
+    }
+
+    /// Mark Failed without process ownership (helper start failed).
+    pub fn fail_external_start(&self, reason: impl Into<String>) -> Result<(), EngineError> {
+        let mut guard = self.lock();
+        let reason = reason.into();
+        let _ = guard.sm.transition(EngineState::Failed {
+            reason: reason.clone(),
+        });
+        Ok(())
+    }
+
+    /// Transition Stopping → Idle when helper killed the process.
+    pub fn finish_external_stop(&self) -> Result<(), EngineError> {
+        let mut guard = self.lock();
+        if !matches!(guard.sm.state(), EngineState::Idle | EngineState::Failed { .. }) {
+            let _ = guard.sm.transition(EngineState::Stopping);
+        }
+        if let Some(mut child) = guard.child.take() {
+            let _ = child.start_kill();
+        }
+        let _ = guard.sm.transition(EngineState::Idle);
+        Ok(())
+    }
+}
+
 impl Engine for XrayEngine {
     fn build_config_with_options(
         &self,
