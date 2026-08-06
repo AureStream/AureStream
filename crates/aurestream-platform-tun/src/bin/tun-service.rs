@@ -2,6 +2,9 @@
 //!
 //! Built as `tun-service.exe` and shipped via Tauri `externalBin`.
 
+// GUI / service binary — do not allocate a console window on start/install.
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 #[cfg(target_os = "windows")]
 fn main() {
     let args: Vec<String> = std::env::args().collect();

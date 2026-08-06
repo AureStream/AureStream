@@ -214,6 +214,15 @@ impl Engine for XrayEngine {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
 
+        // Xray is a console-subsystem binary. Without CREATE_NO_WINDOW, every
+        // start flashes a black terminal on the user's desktop (and rapid
+        // reconnect/restart looks like terminals "spamming").
+        #[cfg(windows)]
+        {
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
         // Xray resolves geoip.dat / geosite.dat via XRAY_LOCATION_ASSET (else cwd).
         if let Some(ref assets) = asset_dir {
             cmd.env("XRAY_LOCATION_ASSET", assets);

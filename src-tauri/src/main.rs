@@ -1,5 +1,7 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Hide the host console on Windows (dev + release). Sidecar still uses
+// CREATE_NO_WINDOW when spawned; without this, `tauri dev` shows a console and
+// every core spawn can flash black terminals.
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 fn main() {
     aurestream_lib::run()
