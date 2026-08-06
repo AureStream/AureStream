@@ -5,12 +5,13 @@
 
 #![cfg(target_os = "windows")]
 
-mod config_patch;
 mod dns;
 mod elevate;
 mod outbound_if;
 pub mod scm;
 pub mod service;
+
+use crate::config_patch;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

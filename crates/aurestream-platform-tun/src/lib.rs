@@ -11,6 +11,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+mod config_patch;
+
 /// Installation / readiness of the elevated TUN helper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -308,6 +310,18 @@ mod linux {
         let assets = asset_dir
             .and_then(|p| p.to_str().map(|s| s.to_string()))
             .filter(|s| !s.is_empty());
+
+        // Bind proxy dials to the physical NIC (same loop risk as macOS/Windows).
+        match detect_active_iface() {
+            Ok(iface) => {
+                match super::config_patch::patch_tun_config_outbounds_interface(config, &iface) {
+                    Ok(true) => log::info!("[tun/linux] patched outbound interface -> {iface}"),
+                    Ok(false) => log::debug!("[tun/linux] outbound interface already {iface}"),
+                    Err(e) => log::warn!("[tun/linux] patch outbound interface failed: {e}"),
+                }
+            }
+            Err(e) => log::warn!("[tun/linux] resolve default iface: {e}"),
+        }
 
         // Capture original DNS before starting (restore on stop).
         let dns_info = match prepare_dns_capture() {

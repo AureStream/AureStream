@@ -62,6 +62,18 @@ pub fn start_tun(
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or(config);
 
+    // Critical: bind proxy dials to the physical NIC (en0/…), otherwise the
+    // node server IP is captured by TUN → loop → WS "closed pipe" and Google dies.
+    match resolve_default_interface() {
+        Ok(iface) => match crate::config_patch::patch_tun_config_outbounds_interface(&config, &iface)
+        {
+            Ok(true) => log::info!("[tun/mac] patched outbound interface -> {iface}"),
+            Ok(false) => log::debug!("[tun/mac] outbound interface already {iface}"),
+            Err(e) => log::warn!("[tun/mac] patch outbound interface failed: {e}"),
+        },
+        Err(e) => log::warn!("[tun/mac] resolve default iface: {e}"),
+    }
+
     let log_path = core_log_path();
     if let Some(parent) = Path::new(&log_path).parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -189,4 +201,22 @@ fn helper_log_tail(path: &str, max_lines: usize) -> String {
     };
     let lines: Vec<&str> = raw.lines().rev().take(max_lines).collect();
     lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+}
+
+/// BSD interface name that owns the default IPv4 route (e.g. `en0`).
+fn resolve_default_interface() -> Result<String, String> {
+    let out = std::process::Command::new("route")
+        .args(["-n", "get", "default"])
+        .output()
+        .map_err(|e| format!("route get default failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    stdout
+        .lines()
+        .find_map(|l| {
+            l.trim()
+                .strip_prefix("interface:")
+                .map(|s| s.trim().to_string())
+        })
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "no default interface".into())
 }
