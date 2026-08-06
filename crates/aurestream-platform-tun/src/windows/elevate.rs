@@ -77,7 +77,6 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
     Ok(())
 }
 
-#[allow(dead_code)]
 pub fn run_elevated_uninstall(bundled_exe: &std::path::Path) -> Result<(), String> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;

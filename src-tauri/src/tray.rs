@@ -43,20 +43,6 @@ fn emit_error_alert(app: &AppHandle, title: &'static str, message: impl Into<Str
     show_main_window(app);
 }
 
-fn emit_info_alert(app: &AppHandle, title: &'static str, message: impl Into<String>) {
-    let message = message.into();
-    log::info!("alert: {title}: {message}");
-    let _ = app.emit(
-        APP_ALERT_EVENT,
-        AppAlertPayload {
-            kind: "info",
-            title,
-            message,
-        },
-    );
-    show_main_window(app);
-}
-
 const TRAY_ID: &str = "main-tray";
 const ID_SHOW: &str = "tray_show";
 const ID_SYSTEM: &str = "tray_mode_system";

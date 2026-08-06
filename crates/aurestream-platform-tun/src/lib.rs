@@ -161,6 +161,13 @@ pub fn windows_service_run_dispatcher() -> i32 {
     windows::service::run_dispatcher()
 }
 
+/// Elevated uninstall of the Windows TUN SCM service (UAC).
+#[cfg(target_os = "windows")]
+pub fn windows_uninstall_service() -> Result<(), TunError> {
+    let bundled = windows::resolve_tun_service_path()?;
+    windows::elevate_uninstall(&bundled)
+}
+
 /// Stop TUN capture and restore DNS (best-effort).
 pub fn stop_tun() -> Result<(), TunError> {
     #[cfg(target_os = "linux")]

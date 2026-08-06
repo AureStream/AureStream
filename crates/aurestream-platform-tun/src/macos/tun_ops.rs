@@ -387,6 +387,8 @@ fn apply_captured_originals_sync(taken: Option<&ActiveOverride>) -> Option<(Stri
     Some((active.service.clone(), target))
 }
 
+/// Release DNS override when the primary link drops (optional NetworkDown hook).
+#[allow(dead_code)]
 pub fn release_dns_on_network_down() -> Result<(), String> {
     let (service, prev_gateway) = {
         let mut slot = ACTIVE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner());

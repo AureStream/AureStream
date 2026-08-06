@@ -100,15 +100,6 @@ impl BuildOptions {
     }
 }
 
-pub fn write_xray_config(
-    path: &Path,
-    node: &ProxyNode,
-    socks_port: u16,
-    api_port: u16,
-) -> Result<(), EngineError> {
-    write_xray_config_with_options(path, node, BuildOptions::system_proxy(socks_port, api_port))
-}
-
 pub fn write_xray_config_with_options(
     path: &Path,
     node: &ProxyNode,
@@ -127,14 +118,6 @@ pub fn write_xray_config_with_options(
     fs::write(path, body)
         .map_err(|e| EngineError::io(format!("write {}: {e}", path.display())))?;
     Ok(())
-}
-
-pub fn build_xray_config_value(
-    node: &ProxyNode,
-    socks_port: u16,
-    api_port: u16,
-) -> Result<Value, EngineError> {
-    build_xray_config_value_with_options(node, BuildOptions::system_proxy(socks_port, api_port))
 }
 
 pub fn build_xray_config_value_with_options(

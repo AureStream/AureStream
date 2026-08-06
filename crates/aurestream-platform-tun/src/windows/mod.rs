@@ -19,9 +19,6 @@ use super::{not_installed_error, TunError, TunServiceState};
 
 pub const SERVICE_NAME: &str = "AureStreamTunService";
 pub const SERVICE_DISPLAY_NAME: &str = "AureStream TUN Service";
-#[allow(dead_code)]
-pub const SERVICE_DESCRIPTION: &str =
-    "Runs AureStream core (Xray) in TUN mode on behalf of AureStream. Installed once per machine; started on demand without UAC.";
 
 const READY_TIMEOUT: Duration = Duration::from_secs(25);
 const POLL: Duration = Duration::from_millis(150);
@@ -246,4 +243,10 @@ fn wait_api(port: u16) -> bool {
         std::thread::sleep(POLL);
     }
     false
+}
+
+pub(super) fn elevate_uninstall(bundled: &Path) -> Result<(), super::TunError> {
+    elevate::run_elevated_uninstall(bundled).map_err(|e| {
+        super::TunError::failed("tun_uninstall_failed", format!("卸载虚拟网卡服务失败: {e}"))
+    })
 }

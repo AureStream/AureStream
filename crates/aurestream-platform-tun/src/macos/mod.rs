@@ -82,6 +82,8 @@ pub fn start_tun(
         dns
     );
 
+    helper::exit_bridge_ensure_callback();
+
     // bypass_router IP forward only when needed (default off).
     let pid = tun_ops::start_core_via_helper(&config, &log_path, false).map_err(|e| {
         TunError::failed("helper_start", format!("启动特权内核失败: {e}"))

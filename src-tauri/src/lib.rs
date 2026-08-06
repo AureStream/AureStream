@@ -99,6 +99,8 @@ pub fn run() {
                     log::info!("app exiting — clearing system proxy + tun");
                     let _ = aurestream_platform_proxy::clear_system_proxy();
                     let _ = aurestream_platform_tun::stop_tun();
+                    // Keep handle referenced on non-macOS (Reopen is mac-only).
+                    let _ = &app_handle;
                 }
                 _ => {}
             }

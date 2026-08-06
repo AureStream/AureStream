@@ -3,10 +3,6 @@
 mod config;
 
 pub use config::{write_xray_config_with_options, BuildOptions};
-// keep compatibility helper available to dependents
-#[allow(unused_imports)]
-pub use config::write_xray_config;
-#[allow(unused_imports)]
 
 use std::fs;
 use std::io::Write;

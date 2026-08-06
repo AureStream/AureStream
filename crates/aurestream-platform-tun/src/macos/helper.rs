@@ -90,13 +90,10 @@ where
 // `g_exit_callback` → Rust mpsc channel
 // ---------------------------------------------------------------------------
 
-#[cfg(target_os = "macos")]
-mod exit_bridge {
-    use super::ffi;
+/// Register C exit callback once (logging only; shell uses stop_tun).
+pub fn exit_bridge_ensure_callback() {
     use std::sync::Once;
-
     static INIT: Once = Once::new();
-
     extern "C" fn on_exit_trampoline(pid: std::os::raw::c_int, exit_code: std::os::raw::c_int) {
         log::info!(
             "[helper-client] core exit event pid={} code={}",
@@ -104,16 +101,10 @@ mod exit_bridge {
             exit_code
         );
     }
-
-    /// Register C exit callback once (logging only; shell uses stop_tun).
-    pub fn ensure_exit_callback() {
-        INIT.call_once(|| unsafe {
-            ffi::aurestream_helper_set_exit_callback(on_exit_trampoline);
-        });
-    }
+    INIT.call_once(|| unsafe {
+        ffi::aurestream_helper_set_exit_callback(on_exit_trampoline);
+    });
 }
-
-
 
 // ---------------------------------------------------------------------------
 // Safe wrappers (macOS)
