@@ -153,8 +153,8 @@ pub fn build_xray_config_value_with_options(
     if let Some(frag) = fragment_outbound {
         outbounds.push(frag);
     }
+    // Present whenever TUN may capture OS DNS (port 53 → this outbound).
     if opts.enable_tun {
-        // Built-in DNS outbound for OS DNS captured on tun-in :53.
         outbounds.push(json!({
             "tag": "dns-out",
             "protocol": "dns",
@@ -204,8 +204,10 @@ pub fn build_xray_config_value_with_options(
         "outboundTag": "api"
     })];
 
-    if opts.enable_tun {
-        // DNS module tag routes must precede port-53 capture (XTLS DNS docs).
+    // Built-in DNS query traffic (dns.tag / per-server tag) — before business rules.
+    // See https://xtls.github.io/document/level-1/routing-with-dns.html
+    let use_dns_module = opts.enable_tun || opts.smart_routing;
+    if use_dns_module {
         if opts.smart_routing {
             rules.push(json!({
                 "type": "field",
@@ -218,6 +220,10 @@ pub fn build_xray_config_value_with_options(
             "inboundTag": ["dns-proxy"],
             "outboundTag": proxy_tag.clone()
         }));
+    }
+
+    if opts.enable_tun {
+        // OS DNS packets entering TUN → dns outbound → built-in DNS module.
         rules.push(json!({
             "type": "field",
             "inboundTag": ["tun-in"],
@@ -287,6 +293,14 @@ pub fn build_xray_config_value_with_options(
         "outboundTag": proxy_tag
     }));
 
+    // IPIfNonMatch: match domain rules first; if no hit, resolve via built-in DNS
+    // then re-match geoip (official routing-with-dns guide). AsIs when global proxy.
+    let routing_domain_strategy = if opts.smart_routing {
+        "IPIfNonMatch"
+    } else {
+        "AsIs"
+    };
+
     let mut root = json!({
         "log": { "loglevel": "warning" },
         "api": {
@@ -305,12 +319,12 @@ pub fn build_xray_config_value_with_options(
         "inbounds": inbounds,
         "outbounds": outbounds,
         "routing": {
-            "domainStrategy": "AsIs",
+            "domainStrategy": routing_domain_strategy,
             "rules": rules
         }
     });
 
-    if opts.enable_tun {
+    if use_dns_module {
         root["dns"] = build_dns_config(opts.smart_routing, opts.enable_ipv6);
     }
 
@@ -359,7 +373,9 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
             "queryStrategy": query_strategy
         });
     }
-    // Simplified rule DNS (Phase 0): CN via direct-tagged servers, else proxy.
+    // Align with XTLS routing-with-dns (simplified example 2):
+    // CN → domestic DNS (direct tag) + expectedIPs filter; else foreign via proxy tag.
+    // Field name is expectedIPs (official dns.html), not expectIPs.
     json!({
         "tag": "dns-proxy",
         "queryStrategy": query_strategy,
@@ -368,13 +384,15 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
                 "tag": "dns-direct",
                 "address": "223.5.5.5",
                 "domains": ["geosite:cn"],
-                "expectIPs": ["geoip:cn"]
+                "expectedIPs": ["geoip:cn"],
+                "skipFallback": true
             },
             {
                 "tag": "dns-direct",
                 "address": "114.114.114.114",
                 "domains": ["geosite:cn"],
-                "expectIPs": ["geoip:cn"]
+                "expectedIPs": ["geoip:cn"],
+                "skipFallback": true
             },
             "1.1.1.1",
             "8.8.8.8"

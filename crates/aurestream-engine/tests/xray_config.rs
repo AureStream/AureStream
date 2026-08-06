@@ -122,6 +122,25 @@ fn xray_build_config_with_tun_inbound() {
         "dns-out required for TUN DNS capture"
     );
     assert!(cfg.get("dns").is_some(), "dns module required for TUN");
+    assert_eq!(
+        cfg["routing"]["domainStrategy"], "IPIfNonMatch",
+        "smart_routing should use IPIfNonMatch so geoip can use built-in DNS results"
+    );
+    let dns_servers = cfg["dns"]["servers"].as_array().expect("dns.servers");
+    let cn_servers: Vec<&Value> = dns_servers
+        .iter()
+        .filter(|s| s.get("tag").and_then(|t| t.as_str()) == Some("dns-direct"))
+        .collect();
+    assert!(!cn_servers.is_empty(), "dns-direct servers required");
+    for s in &cn_servers {
+        assert!(
+            s.get("expectedIPs")
+                .and_then(|v| v.as_array())
+                .is_some_and(|a| a.iter().any(|x| x.as_str() == Some("geoip:cn"))),
+            "expectedIPs (not expectIPs) required: {s}"
+        );
+        assert_eq!(s.get("skipFallback"), Some(&Value::Bool(true)));
+    }
     let rules = cfg["routing"]["rules"].as_array().unwrap();
     assert!(
         rules.iter().any(|r| {
@@ -131,6 +150,15 @@ fn xray_build_config_with_tun_inbound() {
                 && r.get("port").and_then(|p| p.as_str()) == Some("53")
         }),
         "port-53 capture on tun-in required"
+    );
+    assert!(
+        rules.iter().any(|r| {
+            r.get("inboundTag")
+                .and_then(|t| t.as_array())
+                .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("dns-direct")))
+                && r.get("outboundTag").and_then(|t| t.as_str()) == Some("direct")
+        }),
+        "dns-direct → direct required"
     );
     // mixed inbound retained for local probe / system proxy fallback
     assert!(inbounds.iter().any(|ib| {

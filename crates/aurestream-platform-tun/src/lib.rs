@@ -97,8 +97,9 @@ pub fn ensure_installed() -> Result<TunServiceState, TunError> {
 /// spawn a user-space core. After this returns Ok, mixed/API ports should be
 /// ready for probing.
 ///
-/// `dns_hijack`: OS DNS override target. Linux/macOS typically use the TUN
-/// gateway (`198.18.0.1`); Windows uses a public resolver.
+/// `dns_hijack`: OS DNS override target. Prefer a public resolver that is
+/// routed into the TUN (default `1.1.1.1` on all platforms). Do not use the
+/// TUN gateway IP — host DNS to `198.18.0.1:53` is refused.
 /// `asset_dir`: directory with `geoip.dat` / `geosite.dat` (exported as
 /// `XRAY_LOCATION_ASSET` for the elevated core).
 pub fn start_tun(
@@ -109,10 +110,6 @@ pub fn start_tun(
 ) -> Result<(), TunError> {
     #[cfg(target_os = "linux")]
     {
-        // Linux: hijack system DNS to a public resolver that is routed into the
-        // TUN (same idea as Windows). Xray does not accept host DNS on the TUN
-        // gateway IP itself (198.18.0.1:53 → connection refused); queries to
-        // 1.1.1.1 enter utun233 via autoSystemRoutingTable and are handled.
         return linux::start_tun(
             config_path,
             core_path,
