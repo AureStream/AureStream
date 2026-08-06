@@ -160,25 +160,37 @@ jobs:
           AURESTREAM_RUST_TARGET: ${{ matrix.rust_target }}
         run: pnpm download-binaries
 
+      - name: Build Windows tun-service sidecar
+        if: runner.os == 'Windows'
+        env:
+          AURESTREAM_RUST_TARGET: ${{ matrix.rust_target }}
+        run: pnpm build-tun
+
       - name: Verify staged sidecar for matrix target
         shell: bash
         run: |
           set -euo pipefail
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             bin="src-tauri/binaries/aurestream-core-${{ matrix.rust_target }}.exe"
+            tun="src-tauri/binaries/tun-service-${{ matrix.rust_target }}.exe"
+            test -f "$bin"
+            test -f "$tun"
+            # wintun.dll required for Xray TUN on Windows
+            test -f src-tauri/resources/wintun.dll || test -f src-tauri/binaries/wintun.dll
+            ls -la "$bin" "$tun" src-tauri/resources/geoip.dat src-tauri/resources/geosite.dat
+            ls -la src-tauri/resources/wintun.dll src-tauri/binaries/wintun.dll 2>/dev/null || true
           else
             bin="src-tauri/binaries/aurestream-core-${{ matrix.rust_target }}"
+            test -f "$bin"
+            test -f src-tauri/resources/geoip.dat
+            test -f src-tauri/resources/geosite.dat
+            ls -la "$bin" src-tauri/resources/geoip.dat src-tauri/resources/geosite.dat
           fi
-          test -f "$bin"
-          test -f src-tauri/resources/geoip.dat
-          test -f src-tauri/resources/geosite.dat
-          ls -la "$bin" src-tauri/resources/geoip.dat src-tauri/resources/geosite.dat
 
       - name: Check frontend + workspace crates
         run: |
           pnpm build
-          cargo check --workspace
-
+          cargo check --workspace --target ${{ matrix.rust_target }}
       - name: Work around ldd crash on static Xray binary (Linux)
         if: startsWith(matrix.os, 'ubuntu')
         run: |

@@ -11,6 +11,9 @@ const __dirname = path.dirname(__filename);
 
 const BINARY_NAME = 'xray';
 const GITHUB_RELEASE_URL = 'https://github.com/XTLS/Xray-core/releases/download/';
+/** Official Wintun release (Xray Windows TUN loads wintun.dll next to the core). */
+const WINTUN_VERSION = '0.14.1';
+const WINTUN_ZIP_URL = `https://www.wintun.net/builds/wintun-${WINTUN_VERSION}.zip`;
 
 // Xray-core release assets always ship as a zip, on every platform, and extract
 // flat at the archive root (no versioned subdirectory) — e.g.
@@ -131,24 +134,9 @@ async function embeddingExternalBinaries(
             }
         }
 
-        // Stage wintun.dll next to resources for Windows TUN (copy beside core at runtime).
+        // Stage wintun.dll for Windows TUN (from Xray zip if present, else official Wintun).
         if (platform === 'windows') {
-            const wintunSrc = path.join(tmpDir, 'wintun.dll');
-            // Official Xray zip may not ship wintun; try common names / skip if absent.
-            const candidates = ['wintun.dll', path.join('wintun', 'bin', 'amd64', 'wintun.dll'), path.join('wintun', 'bin', 'arm64', 'wintun.dll')];
-            let found: string | null = null;
-            for (const c of candidates) {
-                const full = path.isAbsolute(c) ? c : path.join(tmpDir, c);
-                if (fs.existsSync(full)) { found = full; break; }
-            }
-            if (found) {
-                fs.copyFileSync(found, path.join(resourcesDir, 'wintun.dll'));
-                // Also next to staged core for service cwd.
-                fs.copyFileSync(found, path.join(targetDir, 'wintun.dll'));
-                console.log('staged wintun.dll');
-            } else {
-                console.warn('wintun.dll not in Xray archive — place manually in src-tauri/resources/wintun.dll for TUN');
-            }
+            await stageWintunDll(arch as Architecture, tmpDir, resourcesDir, targetDir);
         }
 
         fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -160,6 +148,62 @@ async function embeddingExternalBinaries(
         console.error(`Processing failed after ${elapsed}s:`, error);
         throw error;
     }
+}
+
+async function stageWintunDll(
+    arch: Architecture,
+    xrayTmpDir: string,
+    resourcesDir: string,
+    coreDir: string,
+): Promise<void> {
+    const archDir = arch === 'arm64' ? 'arm64' : 'amd64';
+    const candidates = [
+        path.join(xrayTmpDir, 'wintun.dll'),
+        path.join(xrayTmpDir, 'wintun', 'bin', archDir, 'wintun.dll'),
+        path.join(resourcesDir, 'wintun.dll'),
+    ];
+    let found: string | null = null;
+    for (const full of candidates) {
+        if (fs.existsSync(full)) {
+            found = full;
+            break;
+        }
+    }
+
+    if (!found) {
+        const wintunTmp = path.join(__dirname, 'tmp', `wintun-${WINTUN_VERSION}-${Date.now()}`);
+        fs.mkdirSync(wintunTmp, { recursive: true });
+        const zipPath = path.join(wintunTmp, 'wintun.zip');
+        console.log(`Downloading Wintun ${WINTUN_VERSION}...`);
+        try {
+            await downloadFile(WINTUN_ZIP_URL, zipPath);
+            await extractZip(zipPath, wintunTmp);
+            const fromZip = path.join(wintunTmp, 'wintun', 'bin', archDir, 'wintun.dll');
+            if (fs.existsSync(fromZip)) {
+                found = fromZip;
+            }
+        } catch (e) {
+            console.warn(`Wintun download failed: ${(e as Error).message}`);
+        } finally {
+            // keep found path until after copy
+        }
+        if (found) {
+            // copy out then clean
+            const staged = path.join(resourcesDir, 'wintun.dll');
+            fs.copyFileSync(found, staged);
+            fs.copyFileSync(found, path.join(coreDir, 'wintun.dll'));
+            fs.rmSync(wintunTmp, { recursive: true, force: true });
+            console.log('staged wintun.dll (official release)');
+            return;
+        }
+        fs.rmSync(wintunTmp, { recursive: true, force: true });
+        console.warn('wintun.dll unavailable — Windows TUN will not work until it is staged');
+        return;
+    }
+
+    fs.copyFileSync(found, path.join(resourcesDir, 'wintun.dll'));
+    fs.copyFileSync(found, path.join(coreDir, 'wintun.dll'));
+    console.log('staged wintun.dll');
 }
 
 function parseTargetFilter(argv: string[]): string | undefined {
