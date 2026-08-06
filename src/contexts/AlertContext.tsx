@@ -79,6 +79,7 @@ function humanizeRawError(raw: string): string {
   if (!s) return "操作失败"
   // Common engine / IPC codes
   if (s === "not_authenticated") return "请先登录"
+  if (s === "invalid_token") return "登录已过期，请重新登录"
   if (s === "no_active_subscription") return "暂无可用订阅，请先同步"
   if (s === "subscription_body_missing") return "订阅内容缺失，请重新同步"
   if (s === "no_nodes") return "暂无可用节点"

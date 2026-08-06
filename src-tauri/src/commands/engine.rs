@@ -43,10 +43,28 @@ pub struct EngineAppState {
     last_emitted: Mutex<EngineStatePayload>,
     /// Single-flight gate for start/stop/select-restart orchestration.
     gate: AsyncMutex<()>,
+    /// Bundled geo-asset dir for this install, if found (see `bundled_asset_dir`).
+    asset_dir: Option<PathBuf>,
     selection_path: PathBuf,
     config_path: PathBuf,
     socks_port: u16,
     api_port: u16,
+}
+
+/// Directory holding bundled `geoip.dat` / `geosite.dat` for this install.
+///
+/// Tauri's `resource_dir()` points at the bundle root, which is the resources
+/// dir on some targets and its parent on others — probe both.
+fn bundled_asset_dir(app: &AppHandle) -> Option<PathBuf> {
+    let root = app.path().resource_dir().ok()?;
+    let nested = root.join("resources");
+    if nested.join("geoip.dat").is_file() {
+        return Some(nested);
+    }
+    if root.join("geoip.dat").is_file() {
+        return Some(root);
+    }
+    None
 }
 
 impl EngineAppState {
@@ -69,6 +87,14 @@ impl EngineAppState {
         if let Ok(log_dir) = crate::logging::app_log_dir(app) {
             engine = engine.with_log_dir(log_dir);
         }
+        // Authoritative geo-asset location per install layout. Without this the
+        // engine can only guess relative to the sidecar, which fails on Linux
+        // deb/rpm (`/usr/bin/aurestream-core` vs
+        // `/usr/lib/AureStream/resources/geoip.dat`) and breaks `geoip:` rules.
+        let asset_dir = bundled_asset_dir(app);
+        if let Some(assets) = asset_dir.clone() {
+            engine = engine.with_asset_dir(assets);
+        }
 
         Ok(Self {
             engine: std::sync::Arc::new(engine),
@@ -76,6 +102,7 @@ impl EngineAppState {
             capture_mode: Mutex::new(CaptureMode::Off),
             last_emitted: Mutex::new(initial),
             gate: AsyncMutex::new(()),
+            asset_dir,
             selection_path,
             config_path,
             socks_port: DEFAULT_SOCKS_PORT,
@@ -382,7 +409,10 @@ async fn start_steps(
 
             let core = aurestream_engine::resolve_sidecar_path()
                 .map_err(|e| e.to_string())?;
-            let asset_dir = aurestream_engine::resolve_asset_dir(&core);
+            let asset_dir = engine_state
+                .asset_dir
+                .clone()
+                .or_else(|| aurestream_engine::resolve_asset_dir(&core));
 
             // Elevated path owns the core process (pkexec/helper). Do not also
             // spawn a user-space sidecar via Engine::start.

@@ -26,6 +26,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SIDECAR_NAME: &str = "aurestream-core";
 const GEOIP_FILE: &str = "geoip.dat";
 const GEOSITE_FILE: &str = "geosite.dat";
+/// Linux deb/rpm install resources under `{prefix}/lib/{productName}/resources`.
+const LINUX_PRODUCT_DIR: &str = "AureStream";
 /// Sidecar log file stem prefix — matches shell `logging::CORE_LOG_PREFIX`.
 const CORE_LOG_PREFIX: &str = "aurestream-core";
 
@@ -583,6 +585,15 @@ pub fn resolve_asset_dir(sidecar: &Path) -> Option<PathBuf> {
         if let Some(grand) = parent.parent() {
             candidates.push(grand.join("resources"));
             candidates.push(grand.join("resources").join("resources"));
+            // Linux deb/rpm split the sidecar (`{prefix}/bin`) from resources
+            // (`{prefix}/lib/AureStream/resources`), so no relative walk from
+            // the binary reaches them.
+            candidates.push(
+                grand
+                    .join("lib")
+                    .join(LINUX_PRODUCT_DIR)
+                    .join("resources"),
+            );
         }
     }
 
@@ -591,6 +602,14 @@ pub fn resolve_asset_dir(sidecar: &Path) -> Option<PathBuf> {
             candidates.push(dir.to_path_buf());
             candidates.push(dir.join("resources"));
             candidates.push(dir.join("resources").join("resources"));
+            if let Some(grand) = dir.parent() {
+                candidates.push(
+                    grand
+                        .join("lib")
+                        .join(LINUX_PRODUCT_DIR)
+                        .join("resources"),
+                );
+            }
         }
     }
 
@@ -630,6 +649,28 @@ mod tests {
         std::fs::write(dir.path().join(GEOIP_FILE), b"geo").unwrap();
         let found = resolve_asset_dir(&sidecar).expect("asset dir");
         assert_eq!(found, dir.path());
+    }
+
+    #[test]
+    fn resolve_asset_dir_finds_linux_install_layout() {
+        // deb/rpm: sidecar in `{prefix}/bin`, assets in
+        // `{prefix}/lib/AureStream/resources` — no relative walk from the
+        // binary's own dir reaches them.
+        let root = tempfile::tempdir().unwrap();
+        let bin = root.path().join("bin");
+        let assets = root
+            .path()
+            .join("lib")
+            .join(LINUX_PRODUCT_DIR)
+            .join("resources");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&assets).unwrap();
+        let sidecar = bin.join("aurestream-core");
+        std::fs::write(&sidecar, b"x").unwrap();
+        std::fs::write(assets.join(GEOIP_FILE), b"geo").unwrap();
+
+        let found = resolve_asset_dir(&sidecar).expect("asset dir");
+        assert_eq!(found, assets);
     }
 
     #[test]
