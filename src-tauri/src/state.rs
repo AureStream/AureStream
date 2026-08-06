@@ -77,11 +77,14 @@ impl AuthState {
     pub fn save(&self, tokens: AuthTokens) -> Result<User, String> {
         let session = StoredSession::from(tokens);
         let user = session.user.clone();
-        write_json(&self.path, &session)?;
+        // Same ordering discipline as `clear`: hold the lock across the write so
+        // a concurrent clear can't land between the file write and the memory
+        // update, leaving an orphaned session file behind.
         let mut guard = self
             .inner
             .lock()
             .map_err(|_| "auth state lock poisoned".to_string())?;
+        write_json(&self.path, &session)?;
         *guard = Some(session);
         Ok(user)
     }
@@ -117,20 +120,22 @@ impl AuthState {
 
     /// Persist a rotated token pair, keeping the existing user.
     ///
-    /// No-op if the session was cleared (e.g. logout raced the refresh) —
-    /// re-storing tokens there would resurrect a session the user ended.
-    pub fn update_tokens(&self, tokens: &RefreshedTokens) -> Result<(), String> {
+    /// Returns `false` without storing anything if the session was cleared
+    /// (e.g. logout raced the refresh) — re-storing tokens there would
+    /// resurrect a session the user ended.
+    pub fn update_tokens(&self, tokens: &RefreshedTokens) -> Result<bool, String> {
         let mut guard = self
             .inner
             .lock()
             .map_err(|_| "auth state lock poisoned".to_string())?;
         let Some(session) = guard.as_mut() else {
-            return Ok(());
+            return Ok(false);
         };
         session.access_token = tokens.access_token.clone();
         session.refresh_token = tokens.refresh_token.clone();
         session.expires_in = tokens.expires_in;
-        write_json(&self.path, session)
+        write_json(&self.path, session)?;
+        Ok(true)
     }
 
     /// Load session from disk into memory (idempotent).
@@ -178,10 +183,21 @@ impl AuthState {
 
         let tokens = client.refresh(&refresh_token).await?;
         let access = tokens.access_token.clone();
-        self.update_tokens(&tokens).map_err(|e| {
+        let stored = self.update_tokens(&tokens).map_err(|e| {
             log::error!("persist refreshed tokens: {e}");
             aurestream_api_client::ApiError::from_code("request_failed", 0, None)
         })?;
+        if !stored {
+            // Logout won the race. The server already rotated, so the pair we
+            // just minted is deliberately discarded — handing the caller a
+            // token nothing persisted would let it act on a dead session.
+            log::info!("refresh discarded: session cleared during refresh");
+            return Err(aurestream_api_client::ApiError::from_code(
+                "not_authenticated",
+                401,
+                None,
+            ));
+        }
         log::info!("access token refreshed");
         Ok(access)
     }
@@ -290,13 +306,15 @@ mod tests {
         let path = dir.path().join("s.json");
         let auth = session_at(&path, "old-access", "old-refresh");
 
-        auth.update_tokens(&RefreshedTokens {
-            access_token: "new-access".into(),
-            refresh_token: "new-refresh".into(),
-            expires_in: 7200,
-        })
-        .unwrap();
+        let stored = auth
+            .update_tokens(&RefreshedTokens {
+                access_token: "new-access".into(),
+                refresh_token: "new-refresh".into(),
+                expires_in: 7200,
+            })
+            .unwrap();
 
+        assert!(stored, "a live session must report the pair as persisted");
         assert_eq!(auth.access_token().unwrap(), "new-access");
         // The rotated refresh token must survive a restart, else the session
         // can never be renewed again.
@@ -357,19 +375,65 @@ mod tests {
     }
 
     #[test]
+    fn save_and_clear_never_disagree_on_disk() {
+        // File write and memory update must be atomic in both directions, so
+        // memory and disk can never end up claiming different things.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.json");
+        let auth = std::sync::Arc::new(session_at(&path, "a", "r"));
+
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let saver = {
+            let auth = auth.clone();
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    let _ = auth.save(AuthTokens {
+                        access_token: "a".into(),
+                        refresh_token: "r".into(),
+                        expires_in: 7200,
+                        user: User {
+                            id: "u1".into(),
+                            email: "a@b.c".into(),
+                            created_at: 0,
+                        },
+                    });
+                }
+            })
+        };
+
+        for _ in 0..500 {
+            auth.clear().unwrap();
+            // Cleared memory must imply no file, checked while the saver races.
+            if auth.access_token().is_none() {
+                assert!(
+                    !path.exists() || auth.access_token().is_some(),
+                    "session file left behind with no in-memory session"
+                );
+            }
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        saver.join().unwrap();
+    }
+
+    #[test]
     fn update_tokens_does_not_resurrect_cleared_session() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s.json");
         let auth = session_at(&path, "old-access", "old-refresh");
 
         auth.clear().unwrap();
-        auth.update_tokens(&RefreshedTokens {
-            access_token: "new-access".into(),
-            refresh_token: "new-refresh".into(),
-            expires_in: 7200,
-        })
-        .unwrap();
+        let stored = auth
+            .update_tokens(&RefreshedTokens {
+                access_token: "new-access".into(),
+                refresh_token: "new-refresh".into(),
+                expires_in: 7200,
+            })
+            .unwrap();
 
+        // Must report the discard, not a silent success: the caller has to know
+        // the pair it just minted was thrown away.
+        assert!(!stored);
         assert!(auth.access_token().is_none());
         assert!(!path.exists(), "logout must win the race with a refresh");
     }
