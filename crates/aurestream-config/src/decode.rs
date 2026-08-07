@@ -54,9 +54,38 @@ fn safe_base64_decode(input: &str) -> String {
 }
 
 fn parse_proxy_list(text: &str) -> Vec<ProxyNode> {
-    text.lines()
+    let mut nodes: Vec<ProxyNode> = text.lines()
         .filter_map(|line| parse_line(line.trim()))
-        .collect()
+        .collect();
+
+    // Generate unique tags for nodes with duplicate names
+    ensure_unique_tags(&mut nodes);
+
+    nodes
+}
+
+/// Ensure all nodes have unique tags by appending indices to duplicates.
+fn ensure_unique_tags(nodes: &mut [ProxyNode]) {
+    use std::collections::HashMap;
+
+    // Count occurrences of each tag
+    let mut tag_counts: HashMap<String, usize> = HashMap::new();
+    for node in nodes.iter() {
+        *tag_counts.entry(node.tag.clone()).or_insert(0) += 1;
+    }
+
+    // Track current index for each duplicate tag
+    let mut tag_indices: HashMap<String, usize> = HashMap::new();
+
+    for node in nodes.iter_mut() {
+        let count = tag_counts.get(&node.tag).copied().unwrap_or(1);
+        if count > 1 {
+            // This tag appears multiple times, append index
+            let idx = tag_indices.entry(node.tag.clone()).or_insert(0);
+            *idx += 1;
+            node.tag = format!("{}#{}", node.tag, idx);
+        }
+    }
 }
 
 fn parse_line(line: &str) -> Option<ProxyNode> {
