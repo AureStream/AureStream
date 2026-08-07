@@ -1,6 +1,6 @@
 use std::fs;
 
-use aurestream_config::ProxyNode;
+use aurestream_config::{FragmentSpec, ProxyNode};
 use aurestream_engine::{Engine, XrayEngine};
 use serde_json::Value;
 
@@ -114,14 +114,19 @@ fn xray_build_config_with_tun_inbound() {
     assert_eq!(tun["tag"], "tun-in");
     assert_eq!(tun["settings"]["name"], "utun233");
     assert_eq!(tun["settings"]["mtu"], 1400);
-    assert!(
-        cfg["outbounds"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|o| o.get("tag").and_then(|t| t.as_str()) == Some("dns-out")),
-        "dns-out required for TUN DNS capture"
-    );
+    let dns_out = cfg["outbounds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o.get("tag").and_then(|t| t.as_str()) == Some("dns-out"))
+        .expect("dns-out required for TUN DNS capture");
+    let dns_out_rules = dns_out["settings"]["rules"]
+        .as_array()
+        .expect("dns-out rules");
+    assert_eq!(dns_out_rules[0]["qType"], "1,28");
+    assert_eq!(dns_out_rules[0]["action"], "hijack");
+    assert_eq!(dns_out_rules[1]["action"], "return");
+    assert_eq!(dns_out_rules[1]["rCode"], 0);
     assert!(cfg.get("dns").is_some(), "dns module required for TUN");
     assert_eq!(
         cfg["routing"]["domainStrategy"], "IPIfNonMatch",
@@ -294,31 +299,50 @@ fn xray_dns_config_smart_routing() {
     assert!(dns.is_object(), "DNS config must exist");
     assert_eq!(dns["tag"], "dns-proxy");
     assert_eq!(dns["queryStrategy"], "UseIPv4");
+    assert_eq!(dns["enableParallelQuery"], true);
+    assert_eq!(dns["serveStale"], true);
+    assert_eq!(dns["serveExpiredTTL"], 3600);
 
-    let servers = dns["servers"].as_array().expect("dns.servers must be array");
+    let servers = dns["servers"]
+        .as_array()
+        .expect("dns.servers must be array");
     assert_eq!(servers.len(), 4, "Should have 4 DNS servers");
 
     // Verify first DNS server (domestic for CN domains)
     let first_dns = &servers[0];
-    assert_eq!(first_dns["address"], "119.29.29.29", "First DNS should be 119.29.29.29");
+    assert_eq!(
+        first_dns["address"], "119.29.29.29",
+        "First DNS should be 119.29.29.29"
+    );
     assert_eq!(first_dns["port"], 53);
     assert_eq!(first_dns["domains"][0], "geosite:cn");
     assert_eq!(first_dns["expectedIPs"][0], "geoip:cn");
+    assert_eq!(first_dns["timeoutMs"], 1500);
 
     // Verify second DNS server (also for CN domains)
     let second_dns = &servers[1];
-    assert_eq!(second_dns["address"], "223.5.5.5", "Second DNS should be 223.5.5.5");
+    assert_eq!(
+        second_dns["address"], "223.5.5.5",
+        "Second DNS should be 223.5.5.5"
+    );
     assert_eq!(second_dns["domains"][0], "geosite:cn");
+    assert_eq!(second_dns["timeoutMs"], 1500);
 
     // Verify fallback DNS servers (for non-CN domains like Google, YouTube)
     assert_eq!(
-        servers[2], "https://1.1.1.1/dns-query",
+        servers[2]["address"], "https://cloudflare-dns.com/dns-query",
         "Third DNS should use Cloudflare DoH"
     );
     assert_eq!(
-        servers[3], "https://8.8.8.8/dns-query",
+        servers[3]["address"], "https://dns.google/dns-query",
         "Fourth DNS should use Google DoH"
     );
+    for server in &servers[2..] {
+        assert_eq!(server["tag"], "dns-proxy");
+        assert_eq!(server["timeoutMs"], 3000);
+    }
+    assert_eq!(dns["hosts"]["cloudflare-dns.com"], "1.1.1.1");
+    assert_eq!(dns["hosts"]["dns.google"], "8.8.8.8");
 
     println!("✓ DNS config structure correct");
     println!("✓ CN domains → 119.29.29.29, 223.5.5.5 (with geoip validation)");
@@ -340,17 +364,86 @@ fn xray_dns_config_system_proxy_mode() {
     let dns = &cfg["dns"];
 
     // System proxy mode should also have smart routing DNS
-    let servers = dns["servers"].as_array().expect("dns.servers must be array");
-    assert_eq!(servers.len(), 4, "System proxy mode should have 4 DNS servers");
+    let servers = dns["servers"]
+        .as_array()
+        .expect("dns.servers must be array");
+    assert_eq!(
+        servers.len(),
+        4,
+        "System proxy mode should have 4 DNS servers"
+    );
 
     // Should use the same smart routing DNS config
     assert_eq!(servers[0]["address"], "119.29.29.29");
     assert_eq!(servers[1]["address"], "223.5.5.5");
-    assert_eq!(servers[2], "https://1.1.1.1/dns-query");
-    assert_eq!(servers[3], "https://8.8.8.8/dns-query");
+    assert_eq!(
+        servers[2]["address"],
+        "https://cloudflare-dns.com/dns-query"
+    );
+    assert_eq!(servers[3]["address"], "https://dns.google/dns-query");
+    assert_eq!(dns["enableParallelQuery"], true);
+    assert_eq!(dns["serveStale"], true);
+    assert_eq!(dns["serveExpiredTTL"], 3600);
+    assert_eq!(dns["hosts"]["cloudflare-dns.com"], "1.1.1.1");
+    assert_eq!(dns["hosts"]["dns.google"], "8.8.8.8");
 
     println!("✓ System proxy DNS config correct");
     println!("✓ CN domains → 119.29.29.29, 223.5.5.5");
     println!("✓ Non-CN domains → Cloudflare/Google DoH");
+}
+
+#[test]
+fn xray_tun_ws_disables_fragment_but_system_proxy_keeps_it() {
+    use aurestream_engine::BuildOptions;
+
+    let mut node = sample_vless_node();
+    node.fragment = Some(FragmentSpec {
+        packets: "tlshello".into(),
+        length: "40-60".into(),
+        interval: "30-50".into(),
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let tun_path = dir.path().join("tun.json");
+    let proxy_path = dir.path().join("system-proxy.json");
+    let engine = XrayEngine::new();
+
+    engine
+        .build_config_with_options(&tun_path, &node, BuildOptions::tun(17890, 19291))
+        .unwrap();
+    engine
+        .build_config(&proxy_path, &node, 17890, 19291)
+        .unwrap();
+
+    let tun: Value = serde_json::from_str(&fs::read_to_string(tun_path).unwrap()).unwrap();
+    let tun_outbounds = tun["outbounds"].as_array().unwrap();
+    assert!(
+        !tun_outbounds
+            .iter()
+            .any(|outbound| outbound["tag"] == "fragment-out"),
+        "TUN over WS must not create the fragment outbound"
+    );
+    let tun_proxy = tun_outbounds
+        .iter()
+        .find(|outbound| outbound["protocol"] == "vless")
+        .unwrap();
+    assert!(tun_proxy["streamSettings"]["sockopt"]["dialerProxy"].is_null());
+
+    let system_proxy: Value =
+        serde_json::from_str(&fs::read_to_string(proxy_path).unwrap()).unwrap();
+    let proxy_outbounds = system_proxy["outbounds"].as_array().unwrap();
+    assert!(
+        proxy_outbounds
+            .iter()
+            .any(|outbound| outbound["tag"] == "fragment-out"),
+        "system proxy mode must preserve the subscription fragment setting"
+    );
+    let proxy = proxy_outbounds
+        .iter()
+        .find(|outbound| outbound["protocol"] == "vless")
+        .unwrap();
+    assert_eq!(
+        proxy["streamSettings"]["sockopt"]["dialerProxy"],
+        "fragment-out"
+    );
 }
 

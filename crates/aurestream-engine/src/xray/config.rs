@@ -14,8 +14,8 @@ const TUN_GATEWAY_CIDR: &str = "198.18.0.1/30";
 const TUN_DNS_SERVERS: &[&str] = &["1.1.1.1", "8.8.8.8"];
 const TUN_MTU: u16 = 1400;
 const PROXY_DOH_SERVERS: &[&str] = &[
-    "https://1.1.1.1/dns-query",
-    "https://8.8.8.8/dns-query",
+    "https://cloudflare-dns.com/dns-query",
+    "https://dns.google/dns-query",
 ];
 
 /// IPv4 complement of private/LAN ranges for `autoSystemRoutingTable`
@@ -130,7 +130,12 @@ pub fn build_xray_config_value_with_options(
     opts: BuildOptions,
 ) -> Result<Value, EngineError> {
     let proxy_transport = node.network.to_ascii_lowercase();
-    let (proxy_outbound, fragment_outbound) = map_proxy_outbound(node)?;
+    // TUN captures substantially more concurrent traffic than system-proxy mode.
+    // Fragmenting every TLS ClientHello used to establish a WS/HTTP Upgrade
+    // tunnel causes severe handshake latency and intermittent upstream EOFs.
+    let allow_fragment =
+        !(opts.enable_tun && matches!(proxy_transport.as_str(), "ws" | "httpupgrade"));
+    let (proxy_outbound, fragment_outbound) = map_proxy_outbound(node, allow_fragment)?;
     let proxy_tag = proxy_outbound
         .get("tag")
         .and_then(|t| t.as_str())
@@ -147,7 +152,18 @@ pub fn build_xray_config_value_with_options(
         outbounds.push(json!({
             "tag": "dns-out",
             "protocol": "dns",
-            "settings": {}
+            "settings": {
+                "rules": [
+                    {
+                        "qType": "1,28",
+                        "action": "hijack"
+                    },
+                    {
+                        "action": "return",
+                        "rCode": 0
+                    }
+                ]
+            }
         }));
     }
     let domain_strategy = if opts.enable_ipv6 { "UseIP" } else { "UseIPv4" };
@@ -390,9 +406,27 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
     let query_strategy = if enable_ipv6 { "UseIP" } else { "UseIPv4" };
     if !smart_routing {
         return json!({
-            "servers": PROXY_DOH_SERVERS,
+            "servers": [
+                {
+                    "address": PROXY_DOH_SERVERS[0],
+                    "tag": "dns-proxy",
+                    "timeoutMs": 3000
+                },
+                {
+                    "address": PROXY_DOH_SERVERS[1],
+                    "tag": "dns-proxy",
+                    "timeoutMs": 3000
+                }
+            ],
+            "hosts": {
+                "cloudflare-dns.com": "1.1.1.1",
+                "dns.google": "8.8.8.8"
+            },
             "tag": "dns-proxy",
-            "queryStrategy": query_strategy
+            "queryStrategy": query_strategy,
+            "enableParallelQuery": true,
+            "serveStale": true,
+            "serveExpiredTTL": 3600
         });
     }
     // Xray DNS routing: https://xtls.github.io/config/dns.html
@@ -401,6 +435,15 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
     json!({
         "tag": "dns-proxy",
         "queryStrategy": query_strategy,
+        "enableParallelQuery": true,
+        "serveStale": true,
+        "serveExpiredTTL": 3600,
+        // Keep the HTTPS hostname (and therefore correct TLS SNI) while avoiding
+        // recursive bootstrap lookups after Windows DNS is redirected into TUN.
+        "hosts": {
+            "cloudflare-dns.com": "1.1.1.1",
+            "dns.google": "8.8.8.8"
+        },
         "servers": [
             // Domestic DNS for CN domains ONLY (with expectedIPs validation)
             {
@@ -409,7 +452,8 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
                 "port": 53,
                 "domains": ["geosite:cn"],
                 "expectedIPs": ["geoip:cn"],
-                "skipFallback": true
+                "skipFallback": true,
+                "timeoutMs": 1500
             },
             {
                 "tag": "dns-direct",
@@ -417,17 +461,29 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
                 "port": 53,
                 "domains": ["geosite:cn"],
                 "expectedIPs": ["geoip:cn"],
-                "skipFallback": true
+                "skipFallback": true,
+                "timeoutMs": 1500
             },
             // DoH avoids carrying lossy DNS UDP inside TCP-based transports
             // such as WebSocket. No domains rule means all unmatched queries.
-            PROXY_DOH_SERVERS[0],
-            PROXY_DOH_SERVERS[1]
+            {
+                "address": PROXY_DOH_SERVERS[0],
+                "tag": "dns-proxy",
+                "timeoutMs": 3000
+            },
+            {
+                "address": PROXY_DOH_SERVERS[1],
+                "tag": "dns-proxy",
+                "timeoutMs": 3000
+            }
         ]
     })
 }
 
-fn map_proxy_outbound(node: &ProxyNode) -> Result<(Value, Option<Value>), EngineError> {
+fn map_proxy_outbound(
+    node: &ProxyNode,
+    allow_fragment: bool,
+) -> Result<(Value, Option<Value>), EngineError> {
     let protocol = node.protocol.to_lowercase();
     let tag = if node.tag.is_empty() {
         PROXY_TAG_FALLBACK.to_string()
@@ -448,7 +504,11 @@ fn map_proxy_outbound(node: &ProxyNode) -> Result<(Value, Option<Value>), Engine
         }
     };
 
-    let fragment = node.fragment.as_ref().map(fragment_outbound);
+    let fragment = node
+        .fragment
+        .as_ref()
+        .filter(|_| allow_fragment)
+        .map(fragment_outbound);
     if let Some(ref frag) = fragment {
         let frag_tag = frag
             .get("tag")
