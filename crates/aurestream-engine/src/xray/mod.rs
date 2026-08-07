@@ -8,22 +8,25 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use aurestream_config::ProxyNode;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
+use tokio::sync::{broadcast, oneshot};
+use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout, Instant};
 
 use crate::state::{EngineState, StateMachine};
-use crate::{Engine, EngineError};
+use crate::{Engine, EngineError, EngineExitEvent, KernelId, KernelLaunchSpec};
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SIDECAR_NAME: &str = "aurestream-core";
+const CONFIG_FILENAME: &str = "xray-config.json";
 const GEOIP_FILE: &str = "geoip.dat";
 const GEOSITE_FILE: &str = "geosite.dat";
 /// Linux deb/rpm install resources under `{prefix}/lib/{productName}/resources`.
@@ -33,14 +36,22 @@ const CORE_LOG_PREFIX: &str = "aurestream-core";
 
 struct Runtime {
     sm: StateMachine,
-    child: Option<Child>,
+    monitor: Option<ProcessMonitor>,
     socks_port: Option<u16>,
     api_port: Option<u16>,
+    generation: u64,
+    last_exit: Option<EngineExitEvent>,
+}
+
+struct ProcessMonitor {
+    stop_tx: oneshot::Sender<()>,
+    join: JoinHandle<()>,
 }
 
 /// MVP Xray engine: dialect `build_config` + sidecar spawn/stop.
 pub struct XrayEngine {
-    inner: Mutex<Runtime>,
+    inner: Arc<Mutex<Runtime>>,
+    exit_tx: broadcast::Sender<EngineExitEvent>,
     sidecar_override: Option<PathBuf>,
     asset_override: Option<PathBuf>,
     /// Directory for `aurestream-core-YYYY-MM-DD.log` (OS app log dir).
@@ -49,13 +60,17 @@ pub struct XrayEngine {
 
 impl XrayEngine {
     pub fn new() -> Self {
+        let (exit_tx, _) = broadcast::channel(16);
         Self {
-            inner: Mutex::new(Runtime {
+            inner: Arc::new(Mutex::new(Runtime {
                 sm: StateMachine::new(),
-                child: None,
+                monitor: None,
                 socks_port: None,
                 api_port: None,
-            }),
+                generation: 0,
+                last_exit: None,
+            })),
+            exit_tx,
             sidecar_override: None,
             asset_override: None,
             log_dir: None,
@@ -106,6 +121,18 @@ impl XrayEngine {
     fn lock(&self) -> std::sync::MutexGuard<'_, Runtime> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
+
+    /// Subscribe to unexpected exits of engine-owned sidecar processes.
+    ///
+    /// Elevated TUN helpers own their core process and must report their own exits.
+    pub fn subscribe_exit_events(&self) -> broadcast::Receiver<EngineExitEvent> {
+        self.exit_tx.subscribe()
+    }
+
+    /// Return the latest unexpected sidecar exit, if one has occurred.
+    pub fn last_exit_event(&self) -> Option<EngineExitEvent> {
+        self.lock().last_exit.clone()
+    }
 }
 
 impl Default for XrayEngine {
@@ -119,12 +146,11 @@ impl XrayEngine {
     pub fn begin_external_start(&self, socks_port: u16, api_port: u16) -> Result<(), EngineError> {
         let mut guard = self.lock();
         guard.sm.transition(EngineState::Starting)?;
+        guard.generation = guard.generation.wrapping_add(1);
         guard.socks_port = Some(socks_port);
         guard.api_port = Some(api_port);
-        // Drop any leftover user-space child handle.
-        if let Some(mut child) = guard.child.take() {
-            let _ = child.start_kill();
-        }
+        // A monitor can only remain here after its process already exited.
+        guard.monitor.take();
         Ok(())
     }
 
@@ -148,18 +174,35 @@ impl XrayEngine {
     /// Transition Stopping → Idle when helper killed the process.
     pub fn finish_external_stop(&self) -> Result<(), EngineError> {
         let mut guard = self.lock();
-        if !matches!(guard.sm.state(), EngineState::Idle | EngineState::Failed { .. }) {
+        if !matches!(
+            guard.sm.state(),
+            EngineState::Idle | EngineState::Failed { .. }
+        ) {
             let _ = guard.sm.transition(EngineState::Stopping);
         }
-        if let Some(mut child) = guard.child.take() {
-            let _ = child.start_kill();
-        }
+        guard.monitor.take();
         let _ = guard.sm.transition(EngineState::Idle);
         Ok(())
     }
 }
 
+#[async_trait::async_trait]
 impl Engine for XrayEngine {
+    fn config_filename(&self) -> &'static str {
+        CONFIG_FILENAME
+    }
+
+    fn launch_spec(&self) -> Result<KernelLaunchSpec, EngineError> {
+        let executable = self.resolve_sidecar()?;
+        let asset_dir = self.resolve_assets(&executable);
+        Ok(KernelLaunchSpec {
+            id: KernelId::XRAY,
+            config_filename: self.config_filename(),
+            executable,
+            asset_dir,
+        })
+    }
+
     fn build_config_with_options(
         &self,
         path: &Path,
@@ -182,15 +225,18 @@ impl Engine for XrayEngine {
             .ok_or_else(|| EngineError::io("config path is not valid UTF-8"))?
             .to_string();
 
-        let (socks_port, api_port) = {
+        let (socks_port, api_port, generation) = {
             let mut guard = self.lock();
             guard.sm.transition(EngineState::Starting)?;
+            guard.generation = guard.generation.wrapping_add(1);
+            let generation = guard.generation;
+            guard.monitor.take();
             let socks = guard.socks_port.unwrap_or(10808);
             let api = guard.api_port.unwrap_or(10809);
             let (socks, api) = parse_ports_from_config(config).unwrap_or((socks, api));
             guard.socks_port = Some(socks);
             guard.api_port = Some(api);
-            (socks, api)
+            (socks, api, generation)
         };
 
         log::info!(
@@ -271,37 +317,51 @@ impl Engine for XrayEngine {
         attach_sidecar_log_pumps(&mut child, core_log);
 
         let mut guard = self.lock();
-        guard.child = Some(child);
-        guard.sm.transition(EngineState::Running)?;
+        if guard.generation != generation {
+            let _ = child.start_kill();
+            return Err(EngineError::illegal_transition("stale-start", "running"));
+        }
+        if let Err(error) = guard.sm.transition(EngineState::Running) {
+            let _ = child.start_kill();
+            return Err(error);
+        }
+        guard.monitor = Some(spawn_process_monitor(
+            Arc::clone(&self.inner),
+            self.exit_tx.clone(),
+            child,
+            generation,
+        ));
         log::info!("sidecar running socks=:{socks_port} api=:{api_port}");
         Ok(())
     }
 
     async fn stop(&self) -> Result<(), EngineError> {
-        let mut child = {
+        let monitor = {
             let mut guard = self.lock();
             match guard.sm.state() {
                 EngineState::Idle => return Ok(()),
                 EngineState::Failed { .. } => {
-                    let child = guard.child.take();
+                    let monitor = guard.monitor.take();
                     let _ = guard.sm.transition(EngineState::Idle);
-                    child
+                    monitor
                 }
                 EngineState::Starting => {
                     guard.sm.force(EngineState::Stopping);
-                    guard.child.take()
+                    guard.monitor.take()
                 }
                 _ => {
                     guard.sm.transition(EngineState::Stopping)?;
-                    guard.child.take()
+                    guard.monitor.take()
                 }
             }
         };
 
-        if let Some(ref mut c) = child {
+        if let Some(monitor) = monitor {
             log::info!("stopping sidecar");
-            let _ = c.kill().await;
-            let _ = c.wait().await;
+            let _ = monitor.stop_tx.send(());
+            if let Err(error) = monitor.join.await {
+                log::warn!("sidecar monitor join failed: {error}");
+            }
         }
 
         let mut guard = self.lock();
@@ -315,6 +375,90 @@ impl Engine for XrayEngine {
     fn state(&self) -> EngineState {
         self.lock().sm.state()
     }
+
+    fn subscribe_exit_events(&self) -> broadcast::Receiver<EngineExitEvent> {
+        XrayEngine::subscribe_exit_events(self)
+    }
+
+    fn begin_external_start(&self, socks_port: u16, api_port: u16) -> Result<(), EngineError> {
+        XrayEngine::begin_external_start(self, socks_port, api_port)
+    }
+
+    fn finish_external_start(&self) -> Result<(), EngineError> {
+        XrayEngine::finish_external_start(self)
+    }
+
+    fn fail_external_start(&self, reason: String) -> Result<(), EngineError> {
+        XrayEngine::fail_external_start(self, reason)
+    }
+
+    fn finish_external_stop(&self) -> Result<(), EngineError> {
+        XrayEngine::finish_external_stop(self)
+    }
+}
+
+fn spawn_process_monitor(
+    inner: Arc<Mutex<Runtime>>,
+    exit_tx: broadcast::Sender<EngineExitEvent>,
+    mut child: Child,
+    generation: u64,
+) -> ProcessMonitor {
+    let (stop_tx, stop_rx) = oneshot::channel();
+    let inner = Arc::downgrade(&inner);
+    let join = tokio::spawn(async move {
+        tokio::select! {
+            biased;
+            _ = stop_rx => {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+            }
+            result = child.wait() => {
+                let (code, reason) = match result {
+                    Ok(status) => (
+                        status.code(),
+                        format!("sidecar exited unexpectedly: {status}"),
+                    ),
+                    Err(error) => (
+                        None,
+                        format!("failed to wait for sidecar: {error}"),
+                    ),
+                };
+                let event = EngineExitEvent {
+                    generation,
+                    code,
+                    reason,
+                };
+
+                let should_publish = update_state_after_unexpected_exit(&inner, &event);
+
+                if should_publish {
+                    log::error!("{}", event.reason);
+                    let _ = exit_tx.send(event);
+                }
+            }
+        }
+    });
+
+    ProcessMonitor { stop_tx, join }
+}
+
+fn update_state_after_unexpected_exit(
+    inner: &Weak<Mutex<Runtime>>,
+    event: &EngineExitEvent,
+) -> bool {
+    let Some(inner) = inner.upgrade() else {
+        return false;
+    };
+    let mut guard = inner.lock().unwrap_or_else(|error| error.into_inner());
+    if guard.generation != event.generation || !matches!(guard.sm.state(), EngineState::Running) {
+        return false;
+    }
+
+    guard.sm.force(EngineState::Failed {
+        reason: event.reason.clone(),
+    });
+    guard.last_exit = Some(event.clone());
+    true
 }
 
 async fn wait_until_ready(socks_port: u16, api_port: u16, child: &mut Child) -> bool {
@@ -387,10 +531,7 @@ fn prepare_core_log_path(log_dir: &Path) -> PathBuf {
     let _ = fs::create_dir_all(log_dir);
     let date = chrono::Local::now().format("%Y-%m-%d");
     let path = log_dir.join(format!("{CORE_LOG_PREFIX}-{date}.log"));
-    let _ = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path);
+    let _ = fs::OpenOptions::new().create(true).append(true).open(&path);
     path
 }
 
@@ -461,12 +602,7 @@ fn last_useful_line(text: &str) -> String {
                 && !l.contains("anti-censorship")
                 && !l.contains("Reading config:")
         })
-        .or_else(|| {
-            text.lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty())
-                .last()
-        })
+        .or_else(|| text.lines().map(str::trim).filter(|l| !l.is_empty()).last())
         .unwrap_or("")
         .chars()
         .take(400)
@@ -588,12 +724,7 @@ pub fn resolve_asset_dir(sidecar: &Path) -> Option<PathBuf> {
             // Linux deb/rpm split the sidecar (`{prefix}/bin`) from resources
             // (`{prefix}/lib/AureStream/resources`), so no relative walk from
             // the binary reaches them.
-            candidates.push(
-                grand
-                    .join("lib")
-                    .join(LINUX_PRODUCT_DIR)
-                    .join("resources"),
-            );
+            candidates.push(grand.join("lib").join(LINUX_PRODUCT_DIR).join("resources"));
         }
     }
 
@@ -603,12 +734,7 @@ pub fn resolve_asset_dir(sidecar: &Path) -> Option<PathBuf> {
             candidates.push(dir.join("resources"));
             candidates.push(dir.join("resources").join("resources"));
             if let Some(grand) = dir.parent() {
-                candidates.push(
-                    grand
-                        .join("lib")
-                        .join(LINUX_PRODUCT_DIR)
-                        .join("resources"),
-                );
+                candidates.push(grand.join("lib").join(LINUX_PRODUCT_DIR).join("resources"));
             }
         }
     }
@@ -634,11 +760,89 @@ pub type SharedXrayEngine = Arc<XrayEngine>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SharedEngine;
+
+    fn test_child(command: &str) -> Child {
+        #[cfg(windows)]
+        let mut child = {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", command]);
+            cmd
+        };
+
+        #[cfg(not(windows))]
+        let mut child = {
+            let mut cmd = Command::new("sh");
+            cmd.args(["-c", command]);
+            cmd
+        };
+
+        child
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+            .expect("spawn test child")
+    }
+
+    fn long_running_test_child() -> Child {
+        #[cfg(windows)]
+        let mut child = {
+            let mut cmd = Command::new("powershell");
+            cmd.args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep -Seconds 30",
+            ]);
+            cmd
+        };
+
+        #[cfg(not(windows))]
+        let mut child = {
+            let mut cmd = Command::new("sleep");
+            cmd.arg("30");
+            cmd
+        };
+
+        child
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+            .expect("spawn long-running test child")
+    }
+
+    fn install_test_monitor(engine: &XrayEngine, child: Child, generation: u64) {
+        {
+            let mut guard = engine.lock();
+            guard.generation = generation;
+            guard.sm.force(EngineState::Running);
+        }
+        let monitor = spawn_process_monitor(
+            Arc::clone(&engine.inner),
+            engine.exit_tx.clone(),
+            child,
+            generation,
+        );
+        engine.lock().monitor = Some(monitor);
+    }
 
     #[test]
     fn dir_has_geo_assets_false_for_empty() {
         let dir = tempfile::tempdir().unwrap();
         assert!(!dir_has_geo_assets(dir.path()));
+    }
+
+    #[test]
+    fn engine_trait_object_exposes_kernel_metadata_without_resolving_launch() {
+        let missing = std::env::temp_dir().join("aurestream-missing-test-sidecar");
+        let engine: SharedEngine = Arc::new(XrayEngine::with_sidecar_path(missing));
+
+        assert_eq!(engine.config_filename(), CONFIG_FILENAME);
+        assert!(engine.launch_spec().is_err());
     }
 
     #[test]
@@ -682,5 +886,50 @@ Failed to start: main: failed to load config files: geoip.dat
 ";
         let line = last_useful_line(text);
         assert!(line.contains("Failed to start"), "{line}");
+    }
+
+    #[tokio::test]
+    async fn unexpected_exit_sets_failed_and_publishes_event() {
+        let engine = XrayEngine::new();
+        let mut exits = engine.subscribe_exit_events();
+        install_test_monitor(&engine, test_child("exit 23"), 7);
+
+        let event = timeout(Duration::from_secs(2), exits.recv())
+            .await
+            .expect("exit event timeout")
+            .expect("exit event channel");
+
+        assert_eq!(event.generation, 7);
+        assert_eq!(event.code, Some(23));
+        assert!(event.reason.contains("unexpectedly"));
+        assert_eq!(engine.last_exit_event(), Some(event.clone()));
+        assert_eq!(
+            engine.state(),
+            EngineState::Failed {
+                reason: event.reason
+            }
+        );
+
+        engine.stop().await.expect("clear failed engine");
+        assert_eq!(engine.state(), EngineState::Idle);
+    }
+
+    #[tokio::test]
+    async fn explicit_stop_does_not_publish_unexpected_exit() {
+        let engine = XrayEngine::new();
+        let mut exits = engine.subscribe_exit_events();
+        install_test_monitor(&engine, long_running_test_child(), 1);
+
+        timeout(Duration::from_secs(2), engine.stop())
+            .await
+            .expect("stop timeout")
+            .expect("stop engine");
+
+        assert_eq!(engine.state(), EngineState::Idle);
+        assert_eq!(engine.last_exit_event(), None);
+        assert!(matches!(
+            exits.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
     }
 }

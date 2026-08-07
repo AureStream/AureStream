@@ -5,11 +5,124 @@ set -e
 
 HELPER_DIR="/usr/lib/AureStream"
 SELF="${HELPER_DIR}/aurestream-tun-helper"
+TRUSTED_CORE="${HELPER_DIR}/aurestream-core"
+PACKAGED_CORE="/usr/bin/aurestream-core"
+TRUSTED_ASSETS="${HELPER_DIR}/resources"
 POLKIT_ACTION="/usr/share/polkit-1/actions/com.root.aurestream.policy"
 POLKIT_RULE="/etc/polkit-1/rules.d/49-aurestream.rules"
 ORPHAN_TIMER_UNIT="aurestream-tun-orphan.timer"
 ORPHAN_SERVICE_UNIT="aurestream-tun-orphan.service"
 SYSTEMD_DIR="/etc/systemd/system"
+RUNTIME_DIR="/run/aurestream-tun"
+
+ensure_runtime_dir() {
+    install -d -o root -g root -m 700 "$RUNTIME_DIR"
+    : > "$RUNTIME_DIR/.lock"
+    chmod 600 "$RUNTIME_DIR/.lock"
+}
+
+lock_state() {
+    ensure_runtime_dir
+    exec 9>"$RUNTIME_DIR/.lock"
+    flock -x 9
+}
+
+unlock_state() {
+    flock -u 9
+}
+
+validate_pid() {
+    case "$1" in
+        *[!0-9]*|''|0|1) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+validate_iface() {
+    case "$1" in
+        ''|*[!A-Za-z0-9_.:-]*|[-.:]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+validate_dns_server() {
+    case "$1" in
+        ''|*[!0-9A-Fa-f:.]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+caller_start_time() {
+    awk '{print $22}' "/proc/$1/stat" 2>/dev/null
+}
+
+validate_caller() {
+    caller_pid="$1"
+    caller_uid="${PKEXEC_UID:-}"
+    validate_pid "$caller_pid" || return 1
+    case "$caller_uid" in
+        *[!0-9]*|'') return 1 ;;
+    esac
+    [ -d "/proc/$caller_pid" ] || return 1
+    [ "$(stat -c '%u' "/proc/$caller_pid" 2>/dev/null)" = "$caller_uid" ] || return 1
+    caller_start_time "$caller_pid"
+}
+
+caller_is_alive() {
+    caller_pid="$1"
+    caller_uid="$2"
+    expected_start="$3"
+    [ -d "/proc/$caller_pid" ] || return 1
+    [ "$(stat -c '%u' "/proc/$caller_pid" 2>/dev/null)" = "$caller_uid" ] || return 1
+    [ "$(caller_start_time "$caller_pid")" = "$expected_start" ]
+}
+
+restore_session_dns() {
+    session_dir="$1"
+    [ -f "$session_dir/dns-active" ] || return 0
+    iface=$(sed -n '1p' "$session_dir/iface" 2>/dev/null || true)
+    validate_iface "$iface" || return 0
+    if [ -s "$session_dir/original-dns" ]; then
+        dns_args=""
+        while IFS= read -r server; do
+            validate_dns_server "$server" || continue
+            dns_args="$dns_args $server"
+        done < "$session_dir/original-dns"
+        if [ -n "$dns_args" ]; then
+            # Intentional word splitting: every entry was validated above.
+            # shellcheck disable=SC2086
+            resolvectl dns "$iface" $dns_args 2>/dev/null || true
+        else
+            resolvectl revert "$iface" 2>/dev/null || true
+        fi
+    else
+        resolvectl revert "$iface" 2>/dev/null || true
+    fi
+    resolvectl flush-caches 2>/dev/null || true
+    rm -f "$session_dir/dns-active"
+}
+
+remove_session() {
+    session_dir="$1"
+    restore_session_dns "$session_dir"
+    rm -f "$session_dir/caller-uid" "$session_dir/caller-start" \
+        "$session_dir/core-pid" "$session_dir/iface" \
+        "$session_dir/original-dns" "$session_dir/dns-active" \
+        "$session_dir/config.json"
+    rmdir "$session_dir" 2>/dev/null || true
+}
+
+stop_core_pid() {
+    core_pid="$1"
+    validate_pid "$core_pid" || return 0
+    kill -TERM "$core_pid" 2>/dev/null || true
+    attempts=0
+    while kill -0 "$core_pid" 2>/dev/null && [ "$attempts" -lt 30 ]; do
+        sleep 0.1
+        attempts=$((attempts + 1))
+    done
+    kill -KILL "$core_pid" 2>/dev/null || true
+}
 
 # Return 0 if the AureStream main app (or package) still appears installed.
 is_main_app_present() {
@@ -56,7 +169,10 @@ do_uninstall() {
         rm -f "${SYSTEMD_DIR}/${ORPHAN_TIMER_UNIT}" "${SYSTEMD_DIR}/${ORPHAN_SERVICE_UNIT}"
         systemctl daemon-reload 2>/dev/null || true
     fi
-    rm -f "$SELF" "$POLKIT_ACTION" "$POLKIT_RULE"
+    rm -f "$SELF" "$TRUSTED_CORE" "$POLKIT_ACTION" "$POLKIT_RULE"
+    rm -f "$TRUSTED_ASSETS/geoip.dat" "$TRUSTED_ASSETS/geosite.dat"
+    rm -rf "$RUNTIME_DIR"
+    rmdir "$TRUSTED_ASSETS" 2>/dev/null || true
     rmdir "$HELPER_DIR" 2>/dev/null || true
     exit 0
 }
@@ -100,59 +216,191 @@ EOF
     systemctl enable --now "$ORPHAN_TIMER_UNIT" 2>/dev/null || true
 }
 
+# Resolve a kernel identifier to a root-owned executable. Never execute a path
+# supplied by the pkexec caller: this helper runs as root.
+resolve_kernel() {
+    case "$1" in
+        xray)
+            for candidate in "$TRUSTED_CORE" "$PACKAGED_CORE"; do
+                mode=$(stat -c '%a' "$candidate" 2>/dev/null || true)
+                if [ -f "$candidate" ] && [ -x "$candidate" ] &&
+                   [ ! -L "$candidate" ] &&
+                   [ "$(stat -c '%u' "$candidate" 2>/dev/null)" = "0" ] &&
+                   [ -n "$mode" ] && [ $((0$mode & 0022)) -eq 0 ]; then
+                    printf '%s\n' "$candidate"
+                    return 0
+                fi
+            done
+            echo "trusted xray kernel is not installed" >&2
+            return 1
+            ;;
+        *)
+            echo "unsupported kernel id: $1" >&2
+            return 1
+            ;;
+    esac
+}
+
+# Only accept the app-owned config for the desktop user that invoked pkexec.
+# Canonicalization and the exact path allowlist prevent symlink escapes.
+resolve_config() {
+    requested="$1"
+    uid="${PKEXEC_UID:-}"
+    if [ -z "$requested" ] || [ -z "$uid" ]; then
+        echo "missing config path or PKEXEC_UID" >&2
+        return 1
+    fi
+    case "$uid" in
+        *[!0-9]*|'') echo "invalid PKEXEC_UID" >&2; return 1 ;;
+    esac
+    home_dir=$(getent passwd "$uid" 2>/dev/null | cut -d: -f6)
+    canonical=$(readlink -f -- "$requested" 2>/dev/null || true)
+    if [ -z "$home_dir" ] || [ -z "$canonical" ] || [ ! -f "$canonical" ] || [ -L "$requested" ]; then
+        echo "config path is not a regular canonical file" >&2
+        return 1
+    fi
+    case "$canonical" in
+        "$home_dir/.local/share/com.root.aurestream/xray-config.json"|\
+        "$home_dir/.config/com.root.aurestream/xray-config.json"|\
+        "/run/user/$uid/com.root.aurestream/xray-config.json") ;;
+        *) echo "config path is outside AureStream app data" >&2; return 1 ;;
+    esac
+    if [ "$(stat -c '%u' "$canonical" 2>/dev/null)" != "$uid" ]; then
+        echo "config file is not owned by the invoking user" >&2
+        return 1
+    fi
+    printf '%s\n' "$canonical"
+}
+
 case "$1" in
     start-tun)
-        # $2 = sidecar path, $3 = config path, $4 = optional asset dir (geoip/geosite)
+        # $2 = kernel id, $3 = config path, $4 = caller pid,
+        # $5 = interface (optional), $6... = original DNS servers.
         # DNS is applied separately AFTER core readiness (dns-override).
-        sidecar="$2"
-        config="$3"
-        asset_dir="${4:-}"
-        if [ -z "$sidecar" ] || [ -z "$config" ]; then
-            echo "start-tun requires sidecar and config paths" >&2
+        kernel_id="$2"
+        requested_config="$3"
+        caller_pid="$4"
+        iface="${5:-}"
+        if [ -z "$kernel_id" ] || [ -z "$requested_config" ] || [ -z "$caller_pid" ]; then
+            echo "start-tun requires kernel id, config path, and caller pid" >&2
             exit 2
         fi
-        if [ ! -x "$sidecar" ] && [ ! -f "$sidecar" ]; then
-            echo "sidecar not found: $sidecar" >&2
-            exit 3
+        sidecar=$(resolve_kernel "$kernel_id") || exit 3
+        config=$(resolve_config "$requested_config") || exit 4
+        caller_start=$(validate_caller "$caller_pid") || {
+            echo "caller pid is not owned by PKEXEC_UID" >&2
+            exit 5
+        }
+        caller_uid="$PKEXEC_UID"
+        if [ -n "$iface" ]; then
+            validate_iface "$iface" || { echo "invalid interface" >&2; exit 6; }
+            shift 5
+            for server in "$@"; do
+                validate_dns_server "$server" || { echo "invalid DNS server" >&2; exit 6; }
+            done
+        else
+            shift 4
         fi
         # Best-effort: ensure orphan timer is armed after first privileged use.
         install_orphan_timer 2>/dev/null || true
-        if [ -n "$asset_dir" ] && [ -d "$asset_dir" ]; then
-            export XRAY_LOCATION_ASSET="$asset_dir"
-            cd "$asset_dir" || true
+        if [ -d "$TRUSTED_ASSETS" ]; then
+            export XRAY_LOCATION_ASSET="$TRUSTED_ASSETS"
+            cd "$TRUSTED_ASSETS"
         else
             side_dir=$(dirname "$sidecar")
-            if [ -d "$side_dir" ]; then
-                export XRAY_LOCATION_ASSET="$side_dir"
-                cd "$side_dir" || true
-            fi
+            export XRAY_LOCATION_ASSET="$side_dir"
+            cd "$side_dir"
         fi
-        exec "$sidecar" run -c "$config"
+        lock_state
+        session_dir="$RUNTIME_DIR/session-$caller_pid"
+        if [ -d "$session_dir" ]; then
+            old_core=$(sed -n '1p' "$session_dir/core-pid" 2>/dev/null || true)
+            stop_core_pid "$old_core"
+            remove_session "$session_dir"
+        fi
+        install -d -o root -g root -m 700 "$session_dir"
+        install -o root -g root -m 600 "$config" "$session_dir/config.json"
+        "$sidecar" run -c "$session_dir/config.json" &
+        core_pid=$!
+        printf '%s\n' "$caller_uid" > "$session_dir/caller-uid"
+        printf '%s\n' "$caller_start" > "$session_dir/caller-start"
+        printf '%s\n' "$core_pid" > "$session_dir/core-pid"
+        printf '%s\n' "$iface" > "$session_dir/iface"
+        : > "$session_dir/original-dns"
+        for server in "$@"; do
+            printf '%s\n' "$server" >> "$session_dir/original-dns"
+        done
+        chmod 600 "$session_dir"/*
+        unlock_state
+
+        cleanup_requested=0
+        trap 'cleanup_requested=1' HUP INT TERM
+        while kill -0 "$core_pid" 2>/dev/null; do
+            if [ "$cleanup_requested" -eq 1 ] || \
+               ! caller_is_alive "$caller_pid" "$caller_uid" "$caller_start"; then
+                stop_core_pid "$core_pid"
+                break
+            fi
+            sleep 1
+        done
+        core_status=0
+        wait "$core_pid" || core_status=$?
+        lock_state
+        remove_session "$session_dir"
+        unlock_state
+        exit "$core_status"
         ;;
     stop-tun)
-        # $2 = iface (optional), $3... = original DNS servers (optional)
-        if [ -n "$2" ] && [ -n "$3" ]; then
-            iface="$2"
-            shift 2
-            resolvectl dns "$iface" "$@" 2>/dev/null || true
-            resolvectl flush-caches 2>/dev/null || true
-        fi
+        lock_state
+        for session_dir in "$RUNTIME_DIR"/session-*; do
+            [ -d "$session_dir" ] || continue
+            core_pid=$(sed -n '1p' "$session_dir/core-pid" 2>/dev/null || true)
+            restore_session_dns "$session_dir"
+            stop_core_pid "$core_pid"
+            remove_session "$session_dir"
+        done
         pkill -x aurestream-core 2>/dev/null || true
         pkill -f '/aurestream-core(-[a-z0-9_]+)*$' 2>/dev/null || true
         # also match debug path binaries
         pkill -f 'target/.*/aurestream-core' 2>/dev/null || true
+        unlock_state
         exit 0
         ;;
     dns-override)
-        # $2 = iface, $3 = gateway, $4... = original DNS (ignored for apply; kept for restore)
+        # $2 = iface, $3 = gateway, $4 = caller pid.
         iface="$2"
         gateway="$3"
-        if [ -z "$iface" ] || [ -z "$gateway" ]; then
-            echo "dns-override requires iface and gateway" >&2
+        caller_pid="$4"
+        if ! validate_iface "$iface" || ! validate_dns_server "$gateway" || \
+           ! validate_pid "$caller_pid"; then
+            echo "dns-override requires valid iface, gateway, and caller pid" >&2
             exit 2
         fi
+        lock_state
+        session_dir="$RUNTIME_DIR/session-$caller_pid"
+        if [ ! -d "$session_dir" ]; then
+            unlock_state
+            echo "active TUN session not found" >&2
+            exit 3
+        fi
+        core_pid=$(sed -n '1p' "$session_dir/core-pid" 2>/dev/null || true)
+        caller_uid=$(sed -n '1p' "$session_dir/caller-uid" 2>/dev/null || true)
+        caller_start=$(sed -n '1p' "$session_dir/caller-start" 2>/dev/null || true)
+        session_iface=$(sed -n '1p' "$session_dir/iface" 2>/dev/null || true)
+        if [ "${PKEXEC_UID:-}" != "$caller_uid" ] || [ "$iface" != "$session_iface" ] || \
+           ! kill -0 "$core_pid" 2>/dev/null || \
+           ! caller_is_alive "$caller_pid" "$caller_uid" "$caller_start"; then
+            remove_session "$session_dir"
+            unlock_state
+            echo "TUN session is no longer alive" >&2
+            exit 4
+        fi
+        # Record restore intent before changing the OS. A partial resolvectl
+        # failure must still be repaired by the watchdog.
+        : > "$session_dir/dns-active"
         resolvectl dns "$iface" "$gateway"
         resolvectl flush-caches 2>/dev/null || true
+        unlock_state
         ;;
     dns-restore)
         iface="$2"

@@ -8,8 +8,9 @@ pub use auth::{
     auth_login, auth_logout, auth_register, auth_restore, auth_verify, spawn_initial_restore,
 };
 pub use engine::{
-    engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
-    engine_uninstall_helper, EngineAppState,
+    cleanup_on_exit, engine_get_state, engine_probe_tun, engine_select_node, engine_start,
+    engine_stop, engine_uninstall_helper, reconcile_stale_runtime, spawn_engine_health_monitor,
+    EngineAppState,
 };
 pub use network::ping_tcp;
 pub use subs::{subs_list, subs_sync};

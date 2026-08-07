@@ -269,6 +269,7 @@ dependencies = [
 name = "aurestream-engine"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "aurestream-config",
  "chrono",
  "log",

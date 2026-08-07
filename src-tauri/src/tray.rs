@@ -16,7 +16,7 @@ use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, Predefined
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, AppHandle, Emitter, Manager};
 
-use crate::commands::engine::{self, EngineAppState};
+use crate::commands::engine::{self, CaptureMode, EngineAppState};
 use crate::window_util::{hide_main_window, show_main_window};
 
 const APP_ALERT_EVENT: &str = "app-alert";
@@ -28,7 +28,7 @@ struct AppAlertPayload {
     message: String,
 }
 
-fn emit_error_alert(app: &AppHandle, title: &'static str, message: impl Into<String>) {
+pub(crate) fn emit_error_alert(app: &AppHandle, title: &'static str, message: impl Into<String>) {
     let message = message.into();
     log::error!("alert: {title}: {message}");
     let _ = app.emit(
@@ -49,37 +49,15 @@ const ID_SYSTEM: &str = "tray_mode_system";
 const ID_TUN: &str = "tray_mode_tun";
 const ID_QUIT: &str = "tray_quit";
 
-/// Which OS capture path the tray presents as active.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CaptureMode {
-    #[default]
-    Off,
-    SystemProxy,
-    /// Elevated TUN (Linux helper ready; Windows/macOS when helpers land).
-    Tun,
-}
-
-/// Shared tray handle + capture mode for menu rebuilds.
+/// Shared tray handle. Capture mode is owned exclusively by EngineAppState.
 pub struct TrayState {
     pub tray: Mutex<Option<TrayIcon>>,
-    pub mode: Mutex<CaptureMode>,
 }
 
 impl TrayState {
     pub fn new() -> Self {
         Self {
             tray: Mutex::new(None),
-            mode: Mutex::new(CaptureMode::Off),
-        }
-    }
-
-    pub fn mode(&self) -> CaptureMode {
-        self.mode.lock().map(|g| *g).unwrap_or(CaptureMode::Off)
-    }
-
-    pub fn set_mode(&self, mode: CaptureMode) {
-        if let Ok(mut g) = self.mode.lock() {
-            *g = mode;
         }
     }
 }
@@ -92,8 +70,8 @@ impl Default for TrayState {
 
 fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let mode = app
-        .try_state::<TrayState>()
-        .map(|s| s.mode())
+        .try_state::<EngineAppState>()
+        .map(|state| state.capture_mode())
         .unwrap_or(CaptureMode::Off);
 
     let system_checked = matches!(mode, CaptureMode::SystemProxy);
@@ -128,9 +106,7 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     let icon = app
         .default_window_icon()
         .cloned()
-        .or_else(|| {
-            tauri::image::Image::from_bytes(include_bytes!("../../public/logo.png")).ok()
-        })
+        .or_else(|| tauri::image::Image::from_bytes(include_bytes!("../../public/logo.png")).ok())
         .ok_or("no tray icon available")?;
 
     let menu = build_menu(&handle)?;
@@ -200,10 +176,6 @@ async fn on_toggle_system_proxy(app: AppHandle) {
         log::warn!("tray: EngineAppState missing");
         return;
     };
-    let Some(tray) = app.try_state::<TrayState>() else {
-        return;
-    };
-
     let running = engine.last_payload().state == "running"
         || matches!(
             engine.engine_state_raw(),
@@ -211,11 +183,10 @@ async fn on_toggle_system_proxy(app: AppHandle) {
         );
 
     // Already on system proxy → stop. If on TUN, switch by stopping then starting system.
-    if running && matches!(tray.mode(), CaptureMode::SystemProxy) {
+    if running && matches!(engine.capture_mode(), CaptureMode::SystemProxy) {
         log::info!("tray: stop system proxy");
         match engine::tray_stop(&app).await {
             Ok(()) => {
-                tray.set_mode(CaptureMode::Off);
                 refresh_menu(&app);
             }
             Err(e) => {
@@ -232,11 +203,9 @@ async fn on_toggle_system_proxy(app: AppHandle) {
     log::info!("tray: start system proxy");
     match engine::tray_start_system(&app).await {
         Ok(()) => {
-            tray.set_mode(CaptureMode::SystemProxy);
             refresh_menu(&app);
         }
         Err(e) => {
-            tray.set_mode(CaptureMode::Off);
             refresh_menu(&app);
             show_main_window(&app);
             if is_pre_start_error(&e) {
@@ -251,21 +220,16 @@ async fn on_toggle_tun(app: AppHandle) {
         log::warn!("tray: EngineAppState missing");
         return;
     };
-    let Some(tray) = app.try_state::<TrayState>() else {
-        return;
-    };
-
     let running = engine.last_payload().state == "running"
         || matches!(
             engine.engine_state_raw(),
             aurestream_engine::EngineState::Running
         );
 
-    if running && matches!(tray.mode(), CaptureMode::Tun) {
+    if running && matches!(engine.capture_mode(), CaptureMode::Tun) {
         log::info!("tray: stop tun");
         match engine::tray_stop(&app).await {
             Ok(()) => {
-                tray.set_mode(CaptureMode::Off);
                 refresh_menu(&app);
             }
             Err(e) => {
@@ -282,11 +246,9 @@ async fn on_toggle_tun(app: AppHandle) {
     log::info!("tray: start tun");
     match engine::tray_start_tun(&app).await {
         Ok(()) => {
-            tray.set_mode(CaptureMode::Tun);
             refresh_menu(&app);
         }
         Err(e) => {
-            tray.set_mode(CaptureMode::Off);
             refresh_menu(&app);
             show_main_window(&app);
             emit_error_alert(&app, "虚拟网卡", humanize_tray_error(&e));
@@ -351,7 +313,7 @@ async fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
-/// Rebuild menu checkmarks from [`TrayState::mode`].
+/// Rebuild menu checkmarks from the authoritative [`EngineAppState`].
 pub fn refresh_menu(app: &AppHandle) {
     let Some(state) = app.try_state::<TrayState>() else {
         return;
@@ -365,7 +327,11 @@ pub fn refresh_menu(app: &AppHandle) {
     if let Ok(menu) = build_menu(app) {
         let _ = tray.set_menu(Some(menu));
     }
-    let tip = match state.mode() {
+    let mode = app
+        .try_state::<EngineAppState>()
+        .map(|engine| engine.capture_mode())
+        .unwrap_or(CaptureMode::Off);
+    let tip = match mode {
         CaptureMode::Off => "AureStream".to_string(),
         CaptureMode::SystemProxy => "AureStream · 系统代理".to_string(),
         CaptureMode::Tun => "AureStream · 虚拟网卡".to_string(),
@@ -373,25 +339,7 @@ pub fn refresh_menu(app: &AppHandle) {
     let _ = tray.set_tooltip(Some(tip));
 }
 
-/// Sync tray checkmarks when the engine emits a new state (Running / Idle / Failed).
-pub fn on_engine_payload(app: &AppHandle, state: &str, capture_mode: &str) {
-    let Some(tray) = app.try_state::<TrayState>() else {
-        return;
-    };
-    let next = match state {
-        "running" | "starting" => match capture_mode {
-            "tun" => CaptureMode::Tun,
-            "system" => CaptureMode::SystemProxy,
-            _ => {
-                // Prefer last tray mode during starting if capture not yet set.
-                match tray.mode() {
-                    CaptureMode::Tun => CaptureMode::Tun,
-                    _ => CaptureMode::SystemProxy,
-                }
-            }
-        },
-        _ => CaptureMode::Off,
-    };
-    tray.set_mode(next);
+/// Sync tray checkmarks when the engine emits a new state.
+pub fn on_engine_payload(app: &AppHandle) {
     refresh_menu(app);
 }

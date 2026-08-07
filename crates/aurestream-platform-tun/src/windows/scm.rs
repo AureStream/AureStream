@@ -56,6 +56,16 @@ pub fn installed_hash_marker() -> PathBuf {
     program_data_dir().join("binary.sha256")
 }
 
+/// Root-owned core used by the LocalSystem service. The service never executes
+/// a core path supplied through `StartServiceW` arguments.
+pub fn installed_core_path() -> PathBuf {
+    program_data_dir().join("aurestream-core.exe")
+}
+
+pub fn installed_core_hash_marker() -> PathBuf {
+    program_data_dir().join("core.sha256")
+}
+
 /// Path to the main app executable recorded on first TUN start / install.
 /// Used by orphan cleanup when the user deletes AureStream without uninstalling the service.
 pub fn app_root_marker() -> PathBuf {
@@ -205,6 +215,18 @@ fn write_marker(hash: &str) -> std::io::Result<()> {
     std::fs::write(installed_hash_marker(), hash)
 }
 
+fn read_core_marker() -> Option<String> {
+    std::fs::read_to_string(installed_core_hash_marker())
+        .ok()
+        .map(|s| s.trim().to_string())
+}
+
+fn write_core_marker(hash: &str) -> std::io::Result<()> {
+    let dir = program_data_dir();
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(installed_core_hash_marker(), hash)
+}
+
 // ============================== wide helpers =========================
 
 fn to_wide_z(s: &str) -> Vec<u16> {
@@ -337,6 +359,36 @@ pub fn check_freshness(bundled_exe: &Path) -> Freshness {
     }
 }
 
+pub fn check_core_freshness(bundled_core: &Path) -> Freshness {
+    if !bundled_core.exists() {
+        return Freshness::MissingBinary;
+    }
+    let bundled_hash = match compute_file_sha256(bundled_core) {
+        Ok(h) => h,
+        Err(_) => return Freshness::MissingBinary,
+    };
+    if !installed_core_path().is_file() {
+        return Freshness::NeedsUpgrade;
+    }
+    if read_core_marker().as_deref() == Some(bundled_hash.as_str()) {
+        Freshness::UpToDate
+    } else {
+        Freshness::NeedsUpgrade
+    }
+}
+
+pub fn verified_installed_core_path() -> Result<PathBuf, String> {
+    let core = installed_core_path();
+    let expected =
+        read_core_marker().ok_or_else(|| "installed core hash marker missing".to_string())?;
+    let actual = compute_file_sha256(&core)
+        .map_err(|e| format!("hash installed core {}: {e}", core.display()))?;
+    if actual != expected {
+        return Err("installed core hash mismatch".to_string());
+    }
+    Ok(core)
+}
+
 // ============================== install ==============================
 
 fn copy_with_retry(src: &Path, dst: &Path) -> std::io::Result<()> {
@@ -427,15 +479,37 @@ fn apply_sddl(svc: &ScHandle) -> Result<(), String> {
 
 /// Elevated: stop + delete existing service + copy binary + create service + ACL.
 /// Idempotent — safe to call repeatedly with the same bundled binary.
-pub fn ensure_installed(bundled_exe: &Path) -> Result<(), String> {
+pub fn ensure_installed(
+    bundled_exe: &Path,
+    bundled_core: &Path,
+    asset_dir: Option<&Path>,
+) -> Result<(), String> {
     if !bundled_exe.exists() {
         return Err(format!(
             "bundled service exe does not exist: {}",
             bundled_exe.display()
         ));
     }
+    if !bundled_core.exists() {
+        return Err(format!(
+            "bundled core exe does not exist: {}",
+            bundled_core.display()
+        ));
+    }
     let bundled_hash =
         compute_file_sha256(bundled_exe).map_err(|e| format!("compute hash failed: {}", e))?;
+    let bundled_core_hash = compute_file_sha256(bundled_core)
+        .map_err(|e| format!("compute core hash failed: {}", e))?;
+    let wintun_src = asset_dir
+        .map(|dir| dir.join("wintun.dll"))
+        .filter(|path| path.is_file())
+        .or_else(|| {
+            bundled_core
+                .parent()
+                .map(|dir| dir.join("wintun.dll"))
+                .filter(|path| path.is_file())
+        })
+        .ok_or_else(|| "wintun.dll is missing from the trusted asset directory".to_string())?;
 
     let dir = program_data_dir();
     std::fs::create_dir_all(&dir)
@@ -445,9 +519,12 @@ pub fn ensure_installed(bundled_exe: &Path) -> Result<(), String> {
 
     // Short-circuit: if the service exists, hash matches marker, and binary is
     // in place, we're already done.
-    if let Some(marker) = read_marker() {
+    if let (Some(marker), Some(core_marker)) = (read_marker(), read_core_marker()) {
         if marker == bundled_hash
+            && core_marker == bundled_core_hash
             && installed_exe_path().exists()
+            && installed_core_path().exists()
+            && dir.join("wintun.dll").is_file()
             && !matches!(query_state(), QueriedState::NotInstalled)
         {
             super::dns::log_line("ensure_installed: already up to date, no-op");
@@ -461,6 +538,18 @@ pub fn ensure_installed(bundled_exe: &Path) -> Result<(), String> {
     // Copy binary (with retry, in case SCM is still releasing the lock).
     let dst = installed_exe_path();
     copy_with_retry(bundled_exe, &dst).map_err(|e| format!("copy binary: {}", e))?;
+    let core_dst = installed_core_path();
+    copy_with_retry(bundled_core, &core_dst).map_err(|e| format!("copy core: {}", e))?;
+    copy_with_retry(&wintun_src, &dir.join("wintun.dll"))
+        .map_err(|e| format!("copy wintun.dll: {}", e))?;
+    if let Some(assets) = asset_dir {
+        for name in ["geoip.dat", "geosite.dat"] {
+            let src = assets.join(name);
+            if src.is_file() {
+                copy_with_retry(&src, &dir.join(name)).map_err(|e| format!("copy {name}: {e}"))?;
+            }
+        }
+    }
 
     // Register with SCM.
     let svc_name_w = to_wide_z(SERVICE_NAME);
@@ -497,6 +586,7 @@ pub fn ensure_installed(bundled_exe: &Path) -> Result<(), String> {
     drop(svc);
 
     write_marker(&bundled_hash).map_err(|e| format!("write marker: {}", e))?;
+    write_core_marker(&bundled_core_hash).map_err(|e| format!("write core marker: {}", e))?;
     install_orphan_task();
     super::dns::log_line(&format!(
         "ensure_installed: OK ({} -> {})",
@@ -518,6 +608,11 @@ pub fn uninstall() -> Result<(), String> {
     }
     let _ = std::fs::remove_file(installed_exe_path());
     let _ = std::fs::remove_file(installed_hash_marker());
+    let _ = std::fs::remove_file(installed_core_path());
+    let _ = std::fs::remove_file(installed_core_hash_marker());
+    for name in ["wintun.dll", "geoip.dat", "geosite.dat"] {
+        let _ = std::fs::remove_file(program_data_dir().join(name));
+    }
     let _ = std::fs::remove_file(app_root_marker());
     super::dns::log_line("uninstall: done");
     Ok(())
@@ -661,6 +756,12 @@ mod tests {
         assert_eq!(
             installed_hash_marker().file_name().unwrap(),
             std::ffi::OsStr::new("binary.sha256")
+        );
+        assert_eq!(installed_core_path().parent().unwrap(), base);
+        assert_eq!(installed_core_hash_marker().parent().unwrap(), base);
+        assert_eq!(
+            installed_core_path().file_name().unwrap(),
+            std::ffi::OsStr::new("aurestream-core.exe")
         );
     }
 

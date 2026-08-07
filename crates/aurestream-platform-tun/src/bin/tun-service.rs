@@ -16,9 +16,18 @@ fn main() {
                     .to_string_lossy()
                     .into_owned()
             });
-            match aurestream_platform_tun::windows_scm_ensure_installed(std::path::Path::new(
-                &bundled,
-            )) {
+            let Some(core) = args.get(3) else {
+                std::process::exit(2);
+            };
+            let assets = args
+                .get(4)
+                .filter(|path| path.as_str() != "-")
+                .map(std::path::Path::new);
+            match aurestream_platform_tun::windows_scm_ensure_installed(
+                std::path::Path::new(&bundled),
+                std::path::Path::new(core),
+                assets,
+            ) {
                 Ok(()) => std::process::exit(0),
                 Err(e) => {
                     // Do NOT use eprintln! — it triggers console window flash on windows_subsystem="windows"

@@ -6,7 +6,9 @@
 //!   argv[1] = core config path
 //!   argv[2] = OS DNS hijack IP from tun.settings.dns[0] (e.g. 1.1.1.1),
 //!             or "-" to skip DNS override. Not the TUN gateway address.
-//!   argv[3] = core exe path
+//!   argv[3] = PID of the AureStream app process that owns this TUN session.
+//! The core executable is never accepted through SCM arguments. It is staged
+//! under ProgramData during the elevated install and resolved from there.
 //!
 //! Startup order (important for network availability):
 //!   1. Spawn core (creates Wintun + routes; port-53 → dns-out ready)
@@ -27,6 +29,7 @@ use std::io::{BufRead, BufReader};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -44,12 +47,14 @@ const DEFAULT_API_PORT: u16 = 10809;
 const CORE_READY_TIMEOUT: Duration = Duration::from_secs(15);
 
 use windows::core::{PCWSTR, PWSTR};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::System::Services::{
     RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
     SERVICE_ACCEPT_STOP, SERVICE_CONTROL_INTERROGATE, SERVICE_CONTROL_STOP, SERVICE_RUNNING,
     SERVICE_START_PENDING, SERVICE_STATUS, SERVICE_STATUS_CURRENT_STATE, SERVICE_STATUS_HANDLE,
     SERVICE_STOPPED, SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
 };
+use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
 
 use super::{dns, SERVICE_NAME};
 
@@ -134,7 +139,11 @@ pub(crate) fn parse_api_port_from_config_text(content: &str) -> u16 {
                 }
             }
         }
-        if let Some(listen) = v.get("api").and_then(|a| a.get("listen")).and_then(|l| l.as_str()) {
+        if let Some(listen) = v
+            .get("api")
+            .and_then(|a| a.get("listen"))
+            .and_then(|l| l.as_str())
+        {
             if let Some((_, port_str)) = listen.rsplit_once(':') {
                 if let Ok(port) = port_str.parse::<u16>() {
                     if port > 0 {
@@ -184,6 +193,45 @@ fn api_port_from_config_file(config_path: &str) -> u16 {
     }
 }
 
+fn is_allowed_config_path(path: &Path) -> bool {
+    let raw = path.to_string_lossy().replace('/', "\\");
+    let normalized = raw.strip_prefix(r"\\?\").unwrap_or(&raw);
+    if normalized.starts_with(r"UNC\") {
+        return false;
+    }
+    let parts: Vec<&str> = normalized
+        .split('\\')
+        .filter(|part| !part.is_empty())
+        .collect();
+    parts.len() == 7
+        && parts[0].ends_with(':')
+        && parts[1].eq_ignore_ascii_case("Users")
+        && !parts[2].is_empty()
+        && parts[3].eq_ignore_ascii_case("AppData")
+        && (parts[4].eq_ignore_ascii_case("Roaming") || parts[4].eq_ignore_ascii_case("Local"))
+        && parts[5].eq_ignore_ascii_case("com.root.aurestream")
+        && parts[6].eq_ignore_ascii_case("xray-config.json")
+}
+
+fn validate_config_path(config_path: &str) -> Result<PathBuf, String> {
+    let requested = Path::new(config_path);
+    let canonical = std::fs::canonicalize(requested)
+        .map_err(|e| format!("canonicalize config {}: {e}", requested.display()))?;
+    if !canonical.is_file() {
+        return Err(format!(
+            "config is not a regular file: {}",
+            canonical.display()
+        ));
+    }
+    if !is_allowed_config_path(&canonical) {
+        return Err(format!(
+            "config path is outside AureStream app data: {}",
+            canonical.display()
+        ));
+    }
+    Ok(canonical)
+}
+
 pub(crate) fn parse_tun_outbound_interface_from_config_text(content: &str) -> Option<String> {
     let config = serde_json::from_str::<serde_json::Value>(content).ok()?;
     config
@@ -212,19 +260,38 @@ fn probe_localhost_port(port: u16) -> bool {
 /// Wait until core accepts connections on `port`, the child exits, stop is
 /// requested, or `timeout` elapses. Bumps SERVICE_START_PENDING while waiting
 /// so SCM does not kill a slow start.
-fn wait_for_core_api(child: &mut Child, port: u16, timeout: Duration) -> bool {
+fn wait_for_core_api(
+    child: &mut Child,
+    app_watch: &AppProcessWatch,
+    port: u16,
+    timeout: Duration,
+) -> bool {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         if STOP_REQUESTED.load(Ordering::SeqCst) {
             dns::log_line("stop requested while waiting for core API");
             return false;
         }
+        match app_watch.state() {
+            AppProcessState::Running => {}
+            AppProcessState::Exited => {
+                dns::log_line(&format!(
+                    "owning app pid={} exited before core API was ready",
+                    app_watch.pid
+                ));
+                return false;
+            }
+            AppProcessState::WaitFailed => {
+                dns::log_line(&format!(
+                    "wait for owning app pid={} failed before core API was ready",
+                    app_watch.pid
+                ));
+                return false;
+            }
+        }
         match child.try_wait() {
             Ok(Some(status)) => {
-                dns::log_line(&format!(
-                    "core exited before API ready: {:?}",
-                    status
-                ));
+                dns::log_line(&format!("core exited before API ready: {:?}", status));
                 return false;
             }
             Ok(None) => {}
@@ -273,6 +340,64 @@ fn apply_dns_override_after_ready(gateway: &str, outbound_interface: Option<&str
     flush_dns_cache();
 }
 
+fn parse_app_pid(value: &str) -> Result<u32, String> {
+    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("app PID must contain ASCII decimal digits only".into());
+    }
+    let pid = value
+        .parse::<u32>()
+        .map_err(|_| "app PID is outside the supported u32 range".to_string())?;
+    if pid == 0 {
+        return Err("app PID must be greater than zero".into());
+    }
+    Ok(pid)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppProcessState {
+    Running,
+    Exited,
+    WaitFailed,
+}
+
+struct AppProcessWatch {
+    handle: HANDLE,
+    pid: u32,
+}
+
+impl AppProcessWatch {
+    fn open(pid: u32) -> Result<Self, String> {
+        if pid == std::process::id() {
+            return Err("app PID points to the TUN service process".into());
+        }
+        let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, pid) }
+            .map_err(|e| format!("OpenProcess(app pid={pid}) failed: {e}"))?;
+        let watch = Self { handle, pid };
+        match watch.state() {
+            AppProcessState::Running => Ok(watch),
+            AppProcessState::Exited => Err(format!("app process pid={pid} already exited")),
+            AppProcessState::WaitFailed => {
+                Err(format!("initial wait for app process pid={pid} failed"))
+            }
+        }
+    }
+
+    fn state(&self) -> AppProcessState {
+        match unsafe { WaitForSingleObject(self.handle, 0) } {
+            value if value == WAIT_TIMEOUT => AppProcessState::Running,
+            value if value == WAIT_OBJECT_0 => AppProcessState::Exited,
+            value if value == WAIT_FAILED => AppProcessState::WaitFailed,
+            _ => AppProcessState::WaitFailed,
+        }
+    }
+}
+
+impl Drop for AppProcessWatch {
+    fn drop(&mut self) {
+        let _ = unsafe { CloseHandle(self.handle) };
+    }
+}
+
 /// The SCM-invoked service entry point.
 unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // Parse argv.
@@ -313,8 +438,9 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         return;
     }
 
-    // argv[0] = service name; argv[1] = config; argv[2] = gateway; argv[3] = core exe.
-    if args.len() < 4 {
+    // argv[0] = service name; argv[1] = config; argv[2] = gateway;
+    // argv[3] = owning AureStream process PID.
+    if args.len() != 4 {
         dns::log_line(&format!(
             "service_main: expected 4 args, got {}: {:?}",
             args.len(),
@@ -323,15 +449,61 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         set_state(SERVICE_STOPPED, 1, 0);
         return;
     }
-    let config = args[1].clone();
+    let config = match validate_config_path(&args[1]) {
+        Ok(path) => path,
+        Err(e) => {
+            dns::log_line(&format!("service_main: rejected config path: {e}"));
+            set_state(SERVICE_STOPPED, 1, 0);
+            return;
+        }
+    };
     let gateway = args[2].clone();
-    let sidecar = args[3].clone();
-    let api_port = api_port_from_config_file(&config);
-    let outbound_interface = tun_outbound_interface_from_config_file(&config);
+    if gateway.parse::<IpAddr>().is_err() {
+        dns::log_line(&format!("service_main: rejected DNS address: {gateway}"));
+        set_state(SERVICE_STOPPED, 1, 0);
+        return;
+    }
+    let app_pid = match parse_app_pid(&args[3]) {
+        Ok(pid) => pid,
+        Err(e) => {
+            dns::log_line(&format!("service_main: rejected app PID: {e}"));
+            set_state(SERVICE_STOPPED, 1, 0);
+            return;
+        }
+    };
+    // Open the process before starting the privileged core. A process handle
+    // refers to this exact process object and remains signaled after exit, so
+    // a subsequently reused numeric PID cannot defeat orphan cleanup.
+    let app_watch = match AppProcessWatch::open(app_pid) {
+        Ok(watch) => watch,
+        Err(e) => {
+            dns::log_line(&format!("service_main: cannot watch app process: {e}"));
+            set_state(SERVICE_STOPPED, 1, 0);
+            return;
+        }
+    };
+    let sidecar = match super::scm::verified_installed_core_path() {
+        Ok(path) => path,
+        Err(e) => {
+            dns::log_line(&format!(
+                "service_main: trusted core verification failed: {e}"
+            ));
+            set_state(SERVICE_STOPPED, 1, 0);
+            return;
+        }
+    };
+    let config_text = config.to_string_lossy();
+    let api_port = api_port_from_config_file(&config_text);
+    let outbound_interface = tun_outbound_interface_from_config_file(&config_text);
 
     dns::log_line(&format!(
-        "service_main: config={} gateway={} sidecar={} api_port={} interface={:?}",
-        config, gateway, sidecar, api_port, outbound_interface
+        "service_main: config={} gateway={} sidecar={} api_port={} interface={:?} app_pid={}",
+        config.display(),
+        gateway,
+        sidecar.display(),
+        api_port,
+        outbound_interface,
+        app_watch.pid
     ));
 
     // Spawn core FIRST (before DNS override). `CREATE_NO_WINDOW` is required —
@@ -343,12 +515,14 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // operators inspecting Process Explorer see a sensible working dir.
     // Xray loads wintun.dll / geo*.dat from the exe directory itself, which
     // the main app stages next to aurestream-core.exe on startup.
-    let sidecar_dir = std::path::Path::new(&sidecar)
+    let sidecar_dir = sidecar
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::path::PathBuf::from("."));
     let mut child = match std::process::Command::new(&sidecar)
-        .args(["run", "-c", &config])
+        .arg("run")
+        .arg("-c")
+        .arg(&config)
         .current_dir(&sidecar_dir)
         .creation_flags(CREATE_NO_WINDOW)
         .stdout(Stdio::piped())
@@ -386,7 +560,7 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
 
     // Wait until Xray API is up (TUN/Wintun + listeners ready) before hijacking
     // system DNS. Otherwise NameServer=gateway with no responder = total outage.
-    if !wait_for_core_api(&mut child, api_port, CORE_READY_TIMEOUT) {
+    if !wait_for_core_api(&mut child, &app_watch, api_port, CORE_READY_TIMEOUT) {
         dns::log_line(&format!(
             "core API :{} not ready within {:?}; aborting start",
             api_port, CORE_READY_TIMEOUT
@@ -403,13 +577,33 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
 
     set_state(SERVICE_RUNNING, 0, 0);
 
-    // Main loop: 200ms tick on child.try_wait() and STOP_REQUESTED.
+    // Main loop: 200ms tick on child/app process state and STOP_REQUESTED.
     let mut unexpected_exit_code: Option<i32> = None;
     loop {
         if STOP_REQUESTED.load(Ordering::SeqCst) {
             dns::log_line("stop requested; killing child");
             let _ = child.kill();
             break;
+        }
+        match app_watch.state() {
+            AppProcessState::Running => {}
+            AppProcessState::Exited => {
+                dns::log_line(&format!(
+                    "owning app pid={} exited; killing core and stopping service",
+                    app_watch.pid
+                ));
+                let _ = child.kill();
+                break;
+            }
+            AppProcessState::WaitFailed => {
+                dns::log_line(&format!(
+                    "wait for owning app pid={} failed; killing core and stopping service",
+                    app_watch.pid
+                ));
+                let _ = child.kill();
+                unexpected_exit_code = Some(1);
+                break;
+            }
         }
         match child.try_wait() {
             Ok(Some(status)) => {
@@ -427,6 +621,12 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
         }
         std::thread::sleep(Duration::from_millis(200));
     }
+
+    set_state(SERVICE_STOP_PENDING, 0, 5000);
+    // Ensure the privileged core is gone before restoring host DNS. `kill()`
+    // only requests termination; waiting here makes the teardown ordering
+    // deterministic for both explicit stops and app-process disappearance.
+    let _ = child.wait();
 
     // Remove only the TUN gateway we inserted after core was ready.
     let (r_ok, r_err) = dns::remove_override(&gateway);
@@ -463,6 +663,29 @@ pub fn run_dispatcher() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_app_pid_accepts_only_nonzero_ascii_u32() {
+        assert_eq!(parse_app_pid("1"), Ok(1));
+        assert_eq!(parse_app_pid("4294967295"), Ok(u32::MAX));
+
+        for invalid in [
+            "",
+            "0",
+            " 42",
+            "42 ",
+            "+42",
+            "-1",
+            "１２",
+            "4294967296",
+            "12a",
+        ] {
+            assert!(
+                parse_app_pid(invalid).is_err(),
+                "PID input should be rejected: {invalid:?}"
+            );
+        }
+    }
 
     #[test]
     fn parse_api_port_from_typical_xray_config() {
@@ -517,5 +740,34 @@ mod tests {
           }]
         }"#;
         assert_eq!(parse_tun_outbound_interface_from_config_text(auto), None);
+    }
+
+    #[test]
+    fn config_path_allowlist_accepts_only_app_data_config() {
+        assert!(is_allowed_config_path(Path::new(
+            r"C:\Users\alice\AppData\Roaming\com.root.aurestream\xray-config.json"
+        )));
+        assert!(is_allowed_config_path(Path::new(
+            r"\\?\D:\Users\alice\AppData\Local\com.root.aurestream\xray-config.json"
+        )));
+        assert!(!is_allowed_config_path(Path::new(
+            r"C:\Users\alice\AppData\Local\com.root.aurestream\other.json"
+        )));
+        assert!(!is_allowed_config_path(Path::new(
+            r"C:\Temp\com.root.aurestream\xray-config.json"
+        )));
+    }
+
+    #[test]
+    fn config_path_allowlist_rejects_escape_and_unc_paths() {
+        assert!(!is_allowed_config_path(Path::new(
+            r"C:\Users\alice\AppData\Local\com.root.aurestream\..\evil\xray-config.json"
+        )));
+        assert!(!is_allowed_config_path(Path::new(
+            r"\\server\share\Users\alice\AppData\Local\com.root.aurestream\xray-config.json"
+        )));
+        assert!(!is_allowed_config_path(Path::new(
+            r"C:\Users\alice\AppData\LocalLow\com.root.aurestream\xray-config.json"
+        )));
     }
 }

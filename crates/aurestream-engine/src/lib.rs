@@ -9,9 +9,54 @@ pub use xray::{
 };
 
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use async_trait::async_trait;
 use aurestream_config::ProxyNode;
+use tokio::sync::broadcast;
+
+/// Stable identifier for an installed proxy kernel implementation.
+///
+/// This is a newtype rather than an enum so adding another kernel does not
+/// require downstream exhaustive matches to change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct KernelId(&'static str);
+
+impl KernelId {
+    pub const XRAY: Self = Self("xray");
+
+    pub const fn new(id: &'static str) -> Self {
+        Self(id)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+impl fmt::Display for KernelId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+/// Everything the privileged capture layer needs to launch a kernel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KernelLaunchSpec {
+    pub id: KernelId,
+    pub config_filename: &'static str,
+    pub executable: PathBuf,
+    pub asset_dir: Option<PathBuf>,
+}
+
+/// Details captured when an engine-owned process exits without an explicit stop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineExitEvent {
+    pub generation: u64,
+    pub code: Option<i32>,
+    pub reason: String,
+}
 
 /// Errors from config dialect, spawn, or illegal state transitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,11 +91,7 @@ impl EngineError {
     pub fn illegal_transition(from: impl Into<String>, to: impl Into<String>) -> Self {
         Self {
             kind: EngineErrorKind::IllegalTransition,
-            message: format!(
-                "illegal transition from {} to {}",
-                from.into(),
-                to.into()
-            ),
+            message: format!("illegal transition from {} to {}", from.into(), to.into()),
         }
     }
 
@@ -74,8 +115,16 @@ impl fmt::Display for EngineError {
 
 impl std::error::Error for EngineError {}
 
-/// Proxy kernel abstraction. MVP: [`XrayEngine`]. Future: SingboxEngine.
-pub trait Engine: Send {
+/// Proxy kernel abstraction. MVP: [`XrayEngine`]. Future kernels implement
+/// this boundary and are selected by the application factory.
+#[async_trait]
+pub trait Engine: Send + Sync {
+    /// Config filename used in the app data directory. This must not perform IO.
+    fn config_filename(&self) -> &'static str;
+
+    /// Resolve the executable, assets and config filename for external launch.
+    fn launch_spec(&self) -> Result<KernelLaunchSpec, EngineError>;
+
     fn build_config(
         &self,
         path: &Path,
@@ -83,11 +132,7 @@ pub trait Engine: Send {
         socks_port: u16,
         api_port: u16,
     ) -> Result<(), EngineError> {
-        self.build_config_with_options(
-            path,
-            node,
-            BuildOptions::system_proxy(socks_port, api_port),
-        )
+        self.build_config_with_options(path, node, BuildOptions::system_proxy(socks_port, api_port))
     }
 
     fn build_config_with_options(
@@ -97,12 +142,27 @@ pub trait Engine: Send {
         opts: BuildOptions,
     ) -> Result<(), EngineError>;
 
-    fn start(
-        &self,
-        config: &Path,
-    ) -> impl std::future::Future<Output = Result<(), EngineError>> + Send;
+    async fn start(&self, config: &Path) -> Result<(), EngineError>;
 
-    fn stop(&self) -> impl std::future::Future<Output = Result<(), EngineError>> + Send;
+    async fn stop(&self) -> Result<(), EngineError>;
 
     fn state(&self) -> EngineState;
+
+    /// Subscribe to unexpected exits of engine-owned processes.
+    fn subscribe_exit_events(&self) -> broadcast::Receiver<EngineExitEvent>;
+
+    /// Begin an externally-owned start (for example an elevated TUN helper).
+    fn begin_external_start(&self, socks_port: u16, api_port: u16) -> Result<(), EngineError>;
+
+    /// Mark an externally-owned kernel ready.
+    fn finish_external_start(&self) -> Result<(), EngineError>;
+
+    /// Mark an externally-owned start failed.
+    fn fail_external_start(&self, reason: String) -> Result<(), EngineError>;
+
+    /// Return to idle after an externally-owned kernel has stopped.
+    fn finish_external_stop(&self) -> Result<(), EngineError>;
 }
+
+/// Kernel-neutral shared engine handle used by the application shell.
+pub type SharedEngine = Arc<dyn Engine>;

@@ -193,10 +193,12 @@ jobs:
             ls -la "$bin" src-tauri/resources/geoip.dat src-tauri/resources/geosite.dat
           fi
 
-      - name: Check frontend + workspace crates
+      - name: Check and test frontend + workspace crates
         run: |
           pnpm build
+          pnpm test
           cargo check --workspace --target ${{ matrix.rust_target }}
+          cargo test --workspace --target ${{ matrix.rust_target }}
       - name: Work around ldd crash on static Xray binary (Linux)
         if: startsWith(matrix.os, 'ubuntu')
         run: |

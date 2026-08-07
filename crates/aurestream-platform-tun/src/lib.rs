@@ -63,10 +63,7 @@ fn set_dns_restore(info: Option<(String, String)>) {
 
 #[cfg(target_os = "linux")]
 fn take_dns_restore() -> Option<(String, String)> {
-    DNS_RESTORE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .take()
+    DNS_RESTORE.lock().unwrap_or_else(|e| e.into_inner()).take()
 }
 
 /// Probe elevated TUN helper availability (no side effects).
@@ -149,8 +146,12 @@ pub fn start_tun(
 
 /// Windows service binary entry helpers (used by `tun-service` bin).
 #[cfg(target_os = "windows")]
-pub fn windows_scm_ensure_installed(bundled: &Path) -> Result<(), String> {
-    windows::scm::ensure_installed(bundled)
+pub fn windows_scm_ensure_installed(
+    bundled: &Path,
+    core: &Path,
+    assets: Option<&Path>,
+) -> Result<(), String> {
+    windows::scm::ensure_installed(bundled, core, assets)
 }
 
 #[cfg(target_os = "windows")]
@@ -262,6 +263,10 @@ mod linux {
     use std::time::{Duration, Instant};
 
     pub const HELPER_PATH: &str = "/usr/lib/AureStream/aurestream-tun-helper";
+    const TRUSTED_CORE_PATHS: [&str; 2] = [
+        "/usr/lib/AureStream/aurestream-core",
+        "/usr/bin/aurestream-core",
+    ];
     const TUN_GATEWAY_IP: &str = "198.18.0.1";
     /// Include time for polkit password dialog + core boot.
     const READY_TIMEOUT: Duration = Duration::from_secs(60);
@@ -270,7 +275,11 @@ mod linux {
     static CHILD: Mutex<Option<Child>> = Mutex::new(None);
 
     pub fn probe() -> TunServiceState {
-        if helper_path().is_file() {
+        if helper_path().is_file()
+            && TRUSTED_CORE_PATHS
+                .iter()
+                .any(|path| Path::new(path).is_file())
+        {
             TunServiceState::Ready
         } else {
             TunServiceState::NotInstalled
@@ -304,12 +313,9 @@ mod linux {
         let config = config_path
             .to_str()
             .ok_or_else(|| TunError::failed("bad_path", "config path is not UTF-8"))?;
-        let core = core_path
-            .to_str()
-            .ok_or_else(|| TunError::failed("bad_path", "core path is not UTF-8"))?;
-        let assets = asset_dir
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
-            .filter(|s| !s.is_empty());
+        // The elevated helper resolves this fixed kernel id to a root-owned
+        // executable. Never pass a caller-controlled executable path to it.
+        let _ = (core_path, asset_dir);
 
         // Bind proxy dials to the physical NIC (same loop risk as macOS/Windows).
         match detect_active_iface() {
@@ -340,22 +346,22 @@ mod linux {
         };
 
         let api_port = parse_api_port_from_config(config_path).unwrap_or(10809);
+        let caller_pid = std::process::id().to_string();
 
         log::info!(
-            "[tun/linux] pkexec start-tun helper={} core={} config={} assets={}",
+            "[tun/linux] pkexec start-tun helper={} kernel=xray config={}",
             helper.display(),
-            core,
-            config,
-            assets.as_deref().unwrap_or("<none>")
+            config
         );
 
         let mut cmd = Command::new("pkexec");
         cmd.arg(helper.as_os_str())
             .arg("start-tun")
-            .arg(core)
-            .arg(config);
-        if let Some(ref a) = assets {
-            cmd.arg(a);
+            .arg("xray")
+            .arg(config)
+            .arg(&caller_pid);
+        if let Some((iface, original)) = dns_info.as_ref() {
+            cmd.arg(iface).args(original.split_whitespace());
         }
         let mut child = cmd
             .stdin(Stdio::null())
@@ -398,7 +404,7 @@ mod linux {
         // Apply DNS hijack AFTER core is ready (plan improvement over legacy).
         if let Some((ref iface, ref original)) = dns_info {
             let gateway = dns_hijack_or_gateway(dns_hijack);
-            if let Err(e) = apply_dns_override(iface, &gateway) {
+            if let Err(e) = apply_dns_override(iface, &gateway, std::process::id()) {
                 log::warn!("[tun/linux] dns-override failed: {e}");
             } else {
                 log::info!("[tun/linux] DNS override iface={iface} -> {gateway}");
@@ -422,7 +428,9 @@ mod linux {
             .arg(helper.as_os_str())
             .arg("uninstall")
             .output()
-            .map_err(|e| TunError::failed("helper_uninstall", format!("pkexec spawn failed: {e}")))?;
+            .map_err(|e| {
+                TunError::failed("helper_uninstall", format!("pkexec spawn failed: {e}"))
+            })?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -444,10 +452,7 @@ mod linux {
 
         // Prefer helper stop (restores DNS + kills core as root).
         if helper.is_file() {
-            let mut args: Vec<String> = vec![
-                helper.display().to_string(),
-                "stop-tun".into(),
-            ];
+            let mut args: Vec<String> = vec![helper.display().to_string(), "stop-tun".into()];
             if let Some((iface, original)) = dns.as_ref() {
                 args.push(iface.clone());
                 for s in original.split_whitespace() {
@@ -603,13 +608,14 @@ mod linux {
         Err(format!("could not determine original DNS for {iface}"))
     }
 
-    fn apply_dns_override(iface: &str, gateway: &str) -> Result<(), TunError> {
+    fn apply_dns_override(iface: &str, gateway: &str, caller_pid: u32) -> Result<(), TunError> {
         let helper = helper_path();
         let out = Command::new("pkexec")
             .arg(helper.as_os_str())
             .arg("dns-override")
             .arg(iface)
             .arg(gateway)
+            .arg(caller_pid.to_string())
             .output()
             .map_err(|e| TunError::failed("pkexec_dns", format!("dns-override spawn: {e}")))?;
         if !out.status.success() {

@@ -10,7 +10,8 @@ AureStream 当前主线为 **v2**：Tauri v2 + React + **Xray-core** 侧车。
 |---|---|
 | [AGENTS.md](../AGENTS.md) | Agent / 开发者仓库约定（以代码为准） |
 | [README.md](../README.md) | 项目简介与快速上手 |
-| [三端虚拟网卡（TUN）实现计划](./superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md) | Win/macOS/Linux TUN 分阶段方案（规划中，默认发布路径未启用） |
+| [架构设计](./architecture.md) | v2 分层、内核抽象、运行时流程、权限边界与故障恢复 |
+| [三端虚拟网卡（TUN）实现计划](./superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md) | Win/macOS/Linux TUN 的设计背景与实施记录 |
 
 ## 技术栈概览（v2）
 
@@ -20,8 +21,9 @@ AureStream 当前主线为 **v2**：Tauri v2 + React + **Xray-core** 侧车。
 | 应用壳 | Tauri v2 | IPC、窗口、托盘、日志、`AppState` |
 | API | `aurestream-api-client` | Worker 鉴权与订阅 |
 | 解码 | `aurestream-config` | 订阅 URI → `ProxyNode`（不写内核 JSON） |
-| 引擎 | `aurestream-engine` + Xray-core (`aurestream-core`) | `build_config`、状态机、侧车 |
+| 引擎 | `aurestream-engine` + Xray-core (`aurestream-core`) | 对象安全 `Engine`、配置构建、状态机、进程监管 |
 | 系统代理 | `aurestream-platform-proxy` | set / clear |
+| 虚拟网卡 | `aurestream-platform-tun` | Win/macOS/Linux 特权 Helper、TUN 与 DNS 恢复 |
 
 ## 项目目录结构概览（v2）
 
@@ -34,7 +36,8 @@ AureStream/
 │   ├── aurestream-api-client/
 │   ├── aurestream-config/
 │   ├── aurestream-engine/
-│   └── aurestream-platform-proxy/
+│   ├── aurestream-platform-proxy/
+│   └── aurestream-platform-tun/
 ├── legacy/                    # 归档的 pre-v2 树（勿改功能）
 └── scripts/
     ├── download-binaries.ts   # 拉 Xray 侧车
@@ -47,4 +50,5 @@ AureStream/
 - **内核**: Xray-core（侧车名 `aurestream-core`）
 - **包管理器**: pnpm
 - **默认代理模式**: 系统代理
-- **默认发布脚本**: `pnpm release`（含 `download-binaries`，**不含** TUN 构建）
+- **可选代理模式**: TUN（需要对应平台的已安装 Helper / Service）
+- **默认发布脚本**: `pnpm release`（含 `download-binaries`；Windows TUN 和 macOS Helper 需额外预构建）

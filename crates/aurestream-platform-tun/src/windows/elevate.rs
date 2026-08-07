@@ -1,4 +1,8 @@
-pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String> {
+pub fn run_elevated_install(
+    bundled_exe: &std::path::Path,
+    bundled_core: &std::path::Path,
+    asset_dir: Option<&std::path::Path>,
+) -> Result<(), String> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
 
@@ -13,6 +17,12 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
             bundled_exe.display()
         ));
     }
+    if !bundled_core.exists() {
+        return Err(format!(
+            "bundled core exe does not exist: {}",
+            bundled_core.display()
+        ));
+    }
 
     let verb: Vec<u16> = OsStr::new("runas\0").encode_wide().collect();
     let file: Vec<u16> = bundled_exe
@@ -20,7 +30,14 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
         .encode_wide()
         .chain(Some(0))
         .collect();
-    let params_str = format!("install \"{}\"", bundled_exe.display());
+    let params_str = format!(
+        "install \"{}\" \"{}\" \"{}\"",
+        bundled_exe.display(),
+        bundled_core.display(),
+        asset_dir
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "-".to_string())
+    );
     let params: Vec<u16> = OsStr::new(&params_str)
         .encode_wide()
         .chain(Some(0))

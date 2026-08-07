@@ -6,11 +6,13 @@
 //! Commands never assemble Xray JSON — only Engine::build_config.
 
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aurestream_config::{decode_subscription_body, ProxyNode};
-use aurestream_engine::{BuildOptions, Engine, EngineState, SharedXrayEngine, XrayEngine};
+use aurestream_engine::{BuildOptions, EngineState, KernelId, SharedEngine, XrayEngine};
 use aurestream_platform_proxy::{clear_system_proxy, set_system_proxy};
 use aurestream_platform_tun::{self as platform_tun, TunServiceState};
 use serde::{Deserialize, Serialize};
@@ -22,7 +24,7 @@ use crate::state::{AuthState, SubsState};
 pub const ENGINE_STATE_EVENT: &str = "engine-state";
 
 const SELECTION_FILE: &str = "engine-selection.json";
-const CONFIG_FILE: &str = "xray-config.json";
+const RUNTIME_SESSION_FILE: &str = "engine-runtime.json";
 const DEFAULT_SOCKS_PORT: u16 = 10808;
 const DEFAULT_API_PORT: u16 = 10809;
 const PROXY_HOST: &str = "127.0.0.1";
@@ -33,19 +35,28 @@ struct SelectionFile {
     selected_node: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeSession {
+    #[serde(default)]
+    session_id: String,
+    capture_mode: CaptureMode,
+}
+
 /// App-owned engine handle + persisted selection (not the kernel dialect).
 pub struct EngineAppState {
-    engine: SharedXrayEngine,
+    engine: SharedEngine,
     selected_node: Mutex<Option<String>>,
     /// Active OS capture path (Off / SystemProxy / Tun).
     capture_mode: Mutex<CaptureMode>,
+    /// Correlates one start/cleanup transaction in app and helper logs.
+    session_id: Mutex<Option<String>>,
     /// Last payload emitted on `engine-state` (source of truth for `engine_get_state`).
     last_emitted: Mutex<EngineStatePayload>,
     /// Single-flight gate for start/stop/select-restart orchestration.
     gate: AsyncMutex<()>,
-    /// Bundled geo-asset dir for this install, if found (see `bundled_asset_dir`).
-    asset_dir: Option<PathBuf>,
     selection_path: PathBuf,
+    runtime_session_path: PathBuf,
     config_path: PathBuf,
     socks_port: u16,
     api_port: u16,
@@ -67,6 +78,19 @@ fn bundled_asset_dir(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
+/// Single kernel selection point. Adding another kernel should only require a
+/// new Engine implementation and a selection branch here.
+fn create_engine(app: &AppHandle) -> SharedEngine {
+    let mut engine = XrayEngine::new();
+    if let Ok(log_dir) = crate::logging::app_log_dir(app) {
+        engine = engine.with_log_dir(log_dir);
+    }
+    if let Some(assets) = bundled_asset_dir(app) {
+        engine = engine.with_asset_dir(assets);
+    }
+    std::sync::Arc::new(engine)
+}
+
 impl EngineAppState {
     pub fn load(app: &AppHandle) -> Result<Self, String> {
         let dir = app
@@ -75,7 +99,7 @@ impl EngineAppState {
             .map_err(|e| format!("app data dir: {e}"))?;
         fs::create_dir_all(&dir).map_err(|e| format!("create app data dir: {e}"))?;
         let selection_path = dir.join(SELECTION_FILE);
-        let config_path = dir.join(CONFIG_FILE);
+        let runtime_session_path = dir.join(RUNTIME_SESSION_FILE);
         let selected = read_selection(&selection_path)?;
         let initial = EngineStatePayload {
             state: "idle".into(),
@@ -83,27 +107,18 @@ impl EngineAppState {
             selected_node: selected.clone(),
             capture_mode: CaptureMode::Off.as_str().into(),
         };
-        let mut engine = XrayEngine::new();
-        if let Ok(log_dir) = crate::logging::app_log_dir(app) {
-            engine = engine.with_log_dir(log_dir);
-        }
-        // Authoritative geo-asset location per install layout. Without this the
-        // engine can only guess relative to the sidecar, which fails on Linux
-        // deb/rpm (`/usr/bin/aurestream-core` vs
-        // `/usr/lib/AureStream/resources/geoip.dat`) and breaks `geoip:` rules.
-        let asset_dir = bundled_asset_dir(app);
-        if let Some(assets) = asset_dir.clone() {
-            engine = engine.with_asset_dir(assets);
-        }
+        let engine = create_engine(app);
+        let config_path = dir.join(engine.config_filename());
 
         Ok(Self {
-            engine: std::sync::Arc::new(engine),
+            engine,
             selected_node: Mutex::new(selected),
             capture_mode: Mutex::new(CaptureMode::Off),
+            session_id: Mutex::new(None),
             last_emitted: Mutex::new(initial),
             gate: AsyncMutex::new(()),
-            asset_dir,
             selection_path,
+            runtime_session_path,
             config_path,
             socks_port: DEFAULT_SOCKS_PORT,
             api_port: DEFAULT_API_PORT,
@@ -111,10 +126,7 @@ impl EngineAppState {
     }
 
     pub fn selected_node(&self) -> Option<String> {
-        self.selected_node
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
+        self.selected_node.lock().ok().and_then(|g| g.clone())
     }
 
     pub fn set_selected_node(&self, tag: Option<String>) -> Result<(), String> {
@@ -125,12 +137,7 @@ impl EngineAppState {
                 .map_err(|_| "engine selection lock poisoned".to_string())?;
             *guard = tag.clone();
         }
-        write_selection(
-            &self.selection_path,
-            &SelectionFile {
-                selected_node: tag,
-            },
-        )
+        write_selection(&self.selection_path, &SelectionFile { selected_node: tag })
     }
 
     pub fn last_payload(&self) -> EngineStatePayload {
@@ -178,9 +185,78 @@ impl EngineAppState {
             .unwrap_or(CaptureMode::Off)
     }
 
-    pub fn set_capture_mode(&self, mode: CaptureMode) {
+    fn set_capture_mode_in_memory(&self, mode: CaptureMode) {
         if let Ok(mut g) = self.capture_mode.lock() {
             *g = mode;
+        }
+    }
+
+    /// Record the target capture mode before making OS changes. The marker is
+    /// intentionally left behind after an abrupt exit so the next process can
+    /// reconcile stale proxy, DNS and elevated helper state.
+    fn begin_capture(&self, mode: CaptureMode) -> Result<(), String> {
+        if mode == CaptureMode::Off {
+            return Err("invalid_capture_mode".into());
+        }
+        let session_id = new_session_id();
+        *self
+            .session_id
+            .lock()
+            .map_err(|_| "engine session lock poisoned".to_string())? = Some(session_id.clone());
+        self.set_capture_mode_in_memory(mode);
+        log::info!(
+            "engine session begin id={} mode={}",
+            session_id,
+            mode.as_str()
+        );
+        Ok(())
+    }
+
+    /// Persist recovery intent immediately before starting a process or making
+    /// capture changes. Failures in pure config preparation need no OS cleanup.
+    fn arm_runtime_cleanup(&self) -> Result<(), String> {
+        let capture_mode = self.capture_mode();
+        let session_id = self
+            .session_id
+            .lock()
+            .map_err(|_| "engine session lock poisoned".to_string())?
+            .clone()
+            .ok_or_else(|| "engine_session_missing".to_string())?;
+        write_runtime_session(
+            &self.runtime_session_path,
+            &RuntimeSession {
+                session_id,
+                capture_mode,
+            },
+        )
+    }
+
+    fn persisted_capture_mode(&self) -> Option<CaptureMode> {
+        read_runtime_session(&self.runtime_session_path)
+            .ok()
+            .flatten()
+            .map(|session| session.capture_mode)
+    }
+
+    fn cleanup_mode(&self) -> CaptureMode {
+        match self.capture_mode() {
+            CaptureMode::Off => self.persisted_capture_mode().unwrap_or(CaptureMode::Off),
+            mode => mode,
+        }
+    }
+
+    fn finish_capture_cleanup(&self, remove_marker: bool) {
+        self.set_capture_mode_in_memory(CaptureMode::Off);
+        if let Ok(mut session_id) = self.session_id.lock() {
+            *session_id = None;
+        }
+        if remove_marker && self.runtime_session_path.exists() {
+            if let Err(e) = fs::remove_file(&self.runtime_session_path) {
+                log::warn!(
+                    "remove runtime session {}: {e}",
+                    self.runtime_session_path.display()
+                );
+            }
         }
     }
 }
@@ -244,10 +320,44 @@ fn write_selection(path: &PathBuf, value: &SelectionFile) -> Result<(), String> 
     fs::write(path, raw).map_err(|e| format!("write {}: {e}", path.display()))
 }
 
+fn read_runtime_session(path: &PathBuf) -> Result<Option<RuntimeSession>, String> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let session =
+        serde_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))?;
+    Ok(Some(session))
+}
+
+fn new_session_id() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    format!("{}-{nanos}", std::process::id())
+}
+
+fn write_runtime_session(path: &PathBuf, session: &RuntimeSession) -> Result<(), String> {
+    let raw =
+        serde_json::to_string(session).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let temp_path = path.with_extension("json.tmp");
+    let mut file =
+        fs::File::create(&temp_path).map_err(|e| format!("create {}: {e}", temp_path.display()))?;
+    file.write_all(raw.as_bytes())
+        .map_err(|e| format!("write {}: {e}", temp_path.display()))?;
+    file.sync_all()
+        .map_err(|e| format!("sync {}: {e}", temp_path.display()))?;
+    fs::rename(&temp_path, path).map_err(|e| {
+        let _ = fs::remove_file(&temp_path);
+        format!("rename {} -> {}: {e}", temp_path.display(), path.display())
+    })
+}
+
 fn emit_engine_state(app: &AppHandle, engine_state: &EngineAppState, payload: &EngineStatePayload) {
     engine_state.record_emitted(payload);
     let _ = app.emit(ENGINE_STATE_EVENT, payload.clone());
-    crate::tray::on_engine_payload(app, &payload.state, &payload.capture_mode);
+    crate::tray::on_engine_payload(app);
 }
 
 fn emit_from(app: &AppHandle, engine_state: &EngineAppState, state: EngineState) {
@@ -329,25 +439,210 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
         .ok_or_else(|| format!("node_not_found:{node_tag}"))
 }
 
-/// Spec §4.2.6: clear proxy, stop engine, emit Failed (recorded for get_state).
-async fn fail_cleanup(app: &AppHandle, engine_state: &EngineAppState, reason: String) {
-    log::error!("engine fail_cleanup: {reason}");
-    let was_tun = matches!(engine_state.capture_mode(), CaptureMode::Tun)
-        || reason.contains("tun")
-        || reason.contains("虚拟网卡")
-        || reason.contains("pkexec");
-    let _ = clear_system_proxy();
-    let _ = platform_tun::stop_tun();
-    if was_tun {
-        let _ = engine_state.engine.finish_external_stop();
-    } else {
-        let _ = engine_state.engine.stop().await;
+/// Idempotent teardown shared by IPC, tray, mode switches, failure handling and
+/// the health monitor. Every step is attempted even if an earlier one fails.
+async fn cleanup_runtime(engine_state: &EngineAppState) -> Result<(), String> {
+    let mode = engine_state.cleanup_mode();
+    let cleanup_armed = engine_state.runtime_session_path.exists();
+    if let Ok(Some(session)) = read_runtime_session(&engine_state.runtime_session_path) {
+        log::info!(
+            "engine session cleanup id={} mode={}",
+            session.session_id,
+            mode.as_str()
+        );
     }
-    engine_state.set_capture_mode(CaptureMode::Off);
+    let mut errors = Vec::new();
+
+    if let Err(e) = clear_system_proxy() {
+        errors.push(format!("clear_system_proxy: {e}"));
+    }
+
+    if mode == CaptureMode::Tun {
+        if cleanup_armed {
+            if let Err(e) = platform_tun::stop_tun() {
+                errors.push(e.to_string());
+            }
+        }
+        if let Err(e) = engine_state.engine.finish_external_stop() {
+            errors.push(e.to_string());
+        }
+    } else if let Err(e) = engine_state.engine.stop().await {
+        errors.push(e.to_string());
+    }
+
+    let succeeded = errors.is_empty();
+    engine_state.finish_capture_cleanup(succeeded);
+    if succeeded {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+async fn fail_cleanup(app: &AppHandle, engine_state: &EngineAppState, reason: String) {
+    log::error!("engine failure: {reason}");
+    if let Err(cleanup_error) = cleanup_runtime(engine_state).await {
+        log::warn!("engine failure cleanup incomplete: {cleanup_error}");
+    }
     emit_failed(app, engine_state, reason);
 }
 
-fn build_options_for(mode: CaptureMode, engine_state: &EngineAppState, smart_routing: bool) -> BuildOptions {
+/// Clear capture state left by a previous process before accepting new starts.
+/// The runtime marker covers platforms whose helper probe cannot report whether
+/// a TUN session is still active; Windows service state is also checked as a
+/// fallback for sessions created before the marker existed.
+pub fn reconcile_stale_runtime(engine_state: &EngineAppState) {
+    let marker_present = engine_state.runtime_session_path.exists();
+    let mut marker_unreadable = false;
+    let persisted_session = match read_runtime_session(&engine_state.runtime_session_path) {
+        Ok(session) => session,
+        Err(e) => {
+            marker_unreadable = true;
+            log::warn!("startup runtime marker unreadable: {e}");
+            None
+        }
+    };
+    let persisted = persisted_session.map(|session| {
+        log::info!(
+            "startup found stale engine session id={} mode={}",
+            session.session_id,
+            session.capture_mode.as_str()
+        );
+        session.capture_mode
+    });
+    let tun_running = matches!(platform_tun::probe(), TunServiceState::Running);
+    if !marker_present && !tun_running {
+        return;
+    }
+    let mut failed = false;
+
+    if let Err(e) = clear_system_proxy() {
+        failed = true;
+        log::warn!("startup stale system proxy cleanup failed: {e}");
+    }
+
+    if persisted == Some(CaptureMode::Tun) || tun_running || marker_unreadable {
+        log::info!("startup reconciling stale TUN runtime");
+        if let Err(e) = platform_tun::stop_tun() {
+            failed = true;
+            log::warn!("startup stale TUN cleanup failed: {e}");
+        }
+    }
+
+    engine_state.finish_capture_cleanup(!failed);
+}
+
+/// Synchronous shell hook for the final Tauri exit event. Normal tray quit and
+/// IPC stop already use the same async cleanup; this is a last best-effort pass.
+pub fn cleanup_on_exit(app: &AppHandle) {
+    let Some(engine_state) = app.try_state::<EngineAppState>() else {
+        let _ = clear_system_proxy();
+        return;
+    };
+    let result = tauri::async_runtime::block_on(async {
+        let _guard = engine_state.gate.lock().await;
+        cleanup_runtime(&engine_state).await
+    });
+    if let Err(e) = result {
+        log::warn!("engine cleanup on exit incomplete: {e}");
+    }
+}
+
+/// Entry point shared with current polling and future kernel-native exit
+/// notifications. It serializes against user start/stop requests.
+pub async fn handle_runtime_failure(app: &AppHandle, reason: String) {
+    let Some(engine_state) = app.try_state::<EngineAppState>() else {
+        return;
+    };
+    let _guard = engine_state.gate.lock().await;
+    let still_failed = matches!(
+        engine_state.engine.state(),
+        EngineState::Failed { reason: ref current } if current == &reason
+    );
+    if !still_failed || engine_state.last_payload().state == "failed" {
+        return;
+    }
+
+    fail_cleanup(app, &engine_state, reason.clone()).await;
+    crate::tray::emit_error_alert(app, "连接已中断", reason);
+}
+
+/// Observe kernel state until the engine crate provides direct exit callbacks.
+/// Once a supervisor marks the raw state Failed, cleanup and UI notification
+/// happen here without changing the IPC/event contract.
+pub fn spawn_engine_health_monitor(app: &AppHandle) {
+    let Some(engine_state) = app.try_state::<EngineAppState>() else {
+        log::warn!("engine health monitor not started: EngineAppState missing");
+        return;
+    };
+    let mut exit_events = engine_state.engine.subscribe_exit_events();
+
+    let event_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match exit_events.recv().await {
+                Ok(event) => {
+                    log::error!(
+                        "engine sidecar exited generation={} code={:?}: {}",
+                        event.generation,
+                        event.code,
+                        event.reason
+                    );
+                    handle_runtime_failure(&event_app, event.reason).await;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                    log::warn!("engine exit monitor lagged; skipped {skipped} events");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let Some(engine_state) = app.try_state::<EngineAppState>() else {
+                continue;
+            };
+            let payload = engine_state.last_payload();
+            if payload.state == "running"
+                && engine_state.capture_mode() == CaptureMode::Tun
+                && tun_runtime_is_missing()
+            {
+                let reason = "TUN 服务意外停止".to_string();
+                let _ = engine_state.engine.fail_external_start(reason.clone());
+                handle_runtime_failure(&app, reason).await;
+                continue;
+            }
+            let EngineState::Failed { reason } = engine_state.engine.state() else {
+                continue;
+            };
+            if engine_state.last_payload().state != "failed" {
+                handle_runtime_failure(&app, reason).await;
+            }
+        }
+    });
+}
+
+// Only Windows currently exposes live service state through `probe`. Linux and
+// macOS report helper installation/readiness, so treating Ready as a dead
+// runtime there would disconnect every healthy TUN session.
+#[cfg(target_os = "windows")]
+fn tun_runtime_is_missing() -> bool {
+    !matches!(platform_tun::probe(), TunServiceState::Running)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn tun_runtime_is_missing() -> bool {
+    false
+}
+
+fn build_options_for(
+    mode: CaptureMode,
+    engine_state: &EngineAppState,
+    smart_routing: bool,
+) -> BuildOptions {
     let mut opts = match mode {
         CaptureMode::Tun => BuildOptions::tun(engine_state.socks_port, engine_state.api_port),
         _ => BuildOptions::system_proxy(engine_state.socks_port, engine_state.api_port),
@@ -363,29 +658,6 @@ async fn start_steps(
     mode: CaptureMode,
     smart_routing: bool,
 ) -> Result<(), String> {
-    // Tear down previous capture first (mode switch = stop → rebuild → start).
-    match engine_state.engine.state() {
-        EngineState::Idle | EngineState::Failed { .. } => {}
-        _ => {
-            let prev_tun = matches!(engine_state.capture_mode(), CaptureMode::Tun);
-            let _ = clear_system_proxy();
-            let _ = platform_tun::stop_tun();
-            if prev_tun {
-                engine_state
-                    .engine
-                    .finish_external_stop()
-                    .map_err(|e| e.to_string())?;
-            } else {
-                engine_state
-                    .engine
-                    .stop()
-                    .await
-                    .map_err(|e| e.to_string())?;
-            }
-            engine_state.set_capture_mode(CaptureMode::Off);
-        }
-    }
-
     let opts = build_options_for(mode, engine_state, smart_routing);
     engine_state
         .engine
@@ -394,6 +666,7 @@ async fn start_steps(
 
     match mode {
         CaptureMode::SystemProxy => {
+            engine_state.arm_runtime_cleanup()?;
             engine_state
                 .engine
                 .start(&engine_state.config_path)
@@ -401,21 +674,32 @@ async fn start_steps(
                 .map_err(|e| e.to_string())?;
             set_system_proxy(PROXY_HOST, engine_state.socks_port)
                 .map_err(|e| format!("set_system_proxy: {e}"))?;
-            engine_state.set_capture_mode(CaptureMode::SystemProxy);
         }
         CaptureMode::Tun => {
             // Clear system proxy so capture is exclusive to TUN.
             let _ = clear_system_proxy();
 
-            let core = aurestream_engine::resolve_sidecar_path()
+            let launch = engine_state
+                .engine
+                .launch_spec()
                 .map_err(|e| e.to_string())?;
-            let asset_dir = engine_state
-                .asset_dir
-                .clone()
-                .or_else(|| aurestream_engine::resolve_asset_dir(&core));
+            if launch.id != KernelId::XRAY {
+                return Err(format!("tun_kernel_unsupported:{}", launch.id));
+            }
+            log::info!(
+                "external kernel launch id={} executable={} assets={}",
+                launch.id,
+                launch.executable.display(),
+                launch
+                    .asset_dir
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "<none>".into())
+            );
 
             // Elevated path owns the core process (pkexec/helper). Do not also
             // spawn a user-space sidecar via Engine::start.
+            engine_state.arm_runtime_cleanup()?;
             engine_state
                 .engine
                 .begin_external_start(engine_state.socks_port, engine_state.api_port)
@@ -430,9 +714,9 @@ async fn start_steps(
 
             if let Err(e) = platform_tun::start_tun(
                 &engine_state.config_path,
-                &core,
+                &launch.executable,
                 dns_hijack,
-                asset_dir.as_deref(),
+                launch.asset_dir.as_deref(),
             ) {
                 let _ = engine_state.engine.fail_external_start(e.message.clone());
                 return Err(e.message);
@@ -444,7 +728,6 @@ async fn start_steps(
                 .map_err(|e| e.to_string())?;
 
             let _ = clear_system_proxy();
-            engine_state.set_capture_mode(CaptureMode::Tun);
         }
         CaptureMode::Off => {
             return Err("invalid_capture_mode".into());
@@ -461,6 +744,19 @@ async fn start_with_node(
     mode: CaptureMode,
     smart_routing: bool,
 ) -> Result<(), String> {
+    let has_previous_runtime = engine_state.cleanup_mode() != CaptureMode::Off
+        || !matches!(engine_state.engine.state(), EngineState::Idle);
+    if has_previous_runtime {
+        if let Err(reason) = cleanup_runtime(engine_state).await {
+            emit_failed(app, engine_state, reason.clone());
+            return Err(reason);
+        }
+    }
+
+    if let Err(reason) = engine_state.begin_capture(mode) {
+        emit_failed(app, engine_state, reason.clone());
+        return Err(reason);
+    }
     emit_from(app, engine_state, EngineState::Starting);
 
     match start_steps(engine_state, node, mode, smart_routing).await {
@@ -584,17 +880,25 @@ pub async fn engine_uninstall_helper(
     let _guard = engine.gate.lock().await;
     log::info!("engine_uninstall_helper");
 
-    let was_tun = matches!(engine.capture_mode(), CaptureMode::Tun);
-    if was_tun {
+    let had_runtime = engine.cleanup_mode() != CaptureMode::Off
+        || !matches!(engine.engine.state(), EngineState::Idle);
+    if had_runtime {
         emit_from(&app, &engine, EngineState::Stopping);
-        let _ = clear_system_proxy();
+        if let Err(reason) = cleanup_runtime(&engine).await {
+            emit_failed(&app, &engine, reason.clone());
+            return Err(reason);
+        }
     }
 
-    platform_tun::uninstall_elevated().map_err(|e| e.to_string())?;
+    if let Err(e) = platform_tun::uninstall_elevated() {
+        let reason = e.to_string();
+        if had_runtime {
+            emit_failed(&app, &engine, reason.clone());
+        }
+        return Err(reason);
+    }
 
-    if was_tun {
-        let _ = engine.engine.finish_external_stop();
-        engine.set_capture_mode(CaptureMode::Off);
+    if had_runtime {
         emit_from(&app, &engine, EngineState::Idle);
     }
 
@@ -613,38 +917,11 @@ pub async fn engine_stop(
 
     emit_from(&app, &engine, EngineState::Stopping);
 
-    let was_tun = matches!(engine.capture_mode(), CaptureMode::Tun);
-
-    if let Err(e) = clear_system_proxy() {
-        let _ = platform_tun::stop_tun();
-        if was_tun {
-            let _ = engine.engine.finish_external_stop();
-        } else {
-            let _ = engine.engine.stop().await;
-        }
-        engine.set_capture_mode(CaptureMode::Off);
-        let reason = format!("clear_system_proxy: {e}");
+    if let Err(reason) = cleanup_runtime(&engine).await {
         emit_failed(&app, &engine, reason.clone());
         return Err(reason);
     }
 
-    let _ = platform_tun::stop_tun();
-
-    if was_tun {
-        if let Err(e) = engine.engine.finish_external_stop() {
-            engine.set_capture_mode(CaptureMode::Off);
-            let reason = e.to_string();
-            emit_failed(&app, &engine, reason.clone());
-            return Err(reason);
-        }
-    } else if let Err(e) = engine.engine.stop().await {
-        engine.set_capture_mode(CaptureMode::Off);
-        let reason = e.to_string();
-        emit_failed(&app, &engine, reason.clone());
-        return Err(reason);
-    }
-
-    engine.set_capture_mode(CaptureMode::Off);
     emit_from(&app, &engine, EngineState::Idle);
     Ok(engine.last_payload())
 }
@@ -704,29 +981,18 @@ pub async fn tray_stop(app: &AppHandle) -> Result<(), String> {
 
     let _guard = engine.gate.lock().await;
     let state = engine.last_payload().state;
-    if state == "idle" {
-        let _ = clear_system_proxy();
+    if state == "idle"
+        && engine.cleanup_mode() == CaptureMode::Off
+        && matches!(engine.engine.state(), EngineState::Idle)
+    {
         return Ok(());
     }
 
     emit_from(app, &engine, EngineState::Stopping);
-    let was_tun = matches!(engine.capture_mode(), CaptureMode::Tun);
-    let _ = clear_system_proxy();
-    let _ = platform_tun::stop_tun();
-    if was_tun {
-        if let Err(e) = engine.engine.finish_external_stop() {
-            engine.set_capture_mode(CaptureMode::Off);
-            let reason = e.to_string();
-            emit_failed(app, &engine, reason.clone());
-            return Err(reason);
-        }
-    } else if let Err(e) = engine.engine.stop().await {
-        engine.set_capture_mode(CaptureMode::Off);
-        let reason = e.to_string();
+    if let Err(reason) = cleanup_runtime(&engine).await {
         emit_failed(app, &engine, reason.clone());
         return Err(reason);
     }
-    engine.set_capture_mode(CaptureMode::Off);
     emit_from(app, &engine, EngineState::Idle);
     Ok(())
 }
@@ -734,6 +1000,27 @@ pub async fn tray_stop(app: &AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn engine_state_at(dir: &std::path::Path) -> EngineAppState {
+        EngineAppState {
+            engine: std::sync::Arc::new(XrayEngine::new()),
+            selected_node: Mutex::new(None),
+            capture_mode: Mutex::new(CaptureMode::Off),
+            session_id: Mutex::new(None),
+            last_emitted: Mutex::new(EngineStatePayload {
+                state: "idle".into(),
+                reason: None,
+                selected_node: None,
+                capture_mode: "off".into(),
+            }),
+            gate: AsyncMutex::new(()),
+            selection_path: dir.join(SELECTION_FILE),
+            runtime_session_path: dir.join(RUNTIME_SESSION_FILE),
+            config_path: dir.join("xray-config.json"),
+            socks_port: DEFAULT_SOCKS_PORT,
+            api_port: DEFAULT_API_PORT,
+        }
+    }
 
     #[test]
     fn failed_payload_shape_matches_event() {
@@ -745,5 +1032,39 @@ mod tests {
         };
         assert_eq!(payload.state, "failed");
         assert_eq!(payload.reason.as_deref(), Some("build_config boom"));
+    }
+
+    #[test]
+    fn runtime_marker_preserves_cleanup_mode_after_memory_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_state_at(dir.path());
+
+        engine.begin_capture(CaptureMode::Tun).unwrap();
+        assert_eq!(engine.capture_mode(), CaptureMode::Tun);
+        assert!(!engine.runtime_session_path.exists());
+
+        engine.arm_runtime_cleanup().unwrap();
+        assert_eq!(engine.persisted_capture_mode(), Some(CaptureMode::Tun));
+
+        engine.finish_capture_cleanup(false);
+        assert_eq!(engine.capture_mode(), CaptureMode::Off);
+        assert_eq!(engine.cleanup_mode(), CaptureMode::Tun);
+
+        engine.finish_capture_cleanup(true);
+        assert_eq!(engine.cleanup_mode(), CaptureMode::Off);
+        assert!(!engine.runtime_session_path.exists());
+    }
+
+    #[test]
+    fn begin_capture_rejects_off_without_writing_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_state_at(dir.path());
+
+        assert_eq!(
+            engine.begin_capture(CaptureMode::Off),
+            Err("invalid_capture_mode".into())
+        );
+        assert_eq!(engine.capture_mode(), CaptureMode::Off);
+        assert!(!engine.runtime_session_path.exists());
     }
 }
