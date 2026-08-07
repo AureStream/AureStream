@@ -5,10 +5,16 @@
 //! to the node server is captured by TUN → loops back →
 //! `websocket: failed to dial … io: read/write on closed pipe`, and Google/YouTube die.
 
+use std::net::{IpAddr, ToSocketAddrs};
+
+use ipnet::IpNet;
+
 /// Rewrite `config.json` so TUN outbounds leave via the physical interface `iface`.
 ///
 /// - TUN inbound: `autoOutboundsInterface` = iface (not `"auto"`)
 /// - Every dialing outbound (proxy / freedom / …): `streamSettings.sockopt.interface`
+/// - TUN routes: exclude every resolved proxy-server IP so the kernel can use
+///   the original physical-interface default route for the proxy connection
 ///
 /// Returns `Ok(true)` when the file was modified.
 pub fn patch_tun_config_outbounds_interface(
@@ -22,10 +28,22 @@ pub fn patch_tun_config_outbounds_interface(
 
     let raw = std::fs::read_to_string(config_path)
         .map_err(|e| format!("read config {}: {}", config_path, e))?;
-    let mut v: serde_json::Value = serde_json::from_str(&raw)
-        .map_err(|e| format!("parse config {}: {}", config_path, e))?;
+    let mut v: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|e| format!("parse config {}: {}", config_path, e))?;
 
     let mut changed = false;
+
+    let (server, port) = first_proxy_server_endpoint(&v)
+        .ok_or_else(|| "proxy server endpoint is missing from config".to_string())?;
+    let server_ips = resolve_server_ips(&server, port)?;
+    log::info!(
+        "[tun] proxy endpoint bypass server={server}:{port} resolved={}",
+        server_ips
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     if let Some(inbounds) = v.get_mut("inbounds").and_then(|x| x.as_array_mut()) {
         for inb in inbounds.iter_mut() {
@@ -49,6 +67,9 @@ pub fn patch_tun_config_outbounds_interface(
                     "autoOutboundsInterface".into(),
                     serde_json::Value::String(iface.to_string()),
                 );
+                changed = true;
+            }
+            if exclude_ips_from_tun_routes(obj, &server_ips)? {
                 changed = true;
             }
         }
@@ -95,27 +116,29 @@ pub fn patch_tun_config_outbounds_interface(
 
     // Also force the proxy server endpoint itself to `direct` so any packet that
     // still enters TUN toward the node IP is not sent back into the proxy chain.
-    if let Some(server) = first_proxy_server_address(&v) {
-        if let Some(rules) = v
-            .pointer_mut("/routing/rules")
-            .and_then(|r| r.as_array_mut())
-        {
-            if ensure_server_direct_rule(rules, &server) {
+    if let Some(rules) = v
+        .pointer_mut("/routing/rules")
+        .and_then(|r| r.as_array_mut())
+    {
+        if ensure_server_direct_rule(rules, &server) {
+            changed = true;
+        }
+        for ip in &server_ips {
+            if ensure_server_direct_rule(rules, &ip.to_string()) {
                 changed = true;
             }
         }
     }
 
     if changed {
-        let out =
-            serde_json::to_vec_pretty(&v).map_err(|e| format!("serialize config: {}", e))?;
+        let out = serde_json::to_vec_pretty(&v).map_err(|e| format!("serialize config: {}", e))?;
         std::fs::write(config_path, out)
             .map_err(|e| format!("write config {}: {}", config_path, e))?;
     }
     Ok(changed)
 }
 
-fn first_proxy_server_address(cfg: &serde_json::Value) -> Option<String> {
+fn first_proxy_server_endpoint(cfg: &serde_json::Value) -> Option<(String, u16)> {
     let outs = cfg.get("outbounds")?.as_array()?;
     for ob in outs {
         let proto = ob.get("protocol").and_then(|p| p.as_str()).unwrap_or("");
@@ -132,7 +155,13 @@ fn first_proxy_server_address(cfg: &serde_json::Value) -> Option<String> {
                 .and_then(|s| s.get("address"))
                 .and_then(|a| a.as_str())
             {
-                return Some(addr.to_string());
+                let port = vnext
+                    .first()
+                    .and_then(|s| s.get("port"))
+                    .and_then(|p| p.as_u64())
+                    .and_then(|p| u16::try_from(p).ok())
+                    .unwrap_or(443);
+                return Some((addr.to_string(), port));
             }
         }
         if let Some(servers) = settings.get("servers").and_then(|x| x.as_array()) {
@@ -141,11 +170,98 @@ fn first_proxy_server_address(cfg: &serde_json::Value) -> Option<String> {
                     .or_else(|| s.get("addr"))
                     .and_then(|a| a.as_str())
             }) {
-                return Some(addr.to_string());
+                let port = servers
+                    .first()
+                    .and_then(|s| s.get("port"))
+                    .and_then(|p| p.as_u64())
+                    .and_then(|p| u16::try_from(p).ok())
+                    .unwrap_or(443);
+                return Some((addr.to_string(), port));
             }
         }
     }
     None
+}
+
+fn resolve_server_ips(server: &str, port: u16) -> Result<Vec<IpAddr>, String> {
+    if let Ok(ip) = server.parse::<IpAddr>() {
+        return Ok(vec![ip]);
+    }
+
+    let mut ips: Vec<IpAddr> = (server, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("resolve proxy server {server}:{port}: {e}"))?
+        .map(|addr| addr.ip())
+        .collect();
+    ips.sort_unstable();
+    ips.dedup();
+    if ips.is_empty() {
+        return Err(format!(
+            "resolve proxy server {server}:{port}: no IP addresses"
+        ));
+    }
+    Ok(ips)
+}
+
+fn exclude_ips_from_tun_routes(
+    tun_settings: &mut serde_json::Map<String, serde_json::Value>,
+    excluded_ips: &[IpAddr],
+) -> Result<bool, String> {
+    let Some(routes) = tun_settings
+        .get_mut("autoSystemRoutingTable")
+        .and_then(|value| value.as_array_mut())
+    else {
+        return Err("tun autoSystemRoutingTable is missing".into());
+    };
+
+    let original = routes.clone();
+    let mut networks = Vec::with_capacity(routes.len());
+    for route in routes.iter() {
+        let route = route
+            .as_str()
+            .ok_or_else(|| "tun autoSystemRoutingTable contains a non-string route".to_string())?;
+        networks.push(
+            route
+                .parse::<IpNet>()
+                .map_err(|e| format!("invalid TUN route CIDR {route}: {e}"))?,
+        );
+    }
+
+    for excluded in excluded_ips {
+        networks = networks
+            .into_iter()
+            .flat_map(|network| exclude_ip_from_network(network, *excluded))
+            .collect();
+    }
+
+    *routes = networks
+        .into_iter()
+        .map(|network| serde_json::Value::String(network.to_string()))
+        .collect();
+    Ok(*routes != original)
+}
+
+fn exclude_ip_from_network(network: IpNet, address: IpAddr) -> Vec<IpNet> {
+    if !network.contains(&address) {
+        return vec![network];
+    }
+    if network.prefix_len() == network.max_prefix_len() {
+        return Vec::new();
+    }
+
+    let mut children = network
+        .subnets(network.prefix_len() + 1)
+        .expect("one-bit CIDR split is always valid");
+    let first = children.next().expect("CIDR split returns two children");
+    let second = children.next().expect("CIDR split returns two children");
+    let (containing, sibling) = if first.contains(&address) {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    let mut result = exclude_ip_from_network(containing, address);
+    result.push(sibling);
+    result
 }
 
 fn ensure_server_direct_rule(rules: &mut Vec<serde_json::Value>, server: &str) -> bool {
@@ -224,6 +340,7 @@ mod tests {
                 "protocol": "tun",
                 "settings": {
                     "autoOutboundsInterface": "auto",
+                    "autoSystemRoutingTable": ["0.0.0.0/0"],
                     "gateway": ["198.18.0.1/30"]
                 }
             }],
@@ -247,8 +364,7 @@ mod tests {
             f.write_all(cfg.to_string().as_bytes()).unwrap();
         }
 
-        let changed =
-            patch_tun_config_outbounds_interface(path.to_str().unwrap(), "en0").unwrap();
+        let changed = patch_tun_config_outbounds_interface(path.to_str().unwrap(), "en0").unwrap();
         assert!(changed);
 
         let parsed: serde_json::Value =
@@ -267,6 +383,22 @@ mod tests {
         );
         assert!(parsed["outbounds"][2].get("streamSettings").is_none());
 
+        let tun_routes = parsed["inbounds"][0]["settings"]["autoSystemRoutingTable"]
+            .as_array()
+            .unwrap();
+        assert!(
+            !routes_contain(tun_routes, "1.2.3.4".parse().unwrap()),
+            "proxy server must bypass every TUN route: {tun_routes:?}"
+        );
+        assert!(
+            routes_contain(tun_routes, "1.2.3.5".parse().unwrap()),
+            "neighboring Internet addresses must remain captured: {tun_routes:?}"
+        );
+        assert!(
+            routes_contain(tun_routes, "8.8.8.8".parse().unwrap()),
+            "unrelated Internet addresses must remain captured: {tun_routes:?}"
+        );
+
         let rules = parsed["routing"]["rules"].as_array().unwrap();
         assert!(
             rules.iter().any(|r| {
@@ -278,10 +410,63 @@ mod tests {
             "server IP must be forced direct: {rules:?}"
         );
 
-        let changed2 =
-            patch_tun_config_outbounds_interface(path.to_str().unwrap(), "en0").unwrap();
+        let changed2 = patch_tun_config_outbounds_interface(path.to_str().unwrap(), "en0").unwrap();
         assert!(!changed2);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cidr_exclusion_is_exact_for_ipv4_and_ipv6() {
+        let ipv4 = "0.0.0.0/0".parse::<IpNet>().unwrap();
+        let ipv4_routes = exclude_ip_from_network(ipv4, "173.245.58.61".parse().unwrap());
+        assert!(!ipv4_routes
+            .iter()
+            .any(|route| route.contains(&"173.245.58.61".parse::<IpAddr>().unwrap())));
+        assert!(ipv4_routes
+            .iter()
+            .any(|route| route.contains(&"173.245.58.60".parse::<IpAddr>().unwrap())));
+        assert!(ipv4_routes
+            .iter()
+            .any(|route| route.contains(&"173.245.58.62".parse::<IpAddr>().unwrap())));
+
+        let ipv6 = "::/0".parse::<IpNet>().unwrap();
+        let ipv6_routes = exclude_ip_from_network(ipv6, "2606:4700:4700::1111".parse().unwrap());
+        assert!(!ipv6_routes
+            .iter()
+            .any(|route| route.contains(&"2606:4700:4700::1111".parse::<IpAddr>().unwrap())));
+        assert!(ipv6_routes
+            .iter()
+            .any(|route| route.contains(&"2606:4700:4700::1112".parse::<IpAddr>().unwrap())));
+    }
+
+    #[test]
+    fn domain_endpoint_resolves_before_tun_routes_are_patched() {
+        let resolved = resolve_server_ips("localhost", 443).unwrap();
+        assert!(!resolved.is_empty());
+
+        let mut settings = serde_json::json!({
+            "autoSystemRoutingTable": ["0.0.0.0/0", "::/0"]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        assert!(exclude_ips_from_tun_routes(&mut settings, &resolved).unwrap());
+        let routes = settings["autoSystemRoutingTable"].as_array().unwrap();
+        for address in resolved {
+            assert!(
+                !routes_contain(routes, address),
+                "resolved proxy address {address} must bypass TUN: {routes:?}"
+            );
+        }
+    }
+
+    fn routes_contain(routes: &[serde_json::Value], address: IpAddr) -> bool {
+        routes.iter().any(|route| {
+            route
+                .as_str()
+                .and_then(|route| route.parse::<IpNet>().ok())
+                .is_some_and(|route| route.contains(&address))
+        })
     }
 }

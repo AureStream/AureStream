@@ -292,6 +292,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "core-foundation 0.9.4",
+ "ipnet",
  "log",
  "serde",
  "serde_json",

@@ -65,13 +65,24 @@ pub fn start_tun(
     // Critical: bind proxy dials to the physical NIC (en0/…), otherwise the
     // node server IP is captured by TUN → loop → WS "closed pipe" and Google dies.
     match resolve_default_interface() {
-        Ok(iface) => match crate::config_patch::patch_tun_config_outbounds_interface(&config, &iface)
-        {
-            Ok(true) => log::info!("[tun/mac] patched outbound interface -> {iface}"),
-            Ok(false) => log::debug!("[tun/mac] outbound interface already {iface}"),
-            Err(e) => log::warn!("[tun/mac] patch outbound interface failed: {e}"),
-        },
-        Err(e) => log::warn!("[tun/mac] resolve default iface: {e}"),
+        Ok(iface) => {
+            match crate::config_patch::patch_tun_config_outbounds_interface(&config, &iface) {
+                Ok(true) => log::info!("[tun/mac] patched outbound interface -> {iface}"),
+                Ok(false) => log::debug!("[tun/mac] outbound interface already {iface}"),
+                Err(e) => {
+                    return Err(TunError::failed(
+                        "tun_route_patch",
+                        format!("准备代理节点绕行路由失败: {e}"),
+                    ));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(TunError::failed(
+                "tun_outbound_interface",
+                format!("无法确定代理流量的物理出口网卡: {e}"),
+            ));
+        }
     }
 
     let log_path = core_log_path();

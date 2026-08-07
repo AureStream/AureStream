@@ -323,10 +323,20 @@ mod linux {
                 match super::config_patch::patch_tun_config_outbounds_interface(config, &iface) {
                     Ok(true) => log::info!("[tun/linux] patched outbound interface -> {iface}"),
                     Ok(false) => log::debug!("[tun/linux] outbound interface already {iface}"),
-                    Err(e) => log::warn!("[tun/linux] patch outbound interface failed: {e}"),
+                    Err(e) => {
+                        return Err(TunError::failed(
+                            "tun_route_patch",
+                            format!("准备代理节点绕行路由失败: {e}"),
+                        ));
+                    }
                 }
             }
-            Err(e) => log::warn!("[tun/linux] resolve default iface: {e}"),
+            Err(e) => {
+                return Err(TunError::failed(
+                    "tun_outbound_interface",
+                    format!("无法确定代理流量的物理出口网卡: {e}"),
+                ));
+            }
         }
 
         // Capture original DNS before starting (restore on stop).

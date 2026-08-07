@@ -227,10 +227,20 @@ pub fn start_tun(
             ) {
                 Ok(true) => log::info!("[tun/win] patched autoOutboundsInterface -> {iface}"),
                 Ok(false) => log::debug!("[tun/win] autoOutboundsInterface already {iface}"),
-                Err(e) => log::warn!("[tun/win] patch outbounds interface failed: {e}"),
+                Err(e) => {
+                    return Err(TunError::failed(
+                        "tun_route_patch",
+                        format!("准备代理节点绕行路由失败: {e}"),
+                    ));
+                }
             }
         }
-        Err(e) => log::warn!("[tun/win] resolve default iface: {e}"),
+        Err(e) => {
+            return Err(TunError::failed(
+                "tun_outbound_interface",
+                format!("无法确定代理流量的物理出口网卡: {e}"),
+            ));
+        }
     }
 
     let config = config_path
