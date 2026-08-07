@@ -5,6 +5,7 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
     use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
     if !bundled_exe.exists() {
         return Err(format!(
@@ -31,7 +32,7 @@ pub fn run_elevated_install(bundled_exe: &std::path::Path) -> Result<(), String>
         lpVerb: windows::core::PCWSTR(verb.as_ptr()),
         lpFile: windows::core::PCWSTR(file.as_ptr()),
         lpParameters: windows::core::PCWSTR(params.as_ptr()),
-        nShow: 0,
+        nShow: SW_HIDE.0,
         ..Default::default()
     };
 
@@ -84,6 +85,7 @@ pub fn run_elevated_uninstall(bundled_exe: &std::path::Path) -> Result<(), Strin
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
     use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
     if !bundled_exe.exists() {
         return Err(format!(
@@ -109,7 +111,7 @@ pub fn run_elevated_uninstall(bundled_exe: &std::path::Path) -> Result<(), Strin
         lpVerb: windows::core::PCWSTR(verb.as_ptr()),
         lpFile: windows::core::PCWSTR(file.as_ptr()),
         lpParameters: windows::core::PCWSTR(params.as_ptr()),
-        nShow: 0,
+        nShow: SW_HIDE.0,
         ..Default::default()
     };
 
