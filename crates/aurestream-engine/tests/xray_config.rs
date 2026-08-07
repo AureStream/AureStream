@@ -113,6 +113,7 @@ fn xray_build_config_with_tun_inbound() {
         .expect("tun inbound required");
     assert_eq!(tun["tag"], "tun-in");
     assert_eq!(tun["settings"]["name"], "utun233");
+    assert_eq!(tun["settings"]["mtu"], 1400);
     assert!(
         cfg["outbounds"]
             .as_array()
@@ -180,6 +181,37 @@ fn xray_build_config_with_tun_inbound() {
         }),
         "dns-direct → direct required"
     );
+    assert!(
+        rules.iter().any(|r| {
+            r.get("inboundTag")
+                .and_then(|t| t.as_array())
+                .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("tun-in")))
+                && r.get("port").and_then(|p| p.as_str()) == Some("443")
+                && r.get("network").and_then(|n| n.as_str()) == Some("udp")
+                && r.get("outboundTag").and_then(|t| t.as_str()) == Some("block")
+        }),
+        "WS TUN must reject QUIC so browsers fall back to TCP"
+    );
+    assert!(
+        !rules.iter().any(|r| {
+            r.get("domain")
+                .and_then(|d| d.as_array())
+                .is_some_and(|a| {
+                    a.iter()
+                        .any(|v| v.as_str() == Some("geosite:category-ads-all"))
+                })
+        }),
+        "transport routing must not apply an ad list with false positives"
+    );
+    assert!(rules.iter().any(|r| {
+        r.get("domain")
+            .and_then(|d| d.as_array())
+            .is_some_and(|a| {
+                a.iter()
+                    .any(|v| v.as_str() == Some("domain:github.com"))
+            })
+            && r.get("outboundTag").and_then(|t| t.as_str()) == Some("node1")
+    }));
     // mixed inbound retained for local probe / system proxy fallback
     assert!(inbounds.iter().any(|ib| {
         matches!(
@@ -187,6 +219,29 @@ fn xray_build_config_with_tun_inbound() {
             Some("mixed") | Some("socks")
         )
     }));
+}
+
+#[test]
+fn xray_tun_keeps_quic_for_udp_native_proxy_protocol() {
+    use aurestream_engine::BuildOptions;
+
+    let mut node = ProxyNode::new("hy2", "hysteria2", "example.com", 443);
+    node.password = Some("secret".into());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config-hy2-tun.json");
+    XrayEngine::new()
+        .build_config_with_options(&path, &node, BuildOptions::tun(17890, 17891))
+        .expect("build config");
+    let cfg: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+    let rules = cfg["routing"]["rules"].as_array().expect("routing rules");
+    assert!(
+        !rules.iter().any(|r| {
+            r.get("port").and_then(|p| p.as_str()) == Some("443")
+                && r.get("network").and_then(|n| n.as_str()) == Some("udp")
+                && r.get("outboundTag").and_then(|t| t.as_str()) == Some("block")
+        }),
+        "UDP-native proxy protocols must retain QUIC support"
+    );
 }
 
 #[test]
@@ -256,12 +311,18 @@ fn xray_dns_config_smart_routing() {
     assert_eq!(second_dns["domains"][0], "geosite:cn");
 
     // Verify fallback DNS servers (for non-CN domains like Google, YouTube)
-    assert_eq!(servers[2], "1.1.1.1", "Third DNS should be 1.1.1.1 fallback");
-    assert_eq!(servers[3], "8.8.8.8", "Fourth DNS should be 8.8.8.8 fallback");
+    assert_eq!(
+        servers[2], "https://1.1.1.1/dns-query",
+        "Third DNS should use Cloudflare DoH"
+    );
+    assert_eq!(
+        servers[3], "https://8.8.8.8/dns-query",
+        "Fourth DNS should use Google DoH"
+    );
 
     println!("✓ DNS config structure correct");
     println!("✓ CN domains → 119.29.29.29, 223.5.5.5 (with geoip validation)");
-    println!("✓ Non-CN domains (Google/YouTube) → 1.1.1.1, 8.8.8.8 fallback");
+    println!("✓ Non-CN domains (Google/YouTube) → Cloudflare/Google DoH fallback");
 }
 
 #[test]
@@ -285,11 +346,11 @@ fn xray_dns_config_system_proxy_mode() {
     // Should use the same smart routing DNS config
     assert_eq!(servers[0]["address"], "119.29.29.29");
     assert_eq!(servers[1]["address"], "223.5.5.5");
-    assert_eq!(servers[2], "1.1.1.1");
-    assert_eq!(servers[3], "8.8.8.8");
+    assert_eq!(servers[2], "https://1.1.1.1/dns-query");
+    assert_eq!(servers[3], "https://8.8.8.8/dns-query");
 
     println!("✓ System proxy DNS config correct");
     println!("✓ CN domains → 119.29.29.29, 223.5.5.5");
-    println!("✓ Non-CN domains → 1.1.1.1, 8.8.8.8");
+    println!("✓ Non-CN domains → Cloudflare/Google DoH");
 }
 

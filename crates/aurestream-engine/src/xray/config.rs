@@ -12,6 +12,11 @@ const PROXY_TAG_FALLBACK: &str = "proxy";
 const TUN_INTERFACE_NAME: &str = "utun233";
 const TUN_GATEWAY_CIDR: &str = "198.18.0.1/30";
 const TUN_DNS_SERVERS: &[&str] = &["1.1.1.1", "8.8.8.8"];
+const TUN_MTU: u16 = 1400;
+const PROXY_DOH_SERVERS: &[&str] = &[
+    "https://1.1.1.1/dns-query",
+    "https://8.8.8.8/dns-query",
+];
 
 /// IPv4 complement of private/LAN ranges for `autoSystemRoutingTable`
 /// (route everything except 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16).
@@ -124,6 +129,7 @@ pub fn build_xray_config_value_with_options(
     node: &ProxyNode,
     opts: BuildOptions,
 ) -> Result<Value, EngineError> {
+    let proxy_transport = node.network.to_ascii_lowercase();
     let (proxy_outbound, fragment_outbound) = map_proxy_outbound(node)?;
     let proxy_tag = proxy_outbound
         .get("tag")
@@ -226,6 +232,18 @@ pub fn build_xray_config_value_with_options(
             "network": "udp",
             "outboundTag": "block"
         }));
+        // QUIC tunneled through a TCP-based proxy transport (WS/HTTP Upgrade)
+        // suffers severe head-of-line blocking. Reject it quickly so browsers
+        // retry over HTTP/2 TCP instead of waiting for UDP timeouts.
+        if matches!(proxy_transport.as_str(), "ws" | "httpupgrade") {
+            rules.push(json!({
+                "type": "field",
+                "inboundTag": ["tun-in"],
+                "port": "443",
+                "network": "udp",
+                "outboundTag": "block"
+            }));
+        }
     }
 
     rules.push(json!({
@@ -269,7 +287,12 @@ pub fn build_xray_config_value_with_options(
                 "domain:ytimg.com",
                 "domain:ggpht.com",
                 "domain:youtube-nocookie.com",
-                "domain:withyoutube.com"
+                "domain:withyoutube.com",
+                "domain:github.com",
+                "domain:githubusercontent.com",
+                "domain:githubassets.com",
+                "domain:githubstatus.com",
+                "domain:githubcopilot.com"
             ],
             "outboundTag": proxy_tag
         }));
@@ -283,11 +306,6 @@ pub fn build_xray_config_value_with_options(
             "type": "field",
             "ip": ["geoip:cn"],
             "outboundTag": "direct"
-        }));
-        rules.push(json!({
-            "type": "field",
-            "domain": ["geosite:category-ads-all"],
-            "outboundTag": "block"
         }));
     }
 
@@ -354,7 +372,7 @@ fn build_tun_inbound(bypass_router: bool, enable_ipv6: bool) -> Value {
         "settings": {
             "name": TUN_INTERFACE_NAME,
             "desc": "AureStream TUN",
-            "mtu": 1500,
+            "mtu": TUN_MTU,
             "gateway": [TUN_GATEWAY_CIDR],
             "dns": TUN_DNS_SERVERS,
             "autoSystemRoutingTable": route_table,
@@ -372,7 +390,7 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
     let query_strategy = if enable_ipv6 { "UseIP" } else { "UseIPv4" };
     if !smart_routing {
         return json!({
-            "servers": ["1.1.1.1", "8.8.8.8"],
+            "servers": PROXY_DOH_SERVERS,
             "tag": "dns-proxy",
             "queryStrategy": query_strategy
         });
@@ -401,10 +419,10 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
                 "expectedIPs": ["geoip:cn"],
                 "skipFallback": true
             },
-            // Fallback DNS for ALL non-CN domains (Google, YouTube, and everything else)
-            // No "domains" rule = handles all unmatched queries
-            "1.1.1.1",
-            "8.8.8.8"
+            // DoH avoids carrying lossy DNS UDP inside TCP-based transports
+            // such as WebSocket. No domains rule means all unmatched queries.
+            PROXY_DOH_SERVERS[0],
+            PROXY_DOH_SERVERS[1]
         ]
     })
 }

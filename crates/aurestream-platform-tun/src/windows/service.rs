@@ -184,6 +184,26 @@ fn api_port_from_config_file(config_path: &str) -> u16 {
     }
 }
 
+pub(crate) fn parse_tun_outbound_interface_from_config_text(content: &str) -> Option<String> {
+    let config = serde_json::from_str::<serde_json::Value>(content).ok()?;
+    config
+        .get("inbounds")?
+        .as_array()?
+        .iter()
+        .find(|inbound| inbound.get("protocol").and_then(|v| v.as_str()) == Some("tun"))?
+        .pointer("/settings/autoOutboundsInterface")?
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("auto"))
+        .map(ToOwned::to_owned)
+}
+
+fn tun_outbound_interface_from_config_file(config_path: &str) -> Option<String> {
+    std::fs::read_to_string(config_path)
+        .ok()
+        .and_then(|content| parse_tun_outbound_interface_from_config_text(&content))
+}
+
 fn probe_localhost_port(port: u16) -> bool {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok()
@@ -242,9 +262,12 @@ fn flush_dns_cache() {
     }
 }
 
-fn apply_dns_override_after_ready(gateway: &str) {
-    let (ok, err) = dns::apply_override(gateway);
-    dns::log_line(&format!("apply_override: ok={} err={}", ok, err));
+fn apply_dns_override_after_ready(gateway: &str, outbound_interface: Option<&str>) {
+    let (ok, err) = dns::apply_override(gateway, outbound_interface);
+    dns::log_line(&format!(
+        "apply_override: interface={:?} ok={} err={}",
+        outbound_interface, ok, err
+    ));
     // Flush after override so apps pick up the TUN gateway NameServer and
     // drop any pre-TUN negative cache entries.
     flush_dns_cache();
@@ -304,10 +327,11 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     let gateway = args[2].clone();
     let sidecar = args[3].clone();
     let api_port = api_port_from_config_file(&config);
+    let outbound_interface = tun_outbound_interface_from_config_file(&config);
 
     dns::log_line(&format!(
-        "service_main: config={} gateway={} sidecar={} api_port={}",
-        config, gateway, sidecar, api_port
+        "service_main: config={} gateway={} sidecar={} api_port={} interface={:?}",
+        config, gateway, sidecar, api_port, outbound_interface
     ));
 
     // Spawn core FIRST (before DNS override). `CREATE_NO_WINDOW` is required —
@@ -375,7 +399,7 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     dns::log_line(&format!("core API :{} ready", api_port));
 
     // Now safe to point physical NICs at the TUN gateway DNS.
-    apply_dns_override_after_ready(&gateway);
+    apply_dns_override_after_ready(&gateway, outbound_interface.as_deref());
 
     set_state(SERVICE_RUNNING, 0, 0);
 
@@ -471,5 +495,27 @@ mod tests {
             parse_api_port_from_config_text(r#"{"inbounds":[{"listen":"0.0.0.0"}]}"#),
             DEFAULT_API_PORT
         );
+    }
+
+    #[test]
+    fn parse_tun_outbound_interface_requires_patched_physical_name() {
+        let patched = r#"{
+          "inbounds": [{
+            "protocol": "tun",
+            "settings": {"autoOutboundsInterface": "以太网"}
+          }]
+        }"#;
+        assert_eq!(
+            parse_tun_outbound_interface_from_config_text(patched).as_deref(),
+            Some("以太网")
+        );
+
+        let auto = r#"{
+          "inbounds": [{
+            "protocol": "tun",
+            "settings": {"autoOutboundsInterface": "auto"}
+          }]
+        }"#;
+        assert_eq!(parse_tun_outbound_interface_from_config_text(auto), None);
     }
 }

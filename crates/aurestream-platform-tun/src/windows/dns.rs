@@ -3,8 +3,8 @@
 //!
 //! All functions write to `HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\
 //! Parameters\Interfaces\{GUID}\NameServer` via raw `windows` crate calls.
-//! Identical scorched-earth semantics to the elevated helper: enumerate, match
-//! by shape, reset everything that isn't TUN-ish.
+//! The original values are persisted before an override and restored verbatim
+//! on stop, including an intentionally empty static-DNS value.
 
 #![cfg(target_os = "windows")]
 #![allow(dead_code)]
@@ -12,6 +12,8 @@
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
+
+use serde::{Deserialize, Serialize};
 
 use windows::core::{PCWSTR, PWSTR};
 use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
@@ -22,6 +24,7 @@ use windows::Win32::System::Registry::{
 
 pub const TCPIP_INTERFACES: &str = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
 pub const NET_CLASS_GUID: &str = "{4D36E972-E325-11CE-BFC1-08002BE10318}";
+const DNS_SNAPSHOT_FILE: &str = "dns-snapshot.json";
 
 // =========================== pure helpers =============================
 
@@ -60,6 +63,20 @@ pub fn is_tun_alias(alias: &str) -> bool {
         || lc.contains("utun")
         || lc.contains("tap-windows")
         || lc.contains("aurestream")
+}
+
+pub fn is_virtual_or_tun_alias(alias: &str) -> bool {
+    let lc = alias.to_ascii_lowercase();
+    is_tun_alias(alias)
+        || lc.contains("loopback")
+        || lc.contains("vethernet")
+        || lc.contains("hyper-v")
+        || lc.contains("wsl")
+        || lc.contains("virtualbox")
+        || lc.contains("vmware")
+        || lc.contains("docker")
+        || lc.contains("wireguard")
+        || lc.contains("vpn")
 }
 
 pub fn format_nameserver_value(servers: &[&str]) -> String {
@@ -245,8 +262,85 @@ pub struct InterfaceInfo {
 
 impl InterfaceInfo {
     pub fn is_candidate_for_dns_override(&self) -> bool {
-        self.has_ip && !is_tun_alias(&self.alias)
+        self.has_ip && !is_virtual_or_tun_alias(&self.alias)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DnsSnapshotEntry {
+    guid: String,
+    alias: String,
+    original_dns: String,
+}
+
+fn snapshot_path() -> std::path::PathBuf {
+    let mut path = std::env::var_os("ProgramData")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    path.push("AureStream");
+    path.push("service");
+    path.push(DNS_SNAPSHOT_FILE);
+    path
+}
+
+fn save_snapshot(entries: &[DnsSnapshotEntry]) -> Result<(), String> {
+    let path = snapshot_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create DNS snapshot directory: {e}"))?;
+    }
+    let body = serde_json::to_vec_pretty(entries)
+        .map_err(|e| format!("serialize DNS snapshot: {e}"))?;
+    let temp_path = path.with_extension("json.tmp");
+    std::fs::write(&temp_path, body)
+        .map_err(|e| format!("write {}: {e}", temp_path.display()))?;
+    std::fs::rename(&temp_path, &path)
+        .map_err(|e| format!("commit {}: {e}", path.display()))
+}
+
+fn restore_saved_snapshot() -> Option<(usize, usize)> {
+    let path = snapshot_path();
+    let body = match std::fs::read(&path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            log_line(&format!("read DNS snapshot failed: {e}"));
+            return Some((0, 1));
+        }
+    };
+    let entries: Vec<DnsSnapshotEntry> = match serde_json::from_slice(&body) {
+        Ok(entries) => entries,
+        Err(e) => {
+            log_line(&format!("parse DNS snapshot failed: {e}"));
+            return Some((0, 1));
+        }
+    };
+
+    let mut ok = 0usize;
+    let mut err = 0usize;
+    for entry in entries {
+        let servers = parse_nameserver_value(&entry.original_dns);
+        match set_interface_dns(&entry.guid, &servers) {
+            Ok(()) => {
+                log_line(&format!(
+                    "dns restore {} ({}) -> {}",
+                    entry.guid, entry.alias, entry.original_dns
+                ));
+                ok += 1;
+            }
+            Err(e) => {
+                log_line(&format!(
+                    "dns restore {} ({}) FAILED: {}",
+                    entry.guid, entry.alias, e
+                ));
+                err += 1;
+            }
+        }
+    }
+    if err == 0 {
+        let _ = std::fs::remove_file(&path);
+    }
+    Some((ok, err))
 }
 
 pub fn enumerate_interfaces() -> Result<Vec<InterfaceInfo>, String> {
@@ -303,7 +397,7 @@ pub fn reset_all_interfaces_dns() -> (usize, usize) {
         }
     };
     for it in list {
-        if is_tun_alias(&it.alias) {
+        if !it.is_candidate_for_dns_override() {
             continue;
         }
         match reset_interface_dns(&it.guid) {
@@ -317,13 +411,28 @@ pub fn reset_all_interfaces_dns() -> (usize, usize) {
     (ok, err)
 }
 
-/// Apply DNS override on all non-TUN interfaces with an IP. Idempotent.
+/// Apply DNS override on the selected physical outbound interface. Idempotent.
 /// Returns `(ok_count, err_count)`. An empty or `"-"` gateway is a no-op.
-pub fn apply_override(gateway: &str) -> (usize, usize) {
+pub fn apply_override(gateway: &str, outbound_interface: Option<&str>) -> (usize, usize) {
     let g = gateway.trim();
     if g.is_empty() || g == "-" {
         return (0, 0);
     }
+    // A stale snapshot means the previous service instance did not complete
+    // cleanup. Restore it before taking a fresh snapshot.
+    if let Some((_, stale_err)) = restore_saved_snapshot() {
+        if stale_err != 0 {
+            return (0, stale_err);
+        }
+    }
+    let Some(outbound_interface) = outbound_interface
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    else {
+        log_line("apply_override: physical outbound interface is missing");
+        return (0, 1);
+    };
+
     let list = match enumerate_interfaces() {
         Ok(l) => l,
         Err(e) => {
@@ -331,12 +440,37 @@ pub fn apply_override(gateway: &str) -> (usize, usize) {
             return (0, 1);
         }
     };
+    let candidates: Vec<InterfaceInfo> = list
+        .into_iter()
+        .filter(|it| it.is_candidate_for_dns_override())
+        .filter(|it| {
+            it.alias == outbound_interface || it.alias.eq_ignore_ascii_case(outbound_interface)
+        })
+        .collect();
+    if candidates.is_empty() {
+        log_line(&format!(
+            "apply_override: no physical interface matched {:?}",
+            Some(outbound_interface)
+        ));
+        return (0, 1);
+    }
+
+    let snapshot: Vec<DnsSnapshotEntry> = candidates
+        .iter()
+        .map(|it| DnsSnapshotEntry {
+            guid: it.guid.clone(),
+            alias: it.alias.clone(),
+            original_dns: it.current_dns.clone(),
+        })
+        .collect();
+    if let Err(e) = save_snapshot(&snapshot) {
+        log_line(&format!("apply_override: {e}"));
+        return (0, 1);
+    }
+
     let mut ok = 0usize;
     let mut err = 0usize;
-    for it in list {
-        if !it.is_candidate_for_dns_override() {
-            continue;
-        }
+    for it in candidates {
         let servers = nameserver_tun_hijack_only(g);
         match set_interface_dns(&it.guid, &servers) {
             Ok(()) => {
@@ -360,14 +494,19 @@ pub fn apply_override(gateway: &str) -> (usize, usize) {
     (ok, err)
 }
 
-/// Remove the TUN gateway from all non-TUN interfaces' NameServer values.
-/// If the gateway was the only static DNS value, writing an empty string lets
-/// Windows fall back to DHCP-provided DNS.
+/// Restore the saved DNS values. Falls back to removing the legacy hijack
+/// value when upgrading from a service version that did not save snapshots.
 pub fn remove_override(gateway: &str) -> (usize, usize) {
     let g = gateway.trim();
     if g.is_empty() || g == "-" {
         return (0, 0);
     }
+    if let Some(restored) = restore_saved_snapshot() {
+        return restored;
+    }
+
+    // Compatibility cleanup for an override created by an older service that
+    // did not persist a snapshot.
     let list = match enumerate_interfaces() {
         Ok(l) => l,
         Err(e) => {
@@ -406,7 +545,7 @@ pub fn remove_override(gateway: &str) -> (usize, usize) {
 
 /// Crash-path fallback when the gateway is unknown.
 pub fn restore_all() -> (usize, usize) {
-    reset_all_interfaces_dns()
+    restore_saved_snapshot().unwrap_or((0, 0))
 }
 
 // =========================== service log =============================
@@ -504,6 +643,17 @@ mod tests {
         assert!(!is_tun_alias("Local Area Connection"));
     }
 
+    #[test]
+    fn virtual_alias_skips_non_physical_adapters() {
+        assert!(is_virtual_or_tun_alias(
+            "vEthernet (WSL (Hyper-V firewall))"
+        ));
+        assert!(is_virtual_or_tun_alias("VMware Network Adapter VMnet8"));
+        assert!(is_virtual_or_tun_alias("WireGuard Tunnel"));
+        assert!(!is_virtual_or_tun_alias("以太网"));
+        assert!(!is_virtual_or_tun_alias("Wi-Fi"));
+    }
+
     // ------------------------------ nameserver format -------------------------
 
     #[test]
@@ -595,9 +745,9 @@ mod tests {
     #[test]
     fn apply_override_with_empty_gateway_is_noop() {
         // Must not touch the registry when gateway is blank.
-        assert_eq!(apply_override(""), (0, 0));
-        assert_eq!(apply_override("-"), (0, 0));
-        assert_eq!(apply_override("  "), (0, 0));
+        assert_eq!(apply_override("", None), (0, 0));
+        assert_eq!(apply_override("-", None), (0, 0));
+        assert_eq!(apply_override("  ", None), (0, 0));
     }
 
     // ------------------------------ enumerate integration --------------------

@@ -168,6 +168,11 @@ pub fn orphan_check_and_cleanup() -> bool {
         return false;
     }
     super::dns::log_line("orphan_check: main app missing — uninstalling tun-service");
+    let (dns_ok, dns_err) = super::dns::restore_all();
+    super::dns::log_line(&format!(
+        "orphan_check: DNS restore ok={} err={}",
+        dns_ok, dns_err
+    ));
     let _ = uninstall();
     true
 }
