@@ -10,7 +10,7 @@ use commands::{
     auth_login, auth_logout, auth_register, auth_restore, auth_verify, cleanup_on_exit,
     engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
     engine_uninstall_helper, ping_tcp, reconcile_stale_runtime, spawn_engine_health_monitor,
-    spawn_initial_restore, subs_list, subs_sync, EngineAppState,
+    subs_list, subs_sync, EngineAppState,
 };
 use state::{AuthState, SubsState};
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -38,7 +38,6 @@ pub fn run() {
             let subs_state = SubsState::load(&handle)?;
             let engine_state = EngineAppState::load(&handle)?;
             reconcile_stale_runtime(&engine_state);
-            spawn_initial_restore(&handle, &auth_state);
             handle.manage(auth_state);
             handle.manage(subs_state);
             handle.manage(engine_state);

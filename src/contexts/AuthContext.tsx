@@ -62,11 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
         }
       });
-      // Fire-and-forget restore: must not gate children on completion.
       try {
-        await authRestore();
+        const restoredUser = await authRestore();
+        if (!cancelled) {
+          setUser(restoredUser);
+        }
       } catch {
-        // Setup spawn may already emit; ignore restore invoke failures.
+        if (!cancelled) {
+          setUser(null);
+        }
       }
     })();
 
@@ -79,8 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     setAuthLoading(true);
     try {
-      await authLogin(email, password);
-      // user is set via auth-changed
+      const authenticatedUser = await authLogin(email, password);
+      setUser(authenticatedUser);
     } finally {
       setAuthLoading(false);
     }

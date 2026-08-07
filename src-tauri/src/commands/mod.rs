@@ -4,9 +4,7 @@ pub mod network;
 pub mod subs;
 pub mod subs_parse;
 
-pub use auth::{
-    auth_login, auth_logout, auth_register, auth_restore, auth_verify, spawn_initial_restore,
-};
+pub use auth::{auth_login, auth_logout, auth_register, auth_restore, auth_verify};
 pub use engine::{
     cleanup_on_exit, engine_get_state, engine_probe_tun, engine_select_node, engine_start,
     engine_stop, engine_uninstall_helper, reconcile_stale_runtime, spawn_engine_health_monitor,

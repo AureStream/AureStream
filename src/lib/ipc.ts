@@ -50,9 +50,9 @@ export async function authLogout(): Promise<void> {
   }
 }
 
-/** Non-blocking: Rust returns immediately and later emits `auth-changed`. */
-export async function authRestore(): Promise<void> {
-  await invoke<void>("auth_restore");
+/** Restore only after Rust refreshes and persists a valid token pair. */
+export async function authRestore(): Promise<User | null> {
+  return invokeAuth<User | null>("auth_restore");
 }
 
 export async function onAuthChanged(

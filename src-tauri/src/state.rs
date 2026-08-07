@@ -45,6 +45,12 @@ impl From<AuthTokens> for StoredSession {
     }
 }
 
+impl StoredSession {
+    fn has_complete_token_pair(&self) -> bool {
+        !self.access_token.trim().is_empty() && !self.refresh_token.trim().is_empty()
+    }
+}
+
 pub struct AuthState {
     inner: Mutex<Option<StoredSession>>,
     path: PathBuf,
@@ -57,7 +63,8 @@ pub struct AuthState {
 impl AuthState {
     /// Build over an explicit session file (tests / non-Tauri callers).
     fn with_path(path: PathBuf) -> Result<Self, String> {
-        let session = read_json_opt(&path)?;
+        let session =
+            read_json_opt::<StoredSession>(&path)?.filter(StoredSession::has_complete_token_pair);
         Ok(Self {
             inner: Mutex::new(session),
             path,
@@ -76,6 +83,9 @@ impl AuthState {
 
     pub fn save(&self, tokens: AuthTokens) -> Result<User, String> {
         let session = StoredSession::from(tokens);
+        if !session.has_complete_token_pair() {
+            return Err("missing_auth_tokens".to_string());
+        }
         let user = session.user.clone();
         // Same ordering discipline as `clear`: hold the lock across the write so
         // a concurrent clear can't land between the file write and the memory
@@ -124,6 +134,9 @@ impl AuthState {
     /// (e.g. logout raced the refresh) — re-storing tokens there would
     /// resurrect a session the user ended.
     pub fn update_tokens(&self, tokens: &RefreshedTokens) -> Result<bool, String> {
+        if tokens.access_token.trim().is_empty() || tokens.refresh_token.trim().is_empty() {
+            return Err("missing_auth_tokens".to_string());
+        }
         let mut guard = self
             .inner
             .lock()
@@ -141,14 +154,19 @@ impl AuthState {
     /// Load session from disk into memory (idempotent).
     pub fn restore_from_disk(&self) -> Option<User> {
         match read_json_opt::<StoredSession>(&self.path) {
-            Ok(Some(session)) => {
+            Ok(Some(session)) if session.has_complete_token_pair() => {
                 let user = session.user.clone();
                 if let Ok(mut guard) = self.inner.lock() {
                     *guard = Some(session);
                 }
                 Some(user)
             }
-            _ => None,
+            _ => {
+                if let Ok(mut guard) = self.inner.lock() {
+                    *guard = None;
+                }
+                None
+            }
         }
     }
 
@@ -273,8 +291,8 @@ fn read_json_opt<T: for<'de> Deserialize<'de>>(path: &PathBuf) -> Result<Option<
 }
 
 fn write_json<T: Serialize>(path: &PathBuf, value: &T) -> Result<(), String> {
-    let raw =
-        serde_json::to_string_pretty(value).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let raw = serde_json::to_string_pretty(value)
+        .map_err(|e| format!("serialize {}: {e}", path.display()))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
     }
@@ -320,6 +338,41 @@ mod tests {
         // can never be renewed again.
         let reloaded = AuthState::with_path(path).unwrap();
         assert_eq!(reloaded.refresh_token().unwrap(), "new-refresh");
+    }
+
+    #[test]
+    fn incomplete_tokens_never_create_or_restore_authenticated_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.json");
+        let auth = AuthState::with_path(path.clone()).unwrap();
+
+        let result = auth.save(AuthTokens {
+            access_token: "".into(),
+            refresh_token: "refresh".into(),
+            expires_in: 7200,
+            user: User {
+                id: "u1".into(),
+                email: "a@b.c".into(),
+                created_at: 0,
+            },
+        });
+        assert_eq!(result.unwrap_err(), "missing_auth_tokens");
+        assert!(!path.exists());
+        assert!(auth.access_token().is_none());
+
+        let invalid = StoredSession {
+            access_token: "access".into(),
+            refresh_token: "  ".into(),
+            expires_in: 7200,
+            user: User {
+                id: "u1".into(),
+                email: "a@b.c".into(),
+                created_at: 0,
+            },
+        };
+        write_json(&path, &invalid).unwrap();
+        assert!(auth.restore_from_disk().is_none());
+        assert!(auth.access_token().is_none());
     }
 
     #[test]

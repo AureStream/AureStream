@@ -31,10 +31,7 @@ impl From<ApiError> for AuthIpcError {
 }
 
 fn emit_auth_changed(app: &AppHandle, user: Option<User>) {
-    let _ = app.emit(
-        AUTH_CHANGED_EVENT,
-        AuthChangedPayload { user },
-    );
+    let _ = app.emit(AUTH_CHANGED_EVENT, AuthChangedPayload { user });
 }
 
 fn api_client() -> ApiClient {
@@ -56,13 +53,11 @@ pub async fn auth_login(
         .login(email.trim(), &password)
         .await
         .map_err(AuthIpcError::from)?;
-    let user = state
-        .save(tokens)
-        .map_err(|e| AuthIpcError {
-            code: e,
-            status: 0,
-            retry_after: None,
-        })?;
+    let user = state.save(tokens).map_err(|e| AuthIpcError {
+        code: e,
+        status: 0,
+        retry_after: None,
+    })?;
     log::info!("auth_login ok email={}", user.email);
     emit_auth_changed(&app, Some(user.clone()));
     Ok(user)
@@ -105,27 +100,33 @@ pub async fn auth_logout(app: AppHandle, state: State<'_, AuthState>) -> Result<
     Ok(())
 }
 
-/// Kick off session restore without blocking the caller / webview load.
-/// Completion is signaled via `auth-changed`.
 #[tauri::command]
-pub fn auth_restore(app: AppHandle, state: State<'_, AuthState>) -> Result<(), String> {
-    let user = state.restore_from_disk();
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        // Yield so the invoke returns and the webview can paint first.
-        emit_auth_changed(&handle, user);
-    });
-    Ok(())
-}
+pub async fn auth_restore(
+    app: AppHandle,
+    state: State<'_, AuthState>,
+) -> Result<Option<User>, AuthIpcError> {
+    let Some(user) = state.restore_from_disk() else {
+        log::info!("auth_restore session=none");
+        emit_auth_changed(&app, None);
+        return Ok(None);
+    };
 
-pub fn spawn_initial_restore(app: &AppHandle, state: &AuthState) {
-    let user = state.restore_from_disk();
-    log::info!(
-        "auth_restore session={}",
-        if user.is_some() { "present" } else { "none" }
-    );
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        emit_auth_changed(&handle, user);
-    });
+    let stale_access = state.access_token().ok_or_else(|| AuthIpcError {
+        code: "missing_auth_tokens".into(),
+        status: 0,
+        retry_after: None,
+    })?;
+
+    if let Err(err) = state
+        .refresh_access_token(&api_client(), &stale_access)
+        .await
+    {
+        log::warn!("auth_restore token verification failed: {err}");
+        emit_auth_changed(&app, None);
+        return Err(AuthIpcError::from(err));
+    }
+
+    log::info!("auth_restore session=verified");
+    emit_auth_changed(&app, Some(user.clone()));
+    Ok(Some(user))
 }
