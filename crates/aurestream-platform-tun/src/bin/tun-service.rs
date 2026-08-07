@@ -21,7 +21,12 @@ fn main() {
             )) {
                 Ok(()) => std::process::exit(0),
                 Err(e) => {
-                    eprintln!("install failed: {e}");
+                    // Do NOT use eprintln! — it triggers console window flash on windows_subsystem="windows"
+                    // Exit with non-zero code; parent (elevate.rs) will surface the error
+                    let _ = std::fs::write(
+                        std::env::temp_dir().join("aurestream-tun-install-error.log"),
+                        format!("install failed: {e}\n"),
+                    );
                     std::process::exit(1);
                 }
             }
@@ -29,7 +34,11 @@ fn main() {
         Some("uninstall") => match aurestream_platform_tun::windows_scm_uninstall() {
             Ok(()) => std::process::exit(0),
             Err(e) => {
-                eprintln!("uninstall failed: {e}");
+                // Do NOT use eprintln! — it triggers console window flash
+                let _ = std::fs::write(
+                    std::env::temp_dir().join("aurestream-tun-uninstall-error.log"),
+                    format!("uninstall failed: {e}\n"),
+                );
                 std::process::exit(1);
             }
         },
