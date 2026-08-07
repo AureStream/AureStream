@@ -377,27 +377,32 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
             "queryStrategy": query_strategy
         });
     }
-    // Align with XTLS routing-with-dns (simplified example 2):
-    // CN → domestic DNS (direct tag) + expectedIPs filter; else foreign via proxy tag.
-    // Field name is expectedIPs (official dns.html), not expectIPs.
+    // Xray DNS routing: https://xtls.github.io/config/dns.html
+    // Strategy: CN domains use domestic DNS with IP validation, all others use fallback.
+    // Xray matches domains rules from top to bottom, unmatched domains use fallback servers.
     json!({
         "tag": "dns-proxy",
         "queryStrategy": query_strategy,
         "servers": [
+            // Domestic DNS for CN domains ONLY (with expectedIPs validation)
+            {
+                "tag": "dns-direct",
+                "address": "119.29.29.29",
+                "port": 53,
+                "domains": ["geosite:cn"],
+                "expectedIPs": ["geoip:cn"],
+                "skipFallback": true
+            },
             {
                 "tag": "dns-direct",
                 "address": "223.5.5.5",
+                "port": 53,
                 "domains": ["geosite:cn"],
                 "expectedIPs": ["geoip:cn"],
                 "skipFallback": true
             },
-            {
-                "tag": "dns-direct",
-                "address": "114.114.114.114",
-                "domains": ["geosite:cn"],
-                "expectedIPs": ["geoip:cn"],
-                "skipFallback": true
-            },
+            // Fallback DNS for ALL non-CN domains (Google, YouTube, and everything else)
+            // No "domains" rule = handles all unmatched queries
             "1.1.1.1",
             "8.8.8.8"
         ]

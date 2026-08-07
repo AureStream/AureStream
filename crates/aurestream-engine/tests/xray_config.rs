@@ -219,3 +219,77 @@ fn xray_build_config_includes_api_listen() {
         });
     assert!(has_api_port, "api port 19291 must appear in config");
 }
+
+#[test]
+fn xray_dns_config_smart_routing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    let engine = XrayEngine::new();
+
+    // Build config with TUN mode (which enables smart_routing)
+    let opts = aurestream_engine::BuildOptions::tun(17890, 19291);
+    engine
+        .build_config_with_options(&path, &sample_vless_node(), opts)
+        .unwrap();
+
+    let cfg: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let dns = &cfg["dns"];
+
+    // Verify DNS config exists
+    assert!(dns.is_object(), "DNS config must exist");
+    assert_eq!(dns["tag"], "dns-proxy");
+    assert_eq!(dns["queryStrategy"], "UseIPv4");
+
+    let servers = dns["servers"].as_array().expect("dns.servers must be array");
+    assert_eq!(servers.len(), 4, "Should have 4 DNS servers");
+
+    // Verify first DNS server (domestic for CN domains)
+    let first_dns = &servers[0];
+    assert_eq!(first_dns["address"], "119.29.29.29", "First DNS should be 119.29.29.29");
+    assert_eq!(first_dns["port"], 53);
+    assert_eq!(first_dns["domains"][0], "geosite:cn");
+    assert_eq!(first_dns["expectedIPs"][0], "geoip:cn");
+
+    // Verify second DNS server (also for CN domains)
+    let second_dns = &servers[1];
+    assert_eq!(second_dns["address"], "223.5.5.5", "Second DNS should be 223.5.5.5");
+    assert_eq!(second_dns["domains"][0], "geosite:cn");
+
+    // Verify fallback DNS servers (for non-CN domains like Google, YouTube)
+    assert_eq!(servers[2], "1.1.1.1", "Third DNS should be 1.1.1.1 fallback");
+    assert_eq!(servers[3], "8.8.8.8", "Fourth DNS should be 8.8.8.8 fallback");
+
+    println!("✓ DNS config structure correct");
+    println!("✓ CN domains → 119.29.29.29, 223.5.5.5 (with geoip validation)");
+    println!("✓ Non-CN domains (Google/YouTube) → 1.1.1.1, 8.8.8.8 fallback");
+}
+
+#[test]
+fn xray_dns_config_system_proxy_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    let engine = XrayEngine::new();
+
+    // Build config with system_proxy mode (smart_routing=true, enable_tun=false)
+    engine
+        .build_config(&path, &sample_vless_node(), 17890, 19291)
+        .unwrap();
+
+    let cfg: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let dns = &cfg["dns"];
+
+    // System proxy mode should also have smart routing DNS
+    let servers = dns["servers"].as_array().expect("dns.servers must be array");
+    assert_eq!(servers.len(), 4, "System proxy mode should have 4 DNS servers");
+
+    // Should use the same smart routing DNS config
+    assert_eq!(servers[0]["address"], "119.29.29.29");
+    assert_eq!(servers[1]["address"], "223.5.5.5");
+    assert_eq!(servers[2], "1.1.1.1");
+    assert_eq!(servers[3], "8.8.8.8");
+
+    println!("✓ System proxy DNS config correct");
+    println!("✓ CN domains → 119.29.29.29, 223.5.5.5");
+    println!("✓ Non-CN domains → 1.1.1.1, 8.8.8.8");
+}
+
