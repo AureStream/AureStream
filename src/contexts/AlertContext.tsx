@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -19,10 +20,16 @@ export type AlertOptions = {
   kind?: AlertKind
 }
 
+export type ConfirmOptions = AlertOptions & {
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
 type AlertContextValue = {
   showAlert: (options: AlertOptions) => void
   showError: (message: string, title?: string) => void
   showInfo: (message: string, title?: string) => void
+  showConfirm: (options: ConfirmOptions) => Promise<boolean>
   /** Convert unknown throw / IPC failure into a user-facing dialog. */
   showErrorFromUnknown: (err: unknown, fallback?: string, title?: string) => void
 }
@@ -47,6 +54,8 @@ type DialogState = {
   title: string
   message: string
   kind: AlertKind
+  confirmLabel?: string
+  cancelLabel?: string
 }
 
 const DEFAULT_TITLES: Record<AlertKind, string> = {
@@ -106,20 +115,47 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     message: "",
     kind: "error",
   })
+  const confirmResolver = useRef<((confirmed: boolean) => void) | null>(null)
 
-  const close = useCallback(() => {
+  const settleConfirm = useCallback((confirmed: boolean) => {
+    const resolve = confirmResolver.current
+    confirmResolver.current = null
+    resolve?.(confirmed)
     setDialog((d) => ({ ...d, open: false }))
   }, [])
+
+  const close = useCallback(() => settleConfirm(false), [settleConfirm])
 
   const showAlert = useCallback((options: AlertOptions) => {
     const kind = options.kind ?? "error"
     const message = (options.message || "").trim()
     if (!message) return
+    confirmResolver.current?.(false)
+    confirmResolver.current = null
     setDialog({
       open: true,
       title: options.title?.trim() || DEFAULT_TITLES[kind],
       message,
       kind,
+    })
+  }, [])
+
+  const showConfirm = useCallback((options: ConfirmOptions) => {
+    const kind = options.kind ?? "info"
+    const message = (options.message || "").trim()
+    if (!message) return Promise.resolve(false)
+
+    confirmResolver.current?.(false)
+    return new Promise<boolean>((resolve) => {
+      confirmResolver.current = resolve
+      setDialog({
+        open: true,
+        title: options.title?.trim() || "请确认",
+        message,
+        kind,
+        confirmLabel: options.confirmLabel?.trim() || "确认",
+        cancelLabel: options.cancelLabel?.trim() || "取消",
+      })
     })
   }, [])
 
@@ -167,8 +203,8 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }, [showAlert])
 
   const value = useMemo(
-    () => ({ showAlert, showError, showInfo, showErrorFromUnknown }),
-    [showAlert, showError, showInfo, showErrorFromUnknown],
+    () => ({ showAlert, showError, showInfo, showConfirm, showErrorFromUnknown }),
+    [showAlert, showError, showInfo, showConfirm, showErrorFromUnknown],
   )
 
   return (
@@ -179,7 +215,10 @@ export function AlertProvider({ children }: { children: ReactNode }) {
         title={dialog.title}
         message={dialog.message}
         kind={dialog.kind}
+        confirmLabel={dialog.confirmLabel}
+        cancelLabel={dialog.cancelLabel}
         onClose={close}
+        onConfirm={() => settleConfirm(true)}
       />
     </AlertContext.Provider>
   )
@@ -190,13 +229,19 @@ function AlertDialog({
   title,
   message,
   kind,
+  confirmLabel,
+  cancelLabel,
   onClose,
+  onConfirm,
 }: {
   open: boolean
   title: string
   message: string
   kind: AlertKind
+  confirmLabel?: string
+  cancelLabel?: string
   onClose: () => void
+  onConfirm: () => void
 }) {
   if (!open) return null
 
@@ -250,19 +295,48 @@ function AlertDialog({
             {message}
           </p>
         </div>
-        <div className="border-t border-[#eceef1] p-3 dark:border-border">
-          <button
-            type="button"
-            autoFocus
-            onClick={onClose}
-            className={cn(
-              "flex h-11 w-full items-center justify-center rounded-full text-[14px] font-semibold",
-              "transition-opacity active:scale-[0.98]",
-              btn,
-            )}
-          >
-            知道了
-          </button>
+        <div
+          className={cn(
+            "border-t border-[#eceef1] p-3 dark:border-border",
+            confirmLabel && "grid grid-cols-2 gap-2",
+          )}
+        >
+          {confirmLabel ? (
+            <>
+              <button
+                type="button"
+                autoFocus
+                onClick={onClose}
+                className="flex h-11 items-center justify-center rounded-full bg-[#f1f2f4] text-[14px] font-semibold text-[#4b5563] transition-opacity active:scale-[0.98] dark:bg-muted dark:text-foreground"
+              >
+                {cancelLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                className={cn(
+                  "flex h-11 items-center justify-center rounded-full text-[14px] font-semibold",
+                  "transition-opacity active:scale-[0.98]",
+                  btn,
+                )}
+              >
+                {confirmLabel}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              autoFocus
+              onClick={onClose}
+              className={cn(
+                "flex h-11 w-full items-center justify-center rounded-full text-[14px] font-semibold",
+                "transition-opacity active:scale-[0.98]",
+                btn,
+              )}
+            >
+              知道了
+            </button>
+          )}
         </div>
       </div>
     </div>

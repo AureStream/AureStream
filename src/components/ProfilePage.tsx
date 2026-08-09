@@ -32,7 +32,7 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const { user, authLoading, logout } = useAuth()
   const { subscriptions, activeId, syncing } = useSubs()
-  const { showErrorFromUnknown, showInfo } = useAlert()
+  const { showConfirm, showErrorFromUnknown, showInfo } = useAlert()
   const [tunHelperReady, setTunHelperReady] = useState(false)
   const [uninstallingHelper, setUninstallingHelper] = useState(false)
 
@@ -50,9 +50,13 @@ export default function ProfilePage() {
   }, [refreshTunHelper])
 
   const handleUninstallHelper = async () => {
-    const ok = window.confirm(
-      "将卸载虚拟网卡特权组件：\n• macOS：SMJobBless Helper\n• Windows：TUN 系统服务\n• Linux：pkexec Helper + polkit\n\n卸载后需重新开启虚拟网卡才会再次安装。\n\n确定继续？",
-    )
+    const ok = await showConfirm({
+      title: "卸载虚拟网卡组件",
+      message:
+        "将卸载虚拟网卡特权组件：\n• macOS：SMJobBless Helper\n• Windows：TUN 系统服务\n• Linux：pkexec Helper + polkit\n\n卸载后需重新开启虚拟网卡才会再次安装。",
+      kind: "error",
+      confirmLabel: "确认卸载",
+    })
     if (!ok) return
     setUninstallingHelper(true)
     try {
