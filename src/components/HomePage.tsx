@@ -4,6 +4,7 @@ import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
+import { flagEmojiForNodeName } from "@/lib/node-flag"
 import {
   loadProxyPrefs,
   setEnableTunPref,
@@ -358,7 +359,7 @@ export default function HomePage() {
                 )}
               >
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-lg leading-none shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-card" aria-hidden>
-                  🌐
+                  {flagEmojiForNodeName(nodeTitle)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p
