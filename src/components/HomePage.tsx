@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
-import { getNodeLatency, subscribeNodeLatencies } from "@/lib/node-latency"
-import { getNodeLatencyTone } from "@/lib/node-latency-tone"
 import {
   loadProxyPrefs,
   setEnableTunPref,
@@ -118,15 +116,6 @@ export default function HomePage() {
         ? "订阅同步中"
         : "暂无节点"
       : "未选择节点")
-  const nodeProtocol = selected?.protocol || "—"
-
-  // Re-read cache when latencies update (e.g. after Nodes page speed test).
-  const [latencyVersion, setLatencyVersion] = useState(0)
-  useEffect(() => subscribeNodeLatencies(() => setLatencyVersion((n) => n + 1)), [])
-  const selectedLatency = useMemo(() => {
-    if (!selected?.tag) return undefined
-    return getNodeLatency(selected.tag)
-  }, [selected?.tag, latencyVersion])
 
   const sub =
     (activeId && subscriptions.find((s) => s.id === activeId)) || subscriptions[0] || null
@@ -378,16 +367,8 @@ export default function HomePage() {
                   >
                     {nodeTitle}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-[#9aa0a6]">
-                    <span className="truncate font-mono uppercase">{nodeProtocol}</span>
-                    <span className="text-[#d0d4da]">·</span>
-                    <span className="shrink-0">点击切换</span>
-                  </div>
+                  <p className="mt-0.5 text-[11px] font-medium text-[#9aa0a6]">点击切换</p>
                 </div>
-                {/* Fixed-width latency slot (same as Nodes page) */}
-                <span className="flex w-[3.75rem] shrink-0 items-center justify-end font-mono text-xs font-bold tabular-nums">
-                  <HomeLatencyBadge ms={selectedLatency} />
-                </span>
                 <svg
                   width="16"
                   height="16"
@@ -478,21 +459,5 @@ export default function HomePage() {
         </div>
       </div>
     </div>
-  )
-}
-
-function HomeLatencyBadge({ ms }: { ms: number | undefined }) {
-  if (ms === undefined || ms === 0) {
-    return <span className="text-[#b0b8c4]">-- ms</span>
-  }
-  if (ms < 0) {
-    return <span className="text-destructive">超时</span>
-  }
-  const tone = getNodeLatencyTone(ms)
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className={cn("size-1.5 shrink-0 rounded-full", tone.dot)} />
-      <span className={tone.text}>{ms}ms</span>
-    </span>
   )
 }

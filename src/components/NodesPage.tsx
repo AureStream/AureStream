@@ -207,10 +207,11 @@ export default function NodesPage() {
                     >
                       {node.name}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] font-medium uppercase text-[#9aa0a6]">
-                      {node.protocol || "—"}
-                      {node.server ? ` · ${node.server}` : ""}
-                    </p>
+                    {node.server ? (
+                      <p className="mt-0.5 truncate text-[11px] font-medium text-[#9aa0a6]">
+                        {node.server}
+                      </p>
+                    ) : null}
                   </div>
 
                   {/* Fixed-width slot so latency always occupies the same place */}

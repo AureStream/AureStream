@@ -3,11 +3,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useAlert } from "@/contexts/AlertContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEngineState } from "@/hooks/useEngineState";
 import {
   onSubsUpdated,
   subsList,
@@ -16,6 +18,10 @@ import {
   type SubSummary,
   type SubsUpdatedPayload,
 } from "@/lib/ipc";
+import {
+  shouldRunAutoSubsSync,
+  SUBS_SYNC_INTERVAL_MS,
+} from "@/lib/subs-auto-sync";
 
 type SubsContextValue = {
   subscriptions: SubSummary[];
@@ -23,7 +29,6 @@ type SubsContextValue = {
   nodes: NodeInfo[];
   /** True while a background sync is in flight (inline hint only — never gates Home). */
   syncing: boolean;
-  refresh: () => void;
 };
 
 const SubsContext = createContext<SubsContextValue>({
@@ -31,7 +36,6 @@ const SubsContext = createContext<SubsContextValue>({
   activeId: null,
   nodes: [],
   syncing: false,
-  refresh: () => {},
 });
 
 export function useSubs() {
@@ -52,10 +56,19 @@ function applyPayload(
 export function SubsProvider({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { showErrorFromUnknown } = useAlert();
+  const engine = useEngineState();
   const [subscriptions, setSubscriptions] = useState<SubSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [syncing, setSyncing] = useState(false);
+
+  const userRef = useRef(user);
+  const engineStateRef = useRef(engine.state);
+  const inFlightRef = useRef(false);
+  const lastSuccessAtRef = useRef<number | null>(null);
+
+  userRef.current = user;
+  engineStateRef.current = engine.state;
 
   // Rust refreshes expired access tokens and retries, so a token error here
   // means the session is unrecoverable — sign out instead of showing an error
@@ -72,7 +85,47 @@ export function SubsProvider({ children }: { children: ReactNode }) {
     [logout, showErrorFromUnknown],
   );
 
-  // Event bus is the source of truth for updates.
+  const runSync = useCallback(
+    (opts: { ignoreInterval?: boolean; /** Dialog on failure (login only). */ notifyError?: boolean }) => {
+      if (
+        !shouldRunAutoSubsSync({
+          hasUser: Boolean(userRef.current),
+          engineState: engineStateRef.current,
+          inFlight: inFlightRef.current,
+          lastSuccessAt: lastSuccessAtRef.current,
+          now: Date.now(),
+          ignoreInterval: opts.ignoreInterval,
+        })
+      ) {
+        return;
+      }
+
+      inFlightRef.current = true;
+      setSyncing(true);
+      void subsSync()
+        .then((payload) => {
+          lastSuccessAtRef.current = Date.now();
+          applyPayload(payload, setSubscriptions, setActiveId, setNodes);
+        })
+        .catch((err) => {
+          // Keep last good cache. Auth failures always sign out; other errors
+          // only surface a dialog on the login/restore attempt (not every tick).
+          const code = (err as { code?: string } | null)?.code;
+          if (code === "invalid_token" || code === "not_authenticated") {
+            handleSyncError(err);
+          } else if (opts.notifyError) {
+            handleSyncError(err);
+          }
+        })
+        .finally(() => {
+          inFlightRef.current = false;
+          setSyncing(false);
+        });
+    },
+    [handleSyncError],
+  );
+
+  // Event bus is the source of truth for updates (e.g. future multi-window).
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
@@ -81,6 +134,8 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       unlisten = await onSubsUpdated((payload) => {
         if (!cancelled) {
           applyPayload(payload, setSubscriptions, setActiveId, setNodes);
+          lastSuccessAtRef.current = Date.now();
+          inFlightRef.current = false;
           setSyncing(false);
         }
       });
@@ -92,22 +147,6 @@ export function SubsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const refresh = useCallback(() => {
-    if (!user) return;
-    setSyncing(true);
-    void subsSync()
-      .then((payload) => {
-        applyPayload(payload, setSubscriptions, setActiveId, setNodes);
-      })
-      .catch((err) => {
-        // Keep last good cache; surface error in dialog.
-        handleSyncError(err);
-      })
-      .finally(() => {
-        setSyncing(false);
-      });
-  }, [user, handleSyncError]);
-
   // Mount / login / restore: hydrate cache then background sync. Never blocks Home.
   useEffect(() => {
     if (!user) {
@@ -115,6 +154,8 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       setActiveId(null);
       setNodes([]);
       setSyncing(false);
+      inFlightRef.current = false;
+      lastSuccessAtRef.current = null;
       return;
     }
 
@@ -129,31 +170,47 @@ export function SubsProvider({ children }: { children: ReactNode }) {
         // Empty cache is fine; sync will fill.
       });
 
-    // Background sync — must not delay login navigation (login never awaits this).
-    setSyncing(true);
-    void subsSync()
-      .then((payload) => {
-        if (!cancelled) {
-          applyPayload(payload, setSubscriptions, setActiveId, setNodes);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          handleSyncError(err);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setSyncing(false);
-      });
+    // Initial sync after login/restore — still blocked if somehow already connected.
+    runSync({ ignoreInterval: true, notifyError: true });
 
     return () => {
       cancelled = true;
     };
-  }, [user, handleSyncError]);
+  }, [user, runSync]);
+
+  // Periodic auto-sync while logged in. Skips when connected / starting / stopping.
+  useEffect(() => {
+    if (!user) return;
+
+    const tick = () => {
+      runSync({ ignoreInterval: false, notifyError: false });
+    };
+
+    const id = window.setInterval(tick, SUBS_SYNC_INTERVAL_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        tick();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user, runSync]);
+
+  // After disconnect settles, catch up if a tick was deferred while connected.
+  useEffect(() => {
+    if (!user) return;
+    if (engine.state !== "idle" && engine.state !== "failed") return;
+    runSync({ ignoreInterval: false, notifyError: false });
+  }, [user, engine.state, runSync]);
 
   return (
     <SubsContext.Provider
-      value={{ subscriptions, activeId, nodes, syncing, refresh }}
+      value={{ subscriptions, activeId, nodes, syncing }}
     >
       {children}
     </SubsContext.Provider>
