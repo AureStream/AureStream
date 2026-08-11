@@ -1,6 +1,11 @@
 #!/bin/sh
 # AureStream TUN helper — privileged ops via pkexec.
 # Installed to /usr/lib/AureStream/aurestream-tun-helper by deb/rpm.
+#
+# Design: one elevated start-tun session owns the full lifecycle
+# (cleanup → core → wait API → DNS → watchdog). The desktop app should
+# stop by signaling that process (TERM) so disconnect needs no second
+# password. stop-tun remains as a fallback after app restart / lost child.
 set -e
 
 HELPER_DIR="/usr/lib/AureStream"
@@ -14,6 +19,9 @@ ORPHAN_TIMER_UNIT="aurestream-tun-orphan.timer"
 ORPHAN_SERVICE_UNIT="aurestream-tun-orphan.service"
 SYSTEMD_DIR="/etc/systemd/system"
 RUNTIME_DIR="/run/aurestream-tun"
+READY_TOKEN="aurestream-tun-ready"
+# ~60s at 150ms polls — matches Rust READY_TIMEOUT.
+API_READY_MAX_ATTEMPTS=400
 
 ensure_runtime_dir() {
     install -d -o root -g root -m 700 "$RUNTIME_DIR"
@@ -35,6 +43,16 @@ validate_pid() {
     case "$1" in
         *[!0-9]*|''|0|1) return 1 ;;
         *) return 0 ;;
+    esac
+}
+
+validate_port() {
+    case "$1" in
+        *[!0-9]*|''|0) return 1 ;;
+        *)
+            # shell ports are 1..65535
+            [ "$1" -ge 1 ] 2>/dev/null && [ "$1" -le 65535 ] 2>/dev/null
+            ;;
     esac
 }
 
@@ -122,6 +140,70 @@ stop_core_pid() {
         attempts=$((attempts + 1))
     done
     kill -KILL "$core_pid" 2>/dev/null || true
+}
+
+pkill_cores() {
+    pkill -x aurestream-core 2>/dev/null || true
+    pkill -f '/aurestream-core(-[a-z0-9_]+)*$' 2>/dev/null || true
+    # also match debug path binaries
+    pkill -f 'target/.*/aurestream-core' 2>/dev/null || true
+}
+
+# Tear down every recorded session + leftover cores (used by start and stop).
+teardown_all_sessions() {
+    for session_dir in "$RUNTIME_DIR"/session-*; do
+        [ -d "$session_dir" ] || continue
+        core_pid=$(sed -n '1p' "$session_dir/core-pid" 2>/dev/null || true)
+        restore_session_dns "$session_dir"
+        stop_core_pid "$core_pid"
+        remove_session "$session_dir"
+    done
+    pkill_cores
+}
+
+# Portable localhost TCP probe (dash has no /dev/tcp).
+probe_localhost_port() {
+    port="$1"
+    if command -v bash >/dev/null 2>&1; then
+        bash -c "exec 3<>/dev/tcp/127.0.0.1/$port" 2>/dev/null && return 0
+    fi
+    if command -v nc >/dev/null 2>&1; then
+        nc -z 127.0.0.1 "$port" >/dev/null 2>&1 && return 0
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        ss -lnt 2>/dev/null | grep -E ":${port}\\s" >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+
+wait_api_ready() {
+    port="$1"
+    core_pid="$2"
+    attempts=0
+    while [ "$attempts" -lt "$API_READY_MAX_ATTEMPTS" ]; do
+        if ! kill -0 "$core_pid" 2>/dev/null; then
+            return 1
+        fi
+        if probe_localhost_port "$port"; then
+            return 0
+        fi
+        sleep 0.15
+        attempts=$((attempts + 1))
+    done
+    return 1
+}
+
+apply_session_dns() {
+    session_dir="$1"
+    iface="$2"
+    gateway="$3"
+    validate_iface "$iface" || return 1
+    validate_dns_server "$gateway" || return 1
+    # Record restore intent before changing the OS.
+    : > "$session_dir/dns-active"
+    chmod 600 "$session_dir/dns-active"
+    resolvectl dns "$iface" "$gateway"
+    resolvectl flush-caches 2>/dev/null || true
 }
 
 # Return 0 if the AureStream main app (or package) still appears installed.
@@ -274,17 +356,29 @@ resolve_config() {
 
 case "$1" in
     start-tun)
-        # $2 = kernel id, $3 = config path, $4 = caller pid,
-        # $5 = interface (optional), $6... = original DNS servers.
-        # DNS is applied separately AFTER core readiness (dns-override).
+        # $2 = kernel id
+        # $3 = config path
+        # $4 = caller pid
+        # $5 = api port (wait until ready before DNS / ready token)
+        # $6 = dns gateway (e.g. 1.1.1.1); ignored when iface omitted
+        # $7 = interface (optional)
+        # $8... = original DNS servers for restore
+        #
+        # Full lifecycle stays in this single elevated process so the app only
+        # needs one polkit password to connect.
         kernel_id="$2"
         requested_config="$3"
         caller_pid="$4"
-        iface="${5:-}"
-        if [ -z "$kernel_id" ] || [ -z "$requested_config" ] || [ -z "$caller_pid" ]; then
-            echo "start-tun requires kernel id, config path, and caller pid" >&2
+        api_port="$5"
+        dns_gateway="$6"
+        iface="${7:-}"
+        if [ -z "$kernel_id" ] || [ -z "$requested_config" ] || [ -z "$caller_pid" ] || \
+           [ -z "$api_port" ] || [ -z "$dns_gateway" ]; then
+            echo "start-tun requires kernel id, config, caller pid, api port, and dns gateway" >&2
             exit 2
         fi
+        validate_port "$api_port" || { echo "invalid api port" >&2; exit 2; }
+        validate_dns_server "$dns_gateway" || { echo "invalid dns gateway" >&2; exit 2; }
         sidecar=$(resolve_kernel "$kernel_id") || exit 3
         config=$(resolve_config "$requested_config") || exit 4
         caller_start=$(validate_caller "$caller_pid") || {
@@ -294,12 +388,14 @@ case "$1" in
         caller_uid="$PKEXEC_UID"
         if [ -n "$iface" ]; then
             validate_iface "$iface" || { echo "invalid interface" >&2; exit 6; }
-            shift 5
+            shift 7
             for server in "$@"; do
                 validate_dns_server "$server" || { echo "invalid DNS server" >&2; exit 6; }
             done
         else
-            shift 4
+            shift 6
+            # No leftover original-dns args when iface is absent.
+            set --
         fi
         # Best-effort: ensure orphan timer is armed after first privileged use.
         install_orphan_timer 2>/dev/null || true
@@ -311,6 +407,12 @@ case "$1" in
             export XRAY_LOCATION_ASSET="$side_dir"
             cd "$side_dir"
         fi
+
+        # Previous TUN session cleanup inside this same elevation — no extra pkexec.
+        lock_state
+        teardown_all_sessions
+        unlock_state
+
         lock_state
         session_dir="$RUNTIME_DIR/session-$caller_pid"
         if [ -d "$session_dir" ]; then
@@ -335,6 +437,31 @@ case "$1" in
 
         cleanup_requested=0
         trap 'cleanup_requested=1' HUP INT TERM
+
+        if ! wait_api_ready "$api_port" "$core_pid"; then
+            echo "core API :${api_port} not ready" >&2
+            stop_core_pid "$core_pid"
+            lock_state
+            remove_session "$session_dir"
+            unlock_state
+            exit 7
+        fi
+
+        if [ -n "$iface" ]; then
+            if ! apply_session_dns "$session_dir" "$iface" "$dns_gateway"; then
+                echo "dns-override failed for iface=${iface}" >&2
+                stop_core_pid "$core_pid"
+                lock_state
+                remove_session "$session_dir"
+                unlock_state
+                exit 8
+            fi
+        fi
+
+        # Tell the unprivileged parent that core + DNS are ready.
+        # Must be a single line token; parent waits for this before returning Ok.
+        printf '%s\n' "$READY_TOKEN"
+
         while kill -0 "$core_pid" 2>/dev/null; do
             if [ "$cleanup_requested" -eq 1 ] || \
                ! caller_is_alive "$caller_pid" "$caller_uid" "$caller_start"; then
@@ -352,21 +479,13 @@ case "$1" in
         ;;
     stop-tun)
         lock_state
-        for session_dir in "$RUNTIME_DIR"/session-*; do
-            [ -d "$session_dir" ] || continue
-            core_pid=$(sed -n '1p' "$session_dir/core-pid" 2>/dev/null || true)
-            restore_session_dns "$session_dir"
-            stop_core_pid "$core_pid"
-            remove_session "$session_dir"
-        done
-        pkill -x aurestream-core 2>/dev/null || true
-        pkill -f '/aurestream-core(-[a-z0-9_]+)*$' 2>/dev/null || true
-        # also match debug path binaries
-        pkill -f 'target/.*/aurestream-core' 2>/dev/null || true
+        teardown_all_sessions
         unlock_state
         exit 0
         ;;
     dns-override)
+        # Kept for compatibility / manual recovery. Normal start applies DNS
+        # inside start-tun so no second polkit prompt is required.
         # $2 = iface, $3 = gateway, $4 = caller pid.
         iface="$2"
         gateway="$3"
@@ -395,11 +514,11 @@ case "$1" in
             echo "TUN session is no longer alive" >&2
             exit 4
         fi
-        # Record restore intent before changing the OS. A partial resolvectl
-        # failure must still be repaired by the watchdog.
-        : > "$session_dir/dns-active"
-        resolvectl dns "$iface" "$gateway"
-        resolvectl flush-caches 2>/dev/null || true
+        if ! apply_session_dns "$session_dir" "$iface" "$gateway"; then
+            unlock_state
+            echo "dns-override failed" >&2
+            exit 5
+        fi
         unlock_state
         ;;
     dns-restore)

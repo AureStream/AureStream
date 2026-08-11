@@ -1,13 +1,12 @@
 //! OS-level TUN capture (virtual NIC).
 //!
-//! - **Linux**: pkexec + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm).
+//! - **Linux**: one `pkexec` session via `/usr/lib/AureStream/aurestream-tun-helper`
+//!   (deb/rpm); stop prefers signaling that session (no second password).
 //! - **Windows**: SCM service `AureStreamTunService` (`tun-service.exe`, one-time UAC).
 //! - **macOS**: SMJobBless helper `com.root.aurestream.helper` (signed bundle).
 
 use std::fmt;
 use std::path::Path;
-#[cfg(target_os = "linux")]
-use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -51,20 +50,6 @@ impl fmt::Display for TunError {
 }
 
 impl std::error::Error for TunError {}
-
-/// Saved DNS restore info for the active TUN session (Linux user-space path).
-#[cfg(target_os = "linux")]
-static DNS_RESTORE: Mutex<Option<(String, String)>> = Mutex::new(None);
-
-#[cfg(target_os = "linux")]
-fn set_dns_restore(info: Option<(String, String)>) {
-    *DNS_RESTORE.lock().unwrap_or_else(|e| e.into_inner()) = info;
-}
-
-#[cfg(target_os = "linux")]
-fn take_dns_restore() -> Option<(String, String)> {
-    DNS_RESTORE.lock().unwrap_or_else(|e| e.into_inner()).take()
-}
 
 /// Probe elevated TUN helper availability (no side effects).
 pub fn probe() -> TunServiceState {
@@ -254,8 +239,7 @@ fn not_installed_error() -> TunError {
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
-    use std::io::Read;
-    use std::net::TcpStream;
+    use std::io::{BufRead, BufReader, Read};
     use std::path::Path;
     use std::process::{Child, Command, Stdio};
     use std::sync::Mutex;
@@ -268,9 +252,11 @@ mod linux {
         "/usr/bin/aurestream-core",
     ];
     const TUN_GATEWAY_IP: &str = "198.18.0.1";
-    /// Include time for polkit password dialog + core boot.
+    /// Helper prints this single line after core API is up and DNS (if any) applied.
+    const READY_TOKEN: &str = "aurestream-tun-ready";
+    /// Include time for polkit password dialog + core boot + DNS.
     const READY_TIMEOUT: Duration = Duration::from_secs(60);
-    const POLL: Duration = Duration::from_millis(150);
+    const STOP_WAIT: Duration = Duration::from_secs(5);
 
     static CHILD: Mutex<Option<Child>> = Mutex::new(None);
 
@@ -307,8 +293,9 @@ mod linux {
             return Err(super::not_installed_error());
         }
 
-        // Tear down any previous elevated session first.
-        let _ = stop_tun();
+        // Prefer signaling the previous elevated session (no password). The new
+        // start-tun also tears down leftover root sessions inside the same pkexec.
+        stop_local_child();
 
         let config = config_path
             .to_str()
@@ -339,7 +326,7 @@ mod linux {
             }
         }
 
-        // Capture original DNS before starting (restore on stop).
+        // Capture original DNS before starting (helper restores on stop).
         let dns_info = match prepare_dns_capture() {
             Ok(info) => {
                 log::info!(
@@ -356,20 +343,26 @@ mod linux {
         };
 
         let api_port = parse_api_port_from_config(config_path).unwrap_or(10809);
+        let gateway = dns_hijack_or_gateway(dns_hijack);
         let caller_pid = std::process::id().to_string();
 
         log::info!(
-            "[tun/linux] pkexec start-tun helper={} kernel=xray config={}",
+            "[tun/linux] pkexec start-tun helper={} kernel=xray config={} api={} dns={}",
             helper.display(),
-            config
+            config,
+            api_port,
+            gateway
         );
 
+        // Single elevated session: cleanup + core + wait API + DNS + watchdog.
         let mut cmd = Command::new("pkexec");
         cmd.arg(helper.as_os_str())
             .arg("start-tun")
             .arg("xray")
             .arg(config)
-            .arg(&caller_pid);
+            .arg(&caller_pid)
+            .arg(api_port.to_string())
+            .arg(&gateway);
         if let Some((iface, original)) = dns_info.as_ref() {
             cmd.arg(iface).args(original.split_whitespace());
         }
@@ -385,48 +378,30 @@ mod linux {
                 )
             })?;
 
-        // Wait until Xray API is accepting connections (core ready).
-        if !wait_port_ready(api_port, &mut child)? {
-            let detail = drain_child_output(&mut child);
-            let _ = child.kill();
-            let _ = child.wait();
-            // Best-effort: elevated pkill if pkexec already handed off.
-            let _ = Command::new("pkexec")
-                .arg(helper.as_os_str())
-                .arg("stop-tun")
-                .output();
-            return Err(TunError::failed(
-                "tun_start_timeout",
-                format!(
-                    "虚拟网卡内核启动超时（API :{api_port} 未就绪）{}",
-                    if detail.is_empty() {
-                        String::new()
-                    } else {
-                        format!(": {detail}")
-                    }
-                ),
-            ));
-        }
-
-        // Keep draining pipes so a chatty core cannot block on full buffers.
-        attach_log_drains(&mut child);
-
-        // Apply DNS hijack AFTER core is ready (plan improvement over legacy).
-        if let Some((ref iface, ref original)) = dns_info {
-            let gateway = dns_hijack_or_gateway(dns_hijack);
-            if let Err(e) = apply_dns_override(iface, &gateway, std::process::id()) {
-                log::warn!("[tun/linux] dns-override failed: {e}");
-            } else {
-                log::info!("[tun/linux] DNS override iface={iface} -> {gateway}");
-                set_dns_restore(Some((iface.clone(), original.clone())));
+        // Wait for helper ready token (core API up + DNS applied in-process).
+        match wait_helper_ready(&mut child) {
+            Ok(()) => {}
+            Err(e) => {
+                let detail = drain_child_output(&mut child);
+                terminate_child(&mut child);
+                let msg = if detail.is_empty() {
+                    e.message
+                } else {
+                    format!("{}: {}", e.message, detail)
+                };
+                return Err(TunError::failed(e.code, msg));
             }
         }
+
+        // Keep draining pipes so a chatty helper cannot block on full buffers.
+        attach_log_drains(&mut child);
 
         *CHILD.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
         Ok(())
     }
 
     /// pkexec uninstall of helper + polkit files (may prompt password).
+    /// Caller should stop TUN first (`uninstall_elevated` already does).
     pub fn uninstall_helper() -> Result<(), TunError> {
         let helper = helper_path();
         if !helper.is_file() {
@@ -457,42 +432,28 @@ mod linux {
     }
 
     pub fn stop_tun() -> Result<(), TunError> {
-        let dns = take_dns_restore();
+        // Primary path: TERM the long-lived elevated start-tun session.
+        // Helper trap restores DNS + stops core — no second polkit prompt.
+        if stop_local_child() {
+            log::info!("[tun/linux] stopped elevated session via local child signal");
+            return Ok(());
+        }
+
+        // Fallback after app restart / lost child handle (may prompt password).
         let helper = helper_path();
-
-        // Prefer helper stop (restores DNS + kills core as root).
-        if helper.is_file() {
-            let mut args: Vec<String> = vec![helper.display().to_string(), "stop-tun".into()];
-            if let Some((iface, original)) = dns.as_ref() {
-                args.push(iface.clone());
-                for s in original.split_whitespace() {
-                    args.push(s.to_string());
-                }
-            }
-            log::info!("[tun/linux] pkexec stop-tun args={args:?}");
-            let out = Command::new("pkexec")
-                .args(&args)
-                .output()
-                .map_err(|e| TunError::failed("pkexec_stop", format!("pkexec stop failed: {e}")))?;
-            if !out.status.success() {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                log::warn!("[tun/linux] stop-tun non-zero: {}", stderr.trim());
-            }
-        } else if let Some((iface, original)) = dns.as_ref() {
-            // Best-effort user-space restore if helper vanished.
-            let _ = Command::new("resolvectl")
-                .arg("dns")
-                .arg(iface)
-                .args(original.split_whitespace())
-                .status();
+        if !helper.is_file() {
+            return Ok(());
         }
-
-        // Drop local child handle (pkexec may already have exited with core).
-        if let Some(mut child) = CHILD.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            let _ = child.kill();
-            let _ = child.wait();
+        log::info!("[tun/linux] pkexec stop-tun (fallback; no local child handle)");
+        let out = Command::new("pkexec")
+            .arg(helper.as_os_str())
+            .arg("stop-tun")
+            .output()
+            .map_err(|e| TunError::failed("pkexec_stop", format!("pkexec stop failed: {e}")))?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            log::warn!("[tun/linux] stop-tun non-zero: {}", stderr.trim());
         }
-
         Ok(())
     }
 
@@ -502,6 +463,162 @@ mod linux {
             "1.1.1.1".into()
         } else {
             dns_hijack.to_string()
+        }
+    }
+
+    /// Signal the stored elevated child with TERM (so helper trap can restore DNS).
+    /// Returns true if a child handle was present.
+    fn stop_local_child() -> bool {
+        let Some(mut child) = CHILD.lock().unwrap_or_else(|e| e.into_inner()).take() else {
+            return false;
+        };
+        terminate_child(&mut child);
+        true
+    }
+
+    fn terminate_child(child: &mut Child) {
+        let pid = child.id();
+        // Child::kill is SIGKILL and skips the helper trap (DNS would stick).
+        // Prefer SIGTERM so start-tun can restore DNS and stop core cleanly.
+        //
+        // Signal the process group first: pkexec is typically the leader and the
+        // helper script is its child — both need TERM so the shell trap runs.
+        #[cfg(unix)]
+        {
+            let pgid = format!("-{pid}");
+            let _ = Command::new("kill").args(["-TERM", "--", &pgid]).status();
+            // Also TERM direct children of pkexec (helper) in case pgid differs.
+            let _ = Command::new("pkill")
+                .args(["-TERM", "-P", &pid.to_string()])
+                .status();
+            let _ = Command::new("kill")
+                .args(["-TERM", "--", &pid.to_string()])
+                .status();
+            let deadline = Instant::now() + STOP_WAIT;
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) => return,
+                    Ok(None) if Instant::now() < deadline => {
+                        thread::sleep(Duration::from_millis(50));
+                    }
+                    Ok(None) | Err(_) => break,
+                }
+            }
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    /// Block until helper prints READY_TOKEN, or the elevated process exits / times out.
+    ///
+    /// Reading runs on a helper thread so READY_TIMEOUT is enforced even when
+    /// `read_line` would otherwise block indefinitely.
+    fn wait_helper_ready(child: &mut Child) -> Result<(), TunError> {
+        use std::process::ChildStdout;
+        use std::sync::mpsc;
+
+        enum ReadyMsg {
+            Ready(ChildStdout),
+            Eof(ChildStdout),
+            Io(std::io::Error, ChildStdout),
+        }
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| TunError::failed("tun_start", "missing helper stdout pipe"))?;
+        let (tx, rx) = mpsc::channel::<ReadyMsg>();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stdout);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) => {
+                        let _ = tx.send(ReadyMsg::Eof(reader.into_inner()));
+                        return;
+                    }
+                    Ok(_) => {
+                        let token = line.trim();
+                        if token == READY_TOKEN {
+                            let _ = tx.send(ReadyMsg::Ready(reader.into_inner()));
+                            return;
+                        }
+                        if !token.is_empty() {
+                            log::debug!("[tun/helper stdout] {token}");
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        let _ = tx.send(ReadyMsg::Io(e, reader.into_inner()));
+                        return;
+                    }
+                }
+            }
+        });
+
+        let deadline = Instant::now() + READY_TIMEOUT;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(TunError::failed(
+                    "tun_start_timeout",
+                    "虚拟网卡启动超时（未收到 helper 就绪信号）",
+                ));
+            }
+
+            match rx.recv_timeout(remaining.min(Duration::from_millis(200))) {
+                Ok(ReadyMsg::Ready(stdout)) => {
+                    child.stdout = Some(stdout);
+                    log::info!("[tun/linux] helper ready ({READY_TOKEN})");
+                    return Ok(());
+                }
+                Ok(ReadyMsg::Eof(stdout)) => {
+                    child.stdout = Some(stdout);
+                    if let Some(status) = child.try_wait().ok().flatten() {
+                        return Err(TunError::failed(
+                            "tun_core_exited",
+                            format!("虚拟网卡内核提前退出 (status={status})"),
+                        ));
+                    }
+                    return Err(TunError::failed(
+                        "tun_start",
+                        "虚拟网卡 helper 在就绪前关闭了输出",
+                    ));
+                }
+                Ok(ReadyMsg::Io(e, stdout)) => {
+                    child.stdout = Some(stdout);
+                    return Err(TunError::failed(
+                        "tun_start",
+                        format!("读取 helper 输出失败: {e}"),
+                    ));
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if let Some(status) = child.try_wait().ok().flatten() {
+                        // Process died; wait briefly for the reader thread to finish.
+                        match rx.recv_timeout(Duration::from_millis(300)) {
+                            Ok(ReadyMsg::Ready(stdout)) => {
+                                child.stdout = Some(stdout);
+                                return Ok(());
+                            }
+                            Ok(ReadyMsg::Eof(stdout)) | Ok(ReadyMsg::Io(_, stdout)) => {
+                                child.stdout = Some(stdout);
+                            }
+                            Err(_) => {}
+                        }
+                        return Err(TunError::failed(
+                            "tun_core_exited",
+                            format!("虚拟网卡内核提前退出 (status={status})"),
+                        ));
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(TunError::failed(
+                        "tun_start",
+                        "虚拟网卡 helper 就绪等待通道已断开",
+                    ));
+                }
+            }
         }
     }
 
@@ -616,56 +733,6 @@ mod linux {
         }
 
         Err(format!("could not determine original DNS for {iface}"))
-    }
-
-    fn apply_dns_override(iface: &str, gateway: &str, caller_pid: u32) -> Result<(), TunError> {
-        let helper = helper_path();
-        let out = Command::new("pkexec")
-            .arg(helper.as_os_str())
-            .arg("dns-override")
-            .arg(iface)
-            .arg(gateway)
-            .arg(caller_pid.to_string())
-            .output()
-            .map_err(|e| TunError::failed("pkexec_dns", format!("dns-override spawn: {e}")))?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            return Err(TunError::failed(
-                "dns_override",
-                format!("dns-override failed: {}", stderr.trim()),
-            ));
-        }
-        Ok(())
-    }
-
-    fn wait_port_ready(api_port: u16, child: &mut Child) -> Result<bool, TunError> {
-        let deadline = Instant::now() + READY_TIMEOUT;
-        while Instant::now() < deadline {
-            if let Some(status) = child.try_wait().ok().flatten() {
-                let detail = drain_child_output(child);
-                return Err(TunError::failed(
-                    "tun_core_exited",
-                    format!(
-                        "虚拟网卡内核提前退出 (status={status}){}",
-                        if detail.is_empty() {
-                            String::new()
-                        } else {
-                            format!(": {detail}")
-                        }
-                    ),
-                ));
-            }
-            if TcpStream::connect_timeout(
-                &([127, 0, 0, 1], api_port).into(),
-                Duration::from_millis(80),
-            )
-            .is_ok()
-            {
-                return Ok(true);
-            }
-            thread::sleep(POLL);
-        }
-        Ok(false)
     }
 
     fn drain_child_output(child: &mut Child) -> String {
