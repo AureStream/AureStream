@@ -267,11 +267,6 @@ function matchChinese(name: string, needles: string[] | undefined): boolean {
   return needles.some((n) => name.includes(n))
 }
 
-function matchEnglish(lower: string, phrases: string[] | undefined): boolean {
-  if (!phrases?.length) return false
-  return phrases.some((p) => lower.includes(p.toLowerCase()))
-}
-
 /**
  * Return a flag emoji for the node name, or 🌐 when unknown.
  */
