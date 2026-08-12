@@ -3,13 +3,17 @@
 # Installed to /usr/lib/AureStream/aurestream-tun-helper by deb/rpm.
 #
 # Design: one elevated start-tun session owns the full lifecycle
-# (cleanup → core → wait API → DNS → watchdog). The desktop app should
-# stop by signaling that process (TERM) so disconnect needs no second
-# password. stop-tun remains as a fallback after app restart / lost child.
+# (cleanup → core → wait API → DNS → watchdog). The unprivileged app
+# stops by writing "stop" to a per-uid control FIFO under
+# /run/aurestream-tun/uid-<uid>/control — users cannot signal root
+# processes, so kill/SIGTERM from the app is intentionally NOT used.
+# stop-tun (via aurestream-tun-stop + polkit allow_active) is the
+# fallback after app restart / lost control channel.
 set -e
 
 HELPER_DIR="/usr/lib/AureStream"
 SELF="${HELPER_DIR}/aurestream-tun-helper"
+STOP_WRAPPER="${HELPER_DIR}/aurestream-tun-stop"
 TRUSTED_CORE="${HELPER_DIR}/aurestream-core"
 PACKAGED_CORE="/usr/bin/aurestream-core"
 TRUSTED_ASSETS="${HELPER_DIR}/resources"
@@ -123,11 +127,67 @@ restore_session_dns() {
 remove_session() {
     session_dir="$1"
     restore_session_dns "$session_dir"
+    caller_uid=$(sed -n '1p' "$session_dir/caller-uid" 2>/dev/null || true)
     rm -f "$session_dir/caller-uid" "$session_dir/caller-start" \
         "$session_dir/core-pid" "$session_dir/iface" \
         "$session_dir/original-dns" "$session_dir/dns-active" \
         "$session_dir/config.json"
     rmdir "$session_dir" 2>/dev/null || true
+    case "$caller_uid" in
+        *[!0-9]*|'') ;;
+        *) remove_uid_control "$caller_uid" ;;
+    esac
+}
+
+# Per-uid control channel: unprivileged app writes "stop\n" here.
+# Root helper reads; ownership is the desktop user so no second elevation.
+uid_control_dir() {
+    printf '%s\n' "$RUNTIME_DIR/uid-$1"
+}
+
+remove_uid_control() {
+    uid="$1"
+    uid_dir=$(uid_control_dir "$uid")
+    [ -d "$uid_dir" ] || return 0
+    rm -f "$uid_dir/control" "$uid_dir/core-pid" "$uid_dir/session" "$uid_dir/helper-pid"
+    rmdir "$uid_dir" 2>/dev/null || true
+}
+
+setup_uid_control() {
+    uid="$1"
+    core_pid="$2"
+    session_dir="$3"
+    uid_dir=$(uid_control_dir "$uid")
+    remove_uid_control "$uid"
+    install -d -o root -g root -m 755 "$uid_dir"
+    control="$uid_dir/control"
+    # FIFO: owner (desktop uid) write-only; root bypasses DAC to read.
+    mkfifo "$control"
+    chown "$uid:root" "$control"
+    chmod 200 "$control"
+    printf '%s\n' "$core_pid" > "$uid_dir/core-pid"
+    printf '%s\n' "$session_dir" > "$uid_dir/session"
+    printf '%s\n' "$$" > "$uid_dir/helper-pid"
+    chmod 644 "$uid_dir/core-pid" "$uid_dir/session" "$uid_dir/helper-pid"
+    printf '%s\n' "$control"
+}
+
+# Return 0 when the control FIFO delivered a stop request within ~1s.
+poll_control_stop() {
+    control="$1"
+    [ -p "$control" ] || return 1
+    # open+read blocks until a writer appears; timeout avoids wedging the loop.
+    line=$(timeout 1 cat "$control" 2>/dev/null || true)
+    # Trim CR/LF/space for matching.
+    line=$(printf '%s' "$line" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    case "$line" in
+        '') return 1 ;;
+        stop|STOP|stop-tun|STOP-TUN) return 0 ;;
+        *)
+            # Any non-empty write is treated as stop (forward compatible).
+            return 0
+            ;;
+    esac
 }
 
 stop_core_pid() {
@@ -157,6 +217,11 @@ teardown_all_sessions() {
         restore_session_dns "$session_dir"
         stop_core_pid "$core_pid"
         remove_session "$session_dir"
+    done
+    # Drop any leftover per-uid control channels (session remove already tries).
+    for uid_dir in "$RUNTIME_DIR"/uid-*; do
+        [ -d "$uid_dir" ] || continue
+        rm -rf "$uid_dir"
     done
     pkill_cores
 }
@@ -244,14 +309,14 @@ is_main_app_present() {
 }
 
 do_uninstall() {
-    "$0" stop-tun 2>/dev/null || true
+    "$SELF" stop-tun 2>/dev/null || true
     # Drop orphan timer if present
     if command -v systemctl >/dev/null 2>&1; then
         systemctl disable --now "$ORPHAN_TIMER_UNIT" 2>/dev/null || true
         rm -f "${SYSTEMD_DIR}/${ORPHAN_TIMER_UNIT}" "${SYSTEMD_DIR}/${ORPHAN_SERVICE_UNIT}"
         systemctl daemon-reload 2>/dev/null || true
     fi
-    rm -f "$SELF" "$TRUSTED_CORE" "$POLKIT_ACTION" "$POLKIT_RULE"
+    rm -f "$SELF" "$STOP_WRAPPER" "$TRUSTED_CORE" "$POLKIT_ACTION" "$POLKIT_RULE"
     rm -f "$TRUSTED_ASSETS/geoip.dat" "$TRUSTED_ASSETS/geosite.dat"
     rm -rf "$RUNTIME_DIR"
     rmdir "$TRUSTED_ASSETS" 2>/dev/null || true
@@ -364,8 +429,8 @@ case "$1" in
         # $7 = interface (optional)
         # $8... = original DNS servers for restore
         #
-        # Full lifecycle stays in this single elevated process so the app only
-        # needs one polkit password to connect.
+# Full lifecycle stays in this single elevated process so the app only
+        # needs one polkit password to connect. Stop uses the control FIFO.
         kernel_id="$2"
         requested_config="$3"
         caller_pid="$4"
@@ -433,9 +498,11 @@ case "$1" in
             printf '%s\n' "$server" >> "$session_dir/original-dns"
         done
         chmod 600 "$session_dir"/*
+        control_path=$(setup_uid_control "$caller_uid" "$core_pid" "$session_dir")
         unlock_state
 
         cleanup_requested=0
+        # TERM is a secondary path (e.g. admin kill); primary stop is the FIFO.
         trap 'cleanup_requested=1' HUP INT TERM
 
         if ! wait_api_ready "$api_port" "$core_pid"; then
@@ -464,11 +531,11 @@ case "$1" in
 
         while kill -0 "$core_pid" 2>/dev/null; do
             if [ "$cleanup_requested" -eq 1 ] || \
+               poll_control_stop "$control_path" || \
                ! caller_is_alive "$caller_pid" "$caller_uid" "$caller_start"; then
                 stop_core_pid "$core_pid"
                 break
             fi
-            sleep 1
         done
         core_status=0
         wait "$core_pid" || core_status=$?

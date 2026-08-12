@@ -1,10 +1,19 @@
-// Polkit rule: require administrator authentication for every retained
-// authorization window. The helper itself also validates every input path.
+// Polkit rules for AureStream TUN helper.
 // Installed to /etc/polkit-1/rules.d/ by the deb/rpm package.
+//
+// - start (run-privileged): sudo group keeps admin auth for a short window
+// - stop (stop-tun): local active users may stop without a password prompt
 polkit.addRule(function(action, subject) {
     if (action.id === "com.root.aurestream.run-privileged" &&
         subject.local && subject.active &&
         subject.isInGroup("sudo")) {
         return polkit.Result.AUTH_ADMIN_KEEP;
+    }
+});
+
+polkit.addRule(function(action, subject) {
+    if (action.id === "com.root.aurestream.stop-tun" &&
+        subject.local && subject.active) {
+        return polkit.Result.YES;
     }
 });

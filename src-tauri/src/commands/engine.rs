@@ -443,7 +443,6 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
 /// the health monitor. Every step is attempted even if an earlier one fails.
 async fn cleanup_runtime(engine_state: &EngineAppState) -> Result<(), String> {
     let mode = engine_state.cleanup_mode();
-    let cleanup_armed = engine_state.runtime_session_path.exists();
     if let Ok(Some(session)) = read_runtime_session(&engine_state.runtime_session_path) {
         log::info!(
             "engine session cleanup id={} mode={}",
@@ -458,10 +457,11 @@ async fn cleanup_runtime(engine_state: &EngineAppState) -> Result<(), String> {
     }
 
     if mode == CaptureMode::Tun {
-        if cleanup_armed {
-            if let Err(e) = platform_tun::stop_tun() {
-                errors.push(e.to_string());
-            }
+        // Always attempt TUN stop — platform_tun::stop_tun is idempotent.
+        // Linux uses a control FIFO (no signals to root); Win/mac use service/XPC.
+        // Never skip this when the runtime marker is missing — that left TUN up.
+        if let Err(e) = platform_tun::stop_tun() {
+            errors.push(e.to_string());
         }
         if let Err(e) = engine_state.engine.finish_external_stop() {
             errors.push(e.to_string());

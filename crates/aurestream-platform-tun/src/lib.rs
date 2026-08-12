@@ -1,7 +1,8 @@
 //! OS-level TUN capture (virtual NIC).
 //!
 //! - **Linux**: one `pkexec` session via `/usr/lib/AureStream/aurestream-tun-helper`
-//!   (deb/rpm); stop prefers signaling that session (no second password).
+//!   (deb/rpm). Stop writes to a per-uid control FIFO (no signals to root; no
+//!   second password). Fallback is passwordless `aurestream-tun-stop` via polkit.
 //! - **Windows**: SCM service `AureStreamTunService` (`tun-service.exe`, one-time UAC).
 //! - **macOS**: SMJobBless helper `com.root.aurestream.helper` (signed bundle).
 
@@ -239,14 +240,18 @@ fn not_installed_error() -> TunError {
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
-    use std::io::{BufRead, BufReader, Read};
-    use std::path::Path;
+    use std::fs::{self, OpenOptions};
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::path::{Path, PathBuf};
     use std::process::{Child, Command, Stdio};
     use std::sync::Mutex;
     use std::thread;
     use std::time::{Duration, Instant};
 
     pub const HELPER_PATH: &str = "/usr/lib/AureStream/aurestream-tun-helper";
+    /// Separate polkit exec.path used only for stop-tun (allow_active=yes).
+    pub const STOP_WRAPPER_PATH: &str = "/usr/lib/AureStream/aurestream-tun-stop";
+    const RUNTIME_DIR: &str = "/run/aurestream-tun";
     const TRUSTED_CORE_PATHS: [&str; 2] = [
         "/usr/lib/AureStream/aurestream-core",
         "/usr/bin/aurestream-core",
@@ -256,30 +261,112 @@ mod linux {
     const READY_TOKEN: &str = "aurestream-tun-ready";
     /// Include time for polkit password dialog + core boot + DNS.
     const READY_TIMEOUT: Duration = Duration::from_secs(60);
-    const STOP_WAIT: Duration = Duration::from_secs(5);
+    /// How long to wait for the elevated helper to exit after a stop request.
+    const STOP_WAIT: Duration = Duration::from_secs(8);
 
     static CHILD: Mutex<Option<Child>> = Mutex::new(None);
 
     pub fn probe() -> TunServiceState {
-        if helper_path().is_file()
-            && TRUSTED_CORE_PATHS
+        if !helper_path().is_file()
+            || !TRUSTED_CORE_PATHS
                 .iter()
                 .any(|path| Path::new(path).is_file())
         {
-            TunServiceState::Ready
+            return TunServiceState::NotInstalled;
+        }
+        if session_appears_running() {
+            TunServiceState::Running
         } else {
-            TunServiceState::NotInstalled
+            TunServiceState::Ready
         }
     }
 
-    fn helper_path() -> std::path::PathBuf {
+    fn helper_path() -> PathBuf {
         if let Ok(p) = std::env::var("AURESTREAM_TUN_HELPER") {
-            let path = std::path::PathBuf::from(p);
+            let path = PathBuf::from(p);
             if path.is_file() {
                 return path;
             }
         }
-        std::path::PathBuf::from(HELPER_PATH)
+        PathBuf::from(HELPER_PATH)
+    }
+
+    fn stop_wrapper_path() -> PathBuf {
+        if let Ok(p) = std::env::var("AURESTREAM_TUN_STOP") {
+            let path = PathBuf::from(p);
+            if path.is_file() {
+                return path;
+            }
+        }
+        PathBuf::from(STOP_WRAPPER_PATH)
+    }
+
+    fn control_fifo_path() -> PathBuf {
+        PathBuf::from(RUNTIME_DIR).join(format!("uid-{}", current_uid())).join("control")
+    }
+
+    fn current_uid() -> u32 {
+        #[cfg(unix)]
+        {
+            return unsafe { libc::getuid() };
+        }
+        #[cfg(not(unix))]
+        {
+            0
+        }
+    }
+
+    /// True when helper left a live session marker / core pid for this machine.
+    fn session_appears_running() -> bool {
+        let runtime = Path::new(RUNTIME_DIR);
+        if !runtime.is_dir() {
+            return false;
+        }
+        // Prefer per-uid marker for the current desktop user.
+        let uid_core = runtime
+            .join(format!("uid-{}", current_uid()))
+            .join("core-pid");
+        if pid_file_alive(&uid_core) {
+            return true;
+        }
+        // Any session-* still present (e.g. after uid dir was partially cleared).
+        if let Ok(entries) = fs::read_dir(runtime) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with("session-") && entry.path().is_dir() {
+                    let core = entry.path().join("core-pid");
+                    if pid_file_alive(&core) {
+                        return true;
+                    }
+                    // Session dir without a live core still means cleanup pending.
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn pid_file_alive(path: &Path) -> bool {
+        let Ok(raw) = fs::read_to_string(path) else {
+            return false;
+        };
+        let Ok(pid) = raw.trim().parse::<i32>() else {
+            return false;
+        };
+        if pid <= 1 {
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            // kill(pid, 0) works across uids for existence check on Linux.
+            return unsafe { libc::kill(pid, 0) } == 0;
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = pid;
+            false
+        }
     }
 
     pub fn start_tun(
@@ -293,9 +380,9 @@ mod linux {
             return Err(super::not_installed_error());
         }
 
-        // Prefer signaling the previous elevated session (no password). The new
-        // start-tun also tears down leftover root sessions inside the same pkexec.
-        stop_local_child();
+        // Best-effort stop of any prior session (FIFO / passwordless stop wrapper).
+        // Fresh start-tun also tears down leftovers inside the same elevation.
+        let _ = stop_tun_inner(/*allow_missing=*/ true);
 
         let config = config_path
             .to_str()
@@ -354,7 +441,7 @@ mod linux {
             gateway
         );
 
-        // Single elevated session: cleanup + core + wait API + DNS + watchdog.
+        // Single elevated session: cleanup + core + wait API + DNS + control FIFO.
         let mut cmd = Command::new("pkexec");
         cmd.arg(helper.as_os_str())
             .arg("start-tun")
@@ -383,7 +470,9 @@ mod linux {
             Ok(()) => {}
             Err(e) => {
                 let detail = drain_child_output(&mut child);
-                terminate_child(&mut child);
+                // Ask helper to exit via FIFO if it got that far; never hang on kill.
+                let _ = request_stop_via_fifo();
+                reap_child_with_timeout(&mut child, Duration::from_secs(3));
                 let msg = if detail.is_empty() {
                     e.message
                 } else {
@@ -432,28 +521,173 @@ mod linux {
     }
 
     pub fn stop_tun() -> Result<(), TunError> {
-        // Primary path: TERM the long-lived elevated start-tun session.
-        // Helper trap restores DNS + stops core — no second polkit prompt.
-        if stop_local_child() {
-            log::info!("[tun/linux] stopped elevated session via local child signal");
+        stop_tun_inner(/*allow_missing=*/ false)
+    }
+
+    fn stop_tun_inner(allow_missing: bool) -> Result<(), TunError> {
+        let had_child = CHILD.lock().unwrap_or_else(|e| e.into_inner()).is_some();
+        let session_before = session_appears_running();
+        if !had_child && !session_before {
+            if allow_missing {
+                return Ok(());
+            }
+            // Nothing to stop — idempotent success (UI disconnect / already idle).
             return Ok(());
         }
 
-        // Fallback after app restart / lost child handle (may prompt password).
-        let helper = helper_path();
-        if !helper.is_file() {
+        // Primary path: write "stop" to the helper control FIFO. The elevated
+        // process exits on its own (DNS restore + core kill). Unprivileged apps
+        // cannot signal root children — never rely on kill/SIGTERM here.
+        let fifo_sent = request_stop_via_fifo();
+        if fifo_sent {
+            log::info!("[tun/linux] stop requested via control FIFO");
+        } else {
+            log::info!("[tun/linux] control FIFO not available; will use stop wrapper fallback");
+        }
+
+        // Reap local child handle with a hard timeout (no kill, no infinite wait).
+        if let Some(mut child) = CHILD.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            if reap_child_with_timeout(&mut child, STOP_WAIT) {
+                log::info!("[tun/linux] elevated session exited after stop request");
+            } else {
+                log::warn!(
+                    "[tun/linux] elevated session still running after {}s; falling back",
+                    STOP_WAIT.as_secs()
+                );
+                // Detach: spawn a short reaper so we do not leak a zombie forever,
+                // but never block the UI thread on a root process we cannot kill.
+                thread::spawn(move || {
+                    let _ = reap_child_with_timeout(&mut child, Duration::from_secs(30));
+                });
+            }
+        } else if fifo_sent {
+            // No child handle (e.g. after partial restart) — wait for markers to clear.
+            wait_session_gone(STOP_WAIT);
+        }
+
+        if !session_appears_running() {
             return Ok(());
         }
-        log::info!("[tun/linux] pkexec stop-tun (fallback; no local child handle)");
-        let out = Command::new("pkexec")
-            .arg(helper.as_os_str())
-            .arg("stop-tun")
-            .output()
-            .map_err(|e| TunError::failed("pkexec_stop", format!("pkexec stop failed: {e}")))?;
+
+        // Fallback: passwordless polkit stop wrapper (or main helper if wrapper missing).
+        pkexec_stop_fallback()?;
+
+        if session_appears_running() {
+            return Err(TunError::failed(
+                "tun_stop_incomplete",
+                "虚拟网卡未能完全关闭（内核或 DNS 会话仍在）。请重试断开，或重新安装 TUN Helper。",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Write stop to the per-uid control FIFO. Returns true if the write opened.
+    fn request_stop_via_fifo() -> bool {
+        let path = control_fifo_path();
+        if !path.exists() {
+            return false;
+        }
+        // Opening a FIFO for write blocks until a reader is present. The helper
+        // loops on `timeout 1 cat`, so a reader appears within ~1s while healthy.
+        // Run the open+write on a worker with a hard deadline so a dead helper
+        // cannot hang the UI stop path forever.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let path_clone = path.clone();
+        thread::spawn(move || {
+            let result = (|| -> std::io::Result<()> {
+                let mut f = OpenOptions::new().write(true).open(&path_clone)?;
+                f.write_all(b"stop\n")?;
+                f.flush()?;
+                Ok(())
+            })();
+            let _ = tx.send(result);
+        });
+        match rx.recv_timeout(Duration::from_secs(3)) {
+            Ok(Ok(())) => true,
+            Ok(Err(e)) => {
+                log::warn!(
+                    "[tun/linux] control FIFO write failed ({}): {e}",
+                    path.display()
+                );
+                false
+            }
+            Err(_) => {
+                log::warn!(
+                    "[tun/linux] control FIFO open timed out ({})",
+                    path.display()
+                );
+                false
+            }
+        }
+    }
+
+    fn wait_session_gone(limit: Duration) {
+        let deadline = Instant::now() + limit;
+        while Instant::now() < deadline {
+            if !session_appears_running() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    /// Wait up to `limit` for the child to exit. Never calls kill (EPERM on root).
+    /// Returns true if the process exited.
+    fn reap_child_with_timeout(child: &mut Child, limit: Duration) -> bool {
+        let deadline = Instant::now() + limit;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    log::debug!("[tun/linux] child reaped status={status}");
+                    return true;
+                }
+                Ok(None) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Ok(None) | Err(_) => return false,
+            }
+        }
+    }
+
+    fn pkexec_stop_fallback() -> Result<(), TunError> {
+        let wrapper = stop_wrapper_path();
+        let helper = helper_path();
+        let (bin, args): (PathBuf, Vec<&str>) = if wrapper.is_file() {
+            // stop wrapper's only argv is consumed by the script itself; pkexec runs it.
+            (wrapper, vec![])
+        } else if helper.is_file() {
+            (helper, vec!["stop-tun"])
+        } else {
+            // No helper installed and no session markers left → treat as stopped.
+            return Ok(());
+        };
+
+        log::info!(
+            "[tun/linux] pkexec stop fallback bin={} args={args:?}",
+            bin.display()
+        );
+        let mut cmd = Command::new("pkexec");
+        cmd.arg(bin.as_os_str());
+        for a in &args {
+            cmd.arg(a);
+        }
+        let out = cmd.output().map_err(|e| {
+            TunError::failed("pkexec_stop", format!("pkexec stop failed: {e}"))
+        })?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            log::warn!("[tun/linux] stop-tun non-zero: {}", stderr.trim());
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            return Err(TunError::failed(
+                "pkexec_stop",
+                format!(
+                    "停止虚拟网卡失败: {}{}",
+                    stderr.trim(),
+                    stdout.trim()
+                ),
+            ));
         }
+        // Give helper a moment to finish DNS restore after teardown returns.
+        wait_session_gone(Duration::from_secs(2));
         Ok(())
     }
 
@@ -464,49 +698,6 @@ mod linux {
         } else {
             dns_hijack.to_string()
         }
-    }
-
-    /// Signal the stored elevated child with TERM (so helper trap can restore DNS).
-    /// Returns true if a child handle was present.
-    fn stop_local_child() -> bool {
-        let Some(mut child) = CHILD.lock().unwrap_or_else(|e| e.into_inner()).take() else {
-            return false;
-        };
-        terminate_child(&mut child);
-        true
-    }
-
-    fn terminate_child(child: &mut Child) {
-        let pid = child.id();
-        // Child::kill is SIGKILL and skips the helper trap (DNS would stick).
-        // Prefer SIGTERM so start-tun can restore DNS and stop core cleanly.
-        //
-        // Signal the process group first: pkexec is typically the leader and the
-        // helper script is its child — both need TERM so the shell trap runs.
-        #[cfg(unix)]
-        {
-            let pgid = format!("-{pid}");
-            let _ = Command::new("kill").args(["-TERM", "--", &pgid]).status();
-            // Also TERM direct children of pkexec (helper) in case pgid differs.
-            let _ = Command::new("pkill")
-                .args(["-TERM", "-P", &pid.to_string()])
-                .status();
-            let _ = Command::new("kill")
-                .args(["-TERM", "--", &pid.to_string()])
-                .status();
-            let deadline = Instant::now() + STOP_WAIT;
-            loop {
-                match child.try_wait() {
-                    Ok(Some(_)) => return,
-                    Ok(None) if Instant::now() < deadline => {
-                        thread::sleep(Duration::from_millis(50));
-                    }
-                    Ok(None) | Err(_) => break,
-                }
-            }
-        }
-        let _ = child.kill();
-        let _ = child.wait();
     }
 
     /// Block until helper prints READY_TOKEN, or the elevated process exits / times out.

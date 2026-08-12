@@ -3,6 +3,7 @@
   "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
   "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
+  <!-- Start / uninstall / general privileged ops: require admin auth (kept briefly). -->
   <action id="com.root.aurestream.run-privileged">
     <description>Run AureStream VPN tunnel operations</description>
     <message>AureStream needs administrator privileges to manage the VPN tunnel.</message>
@@ -12,6 +13,20 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/AureStream/aurestream-tun-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <!-- Stop-only entrypoint: local active session may disconnect without a password.
+       The wrapper only runs `stop-tun` (no start/uninstall). -->
+  <action id="com.root.aurestream.stop-tun">
+    <description>Stop AureStream VPN tunnel</description>
+    <message>AureStream needs permission to stop the VPN tunnel.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/AureStream/aurestream-tun-stop</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 </policyconfig>

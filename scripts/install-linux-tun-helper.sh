@@ -14,13 +14,14 @@ ROOT="${AURESTREAM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 HELPER_SRC="$ROOT/crates/aurestream-platform-tun/linux-helper"
 HELPER_DST_DIR="/usr/lib/AureStream"
 HELPER_DST="$HELPER_DST_DIR/aurestream-tun-helper"
+STOP_DST="$HELPER_DST_DIR/aurestream-tun-stop"
 CORE_DST="$HELPER_DST_DIR/aurestream-core"
 ASSET_SRC="$ROOT/src-tauri/resources"
 ASSET_DST="$HELPER_DST_DIR/resources"
 POLICY_DST="/usr/share/polkit-1/actions/com.root.aurestream.policy"
 RULE_DST="/etc/polkit-1/rules.d/49-aurestream.rules"
 
-for f in aurestream-tun-helper com.root.aurestream.policy 49-aurestream.rules; do
+for f in aurestream-tun-helper aurestream-tun-stop com.root.aurestream.policy 49-aurestream.rules; do
   if [[ ! -f "$HELPER_SRC/$f" ]]; then
     echo "missing $HELPER_SRC/$f" >&2
     exit 1
@@ -74,18 +75,20 @@ run_as_root bash -c '
 set -euo pipefail
 install -d -m 755 "$1"
 install -m 755 "$2" "$3"
-install -o root -g root -m 755 "$4" "$5"
-install -d -m 755 "$6"
-install -m 644 "$7" "$8"
-install -d -m 755 "$9"
-install -m 644 "${10}" "${11}"
-install -d -m 755 "${12}"
-install -o root -g root -m 644 "${13}" "${12}/geoip.dat"
-install -o root -g root -m 644 "${14}" "${12}/geosite.dat"
+install -m 755 "$4" "$5"
+install -o root -g root -m 755 "$6" "$7"
+install -d -m 755 "$8"
+install -m 644 "$9" "${10}"
+install -d -m 755 "${11}"
+install -m 644 "${12}" "${13}"
+install -d -m 755 "${14}"
+install -o root -g root -m 644 "${15}" "${14}/geoip.dat"
+install -o root -g root -m 644 "${16}" "${14}/geosite.dat"
 "$3" install-orphan-timer 2>/dev/null || true
 ' _ \
   "$HELPER_DST_DIR" \
   "$HELPER_SRC/aurestream-tun-helper" "$HELPER_DST" \
+  "$HELPER_SRC/aurestream-tun-stop" "$STOP_DST" \
   "$CORE_SRC" "$CORE_DST" \
   "$(dirname "$POLICY_DST")" "$HELPER_SRC/com.root.aurestream.policy" "$POLICY_DST" \
   "$(dirname "$RULE_DST")" "$HELPER_SRC/49-aurestream.rules" "$RULE_DST" \
@@ -93,6 +96,7 @@ install -o root -g root -m 644 "${14}" "${12}/geosite.dat"
 
 echo "OK: helper installed."
 echo "  helper : $HELPER_DST"
+echo "  stop   : $STOP_DST"
 echo "  core   : $CORE_DST"
 echo "  assets : $ASSET_DST"
 echo "  policy : $POLICY_DST"

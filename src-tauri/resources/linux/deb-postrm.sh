@@ -9,6 +9,7 @@ case "$1" in
             /usr/lib/AureStream/aurestream-tun-helper uninstall 2>/dev/null || true
         fi
         rm -f /usr/lib/AureStream/aurestream-tun-helper
+        rm -f /usr/lib/AureStream/aurestream-tun-stop
         rmdir /usr/lib/AureStream 2>/dev/null || true
         rm -f /usr/share/polkit-1/actions/com.root.aurestream.policy
         rm -f /etc/polkit-1/rules.d/49-aurestream.rules

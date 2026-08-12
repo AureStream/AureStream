@@ -293,6 +293,7 @@ dependencies = [
  "cc",
  "core-foundation 0.9.4",
  "ipnet",
+ "libc",
  "log",
  "serde",
  "serde_json",

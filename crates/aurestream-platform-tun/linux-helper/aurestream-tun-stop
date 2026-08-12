@@ -1,0 +1,10 @@
+#!/bin/sh
+# Passwordless-capable stop entrypoint (separate polkit exec.path).
+# Only forwards to the main helper's stop-tun — no start / uninstall surface.
+set -e
+HELPER="/usr/lib/AureStream/aurestream-tun-helper"
+if [ ! -x "$HELPER" ]; then
+    echo "aurestream-tun-helper is not installed" >&2
+    exit 1
+fi
+exec "$HELPER" stop-tun "$@"

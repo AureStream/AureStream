@@ -49,6 +49,7 @@
         "desktopTemplate": "resources/main.desktop",
         "files": {
           "/usr/lib/AureStream/aurestream-tun-helper": "../crates/aurestream-platform-tun/linux-helper/aurestream-tun-helper",
+          "/usr/lib/AureStream/aurestream-tun-stop": "../crates/aurestream-platform-tun/linux-helper/aurestream-tun-stop",
           "/usr/share/polkit-1/actions/com.root.aurestream.policy": "../crates/aurestream-platform-tun/linux-helper/com.root.aurestream.policy",
           "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-platform-tun/linux-helper/49-aurestream.rules"
         },
@@ -59,6 +60,7 @@
         "desktopTemplate": "resources/main.desktop",
         "files": {
           "/usr/lib/AureStream/aurestream-tun-helper": "../crates/aurestream-platform-tun/linux-helper/aurestream-tun-helper",
+          "/usr/lib/AureStream/aurestream-tun-stop": "../crates/aurestream-platform-tun/linux-helper/aurestream-tun-stop",
           "/usr/share/polkit-1/actions/com.root.aurestream.policy": "../crates/aurestream-platform-tun/linux-helper/com.root.aurestream.policy",
           "/etc/polkit-1/rules.d/49-aurestream.rules": "../crates/aurestream-platform-tun/linux-helper/49-aurestream.rules"
         }
