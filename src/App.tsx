@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Loader2 } from "lucide-react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import AppShell from "@/components/AppShell"
 import HomePage from "@/components/HomePage"
@@ -10,19 +11,49 @@ import { AlertProvider } from "@/contexts/AlertContext"
 import { AuthProvider, useAuth } from "@/contexts/AuthContext"
 import { EngineProvider } from "@/contexts/EngineContext"
 import { SubsProvider } from "@/contexts/SubsContext"
+import { resolveAuthGate } from "@/lib/auth-route"
 
-/** Auth route gate only — never waits on subs sync / sessionReady. */
+function AuthBootScreen() {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-white dark:bg-background">
+      <Loader2
+        className="size-6 animate-spin text-[var(--auth-accent)]"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <p className="mt-3 text-sm font-medium text-[#6b7280]">正在检查登录状态…</p>
+    </div>
+  )
+}
+
+/** Auth restore first — never send a restoring session to /login. Subs do not gate. */
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
-  if (!user) {
+  const { user, authChecking } = useAuth()
+  const decision = resolveAuthGate({
+    checking: authChecking,
+    hasUser: Boolean(user),
+    kind: "protected",
+  })
+  if (decision === "wait") {
+    return <AuthBootScreen />
+  }
+  if (decision === "login") {
     return <Navigate to="/login" replace />
   }
   return children
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
-  if (user) {
+  const { user, authChecking } = useAuth()
+  const decision = resolveAuthGate({
+    checking: authChecking,
+    hasUser: Boolean(user),
+    kind: "guest",
+  })
+  if (decision === "wait") {
+    return <AuthBootScreen />
+  }
+  if (decision === "home") {
     return <Navigate to="/" replace />
   }
   return children

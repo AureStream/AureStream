@@ -19,6 +19,8 @@ import {
 
 type AuthContextValue = {
   user: User | null;
+  /** True until the first `auth_restore` finishes (success, none, or expired). */
+  authChecking: boolean;
   /** True while a login / register / verify request is in flight (button spinner). */
   authLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -29,6 +31,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
+  authChecking: true,
   authLoading: false,
   login: async () => {},
   register: async () => ({ email: "", expires_in: 0 }),
@@ -42,6 +45,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
@@ -70,6 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         if (!cancelled) {
           setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthChecking(false);
         }
       }
     })();
@@ -123,7 +131,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, authLoading, login, register, verifyAndLogin, logout }}
+      value={{
+        user,
+        authChecking,
+        authLoading,
+        login,
+        register,
+        verifyAndLogin,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
