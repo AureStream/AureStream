@@ -14,7 +14,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 
 - **New features only in the v2 tree**: root `src/`, `src-tauri/`, and `crates/aurestream-*`.
 - **`legacy/` is archived / read-only reference.** Do **not** fix bugs or add features there.
-- **Default capture path = system proxy**. TUN is optional (`mode: "tun"`, Home 虚拟网卡). Elevated paths: **Linux** pkexec+polkit, **Windows** SCM `tun-service` (UAC once), **macOS** SMJobBless `com.root.aurestream.helper` (signed bundle; `pnpm pre-bundle`). Without helper/service, TUN start returns a clear install error. AppImage does not install `/usr` helpers — use deb/rpm or `scripts/install-linux-tun-helper.sh`. Windows: `pnpm build-tun` + `wintun.dll`. macOS: plain `tauri dev` without blessed helper cannot TUN.
+- **Default capture path = system proxy**. TUN is optional (`mode: "tun"`, Home 虚拟网卡). Elevated paths: **Linux** systemd `aurestream-tun.socket` + helper (install once via deb/rpm / `scripts/install-linux-tun-helper.sh`), **Windows** SCM `tun-service` (UAC once), **macOS** SMJobBless `com.root.aurestream.helper` (signed bundle; `pnpm pre-bundle`). Without helper/service, TUN start returns a clear install error. AppImage does not install `/usr` helpers. Windows: `pnpm build-tun` + `wintun.dll`. macOS: plain `tauri dev` without blessed helper cannot TUN.
 - Engine config dialect lives in `aurestream-engine` (`build_config`); `aurestream-config` only decodes → `ProxyNode`.
 
 ### Current product surface (implemented)
@@ -22,7 +22,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 - Auth (login / email-code register) + subscription sync
 - Node list, TCP latency probe + sort, home shows selected-node latency
 - Connect / disconnect via Xray sidecar + OS system proxy (Win / macOS / Linux)
-- **Linux TUN**: `aurestream-platform-tun` + `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm / dev install script)
+- **Linux TUN**: `aurestream-platform-tun` + systemd `aurestream-tun.socket` / `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm / dev install script)
 - **Windows TUN**: SCM service via `tun-service.exe` (UAC install once; NameServer hijack to `1.1.1.1` after core ready)
 - **macOS TUN**: SMJobBless helper (root spawn core; DNS via networksetup after API ready; stop restores DNS before kill)
 - System tray (show window, system proxy / TUN toggle when helper ready, quit)

@@ -1,0 +1,13 @@
+[Unit]
+Description=AureStream TUN helper
+Requires=aurestream-tun.socket
+After=network-online.target aurestream-tun.socket
+
+[Service]
+Type=simple
+ExecStartPre=-/bin/sh -c 'mkdir -p /run/aurestream-tun && chmod 755 /run/aurestream-tun'
+ExecStart=/usr/lib/AureStream/aurestream-tun-helper serve
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

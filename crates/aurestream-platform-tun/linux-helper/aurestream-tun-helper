@@ -1,4 +1,7 @@
 #!/bin/sh
+# Legacy pkexec helper. New installs use the Rust binary + systemd
+# aurestream-tun.socket (see scripts/install-linux-tun-helper.sh).
+# Kept as a fallback reference; packaging no longer ships this file.
 # AureStream TUN helper — privileged ops via pkexec.
 # Installed to /usr/lib/AureStream/aurestream-tun-helper by deb/rpm.
 #

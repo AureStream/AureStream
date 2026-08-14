@@ -11,7 +11,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "download-binaries": "tsx scripts/download-binaries.ts",
-    "release": "pnpm download-binaries && pnpm build && pnpm tauri build",
+    "release": "pnpm download-binaries && pnpm build && cargo build -p aurestream-platform-tun --bin aurestream-tun-helper --release && pnpm tauri build",
     "test": "vitest run",
     "test:watch": "vitest",
     "build-tun": "tsx scripts/build-tun-service.ts",
