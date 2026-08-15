@@ -5,7 +5,7 @@ import { useAlert } from "@/contexts/AlertContext"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
-import { flagEmojiForNodeName } from "@/lib/node-flag"
+import NodeFlag from "@/components/NodeFlag"
 import { getAllNodeLatencies, setNodeLatency } from "@/lib/node-latency"
 import { getNodeLatencyTone } from "@/lib/node-latency-tone"
 import { testNodesTcpLatencyBatch } from "@/lib/node-speed-test"
@@ -191,12 +191,10 @@ export default function NodesPage() {
                       : "bg-[#f1f2f4] hover:bg-[#e8eaed] dark:bg-muted dark:hover:bg-muted/80",
                   )}
                 >
-                  <span
-                    className="w-8 shrink-0 text-center text-2xl leading-none select-none"
-                    aria-hidden
-                  >
-                    {flagEmojiForNodeName(node.name)}
-                  </span>
+                  <NodeFlag
+                    name={node.name}
+                    className="flex w-8 shrink-0 items-center justify-center text-center text-2xl leading-none select-none"
+                  />
 
                   <div className="min-w-0 flex-1">
                     <p

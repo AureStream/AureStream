@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAlert } from "@/contexts/AlertContext"
 import { useAuth } from "@/contexts/AuthContext"
+import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { engineProbeTun, engineUninstallHelper } from "@/lib/ipc"
@@ -32,6 +33,7 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const { user, authLoading, logout } = useAuth()
   const { subscriptions, activeId, syncing } = useSubs()
+  const { engine, stop } = useEngine()
   const { showConfirm, showErrorFromUnknown, showInfo } = useAlert()
   const [tunHelperReady, setTunHelperReady] = useState(false)
   const [uninstallingHelper, setUninstallingHelper] = useState(false)
@@ -94,6 +96,12 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     try {
+      // Tear down the tunnel first — otherwise it keeps running across the
+      // session boundary, and its "connected" state blocks the subscription
+      // sync that should fire on the next login (see SubsContext's engine gate).
+      if (engine.state === "running" || engine.state === "starting") {
+        await stop()
+      }
       await logout()
       navigate("/login", { replace: true })
     } catch (err) {

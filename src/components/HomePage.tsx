@@ -4,7 +4,7 @@ import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
-import { flagEmojiForNodeName } from "@/lib/node-flag"
+import NodeFlag from "@/components/NodeFlag"
 import {
   loadProxyPrefs,
   setEnableTunPref,
@@ -53,29 +53,10 @@ function formatDuration(totalSeconds: number) {
   return `${hh}:${mm}:${ss}`
 }
 
-/** Live HH:MM:SS while connected; resets on disconnect. */
-function useConnectionDuration(connected: boolean) {
-  const [startedAt, setStartedAt] = useState<number | null>(null)
-  const [now, setNow] = useState(() => Date.now())
-
-  useEffect(() => {
-    if (connected) {
-      setStartedAt(Date.now())
-      setNow(Date.now())
-      const id = window.setInterval(() => setNow(Date.now()), 1000)
-      return () => window.clearInterval(id)
-    }
-    setStartedAt(null)
-  }, [connected])
-
-  if (!connected || startedAt == null) return 0
-  return Math.max(0, Math.floor((now - startedAt) / 1000))
-}
-
 export default function HomePage() {
   const navigate = useNavigate()
   const { nodes, subscriptions, activeId, syncing } = useSubs()
-  const { engine, start, stop } = useEngine()
+  const { engine, connectedSeconds, start, stop } = useEngine()
 
   const [smartRouting, setSmartRouting] = useState(true)
   const [enableTun, setEnableTun] = useState(false)
@@ -102,7 +83,7 @@ export default function HomePage() {
   const prefsDisabled = busy
   /** Only after a successful connection; otherwise show preference switches. */
   const showNodeEntry = connected
-  const durationText = formatDuration(useConnectionDuration(connected))
+  const durationText = formatDuration(connectedSeconds)
 
   const selected =
     nodes.find((n) => n.tag === engine.selectedNode) ??
@@ -358,9 +339,10 @@ export default function HomePage() {
                   "dark:border-[var(--auth-accent)]/30 dark:bg-[var(--auth-accent)]/10",
                 )}
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-lg leading-none shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-card" aria-hidden>
-                  {flagEmojiForNodeName(nodeTitle)}
-                </span>
+                <NodeFlag
+                  name={nodeTitle}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-lg leading-none shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-card"
+                />
                 <div className="min-w-0 flex-1">
                   <p
                     className="truncate text-[15px] font-semibold text-[#1a1d21] dark:text-foreground"

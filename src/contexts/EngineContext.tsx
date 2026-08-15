@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
   type ReactNode,
 } from "react"
 import { formatUnknownError, useAlert } from "@/contexts/AlertContext"
@@ -24,6 +25,8 @@ export type StartOptions = {
 type EngineContextValue = {
   /** Source of truth from `engine-state` events (plus one-shot hydrate). */
   engine: EngineStatePayload
+  /** Seconds since the current connection started; 0 when not running. Global — keeps counting across route navigation. */
+  connectedSeconds: number
   start: (nodeTagOrOpts?: string | StartOptions) => Promise<void>
   stop: () => Promise<void>
   selectNode: (nodeTag: string) => Promise<void>
@@ -31,6 +34,7 @@ type EngineContextValue = {
 
 const EngineContext = createContext<EngineContextValue>({
   engine: { state: "idle", captureMode: "off" },
+  connectedSeconds: 0,
   start: async () => {},
   stop: async () => {},
   selectNode: async () => {},
@@ -48,6 +52,28 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const engine = useEngineState()
   const { showError } = useAlert()
   const lastDialogKey = useRef<string | null>(null)
+
+  // Global connection timer: starts once when engine enters "running", keeps
+  // counting regardless of which route is mounted, resets only on disconnect.
+  const [connectedSeconds, setConnectedSeconds] = useState(0)
+  const connectedSinceRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (engine.state !== "running") {
+      connectedSinceRef.current = null
+      setConnectedSeconds(0)
+      return
+    }
+    if (connectedSinceRef.current == null) {
+      connectedSinceRef.current = Date.now()
+    }
+    const tick = () => {
+      setConnectedSeconds(Math.max(0, Math.floor((Date.now() - connectedSinceRef.current!) / 1000)))
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [engine.state])
 
   const presentError = useCallback(
     (raw: unknown, fallback: string, title: string) => {
@@ -104,7 +130,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <EngineContext.Provider value={{ engine, start, stop, selectNode }}>
+    <EngineContext.Provider value={{ engine, connectedSeconds, start, stop, selectNode }}>
       {children}
     </EngineContext.Provider>
   )
