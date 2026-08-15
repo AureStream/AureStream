@@ -172,6 +172,14 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: pnpm pre-bundle
 
+      - name: Build Linux tun-helper
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          set -euo pipefail
+          cargo build -p aurestream-platform-tun --bin aurestream-tun-helper --release --target ${{ matrix.rust_target }}
+          mkdir -p target/release
+          cp "src-tauri/target/${{ matrix.rust_target }}/release/aurestream-tun-helper" target/release/aurestream-tun-helper
+
       - name: Verify staged sidecar for matrix target
         shell: bash
         run: |
