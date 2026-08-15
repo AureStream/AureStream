@@ -12,7 +12,8 @@
 //     Support directory; log path must live under the caller's
 //     ~/Library/Logs/com.root.aurestream/ directory; the sing-box binary
 //     path is derived from the caller's SecCode bundle, never passed by
-//     the caller.
+//     the caller. TUN routes are read from the validated config and installed
+//     before startup is reported as successful.
 //   - stopSingBox / reloadSingBox: operate only on the pid the helper
 //     itself spawned, never an arbitrary pid.
 //   - setDnsServers: service name restricted to [A-Za-z0-9 _-], dns spec
@@ -33,6 +34,7 @@
 #include <arpa/inet.h>
 #include <dispatch/dispatch.h>
 #include <fcntl.h>
+#include <net/if.h>
 #include <signal.h>
 #include <spawn.h>
 #include <sys/event.h>
@@ -414,6 +416,103 @@ static NSString *validateDnsSpec(NSString *spec) {
     return nil;
 }
 
+static NSString *validateIPv4Cidr(NSString *cidr) {
+    if (![cidr isKindOfClass:[NSString class]] || cidr.length == 0 || cidr.length > 32) {
+        return @"route must be a non-empty IPv4 CIDR";
+    }
+    NSArray<NSString *> *parts = [cidr componentsSeparatedByString:@"/"];
+    if (parts.count != 2) {
+        return [NSString stringWithFormat:@"route must use IPv4 CIDR notation: %@", cidr];
+    }
+    struct in_addr address;
+    if (inet_pton(AF_INET, parts[0].UTF8String, &address) != 1) {
+        return [NSString stringWithFormat:@"invalid IPv4 route address: %@", cidr];
+    }
+    NSScanner *scanner = [NSScanner scannerWithString:parts[1]];
+    NSInteger prefix = -1;
+    if (![scanner scanInteger:&prefix] || !scanner.isAtEnd || prefix < 0 || prefix > 32) {
+        return [NSString stringWithFormat:@"invalid IPv4 route prefix: %@", cidr];
+    }
+    return nil;
+}
+
+static BOOL loadTunRouteConfig(NSString *configPath,
+                               NSString **interfaceOut,
+                               NSArray<NSString *> **routesOut,
+                               NSString **errorOut) {
+    NSError *readError = nil;
+    NSData *data = [NSData dataWithContentsOfFile:configPath options:0 error:&readError];
+    if (data == nil) {
+        if (errorOut) {
+            *errorOut = [NSString stringWithFormat:@"read TUN config failed: %@",
+                         readError.localizedDescription ?: @"unknown error"];
+        }
+        return NO;
+    }
+
+    NSError *jsonError = nil;
+    id root = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    if (![root isKindOfClass:[NSDictionary class]]) {
+        if (errorOut) {
+            *errorOut = [NSString stringWithFormat:@"parse TUN config failed: %@",
+                         jsonError.localizedDescription ?: @"root is not an object"];
+        }
+        return NO;
+    }
+
+    NSDictionary *tunSettings = nil;
+    id inbounds = ((NSDictionary *)root)[@"inbounds"];
+    if ([inbounds isKindOfClass:[NSArray class]]) {
+        for (id candidate in (NSArray *)inbounds) {
+            if (![candidate isKindOfClass:[NSDictionary class]]) continue;
+            NSDictionary *inbound = (NSDictionary *)candidate;
+            if (![inbound[@"protocol"] isEqual:@"tun"]) continue;
+            id settings = inbound[@"settings"];
+            if ([settings isKindOfClass:[NSDictionary class]]) {
+                tunSettings = (NSDictionary *)settings;
+                break;
+            }
+        }
+    }
+    if (tunSettings == nil) {
+        if (errorOut) *errorOut = @"TUN inbound settings are missing from config";
+        return NO;
+    }
+
+    NSString *interfaceName = tunSettings[@"name"];
+    NSString *interfaceError = validateInterfaceName(interfaceName);
+    if (interfaceError) {
+        if (errorOut) *errorOut = interfaceError;
+        return NO;
+    }
+
+    id routeValue = tunSettings[@"autoSystemRoutingTable"];
+    if (![routeValue isKindOfClass:[NSArray class]] || [(NSArray *)routeValue count] == 0 ||
+        [(NSArray *)routeValue count] > 512) {
+        if (errorOut) *errorOut = @"TUN route table must contain 1-512 CIDRs";
+        return NO;
+    }
+
+    NSMutableArray<NSString *> *routes = [NSMutableArray array];
+    for (id routeValueEntry in (NSArray *)routeValue) {
+        if (![routeValueEntry isKindOfClass:[NSString class]]) {
+            if (errorOut) *errorOut = @"TUN route table contains a non-string entry";
+            return NO;
+        }
+        NSString *route = (NSString *)routeValueEntry;
+        NSString *routeError = validateIPv4Cidr(route);
+        if (routeError) {
+            if (errorOut) *errorOut = routeError;
+            return NO;
+        }
+        [routes addObject:route];
+    }
+
+    if (interfaceOut) *interfaceOut = interfaceName;
+    if (routesOut) *routesOut = routes;
+    return YES;
+}
+
 static int openLogFileForCaller(NSString *path, NSXPCConnection *connection, NSString **errorOut) {
     uid_t callerUid = 0;
     gid_t callerGid = 0;
@@ -479,6 +578,56 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
     }
     return nil;
 }
+
+static NSString *installTunRoutesFromConfig(NSString *configPath, pid_t corePid) {
+    NSString *interfaceName = nil;
+    NSArray<NSString *> *routes = nil;
+    NSString *configError = nil;
+    if (!loadTunRouteConfig(configPath, &interfaceName, &routes, &configError)) {
+        return configError ?: @"failed to load TUN routes";
+    }
+
+    BOOL interfaceReady = NO;
+    for (int attempt = 0; attempt < 250; attempt++) {
+        if (kill(corePid, 0) != 0 && errno == ESRCH) {
+            return @"aurestream-core exited before the TUN interface became ready";
+        }
+        if (if_nametoindex(interfaceName.UTF8String) != 0) {
+            interfaceReady = YES;
+            break;
+        }
+        usleep(100000);
+    }
+    if (!interfaceReady) {
+        return [NSString stringWithFormat:@"TUN interface %@ did not become ready", interfaceName];
+    }
+
+    NSMutableArray<NSString *> *installed = [NSMutableArray array];
+    for (NSString *route in routes) {
+        // Remove only this exact destination first. This makes restarts
+        // idempotent without disturbing the interface's point-to-point route.
+        runTool(@"/sbin/route", @[ @"-q", @"delete", @"-net", route,
+                                    @"-interface", interfaceName ]);
+        NSString *routeError = runTool(
+            @"/sbin/route",
+            @[ @"-q", @"add", @"-net", route, @"-interface", interfaceName ]);
+        if (routeError) {
+            for (NSString *addedRoute in [installed reverseObjectEnumerator]) {
+                runTool(@"/sbin/route", @[ @"-q", @"delete", @"-net", addedRoute,
+                                            @"-interface", interfaceName ]);
+            }
+            return [NSString stringWithFormat:@"install TUN route %@ on %@ failed: %@",
+                    route, interfaceName, routeError];
+        }
+        [installed addObject:route];
+    }
+
+    NSLog(@"[helper] installed %lu TUN routes on %@",
+          (unsigned long)installed.count, interfaceName);
+    return nil;
+}
+
+static void reapSingBoxPid(pid_t pid);
 
 // ============================================================================
 // Service
@@ -626,6 +775,14 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
         if (rc != 0) {
             resultErr = [NSString stringWithFormat:@"posix_spawn failed: %s (%d)",
                          strerror(rc), rc];
+            return;
+        }
+
+        NSString *routeError = installTunRoutesFromConfig(configPath, pid);
+        if (routeError) {
+            NSLog(@"[helper] TUN route setup failed for pid=%d: %@", pid, routeError);
+            reapSingBoxPid(pid);
+            resultErr = routeError;
             return;
         }
 

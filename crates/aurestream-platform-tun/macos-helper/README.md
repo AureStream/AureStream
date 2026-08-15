@@ -22,7 +22,7 @@ The sing-box binary path is derived from the caller's code signature (not client
 | Method | Purpose |
 |--------|---------|
 | `ping` | Heartbeat / install check |
-| `startSingBoxWithConfigPath:` | `posix_spawn` sing-box as root |
+| `startSingBoxWithConfigPath:` | Spawn core as root and install validated TUN routes |
 | `stopSingBox` | `SIGTERM` to tracked pid |
 | `reloadSingBox` | `SIGHUP` to tracked pid |
 | `setIpForwarding:` | Enable/disable IP forwarding |

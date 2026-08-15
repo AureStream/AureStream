@@ -82,7 +82,7 @@ pub fn start_core_via_helper(
 
     let pid = macos_helper::api::start_sing_box(config_path, log_path_str)?;
     log::info!(
-        "[helper] aurestream-core started, pid={} log={}",
+        "[helper] aurestream-core started with TUN routes, pid={} log={}",
         pid,
         log_path_str
     );
@@ -415,4 +415,3 @@ pub fn release_dns_on_network_down() -> Result<(), String> {
     macos_helper::api::flush_dns_cache().ok();
     Ok(())
 }
-

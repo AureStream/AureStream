@@ -24,7 +24,7 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 - Connect / disconnect via Xray sidecar + OS system proxy (Win / macOS / Linux)
 - **Linux TUN**: `aurestream-platform-tun` + systemd `aurestream-tun.socket` / `/usr/lib/AureStream/aurestream-tun-helper` (deb/rpm / dev install script)
 - **Windows TUN**: SCM service via `tun-service.exe` (UAC install once; NameServer hijack to `1.1.1.1` after core ready)
-- **macOS TUN**: SMJobBless helper (root spawn core; DNS via networksetup after API ready; stop restores DNS before kill)
+- **macOS TUN**: SMJobBless helper (root spawns core and installs validated TUN routes before DNS override; stop restores DNS before kill and removes routes)
 - System tray (show window, system proxy / TUN toggle when helper ready, quit)
 - Unified app/core logs; errors via in-app modal (`app-alert` from Rust)
 
@@ -55,6 +55,7 @@ pnpm release             # download-binaries + build + tauri build
 ./scripts/install-linux-tun-helper.sh   # Linux dev: install pkexec helper + polkit
 pnpm build-tun           # Windows: build tun-service.exe into src-tauri/binaries/
 pnpm pre-bundle          # macOS: build/sign com.root.aurestream.helper → src-tauri/target/helper/
+pnpm sign-macos-bundle /path/to/AureStream.app  # macOS: sign nested binaries and app for SMJobBless
 
 # Rust (workspace root)
 cargo check --workspace
@@ -127,6 +128,8 @@ UI copy: Chinese-only (no i18n).
 - Do not commit secrets, signing certs, or local `.env` values.
 - Linux TUN packaging: deb/rpm map helper + polkit under `src-tauri/tauri.conf.json` `bundle.linux`; AppImage is not a supported TUN install path.
 - macOS TUN packaging: `pnpm pre-bundle` then `bundle.macOS.files` embeds helper; SMJobBless needs matching code signature (Developer ID or ad-hoc for local).
+- macOS helper changes under `crates/aurestream-platform-tun/macos-helper/` must bump both `CFBundleShortVersionString` and the monotonically increasing `CFBundleVersion` in `Info.plist`; otherwise SMJobBless may keep an older installed helper.
+- macOS TUN startup is transactional: the helper reads validated `autoSystemRoutingTable` CIDRs from the generated Xray config, installs them on `utun233`, and only then applies the DNS override. Preserve proxy-endpoint exclusions and roll back routes/core on failure.
 
 ## Where to look first
 
@@ -141,7 +144,7 @@ UI copy: Chinese-only (no i18n).
 | Auth / session | `src/contexts/AuthContext.tsx`, `crates/aurestream-api-client` |
 | System proxy | `crates/aurestream-platform-proxy` |
 | Sidecar binary | `scripts/download-binaries.ts`, `src-tauri/binaries/` |
-| TUN (planned) | `docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md`, `legacy/` reference only |
+| TUN implementation | `crates/aurestream-platform-tun`, `src-tauri/src/commands/engine.rs`, `crates/aurestream-engine/src/xray/config.rs`; roadmap in `docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md` |
 | Pre-v2 reference only | `legacy/` (do not maintain) |
 
 ## Build notes
