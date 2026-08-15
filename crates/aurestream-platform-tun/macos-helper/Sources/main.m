@@ -381,13 +381,36 @@ static NSString *validateServiceName(NSString *name) {
 }
 
 static NSString *validateInterfaceName(NSString *name) {
-    if (![name hasPrefix:@"utun"] || name.length < 5 || name.length > 10) {
+    if (![name isKindOfClass:[NSString class]] ||
+        ![name hasPrefix:@"utun"] || name.length < 5 || name.length > 10) {
         return @"interface must match ^utun[0-9]+$";
     }
     NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
     NSString *suffix = [name substringFromIndex:4];
     if ([suffix rangeOfCharacterFromSet:[digits invertedSet]].location != NSNotFound) {
         return @"interface must match ^utun[0-9]+$";
+    }
+    return nil;
+}
+
+static NSString *validateOutboundInterfaceName(NSString *name) {
+    if (![name isKindOfClass:[NSString class]] || name.length == 0 || name.length > 32) {
+        return @"physical outbound interface is missing or too long";
+    }
+    if ([name hasPrefix:@"utun"] || [name isEqualToString:@"lo0"]) {
+        return @"physical outbound interface must not be a tunnel or loopback interface";
+    }
+    static NSCharacterSet *allowed = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        allowed = [NSCharacterSet characterSetWithCharactersInString:
+            @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"];
+    });
+    if ([name rangeOfCharacterFromSet:[allowed invertedSet]].location != NSNotFound) {
+        return @"physical outbound interface contains forbidden characters";
+    }
+    if (if_nametoindex(name.UTF8String) == 0) {
+        return [NSString stringWithFormat:@"physical outbound interface %@ does not exist", name];
     }
     return nil;
 }
@@ -438,6 +461,7 @@ static NSString *validateIPv4Cidr(NSString *cidr) {
 
 static BOOL loadTunRouteConfig(NSString *configPath,
                                NSString **interfaceOut,
+                               NSString **outboundInterfaceOut,
                                NSArray<NSString *> **routesOut,
                                NSString **errorOut) {
     NSError *readError = nil;
@@ -486,6 +510,13 @@ static BOOL loadTunRouteConfig(NSString *configPath,
         return NO;
     }
 
+    NSString *outboundInterface = tunSettings[@"autoOutboundsInterface"];
+    NSString *outboundInterfaceError = validateOutboundInterfaceName(outboundInterface);
+    if (outboundInterfaceError) {
+        if (errorOut) *errorOut = outboundInterfaceError;
+        return NO;
+    }
+
     id routeValue = tunSettings[@"autoSystemRoutingTable"];
     if (![routeValue isKindOfClass:[NSArray class]] || [(NSArray *)routeValue count] == 0 ||
         [(NSArray *)routeValue count] > 512) {
@@ -509,6 +540,7 @@ static BOOL loadTunRouteConfig(NSString *configPath,
     }
 
     if (interfaceOut) *interfaceOut = interfaceName;
+    if (outboundInterfaceOut) *outboundInterfaceOut = outboundInterface;
     if (routesOut) *routesOut = routes;
     return YES;
 }
@@ -579,17 +611,186 @@ static NSString *runTool(NSString *tool, NSArray<NSString *> *args) {
     return nil;
 }
 
-static NSString *installTunRoutesFromConfig(NSString *configPath, pid_t corePid) {
+static NSString *runToolCapture(NSString *tool,
+                                NSArray<NSString *> *args,
+                                NSString **stdoutOut) {
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = tool;
+    task.arguments = args;
+    task.standardInput = [NSFileHandle fileHandleWithNullDevice];
+    NSPipe *outPipe = [NSPipe pipe];
+    NSPipe *errPipe = [NSPipe pipe];
+    task.standardOutput = outPipe;
+    task.standardError = errPipe;
+    @try {
+        [task launch];
+        [task waitUntilExit];
+    } @catch (NSException *ex) {
+        return [NSString stringWithFormat:@"%@ launch failed: %@", tool, ex.reason];
+    }
+
+    NSData *outData = [outPipe.fileHandleForReading readDataToEndOfFile];
+    NSString *out = [[NSString alloc] initWithData:outData encoding:NSUTF8StringEncoding];
+    if (stdoutOut) *stdoutOut = out ?: @"";
+    if (task.terminationStatus != 0) {
+        NSData *errData = [errPipe.fileHandleForReading readDataToEndOfFile];
+        NSString *err = [[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding];
+        return [NSString stringWithFormat:@"%@ exit=%d: %@",
+                tool, task.terminationStatus, err ?: @"(no stderr)"];
+    }
+    return nil;
+}
+
+static NSString *routeValueForKey(NSString *output, NSString *key) {
+    NSString *prefix = [key stringByAppendingString:@":"];
+    for (NSString *line in [output componentsSeparatedByString:@"\n"]) {
+        NSString *trimmed = [line stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceCharacterSet]];
+        if ([trimmed hasPrefix:prefix]) {
+            return [[trimmed substringFromIndex:prefix.length]
+                stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        }
+    }
+    return nil;
+}
+
+static NSString *readDefaultRoute(NSString *scope,
+                                  NSString **interfaceOut,
+                                  NSString **gatewayOut,
+                                  BOOL *isScopedOut) {
+    NSMutableArray<NSString *> *args = [NSMutableArray arrayWithObjects:@"-n", @"get", nil];
+    if (scope.length > 0) {
+        [args addObjectsFromArray:@[ @"-ifscope", scope ]];
+    }
+    [args addObject:@"default"];
+
+    NSString *output = nil;
+    NSString *error = runToolCapture(@"/sbin/route", args, &output);
+    if (error) return error;
+
+    NSString *interfaceName = routeValueForKey(output, @"interface");
+    NSString *gateway = routeValueForKey(output, @"gateway");
+    NSString *flags = routeValueForKey(output, @"flags");
+    struct in_addr address;
+    if (interfaceName.length == 0 || gateway.length == 0 ||
+        inet_pton(AF_INET, gateway.UTF8String, &address) != 1) {
+        return [NSString stringWithFormat:@"could not parse IPv4 default route: %@", output ?: @""];
+    }
+    if (interfaceOut) *interfaceOut = interfaceName;
+    if (gatewayOut) *gatewayOut = gateway;
+    if (isScopedOut) {
+        *isScopedOut = [flags rangeOfString:@"IFSCOPE"].location != NSNotFound;
+    }
+    return nil;
+}
+
+static NSString *installScopedDefaultRoute(NSString *expectedInterface,
+                                           NSString **gatewayOut,
+                                           BOOL *ownedOut) {
+    NSString *defaultInterface = nil;
+    NSString *gateway = nil;
+    NSString *error = readDefaultRoute(nil, &defaultInterface, &gateway, nil);
+    if (error) {
+        return [NSString stringWithFormat:@"read physical default route failed: %@", error];
+    }
+    if (![defaultInterface isEqualToString:expectedInterface]) {
+        return [NSString stringWithFormat:
+            @"physical default route moved from %@ to %@ before TUN startup",
+            expectedInterface, defaultInterface];
+    }
+
+    NSString *scopedInterface = nil;
+    NSString *scopedGateway = nil;
+    BOOL routeIsScoped = NO;
+    NSString *scopedError = readDefaultRoute(expectedInterface,
+                                             &scopedInterface,
+                                             &scopedGateway,
+                                             &routeIsScoped);
+    if (scopedError == nil && routeIsScoped) {
+        if (![scopedInterface isEqualToString:expectedInterface] ||
+            ![scopedGateway isEqualToString:gateway]) {
+            return [NSString stringWithFormat:
+                @"unexpected scoped default route on %@ via %@ (%@)",
+                scopedInterface ?: @"(unknown)", scopedGateway ?: @"(unknown)",
+                expectedInterface];
+        }
+        if (gatewayOut) *gatewayOut = gateway;
+        if (ownedOut) *ownedOut = NO;
+        NSLog(@"[helper] reusing scoped default route on %@ via %@",
+              expectedInterface, gateway);
+        return nil;
+    }
+
+    error = runTool(@"/sbin/route",
+        @[ @"-q", @"add", @"-net", @"-ifscope", expectedInterface,
+           @"default", gateway ]);
+    if (error) {
+        return [NSString stringWithFormat:@"add scoped default route on %@ via %@ failed: %@",
+                expectedInterface, gateway, error];
+    }
+
+    scopedInterface = nil;
+    scopedGateway = nil;
+    routeIsScoped = NO;
+    error = readDefaultRoute(expectedInterface, &scopedInterface, &scopedGateway,
+                             &routeIsScoped);
+    if (error || ![scopedInterface isEqualToString:expectedInterface] ||
+        ![scopedGateway isEqualToString:gateway] || !routeIsScoped) {
+        runTool(@"/sbin/route",
+            @[ @"-q", @"delete", @"-net", @"-ifscope", expectedInterface,
+               @"default", gateway ]);
+        return [NSString stringWithFormat:@"verify scoped default route on %@ failed: %@",
+                expectedInterface, error ?: @"route does not match"];
+    }
+
+    if (gatewayOut) *gatewayOut = gateway;
+    if (ownedOut) *ownedOut = YES;
+    NSLog(@"[helper] installed scoped default route on %@ via %@",
+          expectedInterface, gateway);
+    return nil;
+}
+
+static void removeOwnedScopedDefaultRoute(NSString *interfaceName, NSString *gateway) {
+    if (interfaceName.length == 0 || gateway.length == 0) return;
+    NSString *error = runTool(@"/sbin/route",
+        @[ @"-q", @"delete", @"-net", @"-ifscope", interfaceName,
+           @"default", gateway ]);
+    if (error) {
+        NSLog(@"[helper] remove scoped default route on %@ via %@: %@",
+              interfaceName, gateway, error);
+    } else {
+        NSLog(@"[helper] removed scoped default route on %@ via %@",
+              interfaceName, gateway);
+    }
+}
+
+static NSString *installTunRoutesFromConfig(NSString *configPath,
+                                            pid_t corePid,
+                                            NSString **scopedInterfaceOut,
+                                            NSString **scopedGatewayOut,
+                                            BOOL *ownsScopedRouteOut) {
     NSString *interfaceName = nil;
+    NSString *outboundInterface = nil;
     NSArray<NSString *> *routes = nil;
     NSString *configError = nil;
-    if (!loadTunRouteConfig(configPath, &interfaceName, &routes, &configError)) {
+    if (!loadTunRouteConfig(configPath, &interfaceName, &outboundInterface,
+                            &routes, &configError)) {
         return configError ?: @"failed to load TUN routes";
     }
+
+    NSString *scopedGateway = nil;
+    BOOL ownsScopedRoute = NO;
+    NSString *scopedError = installScopedDefaultRoute(outboundInterface,
+                                                       &scopedGateway,
+                                                       &ownsScopedRoute);
+    if (scopedError) return scopedError;
 
     BOOL interfaceReady = NO;
     for (int attempt = 0; attempt < 250; attempt++) {
         if (kill(corePid, 0) != 0 && errno == ESRCH) {
+            if (ownsScopedRoute) {
+                removeOwnedScopedDefaultRoute(outboundInterface, scopedGateway);
+            }
             return @"aurestream-core exited before the TUN interface became ready";
         }
         if (if_nametoindex(interfaceName.UTF8String) != 0) {
@@ -599,6 +800,9 @@ static NSString *installTunRoutesFromConfig(NSString *configPath, pid_t corePid)
         usleep(100000);
     }
     if (!interfaceReady) {
+        if (ownsScopedRoute) {
+            removeOwnedScopedDefaultRoute(outboundInterface, scopedGateway);
+        }
         return [NSString stringWithFormat:@"TUN interface %@ did not become ready", interfaceName];
     }
 
@@ -616,6 +820,9 @@ static NSString *installTunRoutesFromConfig(NSString *configPath, pid_t corePid)
                 runTool(@"/sbin/route", @[ @"-q", @"delete", @"-net", addedRoute,
                                             @"-interface", interfaceName ]);
             }
+            if (ownsScopedRoute) {
+                removeOwnedScopedDefaultRoute(outboundInterface, scopedGateway);
+            }
             return [NSString stringWithFormat:@"install TUN route %@ on %@ failed: %@",
                     route, interfaceName, routeError];
         }
@@ -624,6 +831,9 @@ static NSString *installTunRoutesFromConfig(NSString *configPath, pid_t corePid)
 
     NSLog(@"[helper] installed %lu TUN routes on %@",
           (unsigned long)installed.count, interfaceName);
+    if (scopedInterfaceOut) *scopedInterfaceOut = outboundInterface;
+    if (scopedGatewayOut) *scopedGatewayOut = scopedGateway;
+    if (ownsScopedRouteOut) *ownsScopedRouteOut = ownsScopedRoute;
     return nil;
 }
 
@@ -641,6 +851,9 @@ static void reapSingBoxPid(pid_t pid);
     pid_t _activePid;
     dispatch_source_t _exitSource;
     __weak NSXPCConnection *_activeConnection;
+    NSString *_activeScopedInterface;
+    NSString *_activeScopedGateway;
+    BOOL _ownsActiveScopedRoute;
 }
 
 - (instancetype)init {
@@ -649,6 +862,15 @@ static void reapSingBoxPid(pid_t pid);
         _stateQueue = dispatch_queue_create("com.root.aurestream.helper.state", DISPATCH_QUEUE_SERIAL);
     }
     return self;
+}
+
+- (void)clearActiveScopedRouteLocked {
+    if (_ownsActiveScopedRoute) {
+        removeOwnedScopedDefaultRoute(_activeScopedInterface, _activeScopedGateway);
+    }
+    _activeScopedInterface = nil;
+    _activeScopedGateway = nil;
+    _ownsActiveScopedRoute = NO;
 }
 
 - (BOOL)listener:(NSXPCListener *)listener
@@ -724,6 +946,7 @@ static void reapSingBoxPid(pid_t pid);
             }
             self->_activePid = 0;
             self->_activeConnection = nil;
+            [self clearActiveScopedRouteLocked];
         }
 
         NSString *logOpenErr = nil;
@@ -778,7 +1001,13 @@ static void reapSingBoxPid(pid_t pid);
             return;
         }
 
-        NSString *routeError = installTunRoutesFromConfig(configPath, pid);
+        NSString *scopedInterface = nil;
+        NSString *scopedGateway = nil;
+        BOOL ownsScopedRoute = NO;
+        NSString *routeError = installTunRoutesFromConfig(configPath, pid,
+                                                           &scopedInterface,
+                                                           &scopedGateway,
+                                                           &ownsScopedRoute);
         if (routeError) {
             NSLog(@"[helper] TUN route setup failed for pid=%d: %@", pid, routeError);
             reapSingBoxPid(pid);
@@ -788,6 +1017,9 @@ static void reapSingBoxPid(pid_t pid);
 
         self->_activePid = pid;
         self->_activeConnection = conn;
+        self->_activeScopedInterface = scopedInterface;
+        self->_activeScopedGateway = scopedGateway;
+        self->_ownsActiveScopedRoute = ownsScopedRoute;
 
         self->_exitSource = dispatch_source_create(
             DISPATCH_SOURCE_TYPE_PROC,
@@ -825,6 +1057,7 @@ static void reapSingBoxPid(pid_t pid);
                 if (strongSelf->_activePid == pid) {
                     strongSelf->_activePid = 0;
                     strongSelf->_activeConnection = nil;
+                    [strongSelf clearActiveScopedRouteLocked];
                     if (strongSelf->_exitSource) {
                         dispatch_source_cancel(strongSelf->_exitSource);
                         strongSelf->_exitSource = nil;
@@ -914,6 +1147,7 @@ static int killListenersOnPort(int port) {
             if (self->_activePid == target) {
                 self->_activePid = 0;
                 self->_activeConnection = nil;
+                [self clearActiveScopedRouteLocked];
                 if (self->_exitSource) {
                     dispatch_source_cancel(self->_exitSource);
                     self->_exitSource = nil;
@@ -1031,6 +1265,10 @@ static int killListenersOnPort(int port) {
     [self removeRoutesForFamily:@"inet" iface:interfaceName];
     [self removeRoutesForFamily:@"inet6" iface:interfaceName];
 
+    dispatch_sync(_stateQueue, ^{
+        [self clearActiveScopedRouteLocked];
+    });
+
     NSString *downErr = runTool(@"/sbin/ifconfig", @[ interfaceName, @"down" ]);
     if (downErr) {
         NSLog(@"[helper] ifconfig %@ down: %@", interfaceName, downErr);
@@ -1096,9 +1334,18 @@ static int killListenersOnPort(int port) {
         target = self->_activePid;
     });
     if (target != 0) {
-        kill(target, SIGTERM);
-        NSLog(@"[helper] sent SIGTERM to sing-box pid=%d before uninstall", target);
+        reapSingBoxPid(target);
+        NSLog(@"[helper] reaped sing-box pid=%d before uninstall", target);
     }
+    dispatch_sync(_stateQueue, ^{
+        self->_activePid = 0;
+        self->_activeConnection = nil;
+        [self clearActiveScopedRouteLocked];
+        if (self->_exitSource) {
+            dispatch_source_cancel(self->_exitSource);
+            self->_exitSource = nil;
+        }
+    });
 
     char pidStr[16];
     snprintf(pidStr, sizeof(pidStr), "%d", getpid());

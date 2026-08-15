@@ -17,10 +17,10 @@
          treats it as up-to-date. There is no automatic sync; see the
          "Privileged helper version bump" section in CLAUDE.md. -->
     <key>CFBundleShortVersionString</key>
-    <string>1.0.9</string>
+    <string>1.0.10</string>
     <key>CFBundleVersion</key>
-    <!-- Bumped 12: install validated TUN routes before reporting core startup. -->
-    <string>12</string>
+    <!-- Bumped 13: add a transactional physical-interface scoped default route. -->
+    <string>13</string>
     <key>SMAuthorizedClients</key>
     <array>
         <string>identifier "com.root.aurestream"</string>
