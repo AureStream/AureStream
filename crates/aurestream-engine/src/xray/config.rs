@@ -249,14 +249,17 @@ pub fn build_xray_config_value_with_options(
             "outboundTag": "block"
         }));
         // QUIC tunneled through a TCP-based proxy transport (WS/HTTP Upgrade)
-        // suffers severe head-of-line blocking. Reject it quickly so browsers
-        // retry over HTTP/2 TCP instead of waiting for UDP timeouts.
+        // suffers severe head-of-line blocking. Reject only genuine QUIC
+        // (sniffed via tun-in's protocol detection) so browsers retry over
+        // HTTP/2 TCP instead of waiting for UDP timeouts. A blanket
+        // port-443/udp block also swallows non-QUIC apps that piggyback on
+        // 443 for NAT traversal (WeChat, remote-desktop tools), so match on
+        // the sniffed protocol instead of the port.
         if matches!(proxy_transport.as_str(), "ws" | "httpupgrade") {
             rules.push(json!({
                 "type": "field",
                 "inboundTag": ["tun-in"],
-                "port": "443",
-                "network": "udp",
+                "protocol": ["quic"],
                 "outboundTag": "block"
             }));
         }

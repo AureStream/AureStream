@@ -191,11 +191,21 @@ fn xray_build_config_with_tun_inbound() {
             r.get("inboundTag")
                 .and_then(|t| t.as_array())
                 .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("tun-in")))
-                && r.get("port").and_then(|p| p.as_str()) == Some("443")
+                && r.get("protocol")
+                    .and_then(|p| p.as_array())
+                    .is_some_and(|a| a.iter().any(|v| v.as_str() == Some("quic")))
+                && r.get("outboundTag").and_then(|t| t.as_str()) == Some("block")
+        }),
+        "WS TUN must reject sniffed QUIC (not a blanket udp/443 block) so browsers \
+         fall back to TCP while non-QUIC apps on 443 (e.g. WeChat) still work"
+    );
+    assert!(
+        !rules.iter().any(|r| {
+            r.get("port").and_then(|p| p.as_str()) == Some("443")
                 && r.get("network").and_then(|n| n.as_str()) == Some("udp")
                 && r.get("outboundTag").and_then(|t| t.as_str()) == Some("block")
         }),
-        "WS TUN must reject QUIC so browsers fall back to TCP"
+        "must not blanket-block udp/443 — that also breaks non-QUIC apps using port 443"
     );
     assert!(
         !rules.iter().any(|r| {
