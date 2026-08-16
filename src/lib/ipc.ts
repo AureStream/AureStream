@@ -119,6 +119,29 @@ export async function onSubsUpdated(
   });
 }
 
+export type PendingTraffic = {
+  subscriptionId: string;
+  upload: number;
+  download: number;
+};
+
+export type TrafficLocalUpdatedPayload = {
+  pending: PendingTraffic[];
+};
+
+export const TRAFFIC_LOCAL_UPDATED_EVENT = "traffic-local-updated";
+
+export async function onTrafficLocalUpdated(
+  handler: (payload: TrafficLocalUpdatedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<TrafficLocalUpdatedPayload>(
+    TRAFFIC_LOCAL_UPDATED_EVENT,
+    (event) => {
+      handler(event.payload);
+    },
+  );
+}
+
 export type CaptureMode = "off" | "system" | "tun";
 
 export type EngineStatePayload = {

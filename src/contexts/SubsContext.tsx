@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -11,12 +12,15 @@ import { useAlert } from "@/contexts/AlertContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   onSubsUpdated,
+  onTrafficLocalUpdated,
   subsList,
   subsSync,
   type NodeInfo,
+  type PendingTraffic,
   type SubSummary,
   type SubsUpdatedPayload,
 } from "@/lib/ipc";
+import { withPendingTraffic } from "@/lib/local-traffic";
 import {
   shouldRunAutoSubsSync,
   SUBS_SYNC_INTERVAL_MS,
@@ -55,7 +59,8 @@ function applyPayload(
 export function SubsProvider({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { showErrorFromUnknown } = useAlert();
-  const [subscriptions, setSubscriptions] = useState<SubSummary[]>([]);
+  const [remoteSubscriptions, setRemoteSubscriptions] = useState<SubSummary[]>([]);
+  const [pendingTraffic, setPendingTraffic] = useState<PendingTraffic[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -65,6 +70,11 @@ export function SubsProvider({ children }: { children: ReactNode }) {
   const lastSuccessAtRef = useRef<number | null>(null);
 
   userRef.current = user;
+
+  const subscriptions = useMemo(
+    () => withPendingTraffic(remoteSubscriptions, pendingTraffic),
+    [remoteSubscriptions, pendingTraffic],
+  );
 
   // Rust refreshes expired access tokens and retries, so a token error here
   // means the session is unrecoverable — sign out instead of showing an error
@@ -100,7 +110,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       void subsSync()
         .then((payload) => {
           lastSuccessAtRef.current = Date.now();
-          applyPayload(payload, setSubscriptions, setActiveId, setNodes);
+          applyPayload(payload, setRemoteSubscriptions, setActiveId, setNodes);
         })
         .catch((err) => {
           // Keep last good cache. Auth failures always sign out; other errors
@@ -123,26 +133,41 @@ export function SubsProvider({ children }: { children: ReactNode }) {
   // Event bus is the source of truth for updates (e.g. future multi-window).
   useEffect(() => {
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    let unlistenSubs: (() => void) | undefined;
+    let unlistenTraffic: (() => void) | undefined;
 
     (async () => {
-      unlisten = await onSubsUpdated((payload) => {
+      unlistenSubs = await onSubsUpdated((payload) => {
         if (!cancelled) {
-          applyPayload(payload, setSubscriptions, setActiveId, setNodes);
+          applyPayload(payload, setRemoteSubscriptions, setActiveId, setNodes);
         }
       });
+      if (cancelled) {
+        unlistenSubs();
+        return;
+      }
+      unlistenTraffic = await onTrafficLocalUpdated((payload) => {
+        if (!cancelled && userRef.current) {
+          setPendingTraffic(payload.pending);
+        }
+      });
+      if (cancelled) {
+        unlistenTraffic();
+      }
     })();
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlistenSubs?.();
+      unlistenTraffic?.();
     };
   }, []);
 
   // Mount / login / restore: hydrate cache then background sync. Never blocks Home.
   useEffect(() => {
     if (!user) {
-      setSubscriptions([]);
+      setRemoteSubscriptions([]);
+      setPendingTraffic([]);
       setActiveId(null);
       setNodes([]);
       setSyncing(false);
@@ -155,7 +180,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
     void subsList()
       .then((payload) => {
         if (!cancelled) {
-          applyPayload(payload, setSubscriptions, setActiveId, setNodes);
+          applyPayload(payload, setRemoteSubscriptions, setActiveId, setNodes);
         }
       })
       .catch(() => {

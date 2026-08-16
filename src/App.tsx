@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { Loader2 } from "lucide-react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import AppShell from "@/components/AppShell"
+import ForceUpdateGate from "@/components/ForceUpdateGate"
 import HomePage from "@/components/HomePage"
 import LoginPage from "@/components/LoginPage"
 import NodesPage from "@/components/NodesPage"
@@ -96,18 +97,20 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AlertProvider>
-      <AuthProvider>
-        <SubsProvider>
-          <EngineProvider>
-            <BrowserRouter>
-              <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-background">
-                <AppRoutes />
-              </div>
-            </BrowserRouter>
-          </EngineProvider>
-        </SubsProvider>
-      </AuthProvider>
-    </AlertProvider>
+    <ForceUpdateGate>
+      <AlertProvider>
+        <AuthProvider>
+          <SubsProvider>
+            <EngineProvider>
+              <BrowserRouter>
+                <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-background">
+                  <AppRoutes />
+                </div>
+              </BrowserRouter>
+            </EngineProvider>
+          </SubsProvider>
+        </AuthProvider>
+      </AlertProvider>
+    </ForceUpdateGate>
   )
 }

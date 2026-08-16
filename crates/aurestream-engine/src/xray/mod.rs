@@ -460,6 +460,47 @@ impl Engine for XrayEngine {
 fn parse_outbound_traffic(output: &str, outbound_tag: &str) -> Result<TrafficStats, EngineError> {
     let upload_name = format!("outbound>>>{outbound_tag}>>>traffic>>>uplink");
     let download_name = format!("outbound>>>{outbound_tag}>>>traffic>>>downlink");
+
+    let trimmed = output.trim();
+    if trimmed.starts_with('{') {
+        let root: serde_json::Value = serde_json::from_str(trimmed)
+            .map_err(|e| EngineError::io(format!("invalid Xray stats JSON: {e}")))?;
+        let Some(entries) = root.get("stat") else {
+            return Ok(TrafficStats::default());
+        };
+        let entries = entries
+            .as_array()
+            .ok_or_else(|| EngineError::io("invalid Xray stats JSON: `stat` is not an array"))?;
+        let mut stats = TrafficStats::default();
+
+        for entry in entries {
+            let Some(name) = entry.get("name").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if name != upload_name && name != download_name {
+                continue;
+            }
+
+            // Proto JSON omits scalar fields whose value is zero.
+            let value = match entry.get("value") {
+                None | Some(serde_json::Value::Null) => 0,
+                Some(value) => value
+                    .as_u64()
+                    .or_else(|| value.as_str().and_then(|raw| raw.parse().ok()))
+                    .ok_or_else(|| {
+                        EngineError::io(format!("invalid Xray stats value for {name}"))
+                    })?,
+            };
+            if name == upload_name {
+                stats.upload = value;
+            } else {
+                stats.download = value;
+            }
+        }
+
+        return Ok(stats);
+    }
+
     let mut current_name: Option<String> = None;
     let mut stats = TrafficStats::default();
 
@@ -1007,6 +1048,45 @@ stat: <
         let stats = parse_outbound_traffic(output, "\u{65b0}\u{52a0}\u{5761}2-SG").unwrap();
         assert_eq!(stats.upload, 1_048_576);
         assert_eq!(stats.download, 10_485_760);
+    }
+
+    #[test]
+    fn parses_outbound_traffic_stats_json() {
+        let output = r#"{
+            "stat": [
+                {
+                    "name": "outbound>>>新加坡-SG>>>traffic>>>uplink",
+                    "value": 4248405
+                },
+                {
+                    "name": "outbound>>>新加坡-SG>>>traffic>>>downlink",
+                    "value": "5466304"
+                },
+                {
+                    "name": "outbound>>>direct>>>traffic>>>downlink",
+                    "value": 55637694
+                }
+            ]
+        }"#;
+
+        let stats = parse_outbound_traffic(output, "新加坡-SG").unwrap();
+        assert_eq!(stats.upload, 4_248_405);
+        assert_eq!(stats.download, 5_466_304);
+    }
+
+    #[test]
+    fn omitted_json_value_is_zero() {
+        let output = r#"{
+            "stat": [
+                { "name": "outbound>>>node-1>>>traffic>>>uplink" },
+                { "name": "outbound>>>node-1>>>traffic>>>downlink" }
+            ]
+        }"#;
+
+        assert_eq!(
+            parse_outbound_traffic(output, "node-1").unwrap(),
+            TrafficStats::default()
+        );
     }
 
     #[test]

@@ -31,6 +31,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "resources": [
       "resources/**/*"
     ],
@@ -77,5 +78,13 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://cdn.jsdelivr.net/gh/AureStream/AureStream@updater/latest.json",
+        "https://github.com/AureStream/AureStream/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhCMjBBNTE3QzYxRjZBN0YKUldSL2FoL0dGNlVnaTVHZjBSdE5GVHY5ekFqUGRQTVZHK1dVT2pMM3VraFhVUFBkL0NET01ncmMK"
+    }
+  }
 }

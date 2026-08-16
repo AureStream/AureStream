@@ -4,186 +4,186 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DEFAULT_REPO = 'AureStream/AureStream';
+const REQUIRED_TARGETS = [
+  'darwin-aarch64-app',
+  'darwin-x86_64-app',
+  'linux-aarch64-appimage',
+  'linux-aarch64-deb',
+  'linux-aarch64-rpm',
+  'linux-x86_64-appimage',
+  'linux-x86_64-deb',
+  'linux-x86_64-rpm',
+  'windows-aarch64-msi',
+  'windows-aarch64-nsis',
+  'windows-x86_64-msi',
+  'windows-x86_64-nsis',
+];
+
+function updaterPlatform(bundleName) {
+  const name = bundleName.toLowerCase();
+  const arm = name.includes('aarch64') || name.includes('arm64');
+  const x64 = name.includes('x86_64') || name.includes('x64') || name.includes('amd64');
+
+  if (name.endsWith('.app.tar.gz')) {
+    if (name.startsWith('macos-aarch64-') || arm) return 'darwin-aarch64-app';
+    if (name.startsWith('macos-x64-') || x64) return 'darwin-x86_64-app';
+    return null;
+  }
+  if (name.endsWith('.appimage') || name.endsWith('.appimage.tar.gz')) {
+    if (arm) return 'linux-aarch64-appimage';
+    if (x64) return 'linux-x86_64-appimage';
+    return null;
+  }
+  if (name.endsWith('.deb')) {
+    if (arm) return 'linux-aarch64-deb';
+    if (x64) return 'linux-x86_64-deb';
+    return null;
+  }
+  if (name.endsWith('.rpm')) {
+    if (arm) return 'linux-aarch64-rpm';
+    if (x64) return 'linux-x86_64-rpm';
+    return null;
+  }
+  if (name.endsWith('-setup.exe')) {
+    if (arm) return 'windows-aarch64-nsis';
+    if (x64) return 'windows-x86_64-nsis';
+  }
+  if (name.endsWith('.msi')) {
+    if (arm) return 'windows-aarch64-msi';
+    if (x64) return 'windows-x86_64-msi';
+  }
+  return null;
+}
+
+export function collectUpdaterAssets(assets) {
+  const byName = new Map(assets.map((asset) => [asset.name, asset]));
+  const selected = new Map();
+
+  for (const signatureAsset of assets.filter((asset) => asset.name.endsWith('.sig'))) {
+    const bundleName = signatureAsset.name.slice(0, -4);
+    const platform = updaterPlatform(bundleName);
+    if (!platform) continue;
+
+    const bundleAsset = byName.get(bundleName);
+    if (!bundleAsset) {
+      throw new Error(`Updater signature has no matching bundle: ${signatureAsset.name}`);
+    }
+    if (selected.has(platform)) {
+      throw new Error(`Multiple updater bundles found for ${platform}`);
+    }
+    selected.set(platform, { bundleAsset, signatureAsset });
+  }
+
+  const missing = REQUIRED_TARGETS.filter((platform) => !selected.has(platform));
+  if (missing.length > 0) {
+    throw new Error(`Missing updater bundles for: ${missing.join(', ')}`);
+  }
+  return selected;
+}
+
+async function replaceReleaseAsset({ apiBase, release, name, body, headers }) {
+  const existing = release.assets.find((asset) => asset.name === name);
+  if (existing) {
+    const response = await fetch(`${apiBase}/releases/assets/${existing.id}`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete existing ${name}: ${response.statusText}`);
+    }
+  }
+
+  const uploadUrl = release.upload_url.split('{')[0];
+  const response = await fetch(`${uploadUrl}?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to upload ${name}: ${response.statusText} ${await response.text()}`);
+  }
+}
 
 async function run() {
   const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error('GITHUB_TOKEN environment variable is required');
-    process.exit(1);
-  }
+  if (!token) throw new Error('GITHUB_TOKEN environment variable is required');
 
-  // Read version from tauri.conf.json
+  const repo = process.env.GITHUB_REPOSITORY || DEFAULT_REPO;
   const tauriConfPath = path.join(__dirname, '..', 'src-tauri', 'tauri.conf.json');
   const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
   const version = tauriConf.version;
   const tag = `v${version}`;
-
-  const repo = 'BadKid90s/AureStream';
   const apiBase = `https://api.github.com/repos/${repo}`;
   const headers = {
-    'Accept': 'application/vnd.github+json',
+    Accept: 'application/vnd.github+json',
     'User-Agent': 'AureStream-Updater',
-    'Authorization': `Bearer ${token}`
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
   };
 
-  console.log(`Fetching release information for tag: ${tag}...`);
-  const releaseRes = await fetch(`${apiBase}/releases/tags/${tag}`, { headers });
-  if (!releaseRes.ok) {
-    console.error(`Failed to fetch release: ${releaseRes.statusText}`);
-    process.exit(1);
+  console.log(`Fetching ${repo} release ${tag}...`);
+  const releaseResponse = await fetch(`${apiBase}/releases/tags/${tag}`, { headers });
+  if (!releaseResponse.ok) {
+    throw new Error(`Failed to fetch release ${tag}: ${releaseResponse.statusText}`);
   }
+  const release = await releaseResponse.json();
+  const selected = collectUpdaterAssets(release.assets);
+  const platforms = {};
 
-  const release = await releaseRes.json();
-  const releaseId = release.id;
-  const uploadUrlTemplate = release.upload_url; // e.g. "https://uploads.github.com/repos/.../assets{?name,label}"
-  const uploadUrl = uploadUrlTemplate.split('{')[0];
-
-  const updateData = {
-    version: version,
-    notes: `Release v${version}`,
-    pub_date: new Date().toISOString(),
-    platforms: {}
-  };
-
-  // Find signatures and their corresponding asset URLs
-  const sigAssets = release.assets.filter(a => a.name.endsWith('.sig'));
-  const otherAssets = release.assets.filter(a => !a.name.endsWith('.sig'));
-
-  for (const sigAsset of sigAssets) {
-    const sigName = sigAsset.name;
-    const bundleName = sigName.slice(0, -4); // remove .sig
-
-    let platformKeys = [];
-    if (bundleName === 'AureStream.app.tar.gz') {
-      platformKeys = ['darwin-aarch64', 'darwin-x86_64'];
-    } else if (bundleName.includes('aarch64.app.tar.gz')) {
-      platformKeys = ['darwin-aarch64'];
-    } else if (bundleName.includes('x64.app.tar.gz')) {
-      platformKeys = ['darwin-x86_64'];
-    } else if ((bundleName.endsWith('.zip') || bundleName.endsWith('.exe')) && !bundleName.includes('portable')) {
-      platformKeys = ['windows-x86_64'];
-    } else if (bundleName.includes('AppImage.tar.gz')) {
-      platformKeys = ['linux-x86_64'];
+  for (const platform of REQUIRED_TARGETS) {
+    const { bundleAsset, signatureAsset } = selected.get(platform);
+    const signatureResponse = await fetch(signatureAsset.browser_download_url, { headers });
+    if (!signatureResponse.ok) {
+      throw new Error(`Failed to download signature ${signatureAsset.name}`);
     }
-
-    if (platformKeys.length === 0) {
-      console.warn(`Could not determine platform for bundle: ${bundleName}`);
-      continue;
-    }
-
-    let bundleAsset = otherAssets.find(a => a.name === bundleName);
-    if (!bundleAsset && platformKeys.includes('windows-x86_64')) {
-      // Fallback for renamed windows installer (e.g. aurestream_0.2.2_windows_x64_setup.exe)
-      bundleAsset = otherAssets.find(a => a.name.includes('windows_x64_setup.exe') || a.name.endsWith('_setup.exe'));
-    }
-
-    if (!bundleAsset) {
-      console.warn(`No matching bundle found for signature: ${sigName}`);
-      continue;
-    }
-
-    console.log(`Downloading signature content for ${sigName}...`);
-    const sigRes = await fetch(sigAsset.browser_download_url);
-    if (!sigRes.ok) {
-      console.error(`Failed to download signature for ${sigName}`);
-      continue;
-    }
-    const signature = await sigRes.text();
-
-    for (const key of platformKeys) {
-      updateData.platforms[key] = {
-        signature: signature.trim(),
-        url: bundleAsset.browser_download_url
-      };
-    }
-  }
-
-  const manifestContent = JSON.stringify(updateData, null, 2);
-  console.log('Generated updater manifest data:', manifestContent);
-
-  // Generate proxied update data
-  const updateDataProxy = {
-    version: version,
-    notes: `Release v${version}`,
-    pub_date: updateData.pub_date,
-    platforms: {}
-  };
-
-  for (const [key, value] of Object.entries(updateData.platforms)) {
-    updateDataProxy.platforms[key] = {
-      signature: value.signature,
-      url: `https://gh-proxy.com/${value.url}`
+    platforms[platform] = {
+      signature: (await signatureResponse.text()).trim(),
+      url: bundleAsset.browser_download_url,
     };
   }
-  const manifestProxyContent = JSON.stringify(updateDataProxy, null, 2);
-  console.log('Generated proxied updater manifest data:', manifestProxyContent);
 
-  // Check if latest.json already exists in release
-  const existingLatest = release.assets.find(a => a.name === 'latest.json');
-  if (existingLatest) {
-    console.log(`Deleting existing latest.json asset (ID: ${existingLatest.id})...`);
-    const deleteRes = await fetch(`${apiBase}/releases/assets/${existingLatest.id}`, {
-      method: 'DELETE',
-      headers
-    });
-    if (!deleteRes.ok) {
-      console.error(`Failed to delete existing latest.json: ${deleteRes.statusText}`);
-    }
+  // Older updater clients only use the generic OS/architecture key.
+  const genericFallbacks = {
+    'darwin-aarch64': 'darwin-aarch64-app',
+    'darwin-x86_64': 'darwin-x86_64-app',
+    'linux-aarch64': 'linux-aarch64-appimage',
+    'linux-x86_64': 'linux-x86_64-appimage',
+    'windows-aarch64': 'windows-aarch64-nsis',
+    'windows-x86_64': 'windows-x86_64-nsis',
+  };
+  for (const [generic, specific] of Object.entries(genericFallbacks)) {
+    platforms[generic] = platforms[specific];
   }
 
-  // Upload new latest.json
-  console.log(`Uploading new latest.json to release ${releaseId}...`);
-  const uploadRes = await fetch(`${uploadUrl}?name=latest.json`, {
-    method: 'POST',
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json'
+  const manifest = JSON.stringify(
+    {
+      version,
+      notes: release.body || `Release ${tag}`,
+      pub_date: release.published_at || new Date().toISOString(),
+      platforms,
     },
-    body: manifestContent
+    null,
+    2,
+  );
+
+  await replaceReleaseAsset({
+    apiBase,
+    release,
+    name: 'latest.json',
+    body: manifest,
+    headers,
   });
 
-  if (uploadRes.ok) {
-    console.log('Successfully uploaded latest.json to GitHub Release!');
-  } else {
-    const errorText = await uploadRes.text();
-    console.error(`Failed to upload latest.json: ${uploadRes.statusText}`, errorText);
-    process.exit(1);
-  }
-
-  // Check if latest-proxy.json already exists in release
-  const existingProxy = release.assets.find(a => a.name === 'latest-proxy.json');
-  if (existingProxy) {
-    console.log(`Deleting existing latest-proxy.json asset (ID: ${existingProxy.id})...`);
-    const deleteRes = await fetch(`${apiBase}/releases/assets/${existingProxy.id}`, {
-      method: 'DELETE',
-      headers
-    });
-    if (!deleteRes.ok) {
-      console.error(`Failed to delete existing latest-proxy.json: ${deleteRes.statusText}`);
-    }
-  }
-
-  // Upload new latest-proxy.json
-  console.log(`Uploading new latest-proxy.json to release ${releaseId}...`);
-  const uploadProxyRes = await fetch(`${uploadUrl}?name=latest-proxy.json`, {
-    method: 'POST',
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json'
-    },
-    body: manifestProxyContent
-  });
-
-  if (uploadProxyRes.ok) {
-    console.log('Successfully uploaded latest-proxy.json to GitHub Release!');
-  } else {
-    const errorText = await uploadProxyRes.text();
-    console.error(`Failed to upload latest-proxy.json: ${uploadProxyRes.statusText}`, errorText);
-    process.exit(1);
-  }
+  const outputDir = path.join(__dirname, '..', 'updater-manifest');
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(path.join(outputDir, 'latest.json'), `${manifest}\n`);
+  console.log(`Generated signed updater manifest for ${REQUIRED_TARGETS.length} installer targets.`);
 }
 
-run().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  run().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

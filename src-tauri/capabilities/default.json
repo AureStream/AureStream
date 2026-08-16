@@ -11,6 +11,8 @@
     "core:window:allow-unminimize",
     "core:tray:default",
     "opener:default",
+    "process:allow-restart",
+    "updater:default",
     "allow-auth",
     "allow-subs",
     "allow-engine",

@@ -10,7 +10,7 @@ use commands::{
     auth_login, auth_logout, auth_register, auth_restore, auth_verify, cleanup_on_exit,
     engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
     engine_uninstall_helper, ping_tcp, reconcile_stale_runtime, spawn_engine_health_monitor,
-    spawn_traffic_reporter, subs_list, subs_sync, EngineAppState,
+    spawn_traffic_reporter, spawn_traffic_sampler, subs_list, subs_sync, EngineAppState,
 };
 use state::{AuthState, SubsState};
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -21,6 +21,8 @@ use window_util::hide_main_window;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(logging::plugin())
         .manage(TrayState::new())
         .setup(|app| {
@@ -42,6 +44,7 @@ pub fn run() {
             handle.manage(subs_state);
             handle.manage(engine_state);
             spawn_engine_health_monitor(&handle);
+            spawn_traffic_sampler(&handle);
             spawn_traffic_reporter(&handle);
 
             if let Err(e) = tray::setup_tray(app) {

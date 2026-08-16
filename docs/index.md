@@ -51,4 +51,5 @@ AureStream/
 - **包管理器**: pnpm
 - **默认代理模式**: 系统代理
 - **可选代理模式**: TUN（需要对应平台的已安装 Helper / Service）
+- **版本更新**: 启动时经 jsDelivr 检查签名更新清单；发现新版本后强制完成更新才能进入应用
 - **默认发布脚本**: `pnpm release`（含 `download-binaries`；Windows TUN 和 macOS Helper 需额外预构建）

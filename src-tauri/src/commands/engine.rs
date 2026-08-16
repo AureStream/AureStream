@@ -27,12 +27,14 @@ use crate::commands::subs::{api_client, emit_subs_updated, is_expired_token};
 use crate::state::{AuthState, SubsState};
 
 pub const ENGINE_STATE_EVENT: &str = "engine-state";
+pub const TRAFFIC_LOCAL_UPDATED_EVENT: &str = "traffic-local-updated";
 
 const SELECTION_FILE: &str = "engine-selection.json";
 const RUNTIME_SESSION_FILE: &str = "engine-runtime.json";
 const DEFAULT_SOCKS_PORT: u16 = 10808;
 const DEFAULT_API_PORT: u16 = 10809;
 const PROXY_HOST: &str = "127.0.0.1";
+const TRAFFIC_SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
 const TRAFFIC_REPORT_INTERVAL: Duration = Duration::from_secs(30 * 60);
 const TRAFFIC_REPORT_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -61,6 +63,19 @@ struct TrafficSession {
 struct TrafficAccounting {
     current: Option<TrafficSession>,
     pending: HashMap<String, TrafficStats>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct PendingTrafficPayload {
+    subscription_id: String,
+    upload: u64,
+    download: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct TrafficLocalUpdatedPayload {
+    pending: Vec<PendingTrafficPayload>,
 }
 
 impl TrafficAccounting {
@@ -350,6 +365,20 @@ impl EngineAppState {
             .unwrap_or_default()
     }
 
+    fn pending_traffic_payload(&self) -> TrafficLocalUpdatedPayload {
+        let mut pending = self
+            .pending_traffic()
+            .into_iter()
+            .map(|(subscription_id, stats)| PendingTrafficPayload {
+                subscription_id,
+                upload: stats.upload,
+                download: stats.download,
+            })
+            .collect::<Vec<_>>();
+        pending.sort_by(|a, b| a.subscription_id.cmp(&b.subscription_id));
+        TrafficLocalUpdatedPayload { pending }
+    }
+
     fn acknowledge_traffic(&self, subscription_id: &str, sent: TrafficStats) {
         if let Ok(mut traffic) = self.traffic.lock() {
             traffic.acknowledge(subscription_id, sent);
@@ -454,6 +483,13 @@ fn emit_engine_state(app: &AppHandle, engine_state: &EngineAppState, payload: &E
     engine_state.record_emitted(payload);
     let _ = app.emit(ENGINE_STATE_EVENT, payload.clone());
     crate::tray::on_engine_payload(app);
+}
+
+fn emit_local_traffic(app: &AppHandle, engine_state: &EngineAppState) {
+    let _ = app.emit(
+        TRAFFIC_LOCAL_UPDATED_EVENT,
+        engine_state.pending_traffic_payload(),
+    );
 }
 
 fn emit_from(app: &AppHandle, engine_state: &EngineAppState, state: EngineState) {
@@ -623,6 +659,7 @@ async fn flush_traffic_usage(
         if let Err(error) = collect_current_traffic(engine_state).await {
             errors.push(format!("collect traffic: {error}"));
         }
+        emit_local_traffic(app, engine_state);
     }
 
     let pending = engine_state.pending_traffic();
@@ -664,6 +701,7 @@ async fn flush_traffic_usage(
                         "traffic report cache update failed subscription={subscription_id}: {error}"
                     ),
                 }
+                emit_local_traffic(app, engine_state);
             }
             Err(error) => {
                 errors.push(format!(
@@ -678,6 +716,32 @@ async fn flush_traffic_usage(
     } else {
         Err(errors.join("; "))
     }
+}
+
+/// Sample Xray counters once per minute so the UI can include usage that has
+/// not yet reached the Worker. Sampling never performs a network request.
+pub fn spawn_traffic_sampler(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut interval = tokio::time::interval(TRAFFIC_SAMPLE_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let Some(engine) = app.try_state::<EngineAppState>() else {
+                continue;
+            };
+            let _guard = engine.gate.lock().await;
+            if !matches!(engine.engine.state(), EngineState::Running) {
+                continue;
+            }
+            if let Err(error) = collect_current_traffic(&engine).await {
+                log::warn!("periodic local traffic sample failed: {error}");
+                continue;
+            }
+            emit_local_traffic(&app, &engine);
+        }
+    });
 }
 
 /// Report traffic on a fixed 30-minute cadence. The engine gate keeps the
@@ -1397,6 +1461,50 @@ mod tests {
                 upload: 50,
                 download: 300,
             })
+        );
+    }
+
+    #[test]
+    fn pending_traffic_payload_is_stable_and_excludes_empty_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_state_at(dir.path());
+        {
+            let mut accounting = engine.traffic.lock().unwrap();
+            accounting.pending.insert(
+                "sub-b".into(),
+                TrafficStats {
+                    upload: 20,
+                    download: 200,
+                },
+            );
+            accounting
+                .pending
+                .insert("sub-empty".into(), TrafficStats::default());
+            accounting.pending.insert(
+                "sub-a".into(),
+                TrafficStats {
+                    upload: 10,
+                    download: 100,
+                },
+            );
+        }
+
+        assert_eq!(
+            engine.pending_traffic_payload(),
+            TrafficLocalUpdatedPayload {
+                pending: vec![
+                    PendingTrafficPayload {
+                        subscription_id: "sub-a".into(),
+                        upload: 10,
+                        download: 100,
+                    },
+                    PendingTrafficPayload {
+                        subscription_id: "sub-b".into(),
+                        upload: 20,
+                        download: 200,
+                    },
+                ],
+            }
         );
     }
 }

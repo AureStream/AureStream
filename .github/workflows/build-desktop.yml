@@ -247,12 +247,20 @@ jobs:
         if: github.event_name == 'release'
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release-files
-          find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
+          while IFS= read -r file; do
+            name="$(basename "$file")"
+            if [[ "${{ matrix.name }}" == macos-* && "$name" == *.app.tar.gz* ]]; then
+              name="${{ matrix.name }}-$name"
+            fi
+            cp "$file" "release-files/$name"
+          done < <(find src-tauri/target/${{ matrix.rust_target }}/release/bundle -type f \( \
             -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
             -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o \
-            -name '*.sig' -o -name '*.tar.gz' -o -name '*.zip' \
-          \) -exec cp {} release-files/ \;
+            -name '*.sig' -o -name '*.AppImage.tar.gz' -o \
+            -name '*.app.tar.gz' -o -name '*.zip' \
+          \) -print)
           ls -la release-files/
 
       - name: Upload to GitHub Release
@@ -280,3 +288,18 @@ jobs:
         run: node scripts/updater.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish updater manifest branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: updater
+          publish_dir: ./updater-manifest
+          force_orphan: true
+          commit_message: "chore: publish updater manifest for ${{ github.event.release.tag_name }}"
+
+      - name: Purge jsDelivr updater cache
+        shell: bash
+        run: |
+          curl --fail --silent --show-error \
+            "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@updater/latest.json"
