@@ -245,6 +245,7 @@ pub struct SubsSnapshot {
 pub struct SubsState {
     inner: Mutex<SubsSnapshot>,
     path: PathBuf,
+    operation_gate: tokio::sync::Mutex<()>,
 }
 
 impl SubsState {
@@ -259,7 +260,14 @@ impl SubsState {
         Ok(Self {
             inner: Mutex::new(snapshot),
             path,
+            operation_gate: tokio::sync::Mutex::new(()),
         })
+    }
+
+    /// Serialize remote sync and usage reporting so an older list response
+    /// cannot overwrite a just-reported traffic total.
+    pub async fn lock_operations(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.operation_gate.lock().await
     }
 
     pub fn snapshot(&self) -> Result<SubsSnapshot, String> {
@@ -278,6 +286,27 @@ impl SubsState {
             .map_err(|_| "subs state lock poisoned".to_string())?;
         *guard = snapshot;
         Ok(())
+    }
+
+    pub fn update_traffic(
+        &self,
+        subscription_id: &str,
+        traffic_used: u64,
+        traffic_total: u64,
+    ) -> Result<SubsSnapshot, String> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| "subs state lock poisoned".to_string())?;
+        let subscription = guard
+            .subscriptions
+            .iter_mut()
+            .find(|sub| sub.id == subscription_id)
+            .ok_or_else(|| "subscription_not_found".to_string())?;
+        subscription.traffic_used = traffic_used;
+        subscription.traffic_total = traffic_total;
+        write_json(&self.path, &*guard)?;
+        Ok(guard.clone())
     }
 }
 

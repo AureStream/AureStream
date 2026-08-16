@@ -20,11 +20,12 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout, Instant};
 
 use crate::state::{EngineState, StateMachine};
-use crate::{Engine, EngineError, EngineExitEvent, KernelId, KernelLaunchSpec};
+use crate::{Engine, EngineError, EngineExitEvent, KernelId, KernelLaunchSpec, TrafficStats};
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 const PROBE_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
+const STATS_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
 const SIDECAR_NAME: &str = "aurestream-core";
 const CONFIG_FILENAME: &str = "xray-config.json";
 const GEOIP_FILE: &str = "geoip.dat";
@@ -372,6 +373,65 @@ impl Engine for XrayEngine {
         Ok(())
     }
 
+    async fn query_outbound_traffic(
+        &self,
+        outbound_tag: &str,
+    ) -> Result<TrafficStats, EngineError> {
+        if outbound_tag.is_empty() {
+            return Err(EngineError::config("outbound tag is empty"));
+        }
+
+        let sidecar = self.resolve_sidecar()?;
+        let api_port = {
+            let guard = self.lock();
+            if !matches!(guard.sm.state(), EngineState::Running) {
+                return Err(EngineError::not_ready("engine is not running"));
+            }
+            guard.api_port.unwrap_or(10809)
+        };
+        let server = format!("127.0.0.1:{api_port}");
+        let pattern = format!("outbound>>>{outbound_tag}>>>traffic>>>");
+
+        let mut command = Command::new(&sidecar);
+        command
+            .args([
+                "api",
+                "statsquery",
+                &format!("--server={server}"),
+                "-timeout=3",
+                "-pattern",
+                &pattern,
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        #[cfg(windows)]
+        {
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let output = timeout(STATS_QUERY_TIMEOUT, command.output())
+            .await
+            .map_err(|_| EngineError::not_ready("Xray stats query timed out"))?
+            .map_err(|e| EngineError::io(format!("run Xray stats query: {e}")))?;
+
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(EngineError::not_ready(if detail.is_empty() {
+                format!("Xray stats query exited with {}", output.status)
+            } else {
+                format!("Xray stats query failed: {detail}")
+            }));
+        }
+
+        let stdout = String::from_utf8(output.stdout)
+            .map_err(|_| EngineError::io("Xray stats output is not UTF-8"))?;
+        parse_outbound_traffic(&stdout, outbound_tag)
+    }
+
     fn state(&self) -> EngineState {
         self.lock().sm.state()
     }
@@ -395,6 +455,45 @@ impl Engine for XrayEngine {
     fn finish_external_stop(&self) -> Result<(), EngineError> {
         XrayEngine::finish_external_stop(self)
     }
+}
+
+fn parse_outbound_traffic(output: &str, outbound_tag: &str) -> Result<TrafficStats, EngineError> {
+    let upload_name = format!("outbound>>>{outbound_tag}>>>traffic>>>uplink");
+    let download_name = format!("outbound>>>{outbound_tag}>>>traffic>>>downlink");
+    let mut current_name: Option<String> = None;
+    let mut stats = TrafficStats::default();
+
+    for line in output.lines() {
+        let line = line.trim();
+        if let Some(raw) = line.strip_prefix("name:") {
+            let raw = raw.trim();
+            current_name = serde_json::from_str::<String>(raw)
+                .ok()
+                .or_else(|| Some(raw.trim_matches('"').to_string()));
+            continue;
+        }
+
+        let Some(raw_value) = line.strip_prefix("value:") else {
+            continue;
+        };
+        let Some(name) = current_name.take() else {
+            continue;
+        };
+        if name != upload_name && name != download_name {
+            continue;
+        }
+        let value = raw_value
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| EngineError::io(format!("invalid Xray stats value for {name}")))?;
+        if name == upload_name {
+            stats.upload = value;
+        } else {
+            stats.download = value;
+        }
+    }
+
+    Ok(stats)
 }
 
 fn spawn_process_monitor(
@@ -886,6 +985,36 @@ Failed to start: main: failed to load config files: geoip.dat
 ";
         let line = last_useful_line(text);
         assert!(line.contains("Failed to start"), "{line}");
+    }
+
+    #[test]
+    fn parses_outbound_traffic_stats() {
+        let output = r#"
+stat: <
+  name: "outbound>>>\u65b0\u52a0\u57612-SG>>>traffic>>>uplink"
+  value: 1048576
+>
+stat: <
+  name: "outbound>>>\u65b0\u52a0\u57612-SG>>>traffic>>>downlink"
+  value: 10485760
+>
+stat: <
+  name: "outbound>>>direct>>>traffic>>>downlink"
+  value: 999999
+>
+"#;
+
+        let stats = parse_outbound_traffic(output, "\u{65b0}\u{52a0}\u{5761}2-SG").unwrap();
+        assert_eq!(stats.upload, 1_048_576);
+        assert_eq!(stats.download, 10_485_760);
+    }
+
+    #[test]
+    fn absent_outbound_counters_are_zero() {
+        assert_eq!(
+            parse_outbound_traffic("", "node-1").unwrap(),
+            TrafficStats::default()
+        );
     }
 
     #[tokio::test]

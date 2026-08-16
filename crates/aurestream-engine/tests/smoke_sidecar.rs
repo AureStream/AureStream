@@ -36,7 +36,9 @@ async fn smoke_decode_build_start_when_sidecar_present() {
     let api = 27902u16;
 
     let engine = XrayEngine::new();
-    engine.build_config(&cfg, node, socks, api).expect("build_config");
+    engine
+        .build_config(&cfg, node, socks, api)
+        .expect("build_config");
 
     // Start may fail readiness if the outbound is unreachable; we only require
     // the local mixed inbound to accept TCP (sidecar came up).
@@ -44,6 +46,12 @@ async fn smoke_decode_build_start_when_sidecar_present() {
     match start {
         Ok(Ok(())) => {
             assert!(matches!(engine.state(), EngineState::Running));
+            let stats = engine
+                .query_outbound_traffic(&node.tag)
+                .await
+                .expect("query outbound stats");
+            assert_eq!(stats.upload, 0);
+            assert_eq!(stats.download, 0);
             engine.stop().await.expect("stop");
             assert!(matches!(engine.state(), EngineState::Idle));
         }

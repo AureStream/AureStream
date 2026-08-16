@@ -1,19 +1,13 @@
 /** Background subscription refresh policy (no manual UI). */
 
-/** How often to pull remote subscriptions while logged in and idle. */
+/** How often to pull remote subscriptions while logged in. */
 export const SUBS_SYNC_INTERVAL_MS = 30 * 60 * 1000
 
 /** Ignore a scheduled tick if a successful sync happened more recently. */
 export const SUBS_SYNC_MIN_GAP_MS = 60 * 1000
 
-/** Connected or transitioning — do not refresh subscription data. */
-export function isEngineBlockingSubsSync(state: string): boolean {
-  return state === "running" || state === "starting" || state === "stopping"
-}
-
 export function shouldRunAutoSubsSync(opts: {
   hasUser: boolean
-  engineState: string
   inFlight: boolean
   lastSuccessAt: number | null
   now: number
@@ -23,7 +17,6 @@ export function shouldRunAutoSubsSync(opts: {
   minGapMs?: number
 }): boolean {
   if (!opts.hasUser || opts.inFlight) return false
-  if (isEngineBlockingSubsSync(opts.engineState)) return false
 
   const minGap = opts.minGapMs ?? SUBS_SYNC_MIN_GAP_MS
   if (

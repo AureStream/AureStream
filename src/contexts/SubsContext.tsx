@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useAlert } from "@/contexts/AlertContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEngineState } from "@/hooks/useEngineState";
 import {
   onSubsUpdated,
   subsList,
@@ -56,19 +55,16 @@ function applyPayload(
 export function SubsProvider({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { showErrorFromUnknown } = useAlert();
-  const engine = useEngineState();
   const [subscriptions, setSubscriptions] = useState<SubSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [syncing, setSyncing] = useState(false);
 
   const userRef = useRef(user);
-  const engineStateRef = useRef(engine.state);
   const inFlightRef = useRef(false);
   const lastSuccessAtRef = useRef<number | null>(null);
 
   userRef.current = user;
-  engineStateRef.current = engine.state;
 
   // Rust refreshes expired access tokens and retries, so a token error here
   // means the session is unrecoverable — sign out instead of showing an error
@@ -90,7 +86,6 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       if (
         !shouldRunAutoSubsSync({
           hasUser: Boolean(userRef.current),
-          engineState: engineStateRef.current,
           inFlight: inFlightRef.current,
           lastSuccessAt: lastSuccessAtRef.current,
           now: Date.now(),
@@ -134,9 +129,6 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       unlisten = await onSubsUpdated((payload) => {
         if (!cancelled) {
           applyPayload(payload, setSubscriptions, setActiveId, setNodes);
-          lastSuccessAtRef.current = Date.now();
-          inFlightRef.current = false;
-          setSyncing(false);
         }
       });
     })();
@@ -170,7 +162,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
         // Empty cache is fine; sync will fill.
       });
 
-    // Initial sync after login/restore — still blocked if somehow already connected.
+    // Initial sync after login/restore.
     runSync({ ignoreInterval: true, notifyError: true });
 
     return () => {
@@ -178,7 +170,7 @@ export function SubsProvider({ children }: { children: ReactNode }) {
     };
   }, [user, runSync]);
 
-  // Periodic auto-sync while logged in. Skips when connected / starting / stopping.
+  // Periodic auto-sync while logged in, including during active connections.
   useEffect(() => {
     if (!user) return;
 
@@ -200,13 +192,6 @@ export function SubsProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [user, runSync]);
-
-  // After disconnect settles, catch up if a tick was deferred while connected.
-  useEffect(() => {
-    if (!user) return;
-    if (engine.state !== "idle" && engine.state !== "failed") return;
-    runSync({ ignoreInterval: false, notifyError: false });
-  }, [user, engine.state, runSync]);
 
   return (
     <SubsContext.Provider

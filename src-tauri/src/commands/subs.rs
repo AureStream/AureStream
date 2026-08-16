@@ -46,14 +46,14 @@ impl From<ApiError> for SubsIpcError {
     }
 }
 
-fn api_client() -> ApiClient {
+pub(crate) fn api_client() -> ApiClient {
     match std::env::var("AURESTREAM_API_BASE") {
         Ok(base) if !base.trim().is_empty() => ApiClient::with_base(base),
         _ => ApiClient::new(),
     }
 }
 
-fn emit_subs_updated(app: &AppHandle, snap: &SubsSnapshot) {
+pub(crate) fn emit_subs_updated(app: &AppHandle, snap: &SubsSnapshot) {
     let _ = app.emit(SUBS_UPDATED_EVENT, SubsUpdatedPayload::from(snap));
 }
 
@@ -84,7 +84,7 @@ pub fn subs_list(subs: State<'_, SubsState>) -> Result<SubsUpdatedPayload, Strin
 }
 
 /// True for API errors that a token refresh could plausibly fix.
-fn is_expired_token(err: &ApiError) -> bool {
+pub(crate) fn is_expired_token(err: &ApiError) -> bool {
     err.status == 401 && err.code == "invalid_token"
 }
 
@@ -95,6 +95,7 @@ pub async fn subs_sync(
     auth: State<'_, AuthState>,
     subs: State<'_, SubsState>,
 ) -> Result<SubsUpdatedPayload, SubsIpcError> {
+    let _operation_guard = subs.lock_operations().await;
     let token = auth.access_token().ok_or(SubsIpcError {
         code: "not_authenticated".to_string(),
         status: 401,

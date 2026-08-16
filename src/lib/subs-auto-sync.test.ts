@@ -1,24 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
-  isEngineBlockingSubsSync,
   shouldRunAutoSubsSync,
   SUBS_SYNC_INTERVAL_MS,
   SUBS_SYNC_MIN_GAP_MS,
 } from "./subs-auto-sync"
 
 describe("subs auto sync policy", () => {
-  it("blocks while engine is connected or transitioning", () => {
-    expect(isEngineBlockingSubsSync("idle")).toBe(false)
-    expect(isEngineBlockingSubsSync("failed")).toBe(false)
-    expect(isEngineBlockingSubsSync("running")).toBe(true)
-    expect(isEngineBlockingSubsSync("starting")).toBe(true)
-    expect(isEngineBlockingSubsSync("stopping")).toBe(true)
-  })
-
-  it("skips without user, while in flight, or while connected", () => {
+  it("skips without user or while a sync is in flight", () => {
     const base = {
       hasUser: true,
-      engineState: "idle",
       inFlight: false,
       lastSuccessAt: null as number | null,
       now: 1_000_000,
@@ -26,9 +16,6 @@ describe("subs auto sync policy", () => {
     }
     expect(shouldRunAutoSubsSync({ ...base, hasUser: false })).toBe(false)
     expect(shouldRunAutoSubsSync({ ...base, inFlight: true })).toBe(false)
-    expect(shouldRunAutoSubsSync({ ...base, engineState: "running" })).toBe(
-      false,
-    )
     expect(shouldRunAutoSubsSync(base)).toBe(true)
   })
 
@@ -37,7 +24,6 @@ describe("subs auto sync policy", () => {
     expect(
       shouldRunAutoSubsSync({
         hasUser: true,
-        engineState: "idle",
         inFlight: false,
         lastSuccessAt: now - SUBS_SYNC_MIN_GAP_MS + 1,
         now,
@@ -51,7 +37,6 @@ describe("subs auto sync policy", () => {
     expect(
       shouldRunAutoSubsSync({
         hasUser: true,
-        engineState: "idle",
         inFlight: false,
         lastSuccessAt: now - SUBS_SYNC_INTERVAL_MS + 1,
         now,
@@ -60,7 +45,6 @@ describe("subs auto sync policy", () => {
     expect(
       shouldRunAutoSubsSync({
         hasUser: true,
-        engineState: "idle",
         inFlight: false,
         lastSuccessAt: now - SUBS_SYNC_INTERVAL_MS,
         now,

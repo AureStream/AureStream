@@ -58,6 +58,13 @@ pub struct EngineExitEvent {
     pub reason: String,
 }
 
+/// Byte counters reported by a proxy kernel for one outbound.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TrafficStats {
+    pub upload: u64,
+    pub download: u64,
+}
+
 /// Errors from config dialect, spawn, or illegal state transitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineError {
@@ -145,6 +152,10 @@ pub trait Engine: Send + Sync {
     async fn start(&self, config: &Path) -> Result<(), EngineError>;
 
     async fn stop(&self) -> Result<(), EngineError>;
+
+    /// Return cumulative counters for one proxy outbound in the current session.
+    async fn query_outbound_traffic(&self, outbound_tag: &str)
+        -> Result<TrafficStats, EngineError>;
 
     fn state(&self) -> EngineState;
 

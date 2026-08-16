@@ -5,20 +5,25 @@
 //! On any failure after Starting: clear proxy + stop + emit Failed (§4.2.6).
 //! Commands never assemble Xray JSON — only Engine::build_config.
 
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use aurestream_api_client::{ApiClient, ApiError, UsageResponse};
 use aurestream_config::{decode_subscription_body, ProxyNode};
-use aurestream_engine::{BuildOptions, EngineState, KernelId, SharedEngine, XrayEngine};
+use aurestream_engine::{
+    BuildOptions, EngineState, KernelId, SharedEngine, TrafficStats, XrayEngine,
+};
 use aurestream_platform_proxy::{clear_system_proxy, set_system_proxy};
 use aurestream_platform_tun::{self as platform_tun, TunServiceState};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 
+use crate::commands::subs::{api_client, emit_subs_updated, is_expired_token};
 use crate::state::{AuthState, SubsState};
 
 pub const ENGINE_STATE_EVENT: &str = "engine-state";
@@ -28,6 +33,8 @@ const RUNTIME_SESSION_FILE: &str = "engine-runtime.json";
 const DEFAULT_SOCKS_PORT: u16 = 10808;
 const DEFAULT_API_PORT: u16 = 10809;
 const PROXY_HOST: &str = "127.0.0.1";
+const TRAFFIC_REPORT_INTERVAL: Duration = Duration::from_secs(30 * 60);
+const TRAFFIC_REPORT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +50,52 @@ struct RuntimeSession {
     capture_mode: CaptureMode,
 }
 
+#[derive(Debug, Clone)]
+struct TrafficSession {
+    subscription_id: String,
+    outbound_tag: String,
+    observed: TrafficStats,
+}
+
+#[derive(Debug, Default)]
+struct TrafficAccounting {
+    current: Option<TrafficSession>,
+    pending: HashMap<String, TrafficStats>,
+}
+
+impl TrafficAccounting {
+    fn record_observation(&mut self, current: TrafficStats) {
+        let Some(session) = self.current.as_mut() else {
+            return;
+        };
+        let delta = TrafficStats {
+            upload: current.upload.saturating_sub(session.observed.upload),
+            download: current.download.saturating_sub(session.observed.download),
+        };
+        session.observed = current;
+        if delta.upload == 0 && delta.download == 0 {
+            return;
+        }
+
+        let pending = self
+            .pending
+            .entry(session.subscription_id.clone())
+            .or_default();
+        pending.upload = pending.upload.saturating_add(delta.upload);
+        pending.download = pending.download.saturating_add(delta.download);
+    }
+
+    fn acknowledge(&mut self, subscription_id: &str, sent: TrafficStats) {
+        if let Some(pending) = self.pending.get_mut(subscription_id) {
+            pending.upload = pending.upload.saturating_sub(sent.upload);
+            pending.download = pending.download.saturating_sub(sent.download);
+            if pending.upload == 0 && pending.download == 0 {
+                self.pending.remove(subscription_id);
+            }
+        }
+    }
+}
+
 /// App-owned engine handle + persisted selection (not the kernel dialect).
 pub struct EngineAppState {
     engine: SharedEngine,
@@ -51,6 +104,7 @@ pub struct EngineAppState {
     capture_mode: Mutex<CaptureMode>,
     /// Correlates one start/cleanup transaction in app and helper logs.
     session_id: Mutex<Option<String>>,
+    traffic: Mutex<TrafficAccounting>,
     /// Last payload emitted on `engine-state` (source of truth for `engine_get_state`).
     last_emitted: Mutex<EngineStatePayload>,
     /// Single-flight gate for start/stop/select-restart orchestration.
@@ -115,6 +169,7 @@ impl EngineAppState {
             selected_node: Mutex::new(selected),
             capture_mode: Mutex::new(CaptureMode::Off),
             session_id: Mutex::new(None),
+            traffic: Mutex::new(TrafficAccounting::default()),
             last_emitted: Mutex::new(initial),
             gate: AsyncMutex::new(()),
             selection_path,
@@ -257,6 +312,47 @@ impl EngineAppState {
                     self.runtime_session_path.display()
                 );
             }
+        }
+    }
+
+    fn begin_traffic_session(&self, subscription_id: String, outbound_tag: String) {
+        let outbound_tag = if outbound_tag.is_empty() {
+            "proxy".to_string()
+        } else {
+            outbound_tag
+        };
+        if let Ok(mut traffic) = self.traffic.lock() {
+            traffic.current = Some(TrafficSession {
+                subscription_id,
+                outbound_tag,
+                observed: TrafficStats::default(),
+            });
+        }
+    }
+
+    fn finish_traffic_session(&self) {
+        if let Ok(mut traffic) = self.traffic.lock() {
+            traffic.current = None;
+        }
+    }
+
+    fn pending_traffic(&self) -> Vec<(String, TrafficStats)> {
+        self.traffic
+            .lock()
+            .map(|traffic| {
+                traffic
+                    .pending
+                    .iter()
+                    .filter(|(_, stats)| stats.upload > 0 || stats.download > 0)
+                    .map(|(id, stats)| (id.clone(), *stats))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn acknowledge_traffic(&self, subscription_id: &str, sent: TrafficStats) {
+        if let Ok(mut traffic) = self.traffic.lock() {
+            traffic.acknowledge(subscription_id, sent);
         }
     }
 }
@@ -439,9 +535,176 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
         .ok_or_else(|| format!("node_not_found:{node_tag}"))
 }
 
+fn active_subscription_id(subs: &SubsState) -> Result<String, String> {
+    subs.snapshot()?
+        .active_id
+        .ok_or_else(|| "no_active_subscription".to_string())
+}
+
+async fn collect_current_traffic(engine_state: &EngineAppState) -> Result<(), String> {
+    let session = engine_state
+        .traffic
+        .lock()
+        .map_err(|_| "traffic state lock poisoned".to_string())?
+        .current
+        .clone();
+    let Some(session) = session else {
+        return Ok(());
+    };
+
+    let current = engine_state
+        .engine
+        .query_outbound_traffic(&session.outbound_tag)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut traffic = engine_state
+        .traffic
+        .lock()
+        .map_err(|_| "traffic state lock poisoned".to_string())?;
+    let Some(active) = traffic.current.as_mut() else {
+        return Ok(());
+    };
+    if active.subscription_id != session.subscription_id
+        || active.outbound_tag != session.outbound_tag
+    {
+        return Ok(());
+    }
+
+    traffic.record_observation(current);
+    Ok(())
+}
+
+async fn report_usage_once(
+    client: &ApiClient,
+    token: &str,
+    subscription_id: &str,
+    usage: TrafficStats,
+) -> Result<UsageResponse, ApiError> {
+    tokio::time::timeout(
+        TRAFFIC_REPORT_TIMEOUT,
+        client.report_subscription_usage(token, subscription_id, usage.upload, usage.download),
+    )
+    .await
+    .map_err(|_| ApiError::from_code("request_timeout", 0, None))?
+}
+
+async fn report_usage_with_refresh(
+    client: &ApiClient,
+    auth: &AuthState,
+    subscription_id: &str,
+    usage: TrafficStats,
+) -> Result<UsageResponse, ApiError> {
+    let token = auth
+        .access_token()
+        .ok_or_else(|| ApiError::from_code("not_authenticated", 401, None))?;
+    match report_usage_once(client, &token, subscription_id, usage).await {
+        Ok(response) => Ok(response),
+        Err(error) if is_expired_token(&error) => {
+            log::info!("traffic report: access token expired, refreshing");
+            let fresh = tokio::time::timeout(
+                TRAFFIC_REPORT_TIMEOUT,
+                auth.refresh_access_token(client, &token),
+            )
+            .await
+            .map_err(|_| ApiError::from_code("request_timeout", 0, None))??;
+            report_usage_once(client, &fresh, subscription_id, usage).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn flush_traffic_usage(
+    app: &AppHandle,
+    engine_state: &EngineAppState,
+    collect_current: bool,
+) -> Result<(), String> {
+    let mut errors = Vec::new();
+    if collect_current {
+        if let Err(error) = collect_current_traffic(engine_state).await {
+            errors.push(format!("collect traffic: {error}"));
+        }
+    }
+
+    let pending = engine_state.pending_traffic();
+    if pending.is_empty() {
+        return if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("; "))
+        };
+    }
+
+    let auth = app
+        .try_state::<AuthState>()
+        .ok_or_else(|| "auth_state_missing".to_string())?;
+    let subs = app
+        .try_state::<SubsState>()
+        .ok_or_else(|| "subs_state_missing".to_string())?;
+    let _operation_guard = subs.lock_operations().await;
+    let client = api_client();
+
+    for (subscription_id, usage) in pending {
+        match report_usage_with_refresh(&client, &auth, &subscription_id, usage).await {
+            Ok(response) => {
+                engine_state.acknowledge_traffic(&subscription_id, usage);
+                log::info!(
+                    "traffic report ok subscription={} upload={} download={} total_used={}",
+                    subscription_id,
+                    usage.upload,
+                    usage.download,
+                    response.traffic_used
+                );
+                match subs.update_traffic(
+                    &subscription_id,
+                    response.traffic_used,
+                    response.traffic_total,
+                ) {
+                    Ok(snapshot) => emit_subs_updated(app, &snapshot),
+                    Err(error) => log::warn!(
+                        "traffic report cache update failed subscription={subscription_id}: {error}"
+                    ),
+                }
+            }
+            Err(error) => {
+                errors.push(format!(
+                    "report traffic subscription={subscription_id}: {error}"
+                ));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+/// Report traffic on a fixed 30-minute cadence. The engine gate keeps the
+/// queried process and outbound stable while counters are collected.
+pub fn spawn_traffic_reporter(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut interval = tokio::time::interval(TRAFFIC_REPORT_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let Some(engine) = app.try_state::<EngineAppState>() else {
+                continue;
+            };
+            let _guard = engine.gate.lock().await;
+            let collect_current = matches!(engine.engine.state(), EngineState::Running);
+            if let Err(error) = flush_traffic_usage(&app, &engine, collect_current).await {
+                log::warn!("periodic traffic report failed: {error}");
+            }
+        }
+    });
+}
+
 /// Idempotent teardown shared by IPC, tray, mode switches, failure handling and
 /// the health monitor. Every step is attempted even if an earlier one fails.
-async fn cleanup_runtime(engine_state: &EngineAppState) -> Result<(), String> {
+async fn cleanup_runtime(app: &AppHandle, engine_state: &EngineAppState) -> Result<(), String> {
     let mode = engine_state.cleanup_mode();
     if let Ok(Some(session)) = read_runtime_session(&engine_state.runtime_session_path) {
         log::info!(
@@ -451,6 +714,16 @@ async fn cleanup_runtime(engine_state: &EngineAppState) -> Result<(), String> {
         );
     }
     let mut errors = Vec::new();
+
+    if matches!(engine_state.engine.state(), EngineState::Running) {
+        if let Err(error) = flush_traffic_usage(app, engine_state, true).await {
+            // Usage reporting is best-effort and must never strand proxy/DNS state.
+            log::warn!("final traffic report failed: {error}");
+        }
+    } else if let Err(error) = flush_traffic_usage(app, engine_state, false).await {
+        log::warn!("pending traffic report failed: {error}");
+    }
+    engine_state.finish_traffic_session();
 
     if let Err(e) = clear_system_proxy() {
         errors.push(format!("clear_system_proxy: {e}"));
@@ -481,7 +754,7 @@ async fn cleanup_runtime(engine_state: &EngineAppState) -> Result<(), String> {
 
 async fn fail_cleanup(app: &AppHandle, engine_state: &EngineAppState, reason: String) {
     log::error!("engine failure: {reason}");
-    if let Err(cleanup_error) = cleanup_runtime(engine_state).await {
+    if let Err(cleanup_error) = cleanup_runtime(app, engine_state).await {
         log::warn!("engine failure cleanup incomplete: {cleanup_error}");
     }
     emit_failed(app, engine_state, reason);
@@ -541,7 +814,7 @@ pub fn cleanup_on_exit(app: &AppHandle) {
     };
     let result = tauri::async_runtime::block_on(async {
         let _guard = engine_state.gate.lock().await;
-        cleanup_runtime(&engine_state).await
+        cleanup_runtime(app, &engine_state).await
     });
     if let Err(e) = result {
         log::warn!("engine cleanup on exit incomplete: {e}");
@@ -741,13 +1014,14 @@ async fn start_with_node(
     app: &AppHandle,
     engine_state: &EngineAppState,
     node: &ProxyNode,
+    subscription_id: &str,
     mode: CaptureMode,
     smart_routing: bool,
 ) -> Result<(), String> {
     let has_previous_runtime = engine_state.cleanup_mode() != CaptureMode::Off
         || !matches!(engine_state.engine.state(), EngineState::Idle);
     if has_previous_runtime {
-        if let Err(reason) = cleanup_runtime(engine_state).await {
+        if let Err(reason) = cleanup_runtime(app, engine_state).await {
             emit_failed(app, engine_state, reason.clone());
             return Err(reason);
         }
@@ -761,6 +1035,7 @@ async fn start_with_node(
 
     match start_steps(engine_state, node, mode, smart_routing).await {
         Ok(()) => {
+            engine_state.begin_traffic_session(subscription_id.to_string(), node.tag.clone());
             emit_from(app, engine_state, EngineState::Running);
             Ok(())
         }
@@ -794,6 +1069,7 @@ pub async fn engine_select_node(
 
     // Validate node exists in decoded cache (before taking the gate).
     let node = resolve_proxy_node(&subs, &tag)?;
+    let subscription_id = active_subscription_id(&subs)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
     log::info!("select_node tag={}", node.tag);
 
@@ -806,7 +1082,7 @@ pub async fn engine_select_node(
             CaptureMode::Off => CaptureMode::SystemProxy,
             m => m,
         };
-        start_with_node(&app, &engine, &node, mode, true).await?;
+        start_with_node(&app, &engine, &node, &subscription_id, mode, true).await?;
     } else {
         let mut payload = engine.last_payload();
         payload.selected_node = engine.selected_node();
@@ -839,6 +1115,7 @@ pub async fn engine_start(
         .unwrap_or_default();
 
     let node = resolve_proxy_node(&subs, &requested)?;
+    let subscription_id = active_subscription_id(&subs)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
 
     let capture = match mode.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
@@ -856,7 +1133,7 @@ pub async fn engine_start(
     );
 
     let _guard = engine.gate.lock().await;
-    start_with_node(&app, &engine, &node, capture, smart).await?;
+    start_with_node(&app, &engine, &node, &subscription_id, capture, smart).await?;
     Ok(engine.last_payload())
 }
 
@@ -884,7 +1161,7 @@ pub async fn engine_uninstall_helper(
         || !matches!(engine.engine.state(), EngineState::Idle);
     if had_runtime {
         emit_from(&app, &engine, EngineState::Stopping);
-        if let Err(reason) = cleanup_runtime(&engine).await {
+        if let Err(reason) = cleanup_runtime(&app, &engine).await {
             emit_failed(&app, &engine, reason.clone());
             return Err(reason);
         }
@@ -917,7 +1194,7 @@ pub async fn engine_stop(
 
     emit_from(&app, &engine, EngineState::Stopping);
 
-    if let Err(reason) = cleanup_runtime(&engine).await {
+    if let Err(reason) = cleanup_runtime(&app, &engine).await {
         emit_failed(&app, &engine, reason.clone());
         return Err(reason);
     }
@@ -942,10 +1219,19 @@ pub async fn tray_start_system(app: &AppHandle) -> Result<(), String> {
 
     let requested = engine.selected_node().unwrap_or_default();
     let node = resolve_proxy_node(&subs, &requested)?;
+    let subscription_id = active_subscription_id(&subs)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
 
     let _guard = engine.gate.lock().await;
-    start_with_node(app, &engine, &node, CaptureMode::SystemProxy, true).await?;
+    start_with_node(
+        app,
+        &engine,
+        &node,
+        &subscription_id,
+        CaptureMode::SystemProxy,
+        true,
+    )
+    .await?;
     Ok(())
 }
 
@@ -965,10 +1251,19 @@ pub async fn tray_start_tun(app: &AppHandle) -> Result<(), String> {
 
     let requested = engine.selected_node().unwrap_or_default();
     let node = resolve_proxy_node(&subs, &requested)?;
+    let subscription_id = active_subscription_id(&subs)?;
     engine.set_selected_node(Some(node.tag.clone()))?;
 
     let _guard = engine.gate.lock().await;
-    start_with_node(app, &engine, &node, CaptureMode::Tun, true).await?;
+    start_with_node(
+        app,
+        &engine,
+        &node,
+        &subscription_id,
+        CaptureMode::Tun,
+        true,
+    )
+    .await?;
     Ok(())
 }
 
@@ -989,7 +1284,7 @@ pub async fn tray_stop(app: &AppHandle) -> Result<(), String> {
     }
 
     emit_from(app, &engine, EngineState::Stopping);
-    if let Err(reason) = cleanup_runtime(&engine).await {
+    if let Err(reason) = cleanup_runtime(app, &engine).await {
         emit_failed(app, &engine, reason.clone());
         return Err(reason);
     }
@@ -1007,6 +1302,7 @@ mod tests {
             selected_node: Mutex::new(None),
             capture_mode: Mutex::new(CaptureMode::Off),
             session_id: Mutex::new(None),
+            traffic: Mutex::new(TrafficAccounting::default()),
             last_emitted: Mutex::new(EngineStatePayload {
                 state: "idle".into(),
                 reason: None,
@@ -1066,5 +1362,41 @@ mod tests {
         );
         assert_eq!(engine.capture_mode(), CaptureMode::Off);
         assert!(!engine.runtime_session_path.exists());
+    }
+
+    #[test]
+    fn traffic_accounting_reports_only_new_bytes() {
+        let mut accounting = TrafficAccounting {
+            current: Some(TrafficSession {
+                subscription_id: "sub-1".into(),
+                outbound_tag: "node-1".into(),
+                observed: TrafficStats::default(),
+            }),
+            pending: HashMap::new(),
+        };
+
+        accounting.record_observation(TrafficStats {
+            upload: 100,
+            download: 1_000,
+        });
+        accounting.acknowledge(
+            "sub-1",
+            TrafficStats {
+                upload: 100,
+                download: 1_000,
+            },
+        );
+        accounting.record_observation(TrafficStats {
+            upload: 150,
+            download: 1_300,
+        });
+
+        assert_eq!(
+            accounting.pending.get("sub-1"),
+            Some(&TrafficStats {
+                upload: 50,
+                download: 300,
+            })
+        );
     }
 }

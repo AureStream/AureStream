@@ -4,10 +4,10 @@ mod subscriptions;
 
 pub use auth::{AuthTokens, RefreshedTokens, RegisterPending, User};
 pub use error::ApiError;
-pub use subscriptions::Subscription;
+pub use subscriptions::{Subscription, UsageResponse};
 
 use auth::{login, logout, refresh, register, verify_register};
-use subscriptions::{fetch_subscription_body, list_subscriptions};
+use subscriptions::{fetch_subscription_body, list_subscriptions, report_subscription_usage};
 
 pub const DEFAULT_BASE_URL: &str = "https://aurestream-api.chilix.ccwu.cc/api";
 
@@ -67,6 +67,25 @@ impl ApiClient {
     /// Download raw subscription document from a provider URL (not the Worker API).
     pub async fn fetch_subscription_body(&self, url: &str) -> Result<String, ApiError> {
         fetch_subscription_body(&self.http, url).await
+    }
+
+    /// Add locally measured Xray traffic to a Worker subscription.
+    pub async fn report_subscription_usage(
+        &self,
+        access_token: &str,
+        subscription_id: &str,
+        upload: u64,
+        download: u64,
+    ) -> Result<UsageResponse, ApiError> {
+        report_subscription_usage(
+            &self.http,
+            &self.base,
+            access_token,
+            subscription_id,
+            upload,
+            download,
+        )
+        .await
     }
 }
 

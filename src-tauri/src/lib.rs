@@ -10,7 +10,7 @@ use commands::{
     auth_login, auth_logout, auth_register, auth_restore, auth_verify, cleanup_on_exit,
     engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
     engine_uninstall_helper, ping_tcp, reconcile_stale_runtime, spawn_engine_health_monitor,
-    subs_list, subs_sync, EngineAppState,
+    spawn_traffic_reporter, subs_list, subs_sync, EngineAppState,
 };
 use state::{AuthState, SubsState};
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -42,6 +42,7 @@ pub fn run() {
             handle.manage(subs_state);
             handle.manage(engine_state);
             spawn_engine_health_monitor(&handle);
+            spawn_traffic_reporter(&handle);
 
             if let Err(e) = tray::setup_tray(app) {
                 log::error!("system tray setup failed: {e}");
