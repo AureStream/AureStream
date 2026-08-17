@@ -22,3 +22,15 @@ export function withUpdateCheckDeadline<T>(
     );
   });
 }
+
+export async function allowUpdateCheckFailure<T>(
+  operation: Promise<T>,
+  reportFailure: (error: unknown) => void,
+): Promise<T | null> {
+  try {
+    return await operation;
+  } catch (error) {
+    reportFailure(error);
+    return null;
+  }
+}

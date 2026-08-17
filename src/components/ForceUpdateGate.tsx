@@ -1,22 +1,24 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { getVersion } from "@tauri-apps/api/app"
 import { isTauri } from "@tauri-apps/api/core"
-import { AlertTriangle, Download, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
+import { Download, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { check } from "@tauri-apps/plugin-updater"
 import {
+  allowUpdateCheckFailure,
   UPDATE_ENDPOINT_TIMEOUT_MS,
   withUpdateCheckDeadline,
 } from "@/lib/update-check"
 
 type AvailableUpdate = NonNullable<Awaited<ReturnType<typeof check>>>
-type GatePhase = "checking" | "ready" | "failed" | "required" | "installing"
+type GatePhase = "checking" | "ready" | "required" | "installing"
 
 let startupCheck: Promise<AvailableUpdate | null> | null = null
 
 function checkAtStartup() {
-  startupCheck ??= withUpdateCheckDeadline(
-    check({ timeout: UPDATE_ENDPOINT_TIMEOUT_MS }),
+  startupCheck ??= allowUpdateCheckFailure(
+    withUpdateCheckDeadline(check({ timeout: UPDATE_ENDPOINT_TIMEOUT_MS })),
+    (error) => console.error("startup update check failed", error),
   )
   return startupCheck
 }
@@ -27,7 +29,7 @@ function errorMessage(error: unknown): string {
   return "更新失败，请检查网络后重试"
 }
 
-/** Blocks all product providers until the signed startup update check completes. */
+/** Blocks product providers while checking and when an update is confirmed. */
 export default function ForceUpdateGate({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<GatePhase>(() =>
     isTauri() ? "checking" : "ready",
@@ -37,16 +39,12 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [downloaded, setDownloaded] = useState(0)
   const [contentLength, setContentLength] = useState<number | null>(null)
-  const [checkAttempt, setCheckAttempt] = useState(0)
 
   useEffect(() => {
     if (!isTauri()) return
 
     let cancelled = false
-    const versionCheck = checkAttempt === 0
-      ? checkAtStartup()
-      : withUpdateCheckDeadline(check({ timeout: UPDATE_ENDPOINT_TIMEOUT_MS }))
-    void Promise.all([getVersion().catch(() => ""), versionCheck])
+    void Promise.all([getVersion().catch(() => ""), checkAtStartup()])
       .then(([version, available]) => {
         if (cancelled) return
         setError(null)
@@ -58,24 +56,11 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
           setPhase("ready")
         }
       })
-      .catch((checkError) => {
-        console.error("startup update check failed", checkError)
-        if (!cancelled) {
-          setError("10 秒内未能获取版本信息，请检查网络后重试")
-          setPhase("failed")
-        }
-      })
 
     return () => {
       cancelled = true
     }
-  }, [checkAttempt])
-
-  const retryCheck = () => {
-    setError(null)
-    setPhase("checking")
-    setCheckAttempt((value) => value + 1)
-  }
+  }, [])
 
   const installUpdate = async () => {
     if (!update || phase === "installing") return
@@ -111,30 +96,6 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
           aria-hidden
         />
         <p className="mt-4 text-sm font-semibold text-foreground">正在检查版本更新</p>
-      </main>
-    )
-  }
-
-  if (phase === "failed") {
-    return (
-      <main className="flex h-full min-h-0 w-full flex-col bg-white px-7 pb-8 pt-20 dark:bg-background">
-        <div className="mx-auto flex w-full max-w-[300px] flex-1 flex-col">
-          <div className="flex size-12 items-center justify-center rounded-lg bg-[#fff2e5] text-[#b45309] dark:bg-[#42230f] dark:text-[#f5a65b]">
-            <AlertTriangle className="size-6" strokeWidth={1.8} aria-hidden />
-          </div>
-          <h1 className="mt-7 text-[22px] font-bold text-foreground">无法确认版本</h1>
-          <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-muted-foreground">
-            {error}
-          </p>
-          <button
-            type="button"
-            onClick={retryCheck}
-            className="mt-auto flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[var(--auth-accent)] px-4 text-sm font-semibold text-white"
-          >
-            <RefreshCw className="size-4" aria-hidden />
-            重新检查
-          </button>
-        </div>
       </main>
     )
   }
