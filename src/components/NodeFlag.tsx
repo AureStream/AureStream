@@ -1,30 +1,24 @@
-import type { ReactNode } from "react"
-import { flagEmojiForNodeName } from "@/lib/node-flag"
-import { HkFlagIcon, MoFlagIcon, TwFlagIcon } from "@/components/icons/RegionFlags"
-
-/**
- * Windows' Segoe UI Emoji doesn't ship glyphs for these regional flags —
- * they render as bare letters instead of a flag. Swap in bundled SVGs.
- */
-const SVG_FLAGS: Record<string, (className?: string) => ReactNode> = {
-  "🇭🇰": (className) => <HkFlagIcon className={className} />,
-  "🇹🇼": (className) => <TwFlagIcon className={className} />,
-  "🇲🇴": (className) => <MoFlagIcon className={className} />,
-}
+import { flagAssetForRegionCode } from "@/components/icons/RegionFlagAssets"
+import { regionCodeForNodeName } from "@/lib/node-flag"
 
 type NodeFlagProps = {
   name: string | null | undefined
-  /** Applied to the wrapping span — same sizing/positioning classes used for the old emoji text. */
+  /** Applied to the fixed-size wrapping span used by node rows and the home card. */
   className?: string
 }
 
-/** Renders a node's inferred region flag, drop-in replacement for `{flagEmojiForNodeName(name)}`. */
+/** Renders a bundled SVG flag that is independent of platform emoji fonts. */
 export default function NodeFlag({ name, className }: NodeFlagProps) {
-  const emoji = flagEmojiForNodeName(name)
-  const svg = SVG_FLAGS[emoji]
+  const code = regionCodeForNodeName(name)
+
   return (
     <span className={className} aria-hidden>
-      {svg ? svg("h-[65%] w-[65%] rounded-[3px] overflow-hidden") : emoji}
+      <img
+        src={flagAssetForRegionCode(code)}
+        alt=""
+        className="h-5 w-[1.6875rem] rounded-[3px] object-cover shadow-[0_1px_2px_rgba(15,23,42,0.16)]"
+        draggable={false}
+      />
     </span>
   )
 }

@@ -1,5 +1,5 @@
 /**
- * Infer a country flag emoji from a proxy node display name / tag.
+ * Infer a stable two-letter region code from a proxy node display name / tag.
  *
  * Matching order (first hit wins within each tier):
  * 1. Chinese country / region names
@@ -10,10 +10,10 @@
  * Short codes never match as substrings inside words (avoids "us" in "business").
  */
 
-const DEFAULT_FLAG = "🌐"
+const DEFAULT_REGION_CODE = "GL"
 
-type FlagRule = {
-  flag: string
+type RegionRule = {
+  code: string
   /** Case-sensitive substrings (typically Chinese). */
   zh?: string[]
   /** Case-insensitive English phrases; longer first is recommended. */
@@ -27,64 +27,64 @@ type FlagRule = {
  * Across rules, earlier entries win when scanning name for Chinese/English;
  * codes are resolved via the first matching token against this list order.
  */
-const FLAG_RULES: FlagRule[] = [
+const REGION_RULES: RegionRule[] = [
   // Greater China
-  { flag: "🇭🇰", zh: ["香港"], en: ["hong kong", "hongkong"], codes: ["hk", "hkg"] },
-  { flag: "🇲🇴", zh: ["澳门", "澳門"], en: ["macau", "macao"], codes: ["mo", "mfm"] },
-  { flag: "🇹🇼", zh: ["台湾", "台灣", "臺湾"], en: ["taiwan", "taipei"], codes: ["tw", "tpe", "tsa", "khh"] },
-  { flag: "🇨🇳", zh: ["中国", "大陸", "大陆", "内地"], en: ["china", "mainland"], codes: ["cn", "sha", "pvg", "pek", "can", "szx"] },
+  { code: "HK", zh: ["香港"], en: ["hong kong", "hongkong"], codes: ["hk", "hkg"] },
+  { code: "MO", zh: ["澳门", "澳門"], en: ["macau", "macao"], codes: ["mo", "mfm"] },
+  { code: "TW", zh: ["台湾", "台灣", "臺湾"], en: ["taiwan", "taipei"], codes: ["tw", "tpe", "tsa", "khh"] },
+  { code: "CN", zh: ["中国", "大陸", "大陆", "内地"], en: ["china", "mainland"], codes: ["cn", "sha", "pvg", "pek", "can", "szx"] },
 
   // East / SE Asia
   {
-    flag: "🇯🇵",
+    code: "JP",
     zh: ["日本"],
     en: ["japan", "tokyo", "osaka", "nagoya", "fukuoka"],
     codes: ["jp", "nrt", "hnd", "kix", "itm", "ngo", "fuk", "tyo"],
   },
   {
-    flag: "🇰🇷",
+    code: "KR",
     zh: ["韩国", "韓國", "南韩", "南韓"],
     en: ["korea", "seoul", "busan"],
     codes: ["kr", "icn", "gmp", "pus"],
   },
   {
-    flag: "🇸🇬",
+    code: "SG",
     zh: ["新加坡"],
     en: ["singapore"],
     codes: ["sg", "sin"],
   },
   {
-    flag: "🇲🇾",
+    code: "MY",
     zh: ["马来西亚", "馬來西亞", "马来"],
     en: ["malaysia", "kuala lumpur"],
     codes: ["my", "kul"],
   },
   {
-    flag: "🇹🇭",
+    code: "TH",
     zh: ["泰国", "泰國"],
     en: ["thailand", "bangkok"],
     codes: ["th", "bkk"],
   },
   {
-    flag: "🇻🇳",
+    code: "VN",
     zh: ["越南"],
     en: ["vietnam", "ho chi minh", "hanoi"],
     codes: ["vn", "sgn", "han"],
   },
   {
-    flag: "🇵🇭",
+    code: "PH",
     zh: ["菲律宾", "菲律賓"],
     en: ["philippines", "manila"],
     codes: ["ph", "mnl"],
   },
   {
-    flag: "🇮🇩",
+    code: "ID",
     zh: ["印尼", "印度尼西亚", "印度尼西亞"],
     en: ["indonesia", "jakarta"],
     codes: ["id", "cgk"],
   },
   {
-    flag: "🇮🇳",
+    code: "IN",
     zh: ["印度"],
     en: ["india", "mumbai", "delhi", "bangalore"],
     codes: ["in", "bom", "del", "blr"],
@@ -92,7 +92,7 @@ const FLAG_RULES: FlagRule[] = [
 
   // Americas
   {
-    flag: "🇺🇸",
+    code: "US",
     zh: ["美国", "美國"],
     en: [
       "united states",
@@ -111,25 +111,25 @@ const FLAG_RULES: FlagRule[] = [
     codes: ["us", "usa", "lax", "sjc", "sfo", "nyc", "ewr", "jfk", "iad", "sea", "ord", "dfw", "mia", "atl"],
   },
   {
-    flag: "🇨🇦",
+    code: "CA",
     zh: ["加拿大"],
     en: ["canada", "toronto", "vancouver", "montreal"],
     codes: ["ca", "yyz", "yvr", "yul"],
   },
   {
-    flag: "🇧🇷",
+    code: "BR",
     zh: ["巴西"],
     en: ["brazil", "sao paulo"],
     codes: ["br", "gru"],
   },
   {
-    flag: "🇦🇷",
+    code: "AR",
     zh: ["阿根廷"],
     en: ["argentina", "buenos aires"],
     codes: ["ar", "eze"],
   },
   {
-    flag: "🇲🇽",
+    code: "MX",
     zh: ["墨西哥"],
     en: ["mexico"],
     codes: ["mx", "mex"],
@@ -137,85 +137,85 @@ const FLAG_RULES: FlagRule[] = [
 
   // Europe
   {
-    flag: "🇬🇧",
+    code: "GB",
     zh: ["英国", "英國"],
     en: ["united kingdom", "britain", "england", "london"],
     codes: ["uk", "gb", "lhr", "lgw", "man"],
   },
   {
-    flag: "🇩🇪",
+    code: "DE",
     zh: ["德国", "德國"],
     en: ["germany", "frankfurt", "berlin", "munich"],
     codes: ["de", "fra", "ber", "muc"],
   },
   {
-    flag: "🇫🇷",
+    code: "FR",
     zh: ["法国", "法國"],
     en: ["france", "paris"],
     codes: ["fr", "cdg", "ory"],
   },
   {
-    flag: "🇳🇱",
+    code: "NL",
     zh: ["荷兰", "荷蘭"],
     en: ["netherlands", "holland", "amsterdam"],
     codes: ["nl", "ams"],
   },
   {
-    flag: "🇮🇹",
+    code: "IT",
     zh: ["意大利"],
     en: ["italy", "milan", "rome"],
     codes: ["it", "mxp", "fco"],
   },
   {
-    flag: "🇪🇸",
+    code: "ES",
     zh: ["西班牙"],
     en: ["spain", "madrid", "barcelona"],
     codes: ["es", "mad", "bcn"],
   },
   {
-    flag: "🇨🇭",
+    code: "CH",
     zh: ["瑞士"],
     en: ["switzerland", "zurich", "geneva"],
     codes: ["ch", "zrh", "gva"],
   },
   {
-    flag: "🇸🇪",
+    code: "SE",
     zh: ["瑞典"],
     en: ["sweden", "stockholm"],
     codes: ["se", "arn"],
   },
   {
-    flag: "🇳🇴",
+    code: "NO",
     zh: ["挪威"],
     en: ["norway", "oslo"],
     codes: ["no", "osl"],
   },
   {
-    flag: "🇫🇮",
+    code: "FI",
     zh: ["芬兰", "芬蘭"],
     en: ["finland", "helsinki"],
     codes: ["fi", "hel"],
   },
   {
-    flag: "🇵🇱",
+    code: "PL",
     zh: ["波兰", "波蘭"],
     en: ["poland", "warsaw"],
     codes: ["pl", "waw"],
   },
   {
-    flag: "🇮🇪",
+    code: "IE",
     zh: ["爱尔兰", "愛爾蘭"],
     en: ["ireland", "dublin"],
     codes: ["ie", "dub"],
   },
   {
-    flag: "🇷🇺",
+    code: "RU",
     zh: ["俄罗斯", "俄羅斯"],
     en: ["russia", "moscow"],
     codes: ["ru", "svo", "dme"],
   },
   {
-    flag: "🇹🇷",
+    code: "TR",
     zh: ["土耳其"],
     en: ["turkey", "istanbul"],
     codes: ["tr", "ist"],
@@ -223,31 +223,31 @@ const FLAG_RULES: FlagRule[] = [
 
   // Oceania / Middle East / Africa
   {
-    flag: "🇦🇺",
+    code: "AU",
     zh: ["澳大利亚", "澳洲", "澳大利亞"],
     en: ["australia", "sydney", "melbourne"],
     codes: ["au", "syd", "mel"],
   },
   {
-    flag: "🇳🇿",
+    code: "NZ",
     zh: ["新西兰", "紐西蘭", "纽西兰"],
     en: ["new zealand", "auckland"],
     codes: ["nz", "akl"],
   },
   {
-    flag: "🇦🇪",
+    code: "AE",
     zh: ["阿联酋", "阿聯酋", "迪拜", "迪拜"],
     en: ["united arab emirates", "dubai", "abu dhabi"],
     codes: ["ae", "dxb", "auh"],
   },
   {
-    flag: "🇮🇱",
+    code: "IL",
     zh: ["以色列"],
     en: ["israel", "tel aviv"],
     codes: ["il", "tlv"],
   },
   {
-    flag: "🇿🇦",
+    code: "ZA",
     zh: ["南非"],
     en: ["south africa", "johannesburg"],
     codes: ["za", "jnb"],
@@ -268,48 +268,48 @@ function matchChinese(name: string, needles: string[] | undefined): boolean {
 }
 
 /**
- * Return a flag emoji for the node name, or 🌐 when unknown.
+ * Return an ISO-style region code for the node name, or GL when unknown.
  */
-export function flagEmojiForNodeName(name: string | null | undefined): string {
+export function regionCodeForNodeName(name: string | null | undefined): string {
   const raw = (name ?? "").trim()
-  if (!raw) return DEFAULT_FLAG
+  if (!raw) return DEFAULT_REGION_CODE
 
   const lower = raw.toLowerCase()
 
-  // Pass 1: Chinese names (order in FLAG_RULES = priority).
-  for (const rule of FLAG_RULES) {
-    if (matchChinese(raw, rule.zh)) return rule.flag
+  // Pass 1: Chinese names (order in REGION_RULES = priority).
+  for (const rule of REGION_RULES) {
+    if (matchChinese(raw, rule.zh)) return rule.code
   }
 
   // Pass 2: English country / city phrases (longer phrases listed first in rules).
   // Sort candidate phrases by length desc across all rules to prefer "hong kong" over "ko".
-  const enHits: { flag: string; len: number }[] = []
-  for (const rule of FLAG_RULES) {
+  const enHits: { code: string; len: number }[] = []
+  for (const rule of REGION_RULES) {
     for (const phrase of rule.en ?? []) {
       const p = phrase.toLowerCase()
       if (lower.includes(p)) {
-        enHits.push({ flag: rule.flag, len: p.length })
+        enHits.push({ code: rule.code, len: p.length })
       }
     }
   }
   if (enHits.length > 0) {
     enHits.sort((a, b) => b.len - a.len)
-    return enHits[0]!.flag
+    return enHits[0]!.code
   }
 
   // Pass 3: whole-token ISO / airport codes — first rule in list that owns a token wins.
   const tokens = new Set(extractTokens(raw))
   if (tokens.size > 0) {
-    for (const rule of FLAG_RULES) {
+    for (const rule of REGION_RULES) {
       for (const code of rule.codes ?? []) {
         if (tokens.has(code.toLowerCase())) {
-          return rule.flag
+          return rule.code
         }
       }
     }
   }
 
-  return DEFAULT_FLAG
+  return DEFAULT_REGION_CODE
 }
 
-export const NODE_FLAG_FALLBACK = DEFAULT_FLAG
+export const NODE_REGION_FALLBACK = DEFAULT_REGION_CODE

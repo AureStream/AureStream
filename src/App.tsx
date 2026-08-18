@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { Loader2 } from "lucide-react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import AppShell from "@/components/AppShell"
 import ForceUpdateGate from "@/components/ForceUpdateGate"
@@ -8,6 +7,7 @@ import LoginPage from "@/components/LoginPage"
 import NodesPage from "@/components/NodesPage"
 import ProfilePage from "@/components/ProfilePage"
 import RegisterPage from "@/components/RegisterPage"
+import StartupLoadingScreen from "@/components/StartupLoadingScreen"
 import { AlertProvider } from "@/contexts/AlertContext"
 import { AuthProvider, useAuth } from "@/contexts/AuthContext"
 import { EngineProvider } from "@/contexts/EngineContext"
@@ -15,16 +15,7 @@ import { SubsProvider } from "@/contexts/SubsContext"
 import { resolveAuthGate } from "@/lib/auth-route"
 
 function AuthBootScreen() {
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-white dark:bg-background">
-      <Loader2
-        className="size-6 animate-spin text-[var(--auth-accent)]"
-        strokeWidth={1.75}
-        aria-hidden
-      />
-      <p className="mt-3 text-sm font-medium text-[#6b7280]">正在检查登录状态…</p>
-    </div>
-  )
+  return <StartupLoadingScreen message="正在检查登录状态…" />
 }
 
 /** Auth restore first — never send a restoring session to /login. Subs do not gate. */

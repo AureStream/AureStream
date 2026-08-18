@@ -1,5 +1,5 @@
-export const UPDATE_CHECK_DEADLINE_MS = 10_000;
-export const UPDATE_ENDPOINT_TIMEOUT_MS = 5_000;
+export const UPDATE_CHECK_DEADLINE_MS = 5_000;
+export const UPDATE_ENDPOINT_TIMEOUT_MS = 2_500;
 
 export function withUpdateCheckDeadline<T>(
   operation: Promise<T>,

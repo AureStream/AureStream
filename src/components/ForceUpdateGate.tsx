@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core"
 import { Download, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { check } from "@tauri-apps/plugin-updater"
+import StartupLoadingScreen from "@/components/StartupLoadingScreen"
 import {
   allowUpdateCheckFailure,
   UPDATE_ENDPOINT_TIMEOUT_MS,
@@ -44,18 +45,22 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
     if (!isTauri()) return
 
     let cancelled = false
-    void Promise.all([getVersion().catch(() => ""), checkAtStartup()])
-      .then(([version, available]) => {
-        if (cancelled) return
-        setError(null)
-        setCurrentVersion(version)
-        if (available) {
-          setUpdate(available)
-          setPhase("required")
-        } else {
-          setPhase("ready")
-        }
-      })
+    void getVersion().then(
+      (version) => {
+        if (!cancelled) setCurrentVersion(version)
+      },
+      () => {},
+    )
+    void checkAtStartup().then((available) => {
+      if (cancelled) return
+      setError(null)
+      if (available) {
+        setUpdate(available)
+        setPhase("required")
+      } else {
+        setPhase("ready")
+      }
+    })
 
     return () => {
       cancelled = true
@@ -88,16 +93,7 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
   if (phase === "ready") return <>{children}</>
 
   if (phase === "checking") {
-    return (
-      <main className="flex h-full min-h-0 w-full flex-col items-center justify-center bg-white px-8 dark:bg-background">
-        <Loader2
-          className="size-7 animate-spin text-[var(--auth-accent)]"
-          strokeWidth={1.8}
-          aria-hidden
-        />
-        <p className="mt-4 text-sm font-semibold text-foreground">正在检查版本更新</p>
-      </main>
-    )
+    return <StartupLoadingScreen message="正在检查版本更新…" />
   }
 
   const progress =
