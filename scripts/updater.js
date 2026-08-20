@@ -5,17 +5,15 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_REPO = 'AureStream/AureStream';
+// Must match the platforms actually built by .github/workflows/build-desktop.yml's
+// matrix (linux-x64, windows-x64, macos-aarch64, macos-x64 — ARM Linux/Windows CI
+// was dropped in 1a32a8d "drop ARM CI"). If the matrix changes, update this list.
 const REQUIRED_TARGETS = [
   'darwin-aarch64-app',
   'darwin-x86_64-app',
-  'linux-aarch64-appimage',
-  'linux-aarch64-deb',
-  'linux-aarch64-rpm',
   'linux-x86_64-appimage',
   'linux-x86_64-deb',
   'linux-x86_64-rpm',
-  'windows-aarch64-msi',
-  'windows-aarch64-nsis',
   'windows-x86_64-msi',
   'windows-x86_64-nsis',
 ];
@@ -143,13 +141,13 @@ async function run() {
     };
   }
 
-  // Older updater clients only use the generic OS/architecture key.
+  // Older updater clients only use the generic OS/architecture key. No
+  // linux-aarch64 / windows-aarch64 entries: those platforms aren't built
+  // (see REQUIRED_TARGETS above), so there's no bundle to fall back to.
   const genericFallbacks = {
     'darwin-aarch64': 'darwin-aarch64-app',
     'darwin-x86_64': 'darwin-x86_64-app',
-    'linux-aarch64': 'linux-aarch64-appimage',
     'linux-x86_64': 'linux-x86_64-appimage',
-    'windows-aarch64': 'windows-aarch64-nsis',
     'windows-x86_64': 'windows-x86_64-nsis',
   };
   for (const [generic, specific] of Object.entries(genericFallbacks)) {
