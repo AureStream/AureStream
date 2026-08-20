@@ -1,10 +1,13 @@
 /**
- * Ad-hoc (or Developer ID) sign a built AureStream.app so SMJobBless works.
+ * Sign a built AureStream.app (with the shared "AureStream Code Signing"
+ * certificate, or Developer ID) so SMJobBless works.
  *
  * Root cause of CFErrorDomainLaunchd error 4 on local builds:
  *   - tauri/cargo often leaves the main binary *linker-signed* with a random
  *     identifier (e.g. aurestream-667404ea…), Info.plist not bound
  *   - helper SMAuthorizedClients requires: identifier "com.root.aurestream"
+ *     AND the "AureStream Code Signing" certificate's leaf hash (a bare
+ *     identifier string isn't enough — see macos-helper/Sources/main.m)
  *   - SMJobBless rejects the client → error 4
  *   - non-Mach-O files (geoip.dat / geosite.dat) under Contents/MacOS also
  *     break codesign of the main binary
@@ -13,7 +16,13 @@
  *   pnpm sign-macos-bundle /Applications/AureStream.app
  *   pnpm sign-macos-bundle path/to/AureStream.app "Developer ID Application: …"
  *
- * Identity defaults to ad-hoc "-" (or $APPLE_SIGNING_IDENTITY).
+ * Identity defaults to the shared "AureStream Code Signing" self-issued
+ * certificate — import its .p12 into your login keychain first (see
+ * AGENTS.md's "macOS code signing" section). Pass an explicit identity or
+ * set $APPLE_SIGNING_IDENTITY to sign with something else instead (e.g. a
+ * real Developer ID, once available — note the helper's SMAuthorizedClients
+ * and the app's SMPrivilegedExecutables/kClientRequirement would then need
+ * to be regenerated to match the new certificate).
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -30,7 +39,7 @@ const appPath = resolve(process.argv[2] || "");
 const identity =
   process.argv[3]?.trim() ||
   process.env.APPLE_SIGNING_IDENTITY?.trim() ||
-  "-";
+  "AureStream Code Signing";
 
 if (!appPath || !existsSync(appPath)) {
   console.error(

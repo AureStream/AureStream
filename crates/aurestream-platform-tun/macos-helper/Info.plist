@@ -17,15 +17,18 @@
          treats it as up-to-date. There is no automatic sync; see the
          "Privileged helper version bump" section in CLAUDE.md. -->
     <key>CFBundleShortVersionString</key>
-    <string>1.0.11</string>
+    <string>1.0.12</string>
     <key>CFBundleVersion</key>
-    <!-- Bumped 14: gate the unsigned Info.plist bundle-id fallback in
-         validateClient() behind AURESTREAM_ALLOW_UNSIGNED_HELPER_CLIENTS,
-         off by default in production builds (privilege-escalation fix). -->
-    <string>14</string>
+    <!-- Bumped 15: pin SMAuthorizedClients to the "AureStream Code Signing"
+         certificate's leaf hash instead of a bare identifier string — a bare
+         `identifier "com.root.aurestream"` requirement is satisfiable by any
+         local user via ad-hoc `codesign --sign - --identifier ...` (no
+         certificate needed), which let any local process impersonate the
+         app to this helper. Must match kClientRequirement in main.m. -->
+    <string>15</string>
     <key>SMAuthorizedClients</key>
     <array>
-        <string>identifier "com.root.aurestream"</string>
+        <string>identifier "com.root.aurestream" and certificate leaf = H"8cd4e1d490e21a4f412a8784393087d93ad15bbd"</string>
     </array>
 </dict>
 </plist>

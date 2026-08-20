@@ -125,9 +125,10 @@ UI copy: Chinese-only (no i18n).
 - Start/stop must clear system proxy on failure/stop; TUN stop must restore DNS (best-effort).
 - Do not commit secrets, signing certs, or local `.env` values.
 - Linux TUN packaging: deb/rpm map helper + polkit under `src-tauri/tauri.conf.json` `bundle.linux`; AppImage is not a supported TUN install path.
-- macOS TUN packaging: `pnpm pre-bundle` then `bundle.macOS.files` embeds helper; SMJobBless needs matching code signature (Developer ID or ad-hoc for local).
+- macOS TUN packaging: `pnpm pre-bundle` then `bundle.macOS.files` embeds helper; SMJobBless needs matching code signature.
 - macOS helper changes under `crates/aurestream-platform-tun/macos-helper/` must bump both `CFBundleShortVersionString` and the monotonically increasing `CFBundleVersion` in `Info.plist`; otherwise SMJobBless may keep an older installed helper.
 - macOS TUN startup is transactional: the helper reads validated `autoSystemRoutingTable` CIDRs from the generated Xray config, installs them on `utun233`, and only then applies the DNS override. Preserve proxy-endpoint exclusions and roll back routes/core on failure.
+- **macOS code signing**: no Apple Developer ID — the app and helper are both signed with a shared, self-issued "AureStream Code Signing" certificate instead of ad-hoc `-`. The helper's `SMAuthorizedClients`, the app's `SMPrivilegedExecutables`, and `main.m`'s `kClientRequirement` are all pinned to that certificate's leaf hash (`certificate leaf = H"..."`), not just a bare `identifier "..."` string — a bare identifier is satisfiable by anyone via ad-hoc signing (no certificate needed), which let any local process impersonate the app/helper. To build/sign locally: get `aurestream-codesign.p12` + its password from a teammate (or CI's `AURESTREAM_CODESIGN_P12_BASE64`/`AURESTREAM_CODESIGN_P12_PASSWORD` secrets) and `security import aurestream-codesign.p12 -k ~/Library/Keychains/login.keychain-db -P <password> -T /usr/bin/codesign -A`; `pnpm pre-bundle` / `pnpm sign-macos-bundle` both default to this identity. If the certificate is ever rotated, regenerate and update all three pinned requirement strings together (and bump the helper's `CFBundleVersion` per the rule above) — see `scripts/sign-macos-bundle.ts`'s header comment.
 
 ## Where to look first
 

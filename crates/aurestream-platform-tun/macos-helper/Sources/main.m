@@ -94,9 +94,20 @@ static NSString *const kBlessedPlistPath =
 // Caller validation
 // ============================================================================
 
-// Simplified requirement to check bundle identifier only, which works for
-// local development and ad-hoc signing without a Developer ID certificate.
-static NSString *const kClientRequirement = @"identifier \"com.root.aurestream\"";
+// Pinned to the "AureStream Code Signing" self-issued certificate (no Apple
+// Developer ID available — see AGENTS.md's "macOS code signing" section
+// under Safety / product constraints). A bare `identifier "..."`
+// requirement is satisfiable by anyone via `codesign --sign - --identifier
+// com.root.aurestream` (ad-hoc signing needs no certificate at all), which
+// let any local user impersonate the app and drive the root helper. Pinning
+// to this certificate's leaf hash closes that: forging still requires the
+// private key in the "AureStream Code Signing" identity, not just the
+// identifier string. Regenerate this string (and the two matching
+// SMAuthorizedClients / SMPrivilegedExecutables plist entries) if that
+// certificate is ever rotated — see scripts/sign-macos-bundle.ts.
+static NSString *const kClientRequirement =
+    @"identifier \"com.root.aurestream\" and certificate leaf = "
+    @"H\"8cd4e1d490e21a4f412a8784393087d93ad15bbd\"";
 static NSString *const kExpectedBundleId = @"com.root.aurestream";
 
 static SecCodeRef copyClientSecCode(NSXPCConnection *connection) {

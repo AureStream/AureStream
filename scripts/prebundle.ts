@@ -10,6 +10,11 @@
  *   src-tauri/target/helper/com.root.aurestream.helper
  *
  * Skips on non-macOS hosts.
+ *
+ * Signing identity defaults to the shared "AureStream Code Signing"
+ * self-issued certificate (import its .p12 into your login keychain first —
+ * see AGENTS.md's "macOS code signing" section). Pass an explicit identity
+ * or set APPLE_SIGNING_IDENTITY to sign with something else instead.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
@@ -153,8 +158,18 @@ if (
 }
 console.log("[prebundle] Verified embedded plist sections");
 
+// Default to the shared "AureStream Code Signing" self-issued certificate
+// (no Apple Developer ID available). Both this helper and the main app
+// (see sign-macos-bundle.ts) must be signed with the SAME certificate — the
+// helper's SMAuthorizedClients and the app's SMPrivilegedExecutables/
+// kClientRequirement are pinned to its leaf hash, not just an identifier
+// string (ad-hoc "-" signing has no certificate at all and would fail that
+// check by design). Pass an explicit identity or APPLE_SIGNING_IDENTITY to
+// override, e.g. once a real Developer ID is available.
 const signingIdentity =
-  process.argv[2] || process.env.APPLE_SIGNING_IDENTITY?.trim() || "-";
+  process.argv[2] ||
+  process.env.APPLE_SIGNING_IDENTITY?.trim() ||
+  "AureStream Code Signing";
 console.log(`[prebundle] Signing helper with identity: "${signingIdentity}"...`);
 const codesignArgs = [
   "--force",

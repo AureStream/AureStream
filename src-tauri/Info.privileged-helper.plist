@@ -2,10 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Pinned to the "AureStream Code Signing" certificate's leaf hash, not
+         just the bundle identifier — a bare identifier requirement is
+         satisfiable by anyone via ad-hoc `codesign --sign -`, which would
+         let the app install/trust an attacker-forged "helper". Must match
+         SMAuthorizedClients in crates/aurestream-platform-tun/macos-helper/Info.plist
+         and kClientRequirement in macos-helper/Sources/main.m (that one
+         checks the app's identity from the helper's side; this one checks
+         the helper's identity from the app's side — same certificate, two
+         different --identifier values). Regenerate both if the certificate
+         is ever rotated — see scripts/sign-macos-bundle.ts. -->
     <key>SMPrivilegedExecutables</key>
     <dict>
         <key>com.root.aurestream.helper</key>
-        <string>identifier "com.root.aurestream.helper"</string>
+        <string>identifier "com.root.aurestream.helper" and certificate leaf = H"8cd4e1d490e21a4f412a8784393087d93ad15bbd"</string>
     </dict>
 </dict>
 </plist>
