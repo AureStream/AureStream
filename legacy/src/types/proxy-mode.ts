@@ -1,1 +1,0 @@
-export type ProxyMode = "rule" | "global" | "direct" | "tun"
