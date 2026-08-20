@@ -7,18 +7,10 @@ on:
         description: "Build Linux x64"
         type: boolean
         default: false
-      linux-arm64:
-        description: "Build Linux arm64"
-        type: boolean
-        default: false
       windows-x64:
         description: "Build Windows x64"
         type: boolean
         default: true
-      windows-arm64:
-        description: "Build Windows arm64"
-        type: boolean
-        default: false
       macos-aarch64:
         description: "Build macOS ARM64"
         type: boolean
@@ -49,25 +41,19 @@ jobs:
         run: |
           full='[
             {"name":"linux-x64","os":"ubuntu-22.04","rust_target":"x86_64-unknown-linux-gnu"},
-            {"name":"linux-arm64","os":"ubuntu-22.04-arm","rust_target":"aarch64-unknown-linux-gnu"},
             {"name":"windows-x64","os":"windows-2025","rust_target":"x86_64-pc-windows-msvc"},
-            {"name":"windows-arm64","os":"windows-11-arm","rust_target":"aarch64-pc-windows-msvc"},
             {"name":"macos-aarch64","os":"macos-latest","rust_target":"aarch64-apple-darwin"},
             {"name":"macos-x64","os":"macos-15-intel","rust_target":"x86_64-apple-darwin"}
           ]'
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             matrix=$(echo "$full" | jq -c \
               --arg linux_x64 "${{ github.event.inputs.linux-x64 }}" \
-              --arg linux_arm64 "${{ github.event.inputs.linux-arm64 }}" \
               --arg windows_x64 "${{ github.event.inputs.windows-x64 }}" \
-              --arg windows_arm64 "${{ github.event.inputs.windows-arm64 }}" \
               --arg macos_aarch64 "${{ github.event.inputs.macos-aarch64 }}" \
               --arg macos_x64 "${{ github.event.inputs.macos-x64 }}" \
               '{include: [.[] | select(
                 (.name == "linux-x64" and $linux_x64 == "true") or
-                (.name == "linux-arm64" and $linux_arm64 == "true") or
                 (.name == "windows-x64" and $windows_x64 == "true") or
-                (.name == "windows-arm64" and $windows_arm64 == "true") or
                 (.name == "macos-aarch64" and $macos_aarch64 == "true") or
                 (.name == "macos-x64" and $macos_x64 == "true")
               )]}')

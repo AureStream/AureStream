@@ -28,7 +28,7 @@ mod macos;
 mod linux;
 
 pub use error::ProxyError;
-pub use helpers::{default_bypass, format_proxy_addr};
+pub use helpers::{default_bypass, format_proxy_addr, format_windows_proxy_server};
 
 /// Whether this build target has a system-proxy backend.
 ///

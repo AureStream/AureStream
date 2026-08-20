@@ -5,6 +5,16 @@ pub fn format_proxy_addr(host: &str, port: u16) -> String {
     format!("{host}:{port}")
 }
 
+/// WinINET `ProxyServer` value for the Windows Settings “手动设置代理” UI.
+///
+/// Must be a bare `host:port`. Protocol-qualified strings
+/// (`http=host:port;https=host:port`) are valid for WinINET but the Settings
+/// app treats `http=` as `http://` and dumps the rest into the address field,
+/// leaving the port empty.
+pub fn format_windows_proxy_server(host: &str, port: u16) -> String {
+    format_proxy_addr(host, port)
+}
+
 /// Default bypass list for the current target OS.
 ///
 /// Windows uses `;`; macOS/Linux use `,`.
@@ -46,6 +56,22 @@ mod tests {
     fn format_proxy_addr_joins_host_and_port() {
         assert_eq!(format_proxy_addr("127.0.0.1", 7890), "127.0.0.1:7890");
         assert_eq!(format_proxy_addr("localhost", 1080), "localhost:1080");
+    }
+
+    #[test]
+    fn windows_proxy_server_is_bare_host_port_for_settings_ui() {
+        // Win10/11 Settings UI only parses `host:port`. `http=host:port;https=...`
+        // dumps the whole string into Address and leaves Port empty.
+        let server = format_windows_proxy_server("127.0.0.1", 10808);
+        assert_eq!(server, "127.0.0.1:10808");
+        assert!(
+            !server.contains('='),
+            "protocol-qualified ProxyServer breaks the Windows Settings port field: {server}"
+        );
+        assert!(
+            !server.contains("://"),
+            "URL-style ProxyServer leaves the port field empty: {server}"
+        );
     }
 
     #[test]

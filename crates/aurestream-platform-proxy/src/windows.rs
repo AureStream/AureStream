@@ -15,7 +15,7 @@ use windows::Win32::Networking::WinInet::{
     PROXY_TYPE_PROXY,
 };
 
-use crate::helpers::{default_bypass, format_proxy_addr, require_host};
+use crate::helpers::{default_bypass, format_windows_proxy_server, require_host};
 use crate::ProxyError;
 
 const ERROR_BUFFER_TOO_SMALL: u32 = 122;
@@ -159,12 +159,9 @@ fn unset_proxy() -> Result<(), ProxyError> {
 
 pub fn set_system_proxy(host: &str, port: u16) -> Result<(), ProxyError> {
     let host = require_host(host)?;
-    // Scheme-qualified list so WinINET routes HTTP, HTTPS, and SOCKS to the
-    // same mixed inbound (Xray listens for both on one port).
-    let server = format!(
-        "http={0};https={0};socks={0}",
-        format_proxy_addr(host, port)
-    );
+    // Bare `host:port` applies to all WinINET protocols and is the only form
+    // the Windows 10/11 Settings UI can split into address + port.
+    let server = format_windows_proxy_server(host, port);
     set_global_proxy(&server, default_bypass())
 }
 
