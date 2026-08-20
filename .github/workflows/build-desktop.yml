@@ -6,7 +6,7 @@ on:
       linux-x64:
         description: "Build Linux x64"
         type: boolean
-        default: false
+        default: true
       windows-x64:
         description: "Build Windows x64"
         type: boolean
@@ -14,11 +14,11 @@ on:
       macos-aarch64:
         description: "Build macOS ARM64"
         type: boolean
-        default: false
+        default: true
       macos-x64:
         description: "Build macOS x64"
         type: boolean
-        default: false
+        default: true
   release:
     types: [published]
 
