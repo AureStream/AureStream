@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Activity, ArrowUpDown, Check, Gauge } from "lucide-react"
 import { useAlert } from "@/contexts/AlertContext"
@@ -52,6 +52,15 @@ export default function NodesPage() {
   const selectedTag = engine.selectedNode ?? ""
   const busy = engine.state === "starting" || engine.state === "stopping" || selecting
 
+  // Guard against stale writes from an in-flight speed test after the page
+  // unmounts (e.g. user navigates away mid-test).
+  const cancelledRef = useRef(false)
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true
+    }
+  }, [])
+
   const sortedNodes = useMemo(() => {
     return [...nodes].sort((a, b) => {
       if (sortBy === "latency") {
@@ -96,10 +105,11 @@ export default function NodesPage() {
     }
 
     setTesting(true)
-    // Clear display to "testing" state for all listed nodes.
+    // Clear display to "testing" state only for nodes actually being probed;
+    // nodes without server/port are left as-is (never resolve otherwise).
     setLatencies((prev) => {
       const next: LatencyMap = { ...prev }
-      for (const n of nodes) next[n.tag] = 0
+      for (const n of targets) next[n.tag] = 0
       return next
     })
 
@@ -111,16 +121,18 @@ export default function NodesPage() {
           port: n.port ?? 0,
         })),
         (tag, ms) => {
+          if (cancelledRef.current) return
           setNodeLatency(tag, ms)
           setLatencies((prev) => ({ ...prev, [tag]: ms }))
         },
       )
+      if (cancelledRef.current) return
       // After a full run, switch to latency sort so results are easy to scan.
       setSortBy("latency")
     } catch {
-      showError("测速过程中出现错误，请重试", "测速失败")
+      if (!cancelledRef.current) showError("测速过程中出现错误，请重试", "测速失败")
     } finally {
-      setTesting(false)
+      if (!cancelledRef.current) setTesting(false)
     }
   }, [testing, nodes, showError])
 

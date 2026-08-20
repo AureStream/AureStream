@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -49,13 +48,14 @@ export function useAlertOptional(): AlertContextValue | null {
   return useContext(AlertContext)
 }
 
-type DialogState = {
-  open: boolean
+type QueueEntry = {
   title: string
   message: string
   kind: AlertKind
   confirmLabel?: string
   cancelLabel?: string
+  /** Present for `showConfirm` entries; resolves the caller's promise. */
+  resolve?: (confirmed: boolean) => void
 }
 
 const DEFAULT_TITLES: Record<AlertKind, string> = {
@@ -109,35 +109,34 @@ type AppAlertPayload = {
 }
 
 export function AlertProvider({ children }: { children: ReactNode }) {
-  const [dialog, setDialog] = useState<DialogState>({
-    open: false,
-    title: DEFAULT_TITLES.error,
-    message: "",
-    kind: "error",
-  })
-  const confirmResolver = useRef<((confirmed: boolean) => void) | null>(null)
+  // FIFO queue: the currently shown dialog is always queue[0]. Queuing
+  // (instead of replacing a single slot) ensures a fast second alert never
+  // silently clobbers one the user hasn't read yet.
+  const [queue, setQueue] = useState<QueueEntry[]>([])
 
-  const settleConfirm = useCallback((confirmed: boolean) => {
-    const resolve = confirmResolver.current
-    confirmResolver.current = null
-    resolve?.(confirmed)
-    setDialog((d) => ({ ...d, open: false }))
+  /** Resolve the currently shown entry (if it's a confirm) and advance to the next. */
+  const advance = useCallback((confirmed: boolean) => {
+    setQueue((q) => {
+      const [current, ...rest] = q
+      current?.resolve?.(confirmed)
+      return rest
+    })
   }, [])
 
-  const close = useCallback(() => settleConfirm(false), [settleConfirm])
+  const close = useCallback(() => advance(false), [advance])
 
   const showAlert = useCallback((options: AlertOptions) => {
     const kind = options.kind ?? "error"
     const message = (options.message || "").trim()
     if (!message) return
-    confirmResolver.current?.(false)
-    confirmResolver.current = null
-    setDialog({
-      open: true,
-      title: options.title?.trim() || DEFAULT_TITLES[kind],
-      message,
-      kind,
-    })
+    setQueue((q) => [
+      ...q,
+      {
+        title: options.title?.trim() || DEFAULT_TITLES[kind],
+        message,
+        kind,
+      },
+    ])
   }, [])
 
   const showConfirm = useCallback((options: ConfirmOptions) => {
@@ -145,17 +144,18 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     const message = (options.message || "").trim()
     if (!message) return Promise.resolve(false)
 
-    confirmResolver.current?.(false)
     return new Promise<boolean>((resolve) => {
-      confirmResolver.current = resolve
-      setDialog({
-        open: true,
-        title: options.title?.trim() || "请确认",
-        message,
-        kind,
-        confirmLabel: options.confirmLabel?.trim() || "确认",
-        cancelLabel: options.cancelLabel?.trim() || "取消",
-      })
+      setQueue((q) => [
+        ...q,
+        {
+          title: options.title?.trim() || "请确认",
+          message,
+          kind,
+          confirmLabel: options.confirmLabel?.trim() || "确认",
+          cancelLabel: options.cancelLabel?.trim() || "取消",
+          resolve,
+        },
+      ])
     })
   }, [])
 
@@ -207,18 +207,20 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     [showAlert, showError, showInfo, showConfirm, showErrorFromUnknown],
   )
 
+  const current = queue[0]
+
   return (
     <AlertContext.Provider value={value}>
       {children}
       <AlertDialog
-        open={dialog.open}
-        title={dialog.title}
-        message={dialog.message}
-        kind={dialog.kind}
-        confirmLabel={dialog.confirmLabel}
-        cancelLabel={dialog.cancelLabel}
+        open={current !== undefined}
+        title={current?.title ?? DEFAULT_TITLES.error}
+        message={current?.message ?? ""}
+        kind={current?.kind ?? "error"}
+        confirmLabel={current?.confirmLabel}
+        cancelLabel={current?.cancelLabel}
         onClose={close}
-        onConfirm={() => settleConfirm(true)}
+        onConfirm={() => advance(true)}
       />
     </AlertContext.Provider>
   )

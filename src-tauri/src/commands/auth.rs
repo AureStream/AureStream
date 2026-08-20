@@ -34,6 +34,18 @@ fn emit_auth_changed(app: &AppHandle, user: Option<User>) {
     let _ = app.emit(AUTH_CHANGED_EVENT, AuthChangedPayload { user });
 }
 
+/// True for a transport/server-side failure (no HTTP response received at
+/// all — network error, DNS failure, connect/read timeout, or a response
+/// body that failed to decode; all mapped to `status == 0` by this crate —
+/// plus any 5xx or a 429 rate-limit), as opposed to the server actually
+/// rejecting the credentials (e.g. HTTP 401 with an
+/// `invalid_token`/`invalid_grant` body). `ApiError` doesn't carry a
+/// dedicated enum variant for this distinction, so it's inferred from the
+/// HTTP status code it does expose.
+fn is_transient_refresh_error(err: &ApiError) -> bool {
+    err.status == 0 || err.status >= 500 || err.status == 429
+}
+
 fn api_client() -> ApiClient {
     match std::env::var("AURESTREAM_API_BASE") {
         Ok(base) if !base.trim().is_empty() => ApiClient::with_base(base),
@@ -122,6 +134,21 @@ pub async fn auth_restore(
         .await
     {
         log::warn!("auth_restore token verification failed: {err}");
+
+        if is_transient_refresh_error(&err) {
+            // Transport/server error: the refresh token on disk was never
+            // actually rejected, so a flaky network or a momentarily down
+            // server at launch must not spuriously log the user out. Fail
+            // open — keep the cached session and let the user continue; the
+            // next authenticated request will retry the refresh.
+            log::info!("auth_restore: transient refresh failure, keeping cached session");
+            emit_auth_changed(&app, Some(user.clone()));
+            return Ok(Some(user));
+        }
+
+        // The server actively rejected the refresh token (e.g. 401
+        // invalid_token/invalid_grant) — it is genuinely dead, so the local
+        // session must be dropped.
         emit_auth_changed(&app, None);
         return Err(AuthIpcError::from(err));
     }

@@ -2,6 +2,40 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
 
+/// Upper bound on any response body read into memory by this module. Real
+/// Worker subscription-list responses and provider subscription documents
+/// (even hundreds of nodes) are at most a few hundred KB; this exists to cap
+/// memory use if a compromised/misconfigured upstream (Worker or, more
+/// realistically, a provider URL from `Subscription.url`) returns an
+/// unbounded body.
+const MAX_SUBSCRIPTION_BODY_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Read a response body into memory, enforcing `MAX_SUBSCRIPTION_BODY_BYTES`.
+///
+/// Checks `Content-Length` upfront as a fast reject, but does not rely on it
+/// alone — a malicious or misconfigured server can omit or lie about that
+/// header — so the running total is also checked while streaming chunks.
+async fn read_capped_body(mut response: reqwest::Response) -> Result<Vec<u8>, ApiError> {
+    if let Some(len) = response.content_length() {
+        if len > MAX_SUBSCRIPTION_BODY_BYTES {
+            return Err(ApiError::from_code("subscription_body_too_large", 0, None));
+        }
+    }
+
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))?
+    {
+        body.extend_from_slice(&chunk);
+        if body.len() as u64 > MAX_SUBSCRIPTION_BODY_BYTES {
+            return Err(ApiError::from_code("subscription_body_too_large", 0, None));
+        }
+    }
+    Ok(body)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Subscription {
     pub id: String,
@@ -47,9 +81,8 @@ pub(crate) async fn list_subscriptions(
         return Err(ApiError::from_response(response).await);
     }
 
-    let body = response
-        .json::<SubscriptionsResponse>()
-        .await
+    let raw = read_capped_body(response).await?;
+    let body: SubscriptionsResponse = serde_json::from_slice(&raw)
         .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
 
     Ok(body.subscriptions)
@@ -74,10 +107,8 @@ pub(crate) async fn fetch_subscription_body(
         ));
     }
 
-    response
-        .text()
-        .await
-        .map_err(|_| ApiError::from_code("request_failed", 0, None))
+    let raw = read_capped_body(response).await?;
+    String::from_utf8(raw).map_err(|_| ApiError::from_code("request_failed", 0, None))
 }
 
 pub(crate) async fn report_subscription_usage(
@@ -101,10 +132,8 @@ pub(crate) async fn report_subscription_usage(
         return Err(ApiError::from_response(response).await);
     }
 
-    response
-        .json::<UsageResponse>()
-        .await
-        .map_err(|_| ApiError::from_code("request_failed", 0, None))
+    let raw = read_capped_body(response).await?;
+    serde_json::from_slice(&raw).map_err(|_| ApiError::from_code("request_failed", 0, None))
 }
 
 #[cfg(test)]

@@ -8,7 +8,6 @@ const STORAGE_KEY = "aurestream.node-latencies.v1"
 
 const cache = new Map<string, number>()
 let hydrated = false
-const listeners = new Set<() => void>()
 
 function hydrateFromStorage() {
   if (hydrated) return
@@ -39,24 +38,6 @@ function persist() {
   }
 }
 
-function notify() {
-  for (const fn of listeners) {
-    try {
-      fn()
-    } catch {
-      // ignore listener errors
-    }
-  }
-}
-
-/** Subscribe to latency cache updates (e.g. after speed test). Returns unsubscribe. */
-export function subscribeNodeLatencies(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
 export function getNodeLatency(tag: string): number | undefined {
   hydrateFromStorage()
   return cache.get(tag)
@@ -67,7 +48,6 @@ export function setNodeLatency(tag: string, ms: number): void {
   hydrateFromStorage()
   cache.set(tag, ms)
   persist()
-  notify()
 }
 
 export function clearNodeLatencies(): void {
@@ -78,7 +58,6 @@ export function clearNodeLatencies(): void {
   } catch {
     // ignore
   }
-  notify()
 }
 
 /** Snapshot of all known latencies (for bulk UI init). */

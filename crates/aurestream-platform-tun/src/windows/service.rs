@@ -47,14 +47,24 @@ const DEFAULT_API_PORT: u16 = 10809;
 const CORE_READY_TIMEOUT: Duration = Duration::from_secs(15);
 
 use windows::core::{PCWSTR, PWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{
+    CloseHandle, LocalFree, HANDLE, HLOCAL, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
+use windows::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
+use windows::Win32::Security::{
+    EqualSid, GetTokenInformation, TokenUser, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    PSID, TOKEN_QUERY, TOKEN_USER,
+};
 use windows::Win32::System::Services::{
     RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW,
     SERVICE_ACCEPT_STOP, SERVICE_CONTROL_INTERROGATE, SERVICE_CONTROL_STOP, SERVICE_RUNNING,
     SERVICE_START_PENDING, SERVICE_STATUS, SERVICE_STATUS_CURRENT_STATE, SERVICE_STATUS_HANDLE,
     SERVICE_STOPPED, SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
 };
-use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
+use windows::Win32::System::Threading::{
+    OpenProcess, OpenProcessToken, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE,
+};
 
 use super::{dns, SERVICE_NAME};
 
@@ -398,6 +408,137 @@ impl Drop for AppProcessWatch {
     }
 }
 
+/// A process token's owner SID, backed by the heap buffer holding the
+/// `TOKEN_USER` returned by `GetTokenInformation`. The SID returned by
+/// `sid()` points into this buffer, so the buffer must outlive its use.
+struct ProcessOwnerToken {
+    buf: Vec<u8>,
+}
+
+impl ProcessOwnerToken {
+    fn sid(&self) -> PSID {
+        let token_user = self.buf.as_ptr() as *const TOKEN_USER;
+        unsafe { (*token_user).User.Sid }
+    }
+}
+
+/// Look up the SID of the account that owns process `pid`'s token. Used by
+/// `caller_owns_config` to verify a service-start caller's real identity.
+fn process_token_owner_sid(pid: u32) -> Result<ProcessOwnerToken, String> {
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }
+        .map_err(|e| format!("OpenProcess(app pid={pid}) for owner check failed: {e}"))?;
+    let result = (|| -> Result<ProcessOwnerToken, String> {
+        let mut token = HANDLE::default();
+        unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) }
+            .map_err(|e| format!("OpenProcessToken(app pid={pid}) failed: {e}"))?;
+        let token_result = (|| -> Result<ProcessOwnerToken, String> {
+            let mut len: u32 = 0;
+            // First call is expected to fail (buffer too small); it reports
+            // the required size in `len`. Do not assume a fixed size.
+            let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut len) };
+            if len == 0 {
+                return Err(format!(
+                    "GetTokenInformation size probe returned 0 for app pid={pid}"
+                ));
+            }
+            let mut buf = vec![0u8; len as usize];
+            unsafe {
+                GetTokenInformation(
+                    token,
+                    TokenUser,
+                    Some(buf.as_mut_ptr() as *mut core::ffi::c_void),
+                    len,
+                    &mut len,
+                )
+            }
+            .map_err(|e| format!("GetTokenInformation(TokenUser, app pid={pid}) failed: {e}"))?;
+            Ok(ProcessOwnerToken { buf })
+        })();
+        unsafe {
+            let _ = CloseHandle(token);
+        }
+        token_result
+    })();
+    unsafe {
+        let _ = CloseHandle(process);
+    }
+    result
+}
+
+/// A file's owner SID, backed by the `PSECURITY_DESCRIPTOR` allocated by
+/// `GetNamedSecurityInfoW`. Freed via `LocalFree` on drop.
+struct ConfigOwnerSid {
+    psd: PSECURITY_DESCRIPTOR,
+    owner: PSID,
+}
+
+impl Drop for ConfigOwnerSid {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(self.psd.0)));
+        }
+    }
+}
+
+/// Look up the on-disk owner SID of `config` (expected to already be
+/// canonicalized by `validate_config_path`).
+fn config_owner_sid(config: &Path) -> Result<ConfigOwnerSid, String> {
+    let path_w = to_wide_z(&config.to_string_lossy());
+    let mut owner = PSID::default();
+    let mut psd = PSECURITY_DESCRIPTOR::default();
+    let status = unsafe {
+        GetNamedSecurityInfoW(
+            PCWSTR(path_w.as_ptr()),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            Some(&mut owner as *mut PSID),
+            None,
+            None,
+            None,
+            &mut psd,
+        )
+    };
+    if let Err(e) = status.ok() {
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(psd.0)));
+        }
+        return Err(format!(
+            "GetNamedSecurityInfoW({}) failed: {e}",
+            config.display()
+        ));
+    }
+    if owner.0.is_null() {
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(psd.0)));
+        }
+        return Err(format!("config owner SID is null: {}", config.display()));
+    }
+    Ok(ConfigOwnerSid { psd, owner })
+}
+
+/// Reject a service-start request unless `config` is actually owned (on
+/// disk, by SID) by the account running the calling app process `app_pid`.
+///
+/// `is_allowed_config_path` only checks the path SHAPE
+/// (`...\Users\<name>\AppData\...\xray-config.json`) — it never verifies
+/// that `<name>` is really the caller's account. Combined with
+/// `SERVICE_SDDL` (scm.rs) granting SERVICE_START to all local Authenticated
+/// Users, any standard user could otherwise start this SYSTEM service
+/// against a config they authored under their own profile. Comparing SIDs
+/// (not the path string) closes that gap regardless of the SDDL and is
+/// immune to username case/encoding quirks.
+fn caller_owns_config(config: &Path, app_pid: u32) -> Result<(), String> {
+    let config_owner = config_owner_sid(config)?;
+    let process_owner = process_token_owner_sid(app_pid)?;
+    let equal = unsafe { EqualSid(config_owner.owner, process_owner.sid()) }.is_ok();
+    if !equal {
+        return Err(format!(
+            "config file owner does not match owning app process pid={app_pid}"
+        ));
+    }
+    Ok(())
+}
+
 /// The SCM-invoked service entry point.
 unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
     // Parse argv.
@@ -471,6 +612,18 @@ unsafe extern "system" fn service_main(argc: u32, argv: *mut PWSTR) {
             return;
         }
     };
+    // SID-based authorization: `is_allowed_config_path` only validated the
+    // path SHAPE, not that the caller (app_pid) actually owns this config
+    // file. Any Authenticated User can call StartServiceW (see SERVICE_SDDL
+    // in scm.rs), so without this check any standard user could point the
+    // SYSTEM service at a config file they authored under their own profile.
+    if let Err(e) = caller_owns_config(&config, app_pid) {
+        dns::log_line(&format!(
+            "service_main: rejected caller/config owner mismatch: {e}"
+        ));
+        set_state(SERVICE_STOPPED, 1, 0);
+        return;
+    }
     // Open the process before starting the privileged core. A process handle
     // refers to this exact process object and remains signaled after exit, so
     // a subsequently reused numeric PID cannot defeat orphan cleanup.

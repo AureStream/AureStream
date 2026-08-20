@@ -25,7 +25,14 @@ impl ApiClient {
     pub fn with_base(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            http: reqwest::Client::new(),
+            // A bounded timeout is required: `auth_restore` calls `refresh`
+            // before the user can enter the app, so an unresponsive server,
+            // dead DNS, or captive portal must not hang startup forever.
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .build()
+                .expect("reqwest client build"),
         }
     }
 

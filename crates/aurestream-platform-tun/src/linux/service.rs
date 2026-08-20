@@ -190,6 +190,20 @@ fn peer_uid(stream: &UnixStream) -> Result<u32, String> {
     }
 }
 
+/// Mirrors the intent of com.root.aurestream.run-privileged in
+/// linux-helper/49-aurestream.rules: only members of the distro's admin
+/// group may start a tunnel session (any local user may stop/query one).
+fn caller_is_authorized(uid: u32) -> bool {
+    let output = match Command::new("id").args(["-Gn", &uid.to_string()]).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+    let groups = String::from_utf8_lossy(&output.stdout);
+    groups
+        .split_whitespace()
+        .any(|g| g == "sudo" || g == "wheel" || g == "adm")
+}
+
 fn start_session(
     slot: &Arc<Mutex<Option<Session>>>,
     uid: u32,
@@ -200,6 +214,9 @@ fn start_session(
     iface: &str,
     original_dns: &[String],
 ) -> Result<(), String> {
+    if !caller_is_authorized(uid) {
+        return Err("caller is not authorized to start the vpn tunnel (must be in the sudo/wheel/adm group)".into());
+    }
     if !validate_iface(iface) {
         return Err("invalid interface".into());
     }
@@ -407,11 +424,44 @@ fn restore_dns(iface: &str, original: &[String]) {
     let _ = Command::new("resolvectl").arg("flush-caches").status();
 }
 
+/// Orphan cleanup for cores this helper spawned in a prior life (e.g. after
+/// a helper restart that lost the in-memory `Session`/`Child` handle) — not
+/// used when a live `Child` is available, which is killed directly instead.
+/// Matches on the exact trusted core path AND root ownership rather than a
+/// `pkill -f` substring match, so it can never hit another local user's
+/// process whose argv happens to contain "/aurestream-core".
 fn pkill_cores() {
-    let _ = Command::new("pkill").args(["-x", "aurestream-core"]).status();
-    let _ = Command::new("pkill")
-        .args(["-f", "/aurestream-core"])
-        .status();
+    let entries = match fs::read_dir("/proc") {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let pid: i32 = match entry.file_name().to_str().and_then(|s| s.parse().ok()) {
+            Some(pid) => pid,
+            None => continue,
+        };
+        let exe = match fs::read_link(format!("/proc/{pid}/exe")) {
+            Ok(exe) => exe,
+            Err(_) => continue,
+        };
+        if exe != Path::new(TRUSTED_CORE) && exe != Path::new(PACKAGED_CORE) {
+            continue;
+        }
+        let meta = match fs::metadata(format!("/proc/{pid}")) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if meta.uid() != 0 {
+                continue;
+            }
+        }
+        unsafe {
+            libc::kill(pid, libc::SIGTERM);
+        }
+    }
 }
 
 fn delete_iface_if_present(name: &str) {

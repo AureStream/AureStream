@@ -558,11 +558,9 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
     }
     find_proxy_node(&nodes, node_tag)
         .or_else(|| {
-            // Empty tag or stale selection (e.g. previous subscription) → first node.
-            if node_tag.is_empty() || !nodes.is_empty() {
-                log::warn!(
-                    "resolve_proxy_node: tag `{node_tag}` missing, falling back to first node"
-                );
+            // Deterministic default: first decoded node when tag is empty.
+            if node_tag.is_empty() {
+                log::warn!("resolve_proxy_node: tag empty, falling back to first node");
                 nodes.first().cloned()
             } else {
                 None
@@ -1134,10 +1132,11 @@ pub async fn engine_select_node(
     // Validate node exists in decoded cache (before taking the gate).
     let node = resolve_proxy_node(&subs, &tag)?;
     let subscription_id = active_subscription_id(&subs)?;
-    engine.set_selected_node(Some(node.tag.clone()))?;
-    log::info!("select_node tag={}", node.tag);
 
     let _guard = engine.gate.lock().await;
+
+    engine.set_selected_node(Some(node.tag.clone()))?;
+    log::info!("select_node tag={}", node.tag);
 
     let was_running = matches!(engine.engine.state(), EngineState::Running)
         || engine.last_payload().state == "running";

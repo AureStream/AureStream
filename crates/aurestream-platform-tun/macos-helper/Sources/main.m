@@ -131,6 +131,15 @@ static SecCodeRef copyClientSecCode(NSXPCConnection *connection) {
 
 // Fallback: validate caller by reading CFBundleIdentifier from its Info.plist.
 // Used when the caller has no code signature (e.g. tauri dev, unsigned builds).
+//
+// DEV-BUILD ONLY. This function is compiled only when
+// AURESTREAM_ALLOW_UNSIGNED_HELPER_CLIENTS is defined, which must never be
+// the case for a release/signed build — see scripts/prebundle.ts, which
+// only defines it when AURESTREAM_DEV_UNSIGNED_HELPER=1 is set explicitly.
+// It is never reachable, and never compiled at all, in the production
+// helper binary: any caller whose code signature does not satisfy
+// kClientRequirement is rejected outright.
+#ifdef AURESTREAM_ALLOW_UNSIGNED_HELPER_CLIENTS
 static BOOL validateClientByBundleId(NSXPCConnection *connection) {
     SecCodeRef code = copyClientSecCode(connection);
     if (code == NULL) {
@@ -185,6 +194,7 @@ static BOOL validateClientByBundleId(NSXPCConnection *connection) {
     NSLog(@"[helper] fallback validation passed: bundle id match for %@", url.path);
     return YES;
 }
+#endif // AURESTREAM_ALLOW_UNSIGNED_HELPER_CLIENTS
 
 static BOOL validateClient(NSXPCConnection *connection) {
     SecCodeRef code = copyClientSecCode(connection);
@@ -211,11 +221,15 @@ static BOOL validateClient(NSXPCConnection *connection) {
         return YES;
     }
 
-    NSLog(@"[helper] SecCodeCheckValidity failed: %d, attempting fallback validation", (int)status);
+#ifdef AURESTREAM_ALLOW_UNSIGNED_HELPER_CLIENTS
+    NSLog(@"[helper] SecCodeCheckValidity failed: %d, attempting fallback validation (dev build)", (int)status);
     CFRelease(code);
-
-    // Fallback: validate by bundle ID from Info.plist for unsigned / ad-hoc callers
     return validateClientByBundleId(connection);
+#else
+    NSLog(@"[helper] SecCodeCheckValidity failed: %d, rejecting (unsigned fallback disabled)", (int)status);
+    CFRelease(code);
+    return NO;
+#endif
 }
 
 static BOOL copyCallerUser(NSXPCConnection *connection, uid_t *uidOut, gid_t *gidOut) {

@@ -179,10 +179,18 @@ impl XrayEngine {
             guard.sm.state(),
             EngineState::Idle | EngineState::Failed { .. }
         ) {
-            let _ = guard.sm.transition(EngineState::Stopping);
+            let from = guard.sm.state().clone();
+            if let Err(e) = guard.sm.transition(EngineState::Stopping) {
+                log::warn!(
+                    "finish_external_stop: transition to Stopping from {from:?} failed: {e}"
+                );
+            }
         }
         guard.monitor.take();
-        let _ = guard.sm.transition(EngineState::Idle);
+        let from = guard.sm.state().clone();
+        if let Err(e) = guard.sm.transition(EngineState::Idle) {
+            log::warn!("finish_external_stop: transition to Idle from {from:?} failed: {e}");
+        }
         Ok(())
     }
 }

@@ -87,9 +87,20 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   )
 
   // Engine failed state (including tray-triggered starts) → dialog once per reason.
+  // `lastDialogKey` also resets on every new connect attempt (transition INTO
+  // "starting"), so a retry that fails with the same reason as the previous
+  // attempt still gets its own dialog instead of being silently deduped.
+  const prevEngineStateRef = useRef<typeof engine.state | null>(null)
   useEffect(() => {
-    if (engine.state === "running" || engine.state === "idle" || engine.state === "starting") {
-      if (engine.state !== "starting") {
+    const prevState = prevEngineStateRef.current
+    prevEngineStateRef.current = engine.state
+
+    if (engine.state === "running" || engine.state === "idle") {
+      lastDialogKey.current = null
+      return
+    }
+    if (engine.state === "starting") {
+      if (prevState !== "starting") {
         lastDialogKey.current = null
       }
       return

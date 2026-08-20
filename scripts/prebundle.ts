@@ -33,6 +33,21 @@ const helperDir = join(
 const buildDir = join(srcTauri, "target", "helper");
 const label = "com.root.aurestream.helper";
 
+// SECURITY: off by default. Only set AURESTREAM_DEV_UNSIGNED_HELPER=1 for
+// local dev testing against unsigned/ad-hoc builds — it compiles in a
+// fallback that trusts a caller-controlled Info.plist bundle id instead of
+// a verified code signature. Never set this for a helper build that will be
+// installed, distributed, or run against a real user's system.
+const allowUnsignedHelperClients = process.env.AURESTREAM_DEV_UNSIGNED_HELPER === "1";
+if (allowUnsignedHelperClients) {
+  console.warn(
+    "[prebundle] WARNING: AURESTREAM_DEV_UNSIGNED_HELPER=1 — building a helper " +
+      "that accepts unsigned/spoofable clients via Info.plist bundle-id fallback. " +
+      "This is a local-privilege-escalation surface. DEV BUILDS ONLY — this " +
+      "binary must never be distributed or installed on a real user's machine.",
+  );
+}
+
 const clangCheck = spawnSync("clang", ["--version"]);
 if (clangCheck.status !== 0) {
   console.error(
@@ -86,10 +101,11 @@ const buildSlice = (arch: string, target: string): string => {
     "__launchd_plist",
     "-Xlinker",
     launchdPlist,
-    mainSource,
-    "-o",
-    out,
   ];
+  if (allowUnsignedHelperClients) {
+    clangArgs.push("-DAURESTREAM_ALLOW_UNSIGNED_HELPER_CLIENTS=1");
+  }
+  clangArgs.push(mainSource, "-o", out);
   const result = spawnSync("clang", clangArgs, { stdio: "inherit" });
   if (result.status !== 0) {
     console.error(`[prebundle] Failed to compile ${arch} slice`);

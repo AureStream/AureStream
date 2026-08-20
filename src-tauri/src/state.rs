@@ -325,7 +325,23 @@ fn write_json<T: Serialize>(path: &PathBuf, value: &T) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
     }
-    fs::write(path, raw).map_err(|e| format!("write {}: {e}", path.display()))
+    fs::write(path, raw).map_err(|e| format!("write {}: {e}", path.display()))?;
+
+    // Restrict to owner read/write. This is shared by every JSON file this
+    // module persists, including `auth-session.json` which holds a live
+    // access token and a 30-day refresh token — on a shared machine with a
+    // permissive umask, a plain `fs::write` can leave that file group/world
+    // readable. Tightening permissions on the other outputs (the
+    // subscription cache) is harmless, so this is applied unconditionally
+    // here rather than gating on the specific session-file path.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("chmod {}: {e}", path.display()))?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
