@@ -8,12 +8,11 @@ AureStream is a cross-platform proxy client (Tauri v2 + React + **Xray-core** si
 
 **Source of truth**: code under `src/`, `src-tauri/`, `crates/`.  
 **Wiki index**: [`docs/index.md`](./docs/index.md) — prefer code when wiki pages lag.  
-**TUN roadmap**: [`docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md`](./docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md)
+**TUN implementation notes**: [`docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md`](./docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md) (design record; TUN ships for Linux/Windows/macOS — see "Current product surface" below)
 
 ### Hard rules
 
 - **New features only in the v2 tree**: root `src/`, `src-tauri/`, and `crates/aurestream-*`.
-- **`legacy/` is archived / read-only reference.** Do **not** fix bugs or add features there.
 - **Default capture path = system proxy**. TUN is optional (`mode: "tun"`, Home 虚拟网卡). Elevated paths: **Linux** systemd `aurestream-tun.socket` + helper (install once via deb/rpm / `scripts/install-linux-tun-helper.sh`), **Windows** SCM `tun-service` (UAC once), **macOS** SMJobBless `com.root.aurestream.helper` (signed bundle; `pnpm pre-bundle`). Without helper/service, TUN start returns a clear install error. AppImage does not install `/usr` helpers. Windows: `pnpm build-tun` + `wintun.dll`. macOS: plain `tauri dev` without blessed helper cannot TUN.
 - Engine config dialect lives in `aurestream-engine` (`build_config`); `aurestream-config` only decodes → `ProxyNode`.
 
@@ -76,7 +75,6 @@ AureStream/
     aurestream-engine/            # Engine trait + XrayEngine + state machine
     aurestream-platform-proxy/    # OS system proxy set/clear
     aurestream-platform-tun/      # TUN: Linux helper + Windows tun-service + macOS SMJobBless
-  legacy/                         # Pre-v2 monolith (unmaintained)
   scripts/download-binaries.ts    # Fetch Xray as aurestream-core
   scripts/install-linux-tun-helper.sh
   docs/
@@ -144,8 +142,7 @@ UI copy: Chinese-only (no i18n).
 | Auth / session | `src/contexts/AuthContext.tsx`, `crates/aurestream-api-client` |
 | System proxy | `crates/aurestream-platform-proxy` |
 | Sidecar binary | `scripts/download-binaries.ts`, `src-tauri/binaries/` |
-| TUN implementation | `crates/aurestream-platform-tun`, `src-tauri/src/commands/engine.rs`, `crates/aurestream-engine/src/xray/config.rs`; roadmap in `docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md` |
-| Pre-v2 reference only | `legacy/` (do not maintain) |
+| TUN implementation | `crates/aurestream-platform-tun`, `src-tauri/src/commands/engine.rs`, `crates/aurestream-engine/src/xray/config.rs`; design record in `docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md` |
 
 ## Build notes
 

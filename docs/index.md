@@ -2,7 +2,7 @@
 
 AureStream 当前主线为 **v2**：Tauri v2 + React + **Xray-core** 侧车。
 
-实现与约定以代码及 [`AGENTS.md`](../AGENTS.md) 为准；旧应用在 `legacy/`，已归档不维护。
+实现与约定以代码及 [`AGENTS.md`](../AGENTS.md) 为准。
 
 ## 权威入口
 
@@ -38,7 +38,6 @@ AureStream/
 │   ├── aurestream-engine/
 │   ├── aurestream-platform-proxy/
 │   └── aurestream-platform-tun/
-├── legacy/                    # 归档的 pre-v2 树（勿改功能）
 └── scripts/
     ├── download-binaries.ts   # 拉 Xray 侧车
     ├── ldd-static-safe.sh     # Linux CI

@@ -1,6 +1,6 @@
 # AureStream v2 架构设计
 
-本文描述 AureStream v2 当前实现的架构边界、运行时流程和扩展约束。实现与文档冲突时，以根目录 `src/`、`src-tauri/` 和 `crates/aurestream-*` 下的代码为准；`legacy/` 仅供历史参考。
+本文描述 AureStream v2 当前实现的架构边界、运行时流程和扩展约束。实现与文档冲突时，以根目录 `src/`、`src-tauri/` 和 `crates/aurestream-*` 下的代码为准。
 
 ## 1. 设计目标
 
@@ -213,7 +213,7 @@ cargo test --workspace
 
 ## 12. 架构约束清单
 
-- 新功能仅进入 v2 目录；`legacy/` 不接受维护性改动。
+- 新功能仅进入 v2 目录（`src/`、`src-tauri/`、`crates/aurestream-*`）。
 - 前端和 `aurestream-config` 不生成内核 JSON。
 - 所有引擎生命周期变更必须经过状态机。
 - 系统代理失败或停止时必须尽力清除代理。
