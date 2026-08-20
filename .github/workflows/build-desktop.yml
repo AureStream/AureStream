@@ -154,6 +154,7 @@ jobs:
 
       - name: Import AureStream code-signing certificate (macOS)
         if: runner.os == 'macOS'
+        timeout-minutes: 5
         env:
           AURESTREAM_CODESIGN_P12_BASE64: ${{ secrets.AURESTREAM_CODESIGN_P12_BASE64 }}
           AURESTREAM_CODESIGN_P12_PASSWORD: ${{ secrets.AURESTREAM_CODESIGN_P12_PASSWORD }}
@@ -168,17 +169,17 @@ jobs:
           security import "$RUNNER_TEMP/aurestream-codesign.p12" -k "$KEYCHAIN_PATH" -P "$AURESTREAM_CODESIGN_P12_PASSWORD" -T /usr/bin/codesign -A
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/[\" ]//g')
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          # Self-signed cert: `security find-identity -p codesigning` (which
-          # tauri-action's own signing step uses to resolve the identity)
-          # only lists identities trusted for the codeSign policy, even
-          # though plain `codesign --sign` works without this. Extract the
-          # cert and trust it locally so both paths agree.
-          openssl pkcs12 -in "$RUNNER_TEMP/aurestream-codesign.p12" -clcerts -nokeys \
-            -passin "pass:$AURESTREAM_CODESIGN_P12_PASSWORD" \
-            -out "$RUNNER_TEMP/aurestream-codesign.crt"
-          security add-trusted-cert -p codeSign -r trustRoot -k "$KEYCHAIN_PATH" "$RUNNER_TEMP/aurestream-codesign.crt"
-          rm -f "$RUNNER_TEMP/aurestream-codesign.crt"
           rm -f "$RUNNER_TEMP/aurestream-codesign.p12"
+          # NOTE: deliberately not calling `security add-trusted-cert` here —
+          # on a headless runner it can block waiting for a GUI authorization
+          # prompt that will never come (confirmed: hung a CI run for 10+
+          # minutes). `codesign --sign "AureStream Code Signing"` works fine
+          # without it (verified locally, and by pnpm pre-bundle in the next
+          # step) since it matches by name/hash directly, not via the
+          # trust-filtered `security find-identity -p codesigning` list. If
+          # tauri-action's own signing step can't resolve the identity for
+          # the same reason, that will surface as a clear failure below
+          # rather than a silent hang.
 
       - name: Build macOS privileged helper
         if: runner.os == 'macOS'
