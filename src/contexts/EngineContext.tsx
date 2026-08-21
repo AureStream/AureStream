@@ -112,6 +112,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     async (nodeTagOrOpts?: string | StartOptions) => {
+      // Fresh user-initiated attempt: always eligible for its own dialog, even
+      // if the backend errors before engine.state ever reaches "starting"
+      // (e.g. node_not_found) — that path never fires the dedup-reset effect.
+      lastDialogKey.current = null
       try {
         await engineStart(nodeTagOrOpts)
       } catch (err) {
@@ -122,6 +126,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   )
 
   const stop = useCallback(async () => {
+    lastDialogKey.current = null
     try {
       await engineStop()
     } catch (err) {
@@ -131,6 +136,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
 
   const selectNode = useCallback(
     async (nodeTag: string) => {
+      lastDialogKey.current = null
       try {
         await engineSelectNode(nodeTag)
       } catch (err) {

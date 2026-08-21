@@ -42,6 +42,10 @@ const TRAFFIC_REPORT_TIMEOUT: Duration = Duration::from_secs(15);
 #[serde(rename_all = "camelCase")]
 struct SelectionFile {
     selected_node: Option<String>,
+    /// Stable endpoint identity of the selection; survives provider renames.
+    /// Absent in files written before this field existed.
+    #[serde(default)]
+    selected_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +119,8 @@ impl TrafficAccounting {
 pub struct EngineAppState {
     engine: SharedEngine,
     selected_node: Mutex<Option<String>>,
+    /// Stable identity of the selection; recovers it when the tag drifts.
+    selected_key: Mutex<Option<String>>,
     /// Active OS capture path (Off / SystemProxy / Tun).
     capture_mode: Mutex<CaptureMode>,
     /// Correlates one start/cleanup transaction in app and helper logs.
@@ -169,7 +175,8 @@ impl EngineAppState {
         fs::create_dir_all(&dir).map_err(|e| format!("create app data dir: {e}"))?;
         let selection_path = dir.join(SELECTION_FILE);
         let runtime_session_path = dir.join(RUNTIME_SESSION_FILE);
-        let selected = read_selection(&selection_path)?;
+        let selection = read_selection(&selection_path)?;
+        let selected = selection.selected_node;
         let initial = EngineStatePayload {
             state: "idle".into(),
             reason: None,
@@ -182,6 +189,7 @@ impl EngineAppState {
         Ok(Self {
             engine,
             selected_node: Mutex::new(selected),
+            selected_key: Mutex::new(selection.selected_key),
             capture_mode: Mutex::new(CaptureMode::Off),
             session_id: Mutex::new(None),
             traffic: Mutex::new(TrafficAccounting::default()),
@@ -199,15 +207,36 @@ impl EngineAppState {
         self.selected_node.lock().ok().and_then(|g| g.clone())
     }
 
-    pub fn set_selected_node(&self, tag: Option<String>) -> Result<(), String> {
+    pub fn selected_key(&self) -> Option<String> {
+        self.selected_key.lock().ok().and_then(|g| g.clone())
+    }
+
+    /// Persist a selection by its current tag *and* stable identity, so a later
+    /// provider rename can still be resolved back to the same node.
+    pub fn set_selected(&self, node: &ProxyNode) -> Result<(), String> {
+        let tag = node.tag.clone();
+        let key = node_identity(node);
         {
             let mut guard = self
                 .selected_node
                 .lock()
                 .map_err(|_| "engine selection lock poisoned".to_string())?;
-            *guard = tag.clone();
+            *guard = Some(tag.clone());
         }
-        write_selection(&self.selection_path, &SelectionFile { selected_node: tag })
+        {
+            let mut guard = self
+                .selected_key
+                .lock()
+                .map_err(|_| "engine selection lock poisoned".to_string())?;
+            *guard = Some(key.clone());
+        }
+        write_selection(
+            &self.selection_path,
+            &SelectionFile {
+                selected_node: Some(tag),
+                selected_key: Some(key),
+            },
+        )
     }
 
     pub fn last_payload(&self) -> EngineStatePayload {
@@ -426,14 +455,12 @@ pub struct EngineStatePayload {
     pub capture_mode: String,
 }
 
-fn read_selection(path: &PathBuf) -> Result<Option<String>, String> {
+fn read_selection(path: &PathBuf) -> Result<SelectionFile, String> {
     if !path.exists() {
-        return Ok(None);
+        return Ok(SelectionFile::default());
     }
     let raw = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    let file: SelectionFile =
-        serde_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    Ok(file.selected_node)
+    serde_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))
 }
 
 fn write_selection(path: &PathBuf, value: &SelectionFile) -> Result<(), String> {
@@ -529,6 +556,21 @@ fn sanitize_tag_like(name: &str) -> String {
     cleaned.trim_matches('-').to_string()
 }
 
+/// Stable identity for a node across subscription refreshes.
+///
+/// Providers commonly embed volatile data in the display name (e.g. live speed,
+/// `电信-60.48mb/s`), so `tag`/`name` cannot remember a selection — every sync
+/// renames the node and the stored tag stops matching, surfacing as
+/// `node_not_found`. The endpoint plus credential stays put across renames.
+fn node_identity(node: &ProxyNode) -> String {
+    let secret = node
+        .uuid
+        .as_deref()
+        .or(node.password.as_deref())
+        .unwrap_or("");
+    format!("{}|{}|{}|{}", node.protocol, node.server, node.port, secret)
+}
+
 fn find_proxy_node(nodes: &[ProxyNode], tag: &str) -> Option<ProxyNode> {
     nodes.iter().find(|n| n.tag == tag).cloned().or_else(|| {
         nodes
@@ -542,7 +584,31 @@ fn find_proxy_node(nodes: &[ProxyNode], tag: &str) -> Option<ProxyNode> {
     })
 }
 
-fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, String> {
+/// `node_key`: stable identity of a *remembered* selection, used only as a
+/// How a node reference reached us, which decides what recovery is allowed.
+enum NodeQuery<'a> {
+    /// The user just picked this tag in the UI — it is authoritative, so a miss
+    /// must surface as an error instead of silently connecting elsewhere.
+    Explicit(&'a str),
+    /// A selection remembered from a previous session. Providers rename nodes
+    /// freely (live speed embedded in the name), so this may need recovery.
+    Remembered {
+        tag: &'a str,
+        /// Stable identity; absent in selections stored before it existed.
+        key: Option<&'a str>,
+    },
+}
+
+impl NodeQuery<'_> {
+    fn tag(&self) -> &str {
+        match self {
+            Self::Explicit(tag) => tag,
+            Self::Remembered { tag, .. } => tag,
+        }
+    }
+}
+
+fn resolve_proxy_node(subs: &SubsState, query: NodeQuery<'_>) -> Result<ProxyNode, String> {
     let snap = subs.snapshot()?;
     let active_id = snap
         .active_id
@@ -556,15 +622,48 @@ fn resolve_proxy_node(subs: &SubsState, node_tag: &str) -> Result<ProxyNode, Str
     if nodes.is_empty() {
         return Err("no_nodes".into());
     }
-    find_proxy_node(&nodes, node_tag)
+    pick_node(&nodes, query)
+}
+
+/// Pure selection step of [`resolve_proxy_node`], split out so the recovery
+/// rules can be tested without a live `SubsState`. `nodes` must be non-empty.
+fn pick_node(nodes: &[ProxyNode], query: NodeQuery<'_>) -> Result<ProxyNode, String> {
+    let node_tag = query.tag();
+
+    find_proxy_node(nodes, node_tag)
         .or_else(|| {
-            // Deterministic default: first decoded node when tag is empty.
+            // Tag drifted (provider renamed the node). Recover via the stable
+            // endpoint identity; callers re-persist the fresh tag afterwards.
+            let NodeQuery::Remembered { key: Some(key), .. } = query else {
+                return None;
+            };
+            if key.is_empty() {
+                return None;
+            }
+            let matched = nodes.iter().find(|n| node_identity(n) == key).cloned()?;
+            log::info!(
+                "resolve_proxy_node: tag '{node_tag}' no longer present, recovered by identity -> '{}'",
+                matched.tag
+            );
+            Some(matched)
+        })
+        .or_else(|| {
+            // Self-heal an unresolvable remembered selection: an empty tag, or
+            // a node that is gone with no stored identity (selection files
+            // written before `selectedKey` existed). Erroring here strands the
+            // user for good — the home screen only exposes the node list once
+            // connected, so they could never pick a replacement.
+            if !matches!(query, NodeQuery::Remembered { .. }) {
+                return None;
+            }
             if node_tag.is_empty() {
                 log::warn!("resolve_proxy_node: tag empty, falling back to first node");
-                nodes.first().cloned()
             } else {
-                None
+                log::warn!(
+                    "resolve_proxy_node: remembered tag '{node_tag}' unresolvable, falling back to first node"
+                );
             }
+            nodes.first().cloned()
         })
         .ok_or_else(|| format!("node_not_found:{node_tag}"))
 }
@@ -795,8 +894,18 @@ async fn cleanup_runtime(app: &AppHandle, engine_state: &EngineAppState) -> Resu
         // Always attempt TUN stop — platform_tun::stop_tun is idempotent.
         // Linux uses a control FIFO (no signals to root); Win/mac use service/XPC.
         // Never skip this when the runtime marker is missing — that left TUN up.
-        if let Err(e) = platform_tun::stop_tun() {
-            errors.push(e.to_string());
+        //
+        // Exception: if the elevated helper isn't installed at all, there is
+        // nothing to signal — treat as already-clean. Otherwise a leftover
+        // stale marker plus a never-installed/removed helper wedges every
+        // future start behind an unresolvable "can't reach helper" error,
+        // since a failed cleanup here never clears the marker (see
+        // finish_capture_cleanup) and start_with_node bails out before
+        // start_steps whenever cleanup fails.
+        if platform_tun::probe() != TunServiceState::NotInstalled {
+            if let Err(e) = platform_tun::stop_tun() {
+                errors.push(e.to_string());
+            }
         }
         if let Err(e) = engine_state.engine.finish_external_stop() {
             errors.push(e.to_string());
@@ -858,9 +967,14 @@ pub fn reconcile_stale_runtime(engine_state: &EngineAppState) {
 
     if persisted == Some(CaptureMode::Tun) || tun_running || marker_unreadable {
         log::info!("startup reconciling stale TUN runtime");
-        if let Err(e) = platform_tun::stop_tun() {
-            failed = true;
-            log::warn!("startup stale TUN cleanup failed: {e}");
+        // See the matching guard in cleanup_runtime: a never-installed/removed
+        // helper has nothing to stop, and treating that as a failure here
+        // would keep re-persisting the stale marker across every relaunch.
+        if platform_tun::probe() != TunServiceState::NotInstalled {
+            if let Err(e) = platform_tun::stop_tun() {
+                failed = true;
+                log::warn!("startup stale TUN cleanup failed: {e}");
+            }
         }
     }
 
@@ -1130,12 +1244,12 @@ pub async fn engine_select_node(
     }
 
     // Validate node exists in decoded cache (before taking the gate).
-    let node = resolve_proxy_node(&subs, &tag)?;
+    let node = resolve_proxy_node(&subs, NodeQuery::Explicit(&tag))?;
     let subscription_id = active_subscription_id(&subs)?;
 
     let _guard = engine.gate.lock().await;
 
-    engine.set_selected_node(Some(node.tag.clone()))?;
+    engine.set_selected(&node)?;
     log::info!("select_node tag={}", node.tag);
 
     let was_running = matches!(engine.engine.state(), EngineState::Running)
@@ -1171,15 +1285,28 @@ pub async fn engine_start(
 ) -> Result<EngineStatePayload, String> {
     require_auth(&auth)?;
 
-    let requested = node_tag
+    let explicit = node_tag
         .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
+        .filter(|t| !t.is_empty());
+    // Only a remembered selection may recover; an explicit tag from the UI
+    // must resolve on its own.
+    let remembered_key = engine.selected_key();
+    let requested = explicit
+        .clone()
         .or_else(|| engine.selected_node())
         .unwrap_or_default();
+    let query = if explicit.is_some() {
+        NodeQuery::Explicit(&requested)
+    } else {
+        NodeQuery::Remembered {
+            tag: &requested,
+            key: remembered_key.as_deref(),
+        }
+    };
 
-    let node = resolve_proxy_node(&subs, &requested)?;
+    let node = resolve_proxy_node(&subs, query)?;
     let subscription_id = active_subscription_id(&subs)?;
-    engine.set_selected_node(Some(node.tag.clone()))?;
+    engine.set_selected(&node)?;
 
     let capture = match mode.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(m) => CaptureMode::parse(m),
@@ -1281,9 +1408,16 @@ pub async fn tray_start_system(app: &AppHandle) -> Result<(), String> {
     require_auth(&auth)?;
 
     let requested = engine.selected_node().unwrap_or_default();
-    let node = resolve_proxy_node(&subs, &requested)?;
+    let remembered_key = engine.selected_key();
+    let node = resolve_proxy_node(
+        &subs,
+        NodeQuery::Remembered {
+            tag: &requested,
+            key: remembered_key.as_deref(),
+        },
+    )?;
     let subscription_id = active_subscription_id(&subs)?;
-    engine.set_selected_node(Some(node.tag.clone()))?;
+    engine.set_selected(&node)?;
 
     let _guard = engine.gate.lock().await;
     start_with_node(
@@ -1313,9 +1447,16 @@ pub async fn tray_start_tun(app: &AppHandle) -> Result<(), String> {
     require_auth(&auth)?;
 
     let requested = engine.selected_node().unwrap_or_default();
-    let node = resolve_proxy_node(&subs, &requested)?;
+    let remembered_key = engine.selected_key();
+    let node = resolve_proxy_node(
+        &subs,
+        NodeQuery::Remembered {
+            tag: &requested,
+            key: remembered_key.as_deref(),
+        },
+    )?;
     let subscription_id = active_subscription_id(&subs)?;
-    engine.set_selected_node(Some(node.tag.clone()))?;
+    engine.set_selected(&node)?;
 
     let _guard = engine.gate.lock().await;
     start_with_node(
@@ -1363,6 +1504,7 @@ mod tests {
         EngineAppState {
             engine: std::sync::Arc::new(XrayEngine::new()),
             selected_node: Mutex::new(None),
+            selected_key: Mutex::new(None),
             capture_mode: Mutex::new(CaptureMode::Off),
             session_id: Mutex::new(None),
             traffic: Mutex::new(TrafficAccounting::default()),
@@ -1412,6 +1554,99 @@ mod tests {
         engine.finish_capture_cleanup(true);
         assert_eq!(engine.cleanup_mode(), CaptureMode::Off);
         assert!(!engine.runtime_session_path.exists());
+    }
+
+    fn node_with_uuid(tag: &str, server: &str, uuid: &str) -> ProxyNode {
+        let mut n = ProxyNode::new(tag, "vless", server, 443);
+        n.uuid = Some(uuid.into());
+        n
+    }
+
+    /// A renamed node is recovered by identity, keeping the same endpoint.
+    #[test]
+    fn remembered_selection_recovers_renamed_node_by_identity() {
+        let renamed = node_with_uuid("电信-69.68mb/s", "example.com", "uuid-1");
+        let nodes = vec![node_with_uuid("联通-0.52mb/s", "other.example", "uuid-2"), renamed];
+        let key = node_identity(&node_with_uuid("电信-60.48mb/s", "example.com", "uuid-1"));
+
+        let picked = pick_node(
+            &nodes,
+            NodeQuery::Remembered {
+                tag: "电信-60.48mb/s",
+                key: Some(&key),
+            },
+        )
+        .unwrap();
+        assert_eq!(picked.tag, "电信-69.68mb/s");
+    }
+
+    /// The deadlock this guards: a legacy selection file has no identity, the
+    /// remembered node is gone, and the home screen only exposes the node list
+    /// once connected — so erroring would leave the user permanently stuck.
+    #[test]
+    fn remembered_selection_without_key_falls_back_instead_of_erroring() {
+        let nodes = vec![
+            node_with_uuid("电信-69.68mb/s", "example.com", "uuid-1"),
+            node_with_uuid("联通-0.52mb/s", "other.example", "uuid-2"),
+        ];
+
+        let picked = pick_node(
+            &nodes,
+            NodeQuery::Remembered {
+                tag: "电信-60.48mb/s",
+                key: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(picked.tag, "电信-69.68mb/s");
+    }
+
+    /// An explicit pick must never silently land on a different node.
+    #[test]
+    fn explicit_pick_never_falls_back() {
+        let nodes = vec![node_with_uuid("电信-69.68mb/s", "example.com", "uuid-1")];
+
+        assert_eq!(
+            pick_node(&nodes, NodeQuery::Explicit("已删除的节点")),
+            Err("node_not_found:已删除的节点".into())
+        );
+    }
+
+    /// Providers that embed live speed in the node name rename every node on
+    /// each sync; a selection remembered only by tag would break every time.
+    #[test]
+    fn selection_survives_provider_rename_via_stable_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine_state_at(dir.path());
+
+        let mut before = ProxyNode::new("电信-60.48mb/s", "vless", "example.com", 443);
+        before.uuid = Some("uuid-1".into());
+        engine.set_selected(&before).unwrap();
+
+        // Same endpoint, new display name after a subscription refresh.
+        let mut after = ProxyNode::new("电信-69.68mb/s", "vless", "example.com", 443);
+        after.uuid = Some("uuid-1".into());
+        let other = ProxyNode::new("联通-0.52mb/s", "vless", "other.example", 443);
+        let nodes = vec![other, after.clone()];
+
+        // Tag alone no longer matches.
+        assert!(find_proxy_node(&nodes, &engine.selected_node().unwrap()).is_none());
+
+        // The persisted identity still points at the same node.
+        let key = engine.selected_key().unwrap();
+        let recovered = nodes.iter().find(|n| node_identity(n) == key).unwrap();
+        assert_eq!(recovered.tag, after.tag);
+    }
+
+    #[test]
+    fn selection_file_without_key_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SELECTION_FILE);
+        fs::write(&path, r#"{"selectedNode":"n1"}"#).unwrap();
+
+        let loaded = read_selection(&path).unwrap();
+        assert_eq!(loaded.selected_node.as_deref(), Some("n1"));
+        assert_eq!(loaded.selected_key, None);
     }
 
     #[test]
