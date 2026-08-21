@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { getVersion } from "@tauri-apps/api/app"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
 import NodeFlag from "@/components/NodeFlag"
+import { formatAppVersionLabel } from "@/lib/app-version"
 import {
   loadProxyPrefs,
   setEnableTunPref,
@@ -60,6 +62,7 @@ export default function HomePage() {
 
   const [smartRouting, setSmartRouting] = useState(true)
   const [enableTun, setEnableTun] = useState(false)
+  const [appVersion, setAppVersion] = useState("")
   // IPv6 not wired yet — keep visible but disabled off.
   const enableIpv6 = false
 
@@ -67,6 +70,19 @@ export default function HomePage() {
     const prefs = loadProxyPrefs()
     setSmartRouting(prefs.smartRouting)
     setEnableTun(prefs.enableTun)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void getVersion().then(
+      (version) => {
+        if (!cancelled) setAppVersion(formatAppVersionLabel(version))
+      },
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Reflect engine capture mode when running (tray may have switched).
@@ -433,8 +449,14 @@ export default function HomePage() {
                 <span className="text-[11px] font-medium tracking-wide text-[#9aa0a6]">
                   AureStream
                 </span>
-                <span className="text-[11px] text-[#d0d4da]">·</span>
-                <span className="text-[11px] font-medium tabular-nums text-[#b0b8c4]">v0.3.5</span>
+                {appVersion ? (
+                  <>
+                    <span className="text-[11px] text-[#d0d4da]">·</span>
+                    <span className="text-[11px] font-medium tabular-nums text-[#b0b8c4]">
+                      {appVersion}
+                    </span>
+                  </>
+                ) : null}
               </div>
               <div className="h-px flex-1 bg-[#eceef1]" />
             </div>
