@@ -318,13 +318,22 @@ fn xray_dns_config_smart_routing() {
     let servers = dns["servers"]
         .as_array()
         .expect("dns.servers must be array");
-    assert_eq!(servers.len(), 4, "Should have 4 DNS servers");
+    assert_eq!(servers.len(), 5, "Should have intranet + 2 CN + 2 DoH servers");
 
-    // Verify first DNS server (domestic for CN domains)
-    let first_dns = &servers[0];
+    let intranet = &servers[0];
+    assert_eq!(intranet["tag"], "dns-intranet");
+    assert_eq!(intranet["address"], "localhost");
+    assert_eq!(intranet["skipFallback"], true);
+    let intranet_domains = intranet["domains"].as_array().expect("intranet domains");
+    assert!(intranet_domains.iter().any(|d| d == "geosite:private"));
+    assert!(intranet_domains.iter().any(|d| d == "domain:lan"));
+    assert!(intranet_domains.iter().any(|d| d == "domain:local"));
+
+    // Domestic DNS for CN domains
+    let first_dns = &servers[1];
     assert_eq!(
         first_dns["address"], "119.29.29.29",
-        "First DNS should be 119.29.29.29"
+        "First public DNS should be 119.29.29.29"
     );
     assert_eq!(first_dns["port"], 53);
     assert_eq!(first_dns["domains"][0], "geosite:cn");
@@ -332,26 +341,24 @@ fn xray_dns_config_smart_routing() {
     assert_eq!(first_dns["skipFallback"], true);
     assert_eq!(first_dns["timeoutMs"], 1500);
 
-    // Verify second DNS server (also for CN domains)
-    let second_dns = &servers[1];
+    let second_dns = &servers[2];
     assert_eq!(
         second_dns["address"], "223.5.5.5",
-        "Second DNS should be 223.5.5.5"
+        "Second public DNS should be 223.5.5.5"
     );
     assert_eq!(second_dns["domains"][0], "geosite:cn");
     assert_eq!(second_dns["skipFallback"], true);
     assert_eq!(second_dns["timeoutMs"], 1500);
 
-    // Verify fallback DNS servers (for non-CN domains like Google, YouTube)
     assert_eq!(
-        servers[2]["address"], "https://cloudflare-dns.com/dns-query",
-        "Third DNS should use Cloudflare DoH"
+        servers[3]["address"], "https://cloudflare-dns.com/dns-query",
+        "DoH should use Cloudflare"
     );
     assert_eq!(
-        servers[3]["address"], "https://dns.google/dns-query",
-        "Fourth DNS should use Google DoH"
+        servers[4]["address"], "https://dns.google/dns-query",
+        "DoH should use Google"
     );
-    for server in &servers[2..] {
+    for server in &servers[3..] {
         assert_eq!(server["tag"], "dns-proxy");
         assert_eq!(server["timeoutMs"], 3000);
     }
@@ -383,18 +390,20 @@ fn xray_dns_config_system_proxy_mode() {
         .expect("dns.servers must be array");
     assert_eq!(
         servers.len(),
-        4,
-        "System proxy mode should have 4 DNS servers"
+        5,
+        "System proxy mode should have intranet + 2 CN + 2 DoH servers"
     );
 
-    // Should use the same smart routing DNS config
-    assert_eq!(servers[0]["address"], "119.29.29.29");
-    assert_eq!(servers[1]["address"], "223.5.5.5");
+    assert_eq!(servers[0]["address"], "localhost");
+    assert_eq!(servers[0]["tag"], "dns-intranet");
+    assert_eq!(servers[0]["skipFallback"], true);
+    assert_eq!(servers[1]["address"], "119.29.29.29");
+    assert_eq!(servers[2]["address"], "223.5.5.5");
     assert_eq!(
-        servers[2]["address"],
+        servers[3]["address"],
         "https://cloudflare-dns.com/dns-query"
     );
-    assert_eq!(servers[3]["address"], "https://dns.google/dns-query");
+    assert_eq!(servers[4]["address"], "https://dns.google/dns-query");
     assert_eq!(dns["enableParallelQuery"], false);
     assert_eq!(dns["serveStale"], true);
     assert_eq!(dns["serveExpiredTTL"], 3600);

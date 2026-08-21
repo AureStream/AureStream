@@ -76,6 +76,16 @@ pub fn start_tun(
                     ));
                 }
             }
+            let (original_dns, suffixes) = tun_ops::snapshot_system_dns();
+            match crate::dns_policy::patch_tun_intranet_dns(&config, &original_dns, &suffixes) {
+                Ok(true) => log::info!(
+                    "[tun/mac] patched intranet DNS private={:?} suffixes={:?}",
+                    crate::dns_policy::private_dns_servers(&original_dns),
+                    suffixes
+                ),
+                Ok(false) => log::debug!("[tun/mac] intranet DNS patch unchanged"),
+                Err(e) => log::warn!("[tun/mac] intranet DNS patch skipped: {e}"),
+            }
         }
         Err(e) => {
             return Err(TunError::failed(

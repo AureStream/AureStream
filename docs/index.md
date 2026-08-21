@@ -11,6 +11,7 @@ AureStream 当前主线为 **v2**：Tauri v2 + React + **Xray-core** 侧车。
 | [AGENTS.md](../AGENTS.md) | Agent / 开发者仓库约定（以代码为准） |
 | [README.md](../README.md) | 项目简介与快速上手 |
 | [架构设计](./architecture.md) | v2 分层、内核抽象、运行时流程、权限边界与故障恢复 |
+| [系统代理与 TUN：捕获与 DNS](./capture-modes.md) | 两种捕获模式的流量路径、Xray DNS 分流、三端系统 DNS |
 | [三端虚拟网卡（TUN）实现计划](./superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md) | Win/macOS/Linux TUN 的设计背景与实施记录 |
 
 ## 技术栈概览（v2）

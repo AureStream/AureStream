@@ -11,6 +11,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 mod config_patch;
+pub(crate) mod dns_policy;
 
 /// Installation / readiness of the elevated TUN helper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

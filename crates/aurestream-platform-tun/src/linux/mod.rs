@@ -97,6 +97,19 @@ pub fn start_tun(
             Vec::new()
         }
     };
+    let search_suffixes = capture_search_domains(&iface);
+    let config = config_path
+        .to_str()
+        .ok_or_else(|| TunError::failed("bad_path", "config path is not UTF-8"))?;
+    match crate::dns_policy::patch_tun_intranet_dns(config, &original_dns, &search_suffixes) {
+        Ok(true) => log::info!(
+            "[tun/linux] patched intranet DNS private={:?} suffixes={:?}",
+            crate::dns_policy::private_dns_servers(&original_dns),
+            search_suffixes
+        ),
+        Ok(false) => log::debug!("[tun/linux] intranet DNS patch unchanged"),
+        Err(e) => log::warn!("[tun/linux] intranet DNS patch skipped: {e}"),
+    }
 
     let api_port = parse_api_port_from_config(config_path).unwrap_or(10809);
     let gateway = if dns_hijack.is_empty() {
@@ -104,9 +117,6 @@ pub fn start_tun(
     } else {
         dns_hijack.to_string()
     };
-    let config = config_path
-        .to_str()
-        .ok_or_else(|| TunError::failed("bad_path", "config path is not UTF-8"))?;
 
     log::info!(
         "[tun/linux] socket start-tun helper={} config={} api={} dns={} iface={}",
@@ -195,6 +205,18 @@ fn run_ip(args: &[&str]) -> Result<String, String> {
         .output()
         .map_err(|e| format!("ip {} failed: {e}", args.join(" ")))?;
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn capture_search_domains(iface: &str) -> Vec<String> {
+    let out = std::process::Command::new("resolvectl")
+        .args(["domain", iface])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {
+            crate::dns_policy::parse_search_domains(&String::from_utf8_lossy(&o.stdout))
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn capture_original_dns(iface: &str) -> Result<String, String> {

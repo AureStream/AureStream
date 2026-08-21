@@ -216,7 +216,7 @@ pub fn build_xray_config_value_with_options(
         if opts.smart_routing {
             rules.push(json!({
                 "type": "field",
-                "inboundTag": ["dns-direct"],
+                "inboundTag": ["dns-intranet", "dns-direct"],
                 "outboundTag": "direct"
             }));
         }
@@ -450,6 +450,21 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
             "dns.google": "8.8.8.8"
         },
         "servers": [
+            // LAN / split-horizon names via the OS resolver (system proxy) or a
+            // later TUN patch that rewrites this to tcp+local://<RFC1918 DNS>.
+            // https://xtls.github.io/config/dns.html — `localhost` + domains.
+            {
+                "tag": "dns-intranet",
+                "address": "localhost",
+                "domains": [
+                    "geosite:private",
+                    "domain:lan",
+                    "domain:local",
+                    "domain:home.arpa"
+                ],
+                "skipFallback": true,
+                "timeoutMs": 1000
+            },
             // Domestic DNS for CN domains ONLY (with expectedIPs validation)
             {
                 "tag": "dns-direct",

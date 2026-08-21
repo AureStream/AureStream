@@ -282,7 +282,7 @@ fn start_session(
     }
 
     if !iface.is_empty() {
-        if let Err(e) = apply_dns(iface, dns) {
+        if let Err(e) = apply_dns(iface, dns, original_dns) {
             let _ = child.kill();
             let _ = child.wait();
             let _ = restore_dns(iface, original_dns);
@@ -395,24 +395,52 @@ fn wait_api_ready(port: u16, child: &mut Child) -> bool {
     false
 }
 
-fn apply_dns(iface: &str, gateway: &str) -> Result<(), String> {
-    let status = Command::new("resolvectl")
-        .args(["dns", iface, gateway])
+const TUN_IFACE: &str = "utun233";
+
+fn apply_dns(iface: &str, gateway: &str, original: &[String]) -> Result<(), String> {
+    // Prefer per-link DNS on the TUN iface (Xray tun.html: Linux needs system
+    // tools). `domain ~.` on utun233 sends unmatched names into the tunnel
+    // without stealing LAN suffixes from the physical NIC.
+    let tun_ok = Command::new("resolvectl")
+        .args(["dns", TUN_IFACE, gateway])
         .status()
-        .map_err(|e| format!("resolvectl dns: {e}"))?;
-    if !status.success() {
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if tun_ok {
+        let _ = Command::new("resolvectl")
+            .args(["domain", TUN_IFACE, "~."])
+            .status();
+    }
+
+    let physical_servers = {
+        let private = crate::dns_policy::private_dns_servers(original);
+        if private.is_empty() {
+            vec![gateway.to_string()]
+        } else {
+            private
+        }
+    };
+    let mut physical = Command::new("resolvectl");
+    physical.arg("dns").arg(iface);
+    for server in &physical_servers {
+        physical.arg(server);
+    }
+    let physical_ok = physical.status().map(|s| s.success()).unwrap_or(false);
+    if !physical_ok && !tun_ok {
         return Err(format!("dns-override failed for iface={iface}"));
     }
-    // Send all lookups through this link so stub/cache cannot keep using a
-    // previous (possibly poisoned) answer after the hijack.
-    let _ = Command::new("resolvectl")
-        .args(["domain", iface, "~."])
-        .status();
+    if !tun_ok {
+        // Fallback: unmatched queries must still enter TUN via the physical NIC.
+        let _ = Command::new("resolvectl")
+            .args(["domain", iface, "~."])
+            .status();
+    }
     flush_resolver_caches();
     Ok(())
 }
 
 fn restore_dns(iface: &str, original: &[String]) {
+    let _ = Command::new("resolvectl").args(["revert", TUN_IFACE]).status();
     if iface.is_empty() {
         return;
     }

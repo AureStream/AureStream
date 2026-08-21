@@ -234,6 +234,28 @@ pub fn start_tun(
                     ));
                 }
             }
+            let original_dns: Vec<String> = dns::enumerate_interfaces()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|it| it.alias == iface || it.alias.eq_ignore_ascii_case(&iface))
+                .flat_map(|it| {
+                    dns::parse_nameserver_value(&it.current_dns)
+                        .into_iter()
+                        .map(ToString::to_string)
+                })
+                .collect();
+            match crate::dns_policy::patch_tun_intranet_dns(
+                &config_path.to_string_lossy(),
+                &original_dns,
+                &[],
+            ) {
+                Ok(true) => log::info!(
+                    "[tun/win] patched intranet DNS private={:?}",
+                    crate::dns_policy::private_dns_servers(&original_dns)
+                ),
+                Ok(false) => log::debug!("[tun/win] intranet DNS patch unchanged"),
+                Err(e) => log::warn!("[tun/win] intranet DNS patch skipped: {e}"),
+            }
         }
         Err(e) => {
             return Err(TunError::failed(

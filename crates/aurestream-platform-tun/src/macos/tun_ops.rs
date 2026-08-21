@@ -136,6 +136,31 @@ pub fn stop_tun_sync() -> Result<(), String> {
 // macOS System DNS Override
 // ============================================================================
 
+pub(crate) fn snapshot_system_dns() -> (Vec<String>, Vec<String>) {
+    let Ok(service) = detect_active_network_service() else {
+        return (Vec::new(), Vec::new());
+    };
+    let servers = dns_entries(&read_service_dns(&service))
+        .into_iter()
+        .map(ToString::to_string)
+        .collect();
+    (servers, read_search_domains(&service))
+}
+
+fn read_search_domains(service: &str) -> Vec<String> {
+    let out = match Command::new("networksetup")
+        .args(["-getsearchdomains", service])
+        .output()
+    {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Err(_) => return Vec::new(),
+    };
+    if out.contains("aren't any") || out.to_lowercase().contains("error") {
+        return Vec::new();
+    }
+    crate::dns_policy::parse_search_domains(&out)
+}
+
 fn detect_active_network_service() -> Result<String, String> {
     let out = Command::new("route")
         .args(["-n", "get", "default"])
@@ -226,16 +251,6 @@ fn dns_without_gateway<'a>(spec: &'a str, gateway: &str) -> String {
     )
 }
 
-fn dns_with_gateway_first(spec: &str, gateway: &str) -> String {
-    let mut entries = vec![gateway];
-    entries.extend(dns_entries(spec).into_iter().filter(|s| *s != gateway));
-    dns_spec_from_entries(entries)
-}
-
-fn dns_has_gateway_first(spec: &str, gateway: &str) -> bool {
-    dns_entries(spec).first().is_some_and(|s| *s == gateway)
-}
-
 pub fn apply_system_dns_override(gateway: &str) -> Result<(), String> {
     {
         let mut slot = ACTIVE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner());
@@ -277,9 +292,10 @@ pub(crate) fn reapply_on_active_primary(gateway: &str) -> Result<(), String> {
     let mut slot = ACTIVE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner());
     match slot.as_ref() {
         Some(prev) if prev.service == new_service => {
-            if dns_has_gateway_first(&current, gateway) {
+            let entries = dns_entries(&current);
+            if entries.len() == 1 && entries[0] == gateway {
                 log::debug!(
-                    "[dns] apply: [{}] already set to gateway, nothing to do",
+                    "[dns] apply: [{}] already exclusive gateway, nothing to do",
                     new_service
                 );
                 return Ok(());
@@ -292,7 +308,7 @@ pub(crate) fn reapply_on_active_primary(gateway: &str) -> Result<(), String> {
             );
             let mut updated = prev.clone();
             updated.captured = dns_without_gateway(&current, gateway);
-            let target = dns_with_gateway_first(&updated.captured, gateway);
+            let target = gateway.to_string();
             updated.gateway = gateway.to_string();
             *slot = Some(updated);
             drop(slot);
@@ -332,7 +348,7 @@ pub(crate) fn reapply_on_active_primary(gateway: &str) -> Result<(), String> {
                 current
             );
             let captured = dns_without_gateway(&current, gateway);
-            let target = dns_with_gateway_first(&captured, gateway);
+            let target = gateway.to_string();
             macos_helper::api::set_dns_servers(&new_service, &target)?;
             macos_helper::api::flush_dns_cache().ok();
             let mut slot = ACTIVE_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner());
@@ -352,7 +368,7 @@ pub(crate) fn reapply_on_active_primary(gateway: &str) -> Result<(), String> {
                 current
             );
             let captured = dns_without_gateway(&current, gateway);
-            let target = dns_with_gateway_first(&captured, gateway);
+            let target = gateway.to_string();
             macos_helper::api::set_dns_servers(&new_service, &target)?;
             macos_helper::api::flush_dns_cache().ok();
             *slot = Some(ActiveOverride {

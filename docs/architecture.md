@@ -152,7 +152,7 @@ sequenceDiagram
     App-->>UI: engine-state(running, tun)
 ```
 
-TUN 默认使用 `1.1.1.1` 作为操作系统 DNS 劫持目标。`198.18.0.1` 是 TUN 网关地址，不应作为宿主机 DNS 服务器。
+TUN 把公网 DNS 问进隧道的目标默认是 `1.1.1.1`。`198.18.0.1` 是 TUN 网关，不能当宿主机 DNS（主机访问该地址的 53 端口会被拒绝）。完整分流与三端差异见 [系统代理与 TUN：捕获与 DNS](./capture-modes.md)。
 
 ## 8. 故障恢复
 
@@ -166,6 +166,8 @@ Xray 用户态子进程由 supervisor 监管：
 - 仅当前 generation 的意外退出可以将状态置为 `Failed`。
 - 显式停止不会产生错误事件。
 - 异常退出触发捕获清理、`engine-state` 和 `app-alert`。
+
+系统代理与 TUN 的流量路径、Xray DNS 分流（内网 / 国内 / DoH）以及三端系统 DNS 行为见 [系统代理与 TUN：捕获与 DNS](./capture-modes.md)。
 
 ## 9. TUN 特权边界
 
