@@ -130,11 +130,10 @@ pub fn build_xray_config_value_with_options(
     opts: BuildOptions,
 ) -> Result<Value, EngineError> {
     let proxy_transport = node.network.to_ascii_lowercase();
-    // TUN captures substantially more concurrent traffic than system-proxy mode.
-    // Fragmenting every TLS ClientHello used to establish a WS/HTTP Upgrade
-    // tunnel causes severe handshake latency and intermittent upstream EOFs.
-    let allow_fragment =
-        !(opts.enable_tun && matches!(proxy_transport.as_str(), "ws" | "httpupgrade"));
+    // Fragmenting every TLS ClientHello on WS/HTTP Upgrade adds 30–50ms per
+    // handshake and can EOF the tunnel. Disable for those transports in both
+    // TUN and system-proxy mode.
+    let allow_fragment = !matches!(proxy_transport.as_str(), "ws" | "httpupgrade");
     let (proxy_outbound, fragment_outbound) = map_proxy_outbound(node, allow_fragment)?;
     let proxy_tag = proxy_outbound
         .get("tag")

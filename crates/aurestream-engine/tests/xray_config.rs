@@ -416,7 +416,7 @@ fn xray_dns_config_system_proxy_mode() {
 }
 
 #[test]
-fn xray_tun_ws_disables_fragment_but_system_proxy_keeps_it() {
+fn xray_ws_disables_fragment_in_tun_and_system_proxy() {
     use aurestream_engine::BuildOptions;
 
     let mut node = sample_vless_node();
@@ -437,36 +437,23 @@ fn xray_tun_ws_disables_fragment_but_system_proxy_keeps_it() {
         .build_config(&proxy_path, &node, 17890, 19291)
         .unwrap();
 
-    let tun: Value = serde_json::from_str(&fs::read_to_string(tun_path).unwrap()).unwrap();
-    let tun_outbounds = tun["outbounds"].as_array().unwrap();
-    assert!(
-        !tun_outbounds
+    for (label, path) in [("tun", tun_path), ("system proxy", proxy_path)] {
+        let cfg: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+        let outbounds = cfg["outbounds"].as_array().unwrap();
+        assert!(
+            !outbounds
+                .iter()
+                .any(|outbound| outbound["tag"] == "fragment-out"),
+            "{label} over WS must not create the fragment outbound"
+        );
+        let proxy = outbounds
             .iter()
-            .any(|outbound| outbound["tag"] == "fragment-out"),
-        "TUN over WS must not create the fragment outbound"
-    );
-    let tun_proxy = tun_outbounds
-        .iter()
-        .find(|outbound| outbound["protocol"] == "vless")
-        .unwrap();
-    assert!(tun_proxy["streamSettings"]["sockopt"]["dialerProxy"].is_null());
-
-    let system_proxy: Value =
-        serde_json::from_str(&fs::read_to_string(proxy_path).unwrap()).unwrap();
-    let proxy_outbounds = system_proxy["outbounds"].as_array().unwrap();
-    assert!(
-        proxy_outbounds
-            .iter()
-            .any(|outbound| outbound["tag"] == "fragment-out"),
-        "system proxy mode must preserve the subscription fragment setting"
-    );
-    let proxy = proxy_outbounds
-        .iter()
-        .find(|outbound| outbound["protocol"] == "vless")
-        .unwrap();
-    assert_eq!(
-        proxy["streamSettings"]["sockopt"]["dialerProxy"],
-        "fragment-out"
-    );
+            .find(|outbound| outbound["protocol"] == "vless")
+            .unwrap();
+        assert!(
+            proxy["streamSettings"]["sockopt"]["dialerProxy"].is_null(),
+            "{label} over WS must not chain fragment-out"
+        );
+    }
 }
 
