@@ -434,11 +434,13 @@ fn build_dns_config(smart_routing: bool, enable_ipv6: bool) -> Value {
     }
     // Xray DNS routing: https://xtls.github.io/config/dns.html
     // Strategy: CN domains use domestic DNS with IP validation, all others use fallback.
-    // Xray matches domains rules from top to bottom, unmatched domains use fallback servers.
+    // Xray matches domain rules from top to bottom; unmatched domains use fallback servers.
+    // Parallel query also fires unscoped DoH for geosite:cn, so pages wait on
+    // Cloudflare/Google timeouts even after 119.29.29.29 already succeeded.
     json!({
         "tag": "dns-proxy",
         "queryStrategy": query_strategy,
-        "enableParallelQuery": true,
+        "enableParallelQuery": false,
         "serveStale": true,
         "serveExpiredTTL": 3600,
         // Keep the HTTPS hostname (and therefore correct TLS SNI) while avoiding

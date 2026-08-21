@@ -403,7 +403,12 @@ fn apply_dns(iface: &str, gateway: &str) -> Result<(), String> {
     if !status.success() {
         return Err(format!("dns-override failed for iface={iface}"));
     }
-    let _ = Command::new("resolvectl").arg("flush-caches").status();
+    // Send all lookups through this link so stub/cache cannot keep using a
+    // previous (possibly poisoned) answer after the hijack.
+    let _ = Command::new("resolvectl")
+        .args(["domain", iface, "~."])
+        .status();
+    flush_resolver_caches();
     Ok(())
 }
 
@@ -411,9 +416,10 @@ fn restore_dns(iface: &str, original: &[String]) {
     if iface.is_empty() {
         return;
     }
-    if original.is_empty() {
-        let _ = Command::new("resolvectl").args(["revert", iface]).status();
-    } else {
+    // Revert drops per-link `domain ~.` from apply_dns, then put back the
+    // captured servers when we have them (NetworkManager may overwrite later).
+    let _ = Command::new("resolvectl").args(["revert", iface]).status();
+    if !original.is_empty() {
         let mut cmd = Command::new("resolvectl");
         cmd.arg("dns").arg(iface);
         for server in original {
@@ -421,7 +427,23 @@ fn restore_dns(iface: &str, original: &[String]) {
         }
         let _ = cmd.status();
     }
-    let _ = Command::new("resolvectl").arg("flush-caches").status();
+    flush_resolver_caches();
+}
+
+fn flush_resolver_caches() {
+    for args in [["flush-caches"].as_slice(), ["reset-server-features"].as_slice()] {
+        match Command::new("resolvectl").args(args).status() {
+            Ok(status) if status.success() => {}
+            Ok(status) => eprintln!(
+                "[tun-helper] resolvectl {} failed: {status}",
+                args.join(" ")
+            ),
+            Err(e) => eprintln!(
+                "[tun-helper] resolvectl {}: {e}",
+                args.join(" ")
+            ),
+        }
+    }
 }
 
 /// Orphan cleanup for cores this helper spawned in a prior life (e.g. after

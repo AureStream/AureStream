@@ -124,7 +124,20 @@ pub fn start_tun(
         dns: gateway,
         iface,
         original_dns,
-    })
+    })?;
+    // Helper already flushes as root; repeat from the session so stub caches
+    // that the user bus can see (poisoned Google A/AAAA) are dropped too.
+    match std::process::Command::new("resolvectl")
+        .arg("flush-caches")
+        .status()
+    {
+        Ok(status) if status.success() => {
+            log::info!("[tun/linux] flushed systemd-resolved caches");
+        }
+        Ok(status) => log::warn!("[tun/linux] resolvectl flush-caches exit={status}"),
+        Err(e) => log::warn!("[tun/linux] resolvectl flush-caches: {e}"),
+    }
+    Ok(())
 }
 
 pub fn stop_tun() -> Result<(), TunError> {

@@ -309,7 +309,9 @@ fn xray_dns_config_smart_routing() {
     assert!(dns.is_object(), "DNS config must exist");
     assert_eq!(dns["tag"], "dns-proxy");
     assert_eq!(dns["queryStrategy"], "UseIPv4");
-    assert_eq!(dns["enableParallelQuery"], true);
+    // Parallel query also hits unscoped DoH for geosite:cn, so domestic pages wait
+    // on Cloudflare/Google timeouts (~3s) even after 119.29.29.29 already answered.
+    assert_eq!(dns["enableParallelQuery"], false);
     assert_eq!(dns["serveStale"], true);
     assert_eq!(dns["serveExpiredTTL"], 3600);
 
@@ -327,6 +329,7 @@ fn xray_dns_config_smart_routing() {
     assert_eq!(first_dns["port"], 53);
     assert_eq!(first_dns["domains"][0], "geosite:cn");
     assert_eq!(first_dns["expectedIPs"][0], "geoip:cn");
+    assert_eq!(first_dns["skipFallback"], true);
     assert_eq!(first_dns["timeoutMs"], 1500);
 
     // Verify second DNS server (also for CN domains)
@@ -336,6 +339,7 @@ fn xray_dns_config_smart_routing() {
         "Second DNS should be 223.5.5.5"
     );
     assert_eq!(second_dns["domains"][0], "geosite:cn");
+    assert_eq!(second_dns["skipFallback"], true);
     assert_eq!(second_dns["timeoutMs"], 1500);
 
     // Verify fallback DNS servers (for non-CN domains like Google, YouTube)
@@ -391,7 +395,7 @@ fn xray_dns_config_system_proxy_mode() {
         "https://cloudflare-dns.com/dns-query"
     );
     assert_eq!(servers[3]["address"], "https://dns.google/dns-query");
-    assert_eq!(dns["enableParallelQuery"], true);
+    assert_eq!(dns["enableParallelQuery"], false);
     assert_eq!(dns["serveStale"], true);
     assert_eq!(dns["serveExpiredTTL"], 3600);
     assert_eq!(dns["hosts"]["cloudflare-dns.com"], "1.1.1.1");
