@@ -241,7 +241,8 @@ pub fn start_tun(
                 .flat_map(|it| {
                     dns::parse_nameserver_value(&it.current_dns)
                         .into_iter()
-                        .map(ToString::to_string)
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
                 })
                 .collect();
             match crate::dns_policy::patch_tun_intranet_dns(
