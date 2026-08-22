@@ -4,16 +4,18 @@ import { Activity, ArrowUpDown, Check, Gauge } from "lucide-react"
 import { useAlert } from "@/contexts/AlertContext"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
+import type { NodeInfo } from "@/lib/ipc"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import NodeFlag from "@/components/NodeFlag"
 import { getAllNodeLatencies, setNodeLatency } from "@/lib/node-latency"
+import { nodeKey } from "@/lib/node-selection"
 import { getNodeLatencyTone } from "@/lib/node-latency-tone"
 import { testNodesTcpLatencyBatch } from "@/lib/node-speed-test"
 import { cn } from "@/lib/utils"
 
 type SortBy = "name" | "latency" | "protocol"
 
-/** Latency map: undefined = unknown, 0 while testing, >0 ms, -1 timeout. */
+/** Latency map keyed by stable node id: undefined = unknown, 0 while testing, >0 ms, -1 timeout. */
 type LatencyMap = Record<string, number | undefined>
 
 function sortLabel(sortBy: SortBy): string {
@@ -43,14 +45,21 @@ export default function NodesPage() {
   const [testing, setTesting] = useState(false)
   const [latencies, setLatencies] = useState<LatencyMap>(() => {
     const map: LatencyMap = {}
-    for (const [tag, ms] of getAllNodeLatencies()) {
-      map[tag] = ms
+    for (const [key, ms] of getAllNodeLatencies()) {
+      map[key] = ms
     }
     return map
   })
 
+  // Match by stable id: the provider rewrites node names on every sync, so a
+  // tag comparison would show the user's own selection as unselected.
+  const selectedId = engine.selectedNodeId ?? ""
   const selectedTag = engine.selectedNode ?? ""
   const busy = engine.state === "starting" || engine.state === "stopping" || selecting
+
+  /** Id first; tag only for selections stored before ids existed. */
+  const isNodeSelected = (node: NodeInfo) =>
+    selectedId && node.id ? node.id === selectedId : !selectedId && node.tag === selectedTag
 
   // Guard against stale writes from an in-flight speed test after the page
   // unmounts (e.g. user navigates away mid-test).
@@ -64,8 +73,8 @@ export default function NodesPage() {
   const sortedNodes = useMemo(() => {
     return [...nodes].sort((a, b) => {
       if (sortBy === "latency") {
-        const pa = latencies[a.tag]
-        const pb = latencies[b.tag]
+        const pa = latencies[nodeKey(a)] ?? latencies[a.tag]
+        const pb = latencies[nodeKey(b)] ?? latencies[b.tag]
         // Measured ok first (low→high), then unknown, then timeout at end.
         const rank = (v: number | undefined) => {
           if (v === undefined || v === 0) return 1_000_000
@@ -86,11 +95,11 @@ export default function NodesPage() {
     })
   }, [nodes, sortBy, latencies])
 
-  const handleSelect = async (tag: string) => {
-    if (busy || testing || tag === selectedTag) return
+  const handleSelect = async (node: NodeInfo) => {
+    if (busy || testing || isNodeSelected(node)) return
     setSelecting(true)
     try {
-      await selectNode(tag)
+      await selectNode(node.tag, node.id)
     } finally {
       setSelecting(false)
     }
@@ -109,21 +118,21 @@ export default function NodesPage() {
     // nodes without server/port are left as-is (never resolve otherwise).
     setLatencies((prev) => {
       const next: LatencyMap = { ...prev }
-      for (const n of targets) next[n.tag] = 0
+      for (const n of targets) next[nodeKey(n)] = 0
       return next
     })
 
     try {
       await testNodesTcpLatencyBatch(
         targets.map((n) => ({
-          tag: n.tag,
+          tag: nodeKey(n),
           server: n.server ?? "",
           port: n.port ?? 0,
         })),
-        (tag, ms) => {
+        (key, ms) => {
           if (cancelledRef.current) return
-          setNodeLatency(tag, ms)
-          setLatencies((prev) => ({ ...prev, [tag]: ms }))
+          setNodeLatency(key, ms)
+          setLatencies((prev) => ({ ...prev, [key]: ms }))
         },
       )
       if (cancelledRef.current) return
@@ -187,14 +196,14 @@ export default function NodesPage() {
         {sortedNodes.length > 0 ? (
           <section className="flex flex-col gap-3">
             {sortedNodes.map((node) => {
-              const isSelected = selectedTag === node.tag
-              const ping = latencies[node.tag]
+              const isSelected = isNodeSelected(node)
+              const ping = latencies[nodeKey(node)] ?? latencies[node.tag]
               return (
                 <button
                   type="button"
-                  key={node.tag}
+                  key={nodeKey(node)}
                   disabled={busy || testing}
-                  onClick={() => void handleSelect(node.tag)}
+                  onClick={() => void handleSelect(node)}
                   className={cn(
                     "flex h-16 w-full items-center gap-3 rounded-[1.15rem] px-4 text-left transition-colors",
                     "disabled:cursor-wait disabled:opacity-70",

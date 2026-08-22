@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use aurestream_api_client::{ApiClient, ApiError, Subscription};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::commands::subs_parse::extract_nodes_from_body;
 use crate::state::{AuthState, NodeInfo, SubSummary, SubsSnapshot, SubsState};
@@ -150,6 +150,7 @@ pub async fn subs_sync(
         .unwrap_or_default();
 
     let snapshot = SubsSnapshot {
+        schema_version: crate::state::SUBS_SCHEMA_VERSION,
         subscriptions: summaries,
         active_id,
         nodes,
@@ -168,6 +169,11 @@ pub async fn subs_sync(
         status: 0,
         retry_after: None,
     })?;
+
+    if let Some(engine) = app.try_state::<crate::commands::engine::EngineAppState>() {
+        crate::commands::engine::reconcile_persisted_state(&subs, &engine);
+        crate::commands::engine::emit_reconciled_selection(&app, &engine);
+    }
 
     emit_subs_updated(&app, &snapshot);
     Ok(SubsUpdatedPayload::from(&snapshot))

@@ -2,6 +2,8 @@
 
 mod commands;
 mod logging;
+mod node_key;
+mod persist;
 mod state;
 mod tray;
 mod window_util;
@@ -9,7 +11,8 @@ mod window_util;
 use commands::{
     auth_login, auth_logout, auth_register, auth_restore, auth_verify, cleanup_on_exit,
     engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
-    engine_uninstall_helper, ping_tcp, reconcile_stale_runtime, spawn_engine_health_monitor,
+    engine_uninstall_helper, ping_tcp, reconcile_persisted_state, reconcile_stale_runtime,
+    spawn_engine_health_monitor,
     spawn_traffic_reporter, spawn_traffic_sampler, subs_list, subs_sync, EngineAppState,
 };
 use state::{AuthState, SubsState};
@@ -45,6 +48,7 @@ pub fn run() {
             let subs_state = SubsState::load(&handle)?;
             let engine_state = EngineAppState::load(&handle)?;
             reconcile_stale_runtime(&engine_state);
+            reconcile_persisted_state(&subs_state, &engine_state);
             handle.manage(auth_state);
             handle.manage(subs_state);
             handle.manage(engine_state);

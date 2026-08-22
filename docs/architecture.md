@@ -189,9 +189,13 @@ macOS 当前没有覆盖“主应用被强制终止后，特权 Helper 独立恢
 
 | 文件 | 用途 | 生命周期 |
 |---|---|---|
-| `engine-selection.json` | 持久化选中节点 | 用户选择变化时更新 |
+| `engine-selection.json` | 持久化选中节点 | 用户选择变化时更新；启动与订阅同步后按当前身份格式回写 |
+| `subs.json` | 订阅列表、原始 body、解码后的节点视图 | 同步时替换；启动时由 body 重建 `nodes` |
+| `auth-session.json` | 登录会话 | 登录写入，退出删除 |
 | `engine-runtime.json` | 异常恢复意图，包含会话 ID 与捕获模式 | 启动捕获前写入，清理成功后删除 |
 | 内核配置文件 | 由当前 `Engine` 实现生成 | 每次启动或切换节点时覆盖 |
+
+这些文件跨版本存活。读写契约、节点身份只加不换、以及升级时如何回写，见 [跨版本数据兼容](./persist-compat.md)。
 
 日志按平台写入应用日志目录：应用日志为 `aurestream-app.log`，内核日志按日期命名为 `aurestream-core-YYYY-MM-DD.log`。日志中的 `session_id` 用于关联一次启动与清理事务。
 

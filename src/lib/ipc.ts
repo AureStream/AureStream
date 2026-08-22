@@ -72,6 +72,15 @@ export type SubSummary = {
 };
 
 export type NodeInfo = {
+  /**
+   * Stable identity of the node, computed by Rust from the endpoint (see
+   * `node_key.rs`). The ONLY value the UI may key a node by: `tag`/`name` are
+   * provider display text and change on every sync (live speed in the name),
+   * which is what used to break remembered selections.
+   *
+   * Optional only for payloads produced before this field existed.
+   */
+  id?: string;
   tag: string;
   name: string;
   protocol: string;
@@ -147,7 +156,10 @@ export type CaptureMode = "off" | "system" | "tun";
 export type EngineStatePayload = {
   state: string;
   reason?: string;
+  /** Display tag of the selection — for showing, not for matching. */
   selectedNode?: string;
+  /** Stable id of the selection; match rows by this. */
+  selectedNodeId?: string;
   /** `off` | `system` | `tun` */
   captureMode?: CaptureMode | string;
 };
@@ -156,6 +168,8 @@ export const ENGINE_STATE_EVENT = "engine-state";
 
 export type EngineStartOptions = {
   nodeTag?: string;
+  /** Stable node id; preferred over `nodeTag` by the backend. */
+  nodeId?: string;
   /** default `system` */
   mode?: "system" | "tun";
   smartRouting?: boolean;
@@ -170,6 +184,7 @@ export async function engineStart(
       : nodeTagOrOpts;
   return invoke<EngineStatePayload>("engine_start", {
     nodeTag: opts.nodeTag ?? null,
+    nodeId: opts.nodeId ?? null,
     mode: opts.mode ?? "system",
     smartRouting: opts.smartRouting ?? null,
   });
@@ -188,8 +203,14 @@ export async function engineStop(): Promise<EngineStatePayload> {
   return invoke<EngineStatePayload>("engine_stop");
 }
 
-export async function engineSelectNode(nodeTag: string): Promise<EngineStatePayload> {
-  return invoke<EngineStatePayload>("engine_select_node", { nodeTag });
+export async function engineSelectNode(
+  nodeTag: string,
+  nodeId?: string,
+): Promise<EngineStatePayload> {
+  return invoke<EngineStatePayload>("engine_select_node", {
+    nodeTag,
+    nodeId: nodeId ?? null,
+  });
 }
 
 export async function engineGetState(): Promise<EngineStatePayload> {

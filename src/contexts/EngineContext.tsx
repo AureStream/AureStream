@@ -18,6 +18,8 @@ import {
 
 export type StartOptions = {
   nodeTag?: string
+  /** Stable node id — preferred over `nodeTag`; see `lib/node-selection`. */
+  nodeId?: string
   mode?: "system" | "tun"
   smartRouting?: boolean
 }
@@ -29,7 +31,7 @@ type EngineContextValue = {
   connectedSeconds: number
   start: (nodeTagOrOpts?: string | StartOptions) => Promise<void>
   stop: () => Promise<void>
-  selectNode: (nodeTag: string) => Promise<void>
+  selectNode: (nodeTag: string, nodeId?: string) => Promise<void>
 }
 
 const EngineContext = createContext<EngineContextValue>({
@@ -135,10 +137,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   }, [presentError])
 
   const selectNode = useCallback(
-    async (nodeTag: string) => {
+    async (nodeTag: string, nodeId?: string) => {
       lastDialogKey.current = null
       try {
-        await engineSelectNode(nodeTag)
+        await engineSelectNode(nodeTag, nodeId)
       } catch (err) {
         presentError(err, "切换节点失败", "切换失败")
       }

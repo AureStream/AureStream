@@ -144,6 +144,7 @@ UI copy: Chinese-only (no i18n).
 | System proxy | `crates/aurestream-platform-proxy` |
 | Sidecar binary | `scripts/download-binaries.ts`, `src-tauri/binaries/` |
 | TUN implementation | `crates/aurestream-platform-tun`, `src-tauri/src/commands/engine.rs`, `crates/aurestream-engine/src/xray/config.rs`; capture/DNS: [`docs/capture-modes.md`](./docs/capture-modes.md); design record in `docs/superpowers/plans/2026-08-05-aurestream-v2-tun-three-platforms.md` |
+| Persisted JSON / upgrade compat | `src-tauri/src/persist.rs`, `src-tauri/src/node_key.rs`; contract in [`docs/persist-compat.md`](./docs/persist-compat.md) |
 
 ## Build notes
 

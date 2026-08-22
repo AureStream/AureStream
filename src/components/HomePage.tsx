@@ -12,6 +12,7 @@ import {
   setEnableTunPref,
   setSmartRoutingPref,
 } from "@/lib/proxy-prefs"
+import { confirmedSelection, resolveSelectedNode } from "@/lib/node-selection"
 import { cn } from "@/lib/utils"
 
 const PrefIcons = {
@@ -101,12 +102,11 @@ export default function HomePage() {
   const showNodeEntry = connected
   const durationText = formatDuration(connectedSeconds)
 
-  const selected =
-    nodes.find((n) => n.tag === engine.selectedNode) ??
-    (engine.selectedNode
-      ? { tag: engine.selectedNode, name: engine.selectedNode, protocol: "" }
-      : null) ??
-    (nodes.length > 0 ? nodes[0] : null)
+  // Matched by stable id, with the same tag → first-node ladder the backend
+  // uses. Never a node synthesized from a remembered tag: that phantom used to
+  // be sent to `engine_start` as an explicit pick and came back as
+  // `node_not_found` after the provider renamed its nodes.
+  const selected = resolveSelectedNode(nodes, engine)
 
   const nodeTitle = selected?.name
     ?? (nodesEmpty
@@ -146,11 +146,17 @@ export default function HomePage() {
       return
     }
     // Mutual exclusion: TUN vs system proxy.
+    // Only send an identity the current list can confirm. A first-node
+    // fallback (or a stale remembered tag) must not go out as an explicit
+    // pick — the backend recovers from the on-disk selection instead.
     const mode = enableTun ? "tun" : "system"
+    const confirmed = confirmedSelection(nodes, engine)
     void start({
       mode,
       smartRouting,
-      nodeTag: selected?.tag,
+      ...(confirmed
+        ? { nodeId: confirmed.id, nodeTag: confirmed.tag }
+        : {}),
     })
   }
 

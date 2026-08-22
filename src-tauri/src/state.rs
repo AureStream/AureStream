@@ -1,4 +1,9 @@
 //! Persisted auth session + subscription cache under the app data directory.
+//!
+//! I/O rules live in [`crate::persist`]. Identity of a node is
+//! [`crate::node_key`], never a display tag. `nodes` is a decoded *view* of
+//! `bodies` and is rebuilt on load so a cache from an older build cannot hand
+//! the UI identifiers the current process cannot resolve.
 
 use std::collections::HashMap;
 use std::fs;
@@ -9,14 +14,30 @@ use aurestream_api_client::{AuthTokens, RefreshedTokens, User};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+use crate::persist::{read_json_opt, write_json};
+
 const SESSION_FILE: &str = "auth-session.json";
 const SUBS_FILE: &str = "subs.json";
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Bump when the *meaning* of a stored field changes (a new field alone does
+/// not need it — additions are already backward compatible by rule 1).
+pub const SUBS_SCHEMA_VERSION: u32 = 2;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeInfo {
+    /// Stable identity (see `crate::node_key`). The only value the UI, the
+    /// persisted selection and the latency cache may key a node by — `tag`
+    /// and `name` are provider-controlled display text that changes on every
+    /// sync. Empty in caches written before this field existed; backfilled
+    /// from the subscription body on load.
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
     pub tag: String,
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub protocol: String,
     /// Server host for TCP latency probe (and display).
     #[serde(default)]
@@ -26,11 +47,23 @@ pub struct NodeInfo {
     pub port: u16,
 }
 
+fn default_user() -> User {
+    User {
+        id: String::new(),
+        email: String::new(),
+        created_at: 0,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredSession {
+    #[serde(default)]
     pub access_token: String,
+    #[serde(default)]
     pub refresh_token: String,
+    #[serde(default)]
     pub expires_in: u64,
+    #[serde(default = "default_user")]
     pub user: User,
 }
 
@@ -221,23 +254,37 @@ impl AuthState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SubSummary {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub traffic_used: u64,
+    #[serde(default)]
     pub traffic_total: u64,
+    #[serde(default)]
     pub expire_time: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SubsSnapshot {
+    /// Format of this file. Written as [`SUBS_SCHEMA_VERSION`], `0` when the
+    /// file predates the field. Every field below is `#[serde(default)]` so a
+    /// file from any version still loads — see the module docs.
+    #[serde(default)]
+    pub schema_version: u32,
+    #[serde(default)]
     pub subscriptions: Vec<SubSummary>,
+    #[serde(default)]
     pub active_id: Option<String>,
+    #[serde(default)]
     pub nodes: Vec<NodeInfo>,
-    /// Raw provider bodies keyed by subscription id (for Task 6 decode).
+    /// Raw provider bodies keyed by subscription id. The source of truth for
+    /// nodes: `nodes` is a decoded view that is rebuilt from these on load.
     #[serde(default)]
     pub bodies: HashMap<String, String>,
 }
@@ -256,7 +303,11 @@ impl SubsState {
             .map_err(|e| format!("app data dir: {e}"))?;
         fs::create_dir_all(&dir).map_err(|e| format!("create app data dir: {e}"))?;
         let path = dir.join(SUBS_FILE);
-        let snapshot = read_json_opt(&path)?.unwrap_or_default();
+        let snapshot: SubsSnapshot = read_json_opt(&path)?.unwrap_or_default();
+        // Caches written before node ids existed (or by a build with different
+        // decode rules) would hand the UI ids the engine cannot resolve. The
+        // bodies are the source of truth, so re-derive the view from them.
+        let snapshot = rebuild_nodes(snapshot);
         Ok(Self {
             inner: Mutex::new(snapshot),
             path,
@@ -279,6 +330,8 @@ impl SubsState {
     }
 
     pub fn replace(&self, snapshot: SubsSnapshot) -> Result<(), String> {
+        let mut snapshot = snapshot;
+        snapshot.schema_version = SUBS_SCHEMA_VERSION;
         write_json(&self.path, &snapshot)?;
         let mut guard = self
             .inner
@@ -305,48 +358,43 @@ impl SubsState {
             .ok_or_else(|| "subscription_not_found".to_string())?;
         subscription.traffic_used = traffic_used;
         subscription.traffic_total = traffic_total;
+        guard.schema_version = SUBS_SCHEMA_VERSION;
         write_json(&self.path, &*guard)?;
         Ok(guard.clone())
     }
 }
 
-fn read_json_opt<T: for<'de> Deserialize<'de>>(path: &PathBuf) -> Result<Option<T>, String> {
-    if !path.exists() {
-        return Ok(None);
+/// Re-decode the active subscription's nodes from its raw body.
+///
+/// The decoded `nodes` list is a *cache* of what `bodies` says. Trusting the
+/// cached copy across versions means the UI can hold node ids (or tags) the
+/// engine's own decode no longer produces, which is exactly how a selection
+/// stops resolving. Rebuilding on load keeps both sides on one decode.
+fn rebuild_nodes(mut snapshot: SubsSnapshot) -> SubsSnapshot {
+    let Some(body) = snapshot
+        .active_id
+        .as_ref()
+        .and_then(|id| snapshot.bodies.get(id))
+    else {
+        // No body to decode from: keep the cached list as-is, including
+        // pre-id entries from 1.0.0. Wiping them would hide nodes the user
+        // still has until the next successful sync.
+        return snapshot;
+    };
+    let decoded = crate::commands::subs_parse::extract_nodes_from_body(body);
+    if decoded.is_empty() && !snapshot.nodes.is_empty() {
+        // Decode regression (unsupported format) — do not blank a working list.
+        log::warn!("subs cache: body decoded to zero nodes, keeping cached list");
+        return snapshot;
     }
-    let raw = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    let value = serde_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))?;
-    Ok(Some(value))
-}
-
-fn write_json<T: Serialize>(path: &PathBuf, value: &T) -> Result<(), String> {
-    let raw = serde_json::to_string_pretty(value)
-        .map_err(|e| format!("serialize {}: {e}", path.display()))?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("create dir: {e}"))?;
-    }
-    fs::write(path, raw).map_err(|e| format!("write {}: {e}", path.display()))?;
-
-    // Restrict to owner read/write. This is shared by every JSON file this
-    // module persists, including `auth-session.json` which holds a live
-    // access token and a 30-day refresh token — on a shared machine with a
-    // permissive umask, a plain `fs::write` can leave that file group/world
-    // readable. Tightening permissions on the other outputs (the
-    // subscription cache) is harmless, so this is applied unconditionally
-    // here rather than gating on the specific session-file path.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("chmod {}: {e}", path.display()))?;
-    }
-
-    Ok(())
+    snapshot.nodes = decoded;
+    snapshot
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persist::{read_json_opt, write_json};
 
     fn session_at(path: &PathBuf, access: &str, refresh: &str) -> AuthState {
         let session = StoredSession {
@@ -361,6 +409,146 @@ mod tests {
         };
         write_json(path, &session).unwrap();
         AuthState::with_path(path.clone()).unwrap()
+    }
+
+    /// Rule 2: an unreadable state file must degrade to defaults, never abort
+    /// app setup — a user cannot fix JSON in an app that will not launch.
+    #[test]
+    fn corrupt_state_file_yields_defaults_and_is_quarantined() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("subs.json");
+        fs::write(&path, "{ not json").unwrap();
+
+        let loaded: Option<SubsSnapshot> = read_json_opt(&path).unwrap();
+        assert!(loaded.is_none());
+        assert!(!path.exists());
+        assert!(fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.file_name().to_string_lossy().contains(".corrupt-")));
+    }
+
+    /// Rule 1: a cache written by an older build (no `id`, no `schemaVersion`)
+    /// and one written by a newer build (unknown fields) both load.
+    #[test]
+    fn subs_cache_loads_from_older_and_newer_formats() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let legacy = dir.path().join("legacy.json");
+        fs::write(
+            &legacy,
+            r#"{"subscriptions":[],"activeId":null,"nodes":[{"tag":"n1","name":"n1","protocol":"vless"}]}"#,
+        )
+        .unwrap();
+        let loaded: SubsSnapshot = read_json_opt(&legacy).unwrap().unwrap();
+        assert_eq!(loaded.schema_version, 0);
+        assert_eq!(loaded.nodes[0].id, "");
+
+        let future = dir.path().join("future.json");
+        fs::write(
+            &future,
+            r#"{"schemaVersion":99,"nodes":[{"id":"n2:abc","tag":"n1","name":"n1","protocol":"vless","somethingNew":true}],"unknownTop":[1]}"#,
+        )
+        .unwrap();
+        let loaded: SubsSnapshot = read_json_opt(&future).unwrap().unwrap();
+        assert_eq!(loaded.nodes[0].id, "n2:abc");
+    }
+
+    /// Node ids are re-derived from the raw body, so a cache from a build that
+    /// never wrote them (or wrote them differently) still hands the UI ids the
+    /// engine can resolve.
+    #[test]
+    fn rebuild_nodes_backfills_ids_from_body() {
+        let mut bodies = HashMap::new();
+        bodies.insert("sub-1".to_string(), "vless://u@example.com:443#HK-1\n".to_string());
+        let snapshot = rebuild_nodes(SubsSnapshot {
+            active_id: Some("sub-1".into()),
+            bodies,
+            nodes: vec![NodeInfo {
+                tag: "HK-1".into(),
+                name: "HK-1".into(),
+                ..NodeInfo::default()
+            }],
+            ..SubsSnapshot::default()
+        });
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert!(!snapshot.nodes[0].id.is_empty());
+        assert_eq!(snapshot.nodes[0].server, "example.com");
+    }
+
+    /// A decode regression must not blank a working node list.
+    #[test]
+    fn rebuild_nodes_keeps_cached_list_when_body_decodes_to_nothing() {
+        let mut bodies = HashMap::new();
+        bodies.insert("sub-1".to_string(), "not a subscription".to_string());
+        let snapshot = rebuild_nodes(SubsSnapshot {
+            active_id: Some("sub-1".into()),
+            bodies,
+            nodes: vec![NodeInfo {
+                id: "n2:abc".into(),
+                tag: "HK-1".into(),
+                ..NodeInfo::default()
+            }],
+            ..SubsSnapshot::default()
+        });
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert_eq!(snapshot.nodes[0].id, "n2:abc");
+    }
+
+    /// 1.0.0 wrote nodes without `id`. A body we cannot decode must not wipe them.
+    #[test]
+    fn rebuild_nodes_keeps_pre_id_cache_when_body_decodes_to_nothing() {
+        let mut bodies = HashMap::new();
+        bodies.insert("sub-1".to_string(), "not a subscription".to_string());
+        let snapshot = rebuild_nodes(SubsSnapshot {
+            active_id: Some("sub-1".into()),
+            bodies,
+            nodes: vec![NodeInfo {
+                tag: "HK-1".into(),
+                name: "HK-1".into(),
+                ..NodeInfo::default()
+            }],
+            ..SubsSnapshot::default()
+        });
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert_eq!(snapshot.nodes[0].tag, "HK-1");
+        assert!(snapshot.nodes[0].id.is_empty());
+    }
+
+    /// A session written by a newer build (unknown fields) or an older one
+    /// (missing `user` / tokens) must still deserialize.
+    #[test]
+    fn session_file_loads_from_older_and_newer_formats() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let legacy = dir.path().join("legacy.json");
+        fs::write(
+            &legacy,
+            r#"{"access_token":"a","refresh_token":"r","expires_in":1,"user":{"id":"u","email":"e","created_at":0}}"#,
+        )
+        .unwrap();
+        let loaded: StoredSession = read_json_opt(&legacy).unwrap().unwrap();
+        assert_eq!(loaded.access_token, "a");
+        assert_eq!(loaded.user.id, "u");
+
+        let future = dir.path().join("future.json");
+        fs::write(
+            &future,
+            r#"{"access_token":"a","refresh_token":"r","expires_in":1,"user":{"id":"u","email":"e","created_at":0},"deviceBound":true}"#,
+        )
+        .unwrap();
+        let loaded: StoredSession = read_json_opt(&future).unwrap().unwrap();
+        assert_eq!(loaded.access_token, "a");
+
+        let partial = dir.path().join("partial.json");
+        fs::write(&partial, r#"{"access_token":"only-access"}"#).unwrap();
+        let loaded: StoredSession = read_json_opt(&partial).unwrap().unwrap();
+        assert_eq!(loaded.access_token, "only-access");
+        assert!(loaded.refresh_token.is_empty());
+        assert!(loaded.user.id.is_empty());
     }
 
     #[test]
