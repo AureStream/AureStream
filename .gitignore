@@ -40,6 +40,7 @@ src-tauri/gen/
 src-tauri/binaries/
 src-tauri/resources/geoip.dat
 src-tauri/resources/geosite.dat
+src-tauri/resources/wintun.dll
 src-tauri/*.db
 scripts/tmp/
 src-tauri/resources/*.db
