@@ -16,6 +16,7 @@
     "allow-auth",
     "allow-subs",
     "allow-engine",
-    "allow-network"
+    "allow-network",
+    "allow-settings"
   ]
 }

@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-settings"
+description = "Allows AureStream app settings IPC commands"
+commands.allow = [
+  "settings_get",
+  "settings_set"
+]

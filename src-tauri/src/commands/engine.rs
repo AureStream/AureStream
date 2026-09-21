@@ -1330,6 +1330,9 @@ async fn start_with_node(
         Ok(()) => {
             engine_state.begin_traffic_session(subscription_id.to_string(), node.tag.clone());
             emit_from(app, engine_state, EngineState::Running);
+            if let Some(settings) = app.try_state::<crate::settings::SettingsState>() {
+                let _ = settings.record_last_capture_mode(mode.as_str());
+            }
             Ok(())
         }
         Err(reason) => {
@@ -1595,6 +1598,94 @@ pub async fn tray_start_tun(app: &AppHandle) -> Result<(), String> {
     )
     .await?;
     Ok(())
+}
+
+/// Background task executed on application startup to auto-connect if configured.
+pub async fn auto_connect_on_startup(app: &AppHandle) {
+    let Some(settings_state) = app.try_state::<crate::settings::SettingsState>() else {
+        return;
+    };
+    let settings = settings_state.get();
+    if !settings.auto_connect {
+        log::info!("auto-connect on startup is disabled");
+        return;
+    }
+
+    log::info!(
+        "startup auto-connect enabled, mode={:?}",
+        settings.auto_connect_mode
+    );
+
+    // Wait a brief moment to allow app setup and state restoration to settle.
+    tokio::time::sleep(Duration::from_millis(600)).await;
+
+    let Some(auth) = app.try_state::<AuthState>() else {
+        log::warn!("auto-connect skipped: AuthState missing");
+        return;
+    };
+
+    if require_auth(&auth).is_err() {
+        log::info!("auto-connect skipped: user is not authenticated");
+        return;
+    }
+
+    let Some(subs) = app.try_state::<SubsState>() else {
+        log::warn!("auto-connect skipped: SubsState missing");
+        return;
+    };
+
+    let Some(engine) = app.try_state::<EngineAppState>() else {
+        log::warn!("auto-connect skipped: EngineAppState missing");
+        return;
+    };
+
+    let node = match resolve_remembered_node(&subs, &engine) {
+        Ok(node) => node,
+        Err(e) => {
+            log::warn!("auto-connect skipped: cannot resolve node: {e}");
+            return;
+        }
+    };
+
+    let subscription_id = match active_subscription_id(&subs) {
+        Ok(id) => id,
+        Err(e) => {
+            log::warn!("auto-connect skipped: cannot get active subscription: {e}");
+            return;
+        }
+    };
+
+    let mode = match settings.auto_connect_mode {
+        crate::settings::AutoConnectMode::Tun => CaptureMode::Tun,
+        crate::settings::AutoConnectMode::System => CaptureMode::SystemProxy,
+        crate::settings::AutoConnectMode::Last => match settings.last_capture_mode.as_deref() {
+            Some("tun") => CaptureMode::Tun,
+            _ => CaptureMode::SystemProxy,
+        },
+    };
+
+    log::info!(
+        "auto-connecting proxy node='{}' mode={}",
+        node.tag,
+        mode.as_str()
+    );
+
+    if let Err(e) = engine.set_selected(&node) {
+        log::warn!("auto-connect failed to set selected node: {e}");
+    }
+
+    let _guard = engine.gate.lock().await;
+    match start_with_node(app, &engine, &node, &subscription_id, mode, true).await {
+        Ok(()) => {
+            crate::tray::refresh_menu(app);
+            log::info!("startup auto-connect successful");
+        }
+        Err(e) => {
+            crate::tray::refresh_menu(app);
+            log::error!("startup auto-connect failed: {e}");
+            crate::tray::emit_error_alert(app, "自动连接失败", crate::tray::humanize_tray_error(&e));
+        }
+    }
 }
 
 /// Tray / shell: clear system proxy and stop sidecar.

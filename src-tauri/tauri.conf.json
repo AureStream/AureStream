@@ -21,7 +21,7 @@
         "maxWidth": 375,
         "maxHeight": 667,
         "resizable": false,
-        "visible": true
+        "visible": false
       }
     ],
     "security": {

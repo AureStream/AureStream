@@ -49,6 +49,7 @@ pub fn intranet_domain_rules(search_suffixes: &[String]) -> Vec<String> {
 }
 
 /// Tokens after `resolvectl domain <iface>:` — skip `~.` catch-all.
+#[allow(dead_code)]
 pub fn parse_search_domains(raw: &str) -> Vec<String> {
     let payload = raw.rsplit_once(':').map(|(_, rest)| rest).unwrap_or(raw);
     payload

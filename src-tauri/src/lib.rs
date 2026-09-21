@@ -4,17 +4,19 @@ mod commands;
 mod logging;
 mod node_key;
 mod persist;
+mod settings;
 mod state;
 mod tray;
 mod window_util;
 
 use commands::{
-    auth_login, auth_logout, auth_register, auth_restore, auth_verify, cleanup_on_exit,
-    engine_get_state, engine_probe_tun, engine_select_node, engine_start, engine_stop,
-    engine_uninstall_helper, ping_tcp, reconcile_persisted_state, reconcile_stale_runtime,
-    spawn_engine_health_monitor,
-    spawn_traffic_reporter, spawn_traffic_sampler, subs_list, subs_sync, EngineAppState,
+    auth_login, auth_logout, auth_register, auth_restore, auth_verify, auto_connect_on_startup,
+    cleanup_on_exit, engine_get_state, engine_probe_tun, engine_select_node, engine_start,
+    engine_stop, engine_uninstall_helper, ping_tcp, reconcile_persisted_state,
+    reconcile_stale_runtime, spawn_engine_health_monitor, spawn_traffic_reporter,
+    spawn_traffic_sampler, subs_list, subs_sync, EngineAppState,
 };
+use settings::{settings_get, settings_set, SettingsState};
 use state::{AuthState, SubsState};
 use tauri::{Manager, RunEvent, WindowEvent};
 use tray::TrayState;
@@ -32,6 +34,10 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(logging::plugin())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .manage(TrayState::new())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -47,11 +53,22 @@ pub fn run() {
             let auth_state = AuthState::load(&handle)?;
             let subs_state = SubsState::load(&handle)?;
             let engine_state = EngineAppState::load(&handle)?;
+            let settings_state = SettingsState::load(&handle)?;
+
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                if let Ok(is_enabled) = handle.autolaunch().is_enabled() {
+                    let _ = settings_state.sync_os_autostart(is_enabled);
+                }
+            }
+
             reconcile_stale_runtime(&engine_state);
             reconcile_persisted_state(&subs_state, &engine_state);
             handle.manage(auth_state);
             handle.manage(subs_state);
             handle.manage(engine_state);
+            handle.manage(settings_state);
             spawn_engine_health_monitor(&handle);
             spawn_traffic_sampler(&handle);
             spawn_traffic_reporter(&handle);
@@ -59,6 +76,30 @@ pub fn run() {
             if let Err(e) = tray::setup_tray(app) {
                 log::error!("system tray setup failed: {e}");
             }
+
+            // Window visibility: if started with --minimized / --silent or if user configured
+            // silent_start, keep window hidden in tray. Otherwise show it cleanly.
+            let args: Vec<String> = std::env::args().collect();
+            let is_autostart_arg = args.iter().any(|arg| arg == "--minimized" || arg == "--silent");
+            let is_silent_pref = handle
+                .try_state::<SettingsState>()
+                .map(|s| s.get().silent_start)
+                .unwrap_or(false);
+
+            if is_autostart_arg || is_silent_pref {
+                log::info!(
+                    "silent launch requested (autostart={is_autostart_arg}, pref={is_silent_pref}) — staying in tray"
+                );
+            } else {
+                log::info!("normal launch — showing main window");
+                window_util::show_main_window(&handle);
+            }
+
+            // Startup auto-connect task
+            let auto_conn_handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                auto_connect_on_startup(&auto_conn_handle).await;
+            });
 
             log::info!("app setup complete");
             Ok(())
@@ -89,6 +130,8 @@ pub fn run() {
             engine_probe_tun,
             engine_uninstall_helper,
             ping_tcp,
+            settings_get,
+            settings_set,
         ])
         .build(tauri::generate_context!())
         .expect("error while building AureStream")

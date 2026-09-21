@@ -225,4 +225,40 @@ export async function onEngineState(
   });
 }
 
+export type AutoConnectMode = "last" | "system" | "tun";
+
+export type AppSettings = {
+  schemaVersion: number;
+  autostart: boolean;
+  silentStart: boolean;
+  autoConnect: boolean;
+  autoConnectMode: AutoConnectMode;
+  lastCaptureMode?: "system" | "tun" | string | null;
+};
+
+export type AppSettingsUpdate = {
+  autostart?: boolean;
+  silentStart?: boolean;
+  autoConnect?: boolean;
+  autoConnectMode?: AutoConnectMode;
+};
+
+export const APP_SETTINGS_CHANGED_EVENT = "app-settings-changed";
+
+export async function settingsGet(): Promise<AppSettings> {
+  return invoke<AppSettings>("settings_get");
+}
+
+export async function settingsSet(update: AppSettingsUpdate): Promise<AppSettings> {
+  return invoke<AppSettings>("settings_set", { update });
+}
+
+export async function onSettingsChanged(
+  handler: (payload: AppSettings) => void,
+): Promise<UnlistenFn> {
+  return listen<AppSettings>(APP_SETTINGS_CHANGED_EVENT, (event) => {
+    handler(event.payload);
+  });
+}
+
 export { AuthError };

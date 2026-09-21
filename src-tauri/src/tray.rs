@@ -15,6 +15,7 @@ use serde::Serialize;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, AppHandle, Emitter, Manager};
+use tauri_plugin_autostart::ManagerExt;
 
 use crate::commands::engine::{self, CaptureMode, EngineAppState};
 use crate::window_util::{hide_main_window, show_main_window};
@@ -47,6 +48,8 @@ const TRAY_ID: &str = "main-tray";
 const ID_SHOW: &str = "tray_show";
 const ID_SYSTEM: &str = "tray_mode_system";
 const ID_TUN: &str = "tray_mode_tun";
+const ID_AUTOSTART: &str = "tray_autostart";
+const ID_AUTOCONNECT: &str = "tray_autoconnect";
 const ID_QUIT: &str = "tray_quit";
 
 /// Shared tray handle. Capture mode is owned exclusively by EngineAppState.
@@ -77,6 +80,14 @@ fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let system_checked = matches!(mode, CaptureMode::SystemProxy);
     let tun_checked = matches!(mode, CaptureMode::Tun);
 
+    let (autostart_checked, autoconnect_checked) = app
+        .try_state::<crate::settings::SettingsState>()
+        .map(|s| {
+            let settings = s.get();
+            (settings.autostart, settings.auto_connect)
+        })
+        .unwrap_or((false, false));
+
     let show = MenuItemBuilder::with_id(ID_SHOW, "显示主界面").build(app)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
 
@@ -89,10 +100,19 @@ fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
         .build(app)?;
 
     let sep2 = PredefinedMenuItem::separator(app)?;
+
+    let autostart = CheckMenuItemBuilder::with_id(ID_AUTOSTART, "开机自启动")
+        .checked(autostart_checked)
+        .build(app)?;
+    let autoconnect = CheckMenuItemBuilder::with_id(ID_AUTOCONNECT, "启动时自动连接")
+        .checked(autoconnect_checked)
+        .build(app)?;
+
+    let sep3 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItemBuilder::with_id(ID_QUIT, "退出应用").build(app)?;
 
     MenuBuilder::new(app)
-        .items(&[&show, &sep1, &system, &tun, &sep2, &quit])
+        .items(&[&show, &sep1, &system, &tun, &sep2, &autostart, &autoconnect, &sep3, &quit])
         .build()
 }
 
@@ -161,6 +181,18 @@ fn on_menu_event(app: &AppHandle, id: &str) {
                 on_toggle_tun(handle).await;
             });
         }
+        ID_AUTOSTART => {
+            let handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                on_toggle_autostart(handle).await;
+            });
+        }
+        ID_AUTOCONNECT => {
+            let handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                on_toggle_autoconnect(handle).await;
+            });
+        }
         ID_QUIT => {
             let handle = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -169,6 +201,45 @@ fn on_menu_event(app: &AppHandle, id: &str) {
         }
         _ => {}
     }
+}
+
+async fn on_toggle_autostart(app: AppHandle) {
+    let Some(state) = app.try_state::<crate::settings::SettingsState>() else {
+        return;
+    };
+    let current = state.get();
+    let next = !current.autostart;
+    let autolaunch = app.autolaunch();
+    let res = if next {
+        autolaunch.enable()
+    } else {
+        autolaunch.disable()
+    };
+    if let Err(e) = res {
+        log::error!("toggle autostart failed: {e}");
+        emit_error_alert(&app, "开机自启动设置失败", e.to_string());
+        return;
+    }
+    let mut updated = current;
+    updated.autostart = next;
+    if let Err(e) = state.save(&updated) {
+        log::error!("save settings failed: {e}");
+    }
+    refresh_menu(&app);
+    let _ = app.emit(crate::settings::APP_SETTINGS_CHANGED_EVENT, &updated);
+}
+
+async fn on_toggle_autoconnect(app: AppHandle) {
+    let Some(state) = app.try_state::<crate::settings::SettingsState>() else {
+        return;
+    };
+    let mut current = state.get();
+    current.auto_connect = !current.auto_connect;
+    if let Err(e) = state.save(&current) {
+        log::error!("save settings failed: {e}");
+    }
+    refresh_menu(&app);
+    let _ = app.emit(crate::settings::APP_SETTINGS_CHANGED_EVENT, &current);
 }
 
 async fn on_toggle_system_proxy(app: AppHandle) {
@@ -270,7 +341,7 @@ fn is_pre_start_error(err: &str) -> bool {
         || s.contains("虚拟网卡")
 }
 
-fn humanize_tray_error(err: &str) -> String {
+pub(crate) fn humanize_tray_error(err: &str) -> String {
     let s = err.trim();
     if s == "not_authenticated" {
         return "请先登录后再连接".into();

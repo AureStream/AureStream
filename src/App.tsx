@@ -7,6 +7,7 @@ import LoginPage from "@/components/LoginPage"
 import NodesPage from "@/components/NodesPage"
 import ProfilePage from "@/components/ProfilePage"
 import RegisterPage from "@/components/RegisterPage"
+import SettingsPage from "@/components/SettingsPage"
 import StartupLoadingScreen from "@/components/StartupLoadingScreen"
 import { AlertProvider } from "@/contexts/AlertContext"
 import { AuthProvider, useAuth } from "@/contexts/AuthContext"
@@ -80,6 +81,7 @@ function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/nodes" element={<NodesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
