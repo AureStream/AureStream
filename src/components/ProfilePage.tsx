@@ -84,7 +84,7 @@ export default function ProfilePage() {
   const { subscriptions, activeId, nodes, syncing } = useSubs()
   const { engine, stop } = useEngine()
   const { showErrorFromUnknown } = useAlert()
-  const [appVersion, setAppVersion] = useState("v1.0.2")
+  const [appVersion, setAppVersion] = useState("v1.0.3")
   const [manualSyncing, setManualSyncing] = useState(false)
 
   useEffect(() => {

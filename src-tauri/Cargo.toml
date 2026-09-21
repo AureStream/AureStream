@@ -1,6 +1,6 @@
 [package]
 name = "aurestream"
-version = "1.0.2"
+version = "1.0.3"
 description = "AureStream v2 desktop shell"
 authors = ["you"]
 edition = "2021"
