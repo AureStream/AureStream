@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
-import { formatAppVersionLabel } from "@/lib/app-version"
+import { APP_VERSION, formatAppVersionLabel } from "@/lib/app-version"
 import { subsSync } from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 
@@ -84,7 +84,7 @@ export default function ProfilePage() {
   const { subscriptions, activeId, nodes, syncing } = useSubs()
   const { engine, stop } = useEngine()
   const { showErrorFromUnknown } = useAlert()
-  const [appVersion, setAppVersion] = useState("v1.0.3")
+  const [appVersion, setAppVersion] = useState(APP_VERSION)
   const [manualSyncing, setManualSyncing] = useState(false)
 
   useEffect(() => {
