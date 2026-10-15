@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { AuthError, parseAuthInvokeError } from "./auth-errors";
 
@@ -58,6 +58,7 @@ export async function authRestore(): Promise<User | null> {
 export async function onAuthChanged(
   handler: (payload: AuthChangedPayload) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
   return listen<AuthChangedPayload>(AUTH_CHANGED_EVENT, (event) => {
     handler(event.payload);
   });
@@ -123,6 +124,7 @@ export async function subsList(): Promise<SubsUpdatedPayload> {
 export async function onSubsUpdated(
   handler: (payload: SubsUpdatedPayload) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
   return listen<SubsUpdatedPayload>(SUBS_UPDATED_EVENT, (event) => {
     handler(event.payload);
   });
@@ -143,6 +145,7 @@ export const TRAFFIC_LOCAL_UPDATED_EVENT = "traffic-local-updated";
 export async function onTrafficLocalUpdated(
   handler: (payload: TrafficLocalUpdatedPayload) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
   return listen<TrafficLocalUpdatedPayload>(
     TRAFFIC_LOCAL_UPDATED_EVENT,
     (event) => {
@@ -220,6 +223,7 @@ export async function engineGetState(): Promise<EngineStatePayload> {
 export async function onEngineState(
   handler: (payload: EngineStatePayload) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
   return listen<EngineStatePayload>(ENGINE_STATE_EVENT, (event) => {
     handler(event.payload);
   });
@@ -256,6 +260,7 @@ export async function settingsSet(update: AppSettingsUpdate): Promise<AppSetting
 export async function onSettingsChanged(
   handler: (payload: AppSettings) => void,
 ): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
   return listen<AppSettings>(APP_SETTINGS_CHANGED_EVENT, (event) => {
     handler(event.payload);
   });

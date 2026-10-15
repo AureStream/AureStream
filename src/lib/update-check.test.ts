@@ -11,8 +11,8 @@ afterEach(() => {
 });
 
 describe("update check deadline", () => {
-  it("caps the complete startup check at five seconds", () => {
-    expect(UPDATE_CHECK_DEADLINE_MS).toBe(5_000);
+  it("caps the complete startup check at seven seconds", () => {
+    expect(UPDATE_CHECK_DEADLINE_MS).toBe(7_000);
   });
 
   it("budgets two endpoint attempts inside the hard deadline", () => {
@@ -25,7 +25,7 @@ describe("update check deadline", () => {
     );
   });
 
-  it("fails when the version check reaches the five-second deadline", async () => {
+  it("fails when the version check reaches the seven-second deadline", async () => {
     vi.useFakeTimers();
     const result = withUpdateCheckDeadline(new Promise<never>(() => {}));
     const assertion = expect(result).rejects.toThrow("update_check_timeout");

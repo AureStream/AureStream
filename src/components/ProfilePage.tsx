@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { getVersion } from "@tauri-apps/api/app"
+import { RefreshCw } from "lucide-react"
 import { useAlert } from "@/contexts/AlertContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
+import { useUpdateOptional } from "@/components/ForceUpdateGate"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { APP_VERSION, formatAppVersionLabel } from "@/lib/app-version"
 import { cn } from "@/lib/utils"
@@ -82,7 +84,8 @@ export default function ProfilePage() {
   const { user, authLoading, logout } = useAuth()
   const { subscriptions, activeId, nodes, syncing, syncSubscriptions } = useSubs()
   const { engine, stop } = useEngine()
-  const { showErrorFromUnknown } = useAlert()
+  const { showErrorFromUnknown, showInfo, showError } = useAlert()
+  const updater = useUpdateOptional()
   const [appVersion, setAppVersion] = useState(APP_VERSION)
 
   useEffect(() => {
@@ -121,6 +124,21 @@ export default function ProfilePage() {
   const handleManualSync = async () => {
     if (syncing) return
     await syncSubscriptions({ force: true, interactive: true })
+  }
+
+  const handleCheckUpdate = async () => {
+    if (!updater || updater.isChecking) return
+    try {
+      const update = await updater.checkForUpdate({ interactive: true })
+      if (!update) {
+        showInfo(`当前已是最新版本 (${appVersion})`, "检查更新")
+      }
+    } catch (err) {
+      showError(
+        `检查更新失败：${err instanceof Error ? err.message : String(err)}。若网络受限，请连接节点后再试。`,
+        "检查更新",
+      )
+    }
   }
 
   const handleLogout = async () => {
@@ -318,9 +336,37 @@ export default function ProfilePage() {
                   </span>
                   <span className="text-[13px] font-medium">客户端版本</span>
                 </div>
-                <span className="text-[12px] font-semibold text-[#1a1d21] dark:text-foreground">
-                  {appVersion}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-semibold text-[#1a1d21] dark:text-foreground">
+                    {appVersion}
+                  </span>
+                  {updater && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updater.availableUpdate
+                          ? updater.openUpdateModal()
+                          : void handleCheckUpdate()
+                      }
+                      disabled={updater.isChecking}
+                      className={cn(
+                        "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all active:scale-95 disabled:opacity-60",
+                        updater.availableUpdate
+                          ? "border-[#118456]/30 bg-[#e9f8f0] text-[#118456] dark:bg-[#12382b] dark:text-[#5dd39e]"
+                          : "border-border bg-white text-[var(--auth-accent)] hover:bg-muted dark:bg-card",
+                      )}
+                    >
+                      <RefreshCw className={cn("size-3", updater.isChecking && "animate-spin")} />
+                      <span>
+                        {updater.isChecking
+                          ? "检测中…"
+                          : updater.availableUpdate
+                            ? `更新到 v${updater.availableUpdate.version}`
+                            : "检查更新"}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </section>

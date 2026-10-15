@@ -1,28 +1,51 @@
-import { useEffect, useState, type ReactNode } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
 import { getVersion } from "@tauri-apps/api/app"
 import { isTauri } from "@tauri-apps/api/core"
-import { Download, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
+import { Download, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react"
 import { relaunch } from "@tauri-apps/plugin-process"
 import { check } from "@tauri-apps/plugin-updater"
-import StartupLoadingScreen from "@/components/StartupLoadingScreen"
 import {
   allowUpdateCheckFailure,
-  STARTUP_PREVIEW_DURATION_MS,
   UPDATE_ENDPOINT_TIMEOUT_MS,
   withUpdateCheckDeadline,
 } from "@/lib/update-check"
+import { formatAppVersionLabel } from "@/lib/app-version"
 
-type AvailableUpdate = NonNullable<Awaited<ReturnType<typeof check>>>
-type GatePhase = "checking" | "ready" | "required" | "installing"
+export type AvailableUpdate = NonNullable<Awaited<ReturnType<typeof check>>>
 
-let startupCheck: Promise<AvailableUpdate | null> | null = null
+export type UpdateContextValue = {
+  currentVersion: string
+  availableUpdate: AvailableUpdate | null
+  isChecking: boolean
+  isInstalling: boolean
+  installProgress: number | null
+  installError: string | null
+  checkForUpdate: (options?: { interactive?: boolean }) => Promise<AvailableUpdate | null>
+  openUpdateModal: () => void
+  closeUpdateModal: () => void
+  installUpdate: () => Promise<void>
+}
 
-function checkAtStartup() {
-  startupCheck ??= allowUpdateCheckFailure(
-    withUpdateCheckDeadline(check({ timeout: UPDATE_ENDPOINT_TIMEOUT_MS })),
-    (error) => console.error("startup update check failed", error),
-  )
-  return startupCheck
+const UpdateContext = createContext<UpdateContextValue | null>(null)
+
+export function useUpdate(): UpdateContextValue {
+  const ctx = useContext(UpdateContext)
+  if (!ctx) {
+    throw new Error("useUpdate must be used within ForceUpdateGate")
+  }
+  return ctx
+}
+
+export function useUpdateOptional(): UpdateContextValue | null {
+  return useContext(UpdateContext)
 }
 
 function errorMessage(error: unknown): string {
@@ -31,56 +54,85 @@ function errorMessage(error: unknown): string {
   return "更新失败，请检查网络后重试"
 }
 
-/** Blocks product providers while checking and when an update is confirmed. */
 export default function ForceUpdateGate({ children }: { children: ReactNode }) {
-  const [phase, setPhase] = useState<GatePhase>(() =>
-    isTauri() ? "checking" : "ready",
+  const [currentVersion, setCurrentVersion] = useState(() =>
+    !isTauri() ? "v1.0.2" : "",
   )
-  const [currentVersion, setCurrentVersion] = useState("")
-  const [update, setUpdate] = useState<AvailableUpdate | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [update, setUpdate] = useState<AvailableUpdate | null>(() => {
+    if (!isTauri()) {
+      return {
+        version: "1.0.3",
+        body: "• 增加开机自启动配置支持\n• 优化启动更新机制与国内网络容灾\n• 修复 DNS 分流兼容性问题",
+        date: "2026-09-21T02:19:19Z",
+        downloadAndInstall: async (onEvent: (event: any) => void) => {
+          onEvent({ event: "Started", data: { contentLength: 20_000_000 } })
+          for (let i = 1; i <= 10; i++) {
+            await new Promise((r) => setTimeout(r, 180))
+            onEvent({ event: "Progress", data: { chunkLength: 2_000_000 } })
+          }
+        },
+      } as unknown as AvailableUpdate
+    }
+    return null
+  })
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isChecking, setIsChecking] = useState(false)
+  const [isInstalling, setIsInstalling] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
   const [downloaded, setDownloaded] = useState(0)
   const [contentLength, setContentLength] = useState<number | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const checkForUpdate = useCallback(
+    async (options?: { interactive?: boolean }) => {
+      if (!isTauri()) return null
+      setIsChecking(true)
+      setInstallError(null)
+      try {
+        const timeoutMs = options?.interactive ? 10_000 : UPDATE_ENDPOINT_TIMEOUT_MS
+        const checkPromise = check({ timeout: timeoutMs })
+        const available = options?.interactive
+          ? await checkPromise
+          : await allowUpdateCheckFailure(
+              withUpdateCheckDeadline(checkPromise),
+              (err) => console.error("update check failed", err),
+            )
 
-    void getVersion().then(
-      (version) => {
-        if (!cancelled) setCurrentVersion(version)
-      },
-      () => {},
-    )
-
-    // Preview for 3s while checking for update in parallel
-    const timerPromise = new Promise((resolve) =>
-      setTimeout(resolve, STARTUP_PREVIEW_DURATION_MS),
-    )
-    const checkPromise = isTauri() ? checkAtStartup() : Promise.resolve(null)
-
-    void Promise.all([checkPromise, timerPromise]).then(([available]) => {
-      if (cancelled) return
-      setError(null)
-      if (available) {
-        setUpdate(available)
-        setPhase("required")
-      } else {
-        setPhase("ready")
+        if (available) {
+          setUpdate(available)
+          if (options?.interactive) {
+            setIsModalOpen(true)
+          }
+        }
+        return available
+      } catch (err) {
+        if (options?.interactive) {
+          throw err
+        }
+        return null
+      } finally {
+        setIsChecking(false)
       }
-    })
+    },
+    [],
+  )
 
-    return () => {
-      cancelled = true
-    }
+  const openUpdateModal = useCallback(() => {
+    setIsModalOpen(true)
   }, [])
 
-  const installUpdate = async () => {
-    if (!update || phase === "installing") return
+  const closeUpdateModal = useCallback(() => {
+    if (!isInstalling) {
+      setIsModalOpen(false)
+    }
+  }, [isInstalling])
 
-    setError(null)
+  const installUpdate = useCallback(async () => {
+    if (!update || isInstalling) return
+
+    setInstallError(null)
     setDownloaded(0)
     setContentLength(null)
-    setPhase("installing")
+    setIsInstalling(true)
     try {
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") {
@@ -90,98 +142,168 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
         }
       })
       await relaunch()
-    } catch (installError) {
-      console.error("required update install failed", installError)
-      setError(errorMessage(installError))
-      setPhase("required")
+    } catch (installErr) {
+      console.error("update install failed", installErr)
+      setInstallError(errorMessage(installErr))
+      setIsInstalling(false)
     }
-  }
+  }, [update, isInstalling])
 
-  if (phase === "ready") return <>{children}</>
+  useEffect(() => {
+    let cancelled = false
 
-  if (phase === "checking") {
-    return <StartupLoadingScreen message="正在检查版本更新…" />
-  }
+    void getVersion().then(
+      (version) => {
+        if (!cancelled) setCurrentVersion(formatAppVersionLabel(version))
+      },
+      () => {},
+    )
+
+    // Background silent check on startup without blocking user
+    if (isTauri()) {
+      void checkForUpdate({ interactive: false })
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [checkForUpdate])
 
   const progress =
     contentLength && contentLength > 0
       ? Math.min(100, Math.round((downloaded / contentLength) * 100))
       : null
 
+  const contextValue = useMemo<UpdateContextValue>(
+    () => ({
+      currentVersion,
+      availableUpdate: update,
+      isChecking,
+      isInstalling,
+      installProgress: progress,
+      installError,
+      checkForUpdate,
+      openUpdateModal,
+      closeUpdateModal,
+      installUpdate,
+    }),
+    [
+      currentVersion,
+      update,
+      isChecking,
+      isInstalling,
+      progress,
+      installError,
+      checkForUpdate,
+      openUpdateModal,
+      closeUpdateModal,
+      installUpdate,
+    ],
+  )
+
   return (
-    <main className="flex h-full min-h-0 w-full flex-col bg-white px-7 pb-8 pt-20 dark:bg-background">
-      <div className="mx-auto flex w-full max-w-[300px] flex-1 flex-col">
-        <div className="flex size-12 items-center justify-center rounded-lg bg-[#e9f8f0] text-[#118456] dark:bg-[#12382b] dark:text-[#5dd39e]">
-          <ShieldCheck className="size-6" strokeWidth={1.8} aria-hidden />
-        </div>
+    <UpdateContext.Provider value={contextValue}>
+      {children}
 
-        <h1 className="mt-7 text-[22px] font-bold text-foreground">发现新版本</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-muted-foreground">
-          检测到 AureStream 有新版本可用。建议更新以获得最新的功能与节点支持。
-        </p>
-
-        <div className="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-y border-border py-4 text-center">
-          <div>
-            <p className="text-[11px] text-muted-foreground">当前版本</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-foreground">
-              {currentVersion || "..."}
-            </p>
-          </div>
-          <RefreshCw className="size-4 text-muted-foreground" aria-hidden />
-          <div>
-            <p className="text-[11px] text-muted-foreground">最新版本</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-[#118456] dark:text-[#5dd39e]">
-              {update?.version ?? "..."}
-            </p>
-          </div>
-        </div>
-
-        {phase === "installing" ? (
-          <div className="mt-7" aria-live="polite">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>正在下载并安装</span>
-              <span>{progress === null ? "请稍候" : `${progress}%`}</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-[#118456] transition-[width] duration-200"
-                style={{ width: progress === null ? "18%" : `${progress}%` }}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {error ? (
-          <p className="mt-5 break-words text-xs leading-5 text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="mt-auto flex flex-col gap-2.5 pt-6">
-          <button
-            type="button"
-            onClick={() => void installUpdate()}
-            disabled={phase === "installing"}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[var(--auth-accent)] px-4 text-sm font-semibold text-white transition-opacity disabled:cursor-wait disabled:opacity-70"
-          >
-            {phase === "installing" ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Download className="size-4" aria-hidden />
+      {/* Update Modal Dialog */}
+      {isModalOpen && update ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative flex w-full max-w-[320px] flex-col rounded-2xl border border-border bg-white p-6 shadow-2xl dark:bg-card">
+            {!isInstalling && (
+              <button
+                type="button"
+                onClick={closeUpdateModal}
+                className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="关闭"
+              >
+                <X className="size-4" />
+              </button>
             )}
-            {phase === "installing" ? "正在更新" : error ? "重试更新" : "立即更新"}
-          </button>
-          {phase !== "installing" && (
-            <button
-              type="button"
-              onClick={() => setPhase("ready")}
-              className="flex h-10 w-full items-center justify-center rounded-lg text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              暂不更新，进入首页
-            </button>
-          )}
+
+            <div className="flex size-11 items-center justify-center rounded-xl bg-[#e9f8f0] text-[#118456] dark:bg-[#12382b] dark:text-[#5dd39e]">
+              <ShieldCheck className="size-5" strokeWidth={2} aria-hidden />
+            </div>
+
+            <h2 className="mt-4 text-lg font-bold text-foreground">发现新版本</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              检测到 AureStream 有新版本可用。建议更新以获得最新的功能与节点支持。
+            </p>
+
+            <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-border/80 bg-muted/30 py-3 text-center">
+              <div>
+                <p className="text-[11px] text-muted-foreground">当前版本</p>
+                <p className="mt-0.5 font-mono text-xs font-semibold text-foreground">
+                  {currentVersion || "..."}
+                </p>
+              </div>
+              <RefreshCw className="size-3.5 text-muted-foreground/60" aria-hidden />
+              <div>
+                <p className="text-[11px] text-muted-foreground">最新版本</p>
+                <p className="mt-0.5 font-mono text-xs font-semibold text-[#118456] dark:text-[#5dd39e]">
+                  v{update.version}
+                </p>
+              </div>
+            </div>
+
+            {update.body ? (
+              <div className="mt-3 max-h-24 overflow-y-auto rounded-lg bg-muted/40 p-2.5 text-left font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                {update.body}
+              </div>
+            ) : null}
+
+            {isInstalling ? (
+              <div className="mt-4" aria-live="polite">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>正在下载并安装</span>
+                  <span>{progress === null ? "请稍候…" : `${progress}%`}</span>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-[#118456] transition-[width] duration-200"
+                    style={{ width: progress === null ? "20%" : `${progress}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {installError ? (
+              <p className="mt-3 break-words text-xs text-destructive" role="alert">
+                {installError}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => void installUpdate()}
+                disabled={isInstalling}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--auth-accent)] px-4 text-xs font-semibold text-white transition-opacity disabled:cursor-wait disabled:opacity-70"
+              >
+                {isInstalling ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Download className="size-4" aria-hidden />
+                )}
+                {isInstalling ? "正在更新…" : installError ? "重试更新" : "立即更新"}
+              </button>
+
+              {!isInstalling && (
+                <button
+                  type="button"
+                  onClick={closeUpdateModal}
+                  className="flex h-8 w-full items-center justify-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  稍后再说
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </main>
+      ) : null}
+    </UpdateContext.Provider>
   )
 }

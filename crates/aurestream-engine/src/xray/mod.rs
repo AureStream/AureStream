@@ -260,6 +260,23 @@ impl Engine for XrayEngine {
                 .unwrap_or_else(|| "<none>".into())
         );
 
+        if probe_port(socks_port).await || probe_port(api_port).await {
+            let occupied = if probe_port(socks_port).await {
+                socks_port
+            } else {
+                api_port
+            };
+            let reason = format!(
+                "本地端口 :{occupied} 已被占用，无法启动内核。请检查是否有其他代理软件或残留后台进程正在运行。"
+            );
+            log::error!("{reason}");
+            let mut guard = self.lock();
+            let _ = guard.sm.transition(EngineState::Failed {
+                reason: reason.clone(),
+            });
+            return Err(EngineError::not_ready(reason));
+        }
+
         let mut cmd = Command::new(&sidecar);
         cmd.args(["run", "-c", &config_str])
             .stdin(Stdio::null())
@@ -636,18 +653,30 @@ async fn probe_port(port: u16) -> bool {
 
 /// Kill the child (if still alive) and return a short stderr/stdout snippet.
 async fn collect_child_failure(child: &mut Child, core_log: Option<&Path>) -> String {
+    let _ = child.kill().await;
+    let status = child.wait().await.ok();
+
     let mut stderr_buf = Vec::new();
     let mut stdout_buf = Vec::new();
 
-    if let Some(mut err) = child.stderr.take() {
-        let _ = timeout(Duration::from_millis(400), err.read_to_end(&mut stderr_buf)).await;
-    }
-    if let Some(mut out) = child.stdout.take() {
-        let _ = timeout(Duration::from_millis(200), out.read_to_end(&mut stdout_buf)).await;
-    }
+    let mut err_pipe = child.stderr.take();
+    let mut out_pipe = child.stdout.take();
 
-    let _ = child.kill().await;
-    let status = child.wait().await.ok();
+    let read_err = async {
+        if let Some(ref mut err) = err_pipe {
+            let _ = err.read_to_end(&mut stderr_buf).await;
+        }
+    };
+    let read_out = async {
+        if let Some(ref mut out) = out_pipe {
+            let _ = out.read_to_end(&mut stdout_buf).await;
+        }
+    };
+
+    let _ = timeout(Duration::from_millis(1000), async {
+        tokio::join!(read_err, read_out)
+    })
+    .await;
 
     let err = String::from_utf8_lossy(&stderr_buf);
     let out = String::from_utf8_lossy(&stdout_buf);
@@ -739,18 +768,45 @@ where
 }
 
 fn last_useful_line(text: &str) -> String {
+    // 1. Look for lines that look like explicit failure / error indicators
+    if let Some(err) = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .rev()
+        .find(|l| {
+            let lower = l.to_ascii_lowercase();
+            lower.contains("failed to start")
+                || lower.contains("[error]")
+                || lower.contains("panic:")
+                || lower.contains("fatal")
+                || lower.contains("bind:")
+                || lower.contains("address already in use")
+                || lower.contains("only one usage of each socket address")
+                || lower.contains("cannot find the file")
+                || lower.contains("permission denied")
+                || lower.contains("failed to load config")
+        })
+    {
+        return err.chars().take(400).collect();
+    }
+
+    // 2. Otherwise find the last line that is NOT a banner, info, warning, or debug log
     text.lines()
         .map(str::trim)
         .filter(|l| !l.is_empty())
         .rev()
         .find(|l| {
-            // Prefer the actual failure line over the banner.
+            let lower = l.to_ascii_lowercase();
             !l.starts_with("Xray ")
                 && !l.contains("Penetrates Everything")
                 && !l.contains("anti-censorship")
                 && !l.contains("Reading config:")
+                && !l.contains("[Info]")
+                && !l.contains("[Warning]")
+                && !l.contains("[Debug]")
+                && !lower.contains("started")
         })
-        .or_else(|| text.lines().map(str::trim).filter(|l| !l.is_empty()).last())
         .unwrap_or("")
         .chars()
         .take(400)
@@ -1034,6 +1090,31 @@ Failed to start: main: failed to load config files: geoip.dat
 ";
         let line = last_useful_line(text);
         assert!(line.contains("Failed to start"), "{line}");
+    }
+
+    #[test]
+    fn last_useful_line_skips_warnings_and_prioritizes_fatal_error() {
+        let text = "\
+Xray 26.7.28 (Xray, Penetrates Everything.) 5ca6f4b (go1.26.5 windows/amd64)
+A unified platform for anti-censorship.
+2026/10/15 11:28:00.174318 [Info] infra/conf/serial: Reading config: &{Name:xray-config.json Format:json}
+2026/10/15 11:28:00.183737 [Warning] common/errors: The feature WebSocket transport (with ALPN http/1.1, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP H2 & H3 as soon as possible.
+Failed to start: app/proxyman/inbound: failed to listen TCP on 10808 > transport/internet/tcp: failed to listen TCP on 127.0.0.1:10808 > listen tcp 127.0.0.1:10808: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+";
+        let line = last_useful_line(text);
+        assert!(line.contains("failed to listen TCP on 10808"), "got: {line}");
+        assert!(!line.contains("[Warning]"), "got: {line}");
+    }
+
+    #[test]
+    fn last_useful_line_does_not_return_warning_even_if_last() {
+        let text = "\
+Xray 26.7.28 (Xray, Penetrates Everything.) 5ca6f4b
+2026/10/15 11:28:00.174318 [Info] infra/conf/serial: Reading config: ...
+2026/10/15 11:28:00.183737 [Warning] common/errors: The feature WebSocket transport is deprecated
+";
+        let line = last_useful_line(text);
+        assert_eq!(line, "");
     }
 
     #[test]

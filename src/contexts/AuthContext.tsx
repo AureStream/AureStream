@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import {
   authLogin,
   authLogout,
@@ -53,6 +54,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unlisten: (() => void) | undefined;
 
     (async () => {
+      if (!isTauri()) {
+        if (!cancelled) {
+          setUser({ id: "demo-user", email: "demo@aurestream.com", created_at: Date.now() });
+          setAuthChecking(false);
+        }
+        return;
+      }
+
       unlisten = await onAuthChanged((payload) => {
         if (!cancelled) {
           // Startup emits `auth-changed` twice (setup spawn + authRestore) with

@@ -355,8 +355,17 @@ pub(crate) fn humanize_tray_error(err: &str) -> String {
     if s.starts_with("node_not_found:") {
         return "节点不存在或已失效，请在应用内重新选择节点".into();
     }
+    if s.contains("bind:")
+        || s.contains("address already in use")
+        || s.contains("Only one usage of each socket address")
+        || s.contains("failed to listen TCP on")
+        || s.contains("本地端口")
+    {
+        return "本地端口被占用（10808/10809）。请检查是否有其他代理软件（如 Clash、v2rayN）正在运行，或存在残留后台进程。".into();
+    }
     if s.starts_with("sidecar failed:") {
-        return format!("内核启动失败：{}", s.trim_start_matches("sidecar failed:"));
+        let inner = s.trim_start_matches("sidecar failed:").trim();
+        return format!("内核启动失败：{inner}");
     }
     if s.contains("tun_not_installed")
         || s.contains("虚拟网卡服务尚未安装")

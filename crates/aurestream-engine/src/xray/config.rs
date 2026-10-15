@@ -282,6 +282,17 @@ pub fn build_xray_config_value_with_options(
         "outboundTag": "direct"
     }));
 
+    // Control-plane API & subscription hosts must always route direct so
+    // subscription updates, token refreshes, and traffic reporting never fail
+    // when a proxy node is unreachable, expired, or has TLS SNI conflict.
+    rules.push(json!({
+        "type": "field",
+        "domain": [
+            "domain:chilix.ccwu.cc"
+        ],
+        "outboundTag": "direct"
+    }));
+
     if opts.smart_routing {
         // Prefer geosite/geoip when assets present; harmless if missing at dial time for non-matching.
         rules.push(json!({
@@ -714,6 +725,9 @@ fn build_stream_settings(node: &ProxyNode) -> Option<Value> {
                 );
                 if let Some(host) = &node.host {
                     ws.insert("host".into(), Value::String(host.clone()));
+                    let mut headers = serde_json::Map::new();
+                    headers.insert("Host".into(), Value::String(host.clone()));
+                    ws.insert("headers".into(), Value::Object(headers));
                 }
                 stream.insert("wsSettings".into(), Value::Object(ws));
             }
@@ -735,6 +749,9 @@ fn build_stream_settings(node: &ProxyNode) -> Option<Value> {
                 );
                 if let Some(host) = &node.host {
                     hu.insert("host".into(), Value::String(host.clone()));
+                    let mut headers = serde_json::Map::new();
+                    headers.insert("Host".into(), Value::String(host.clone()));
+                    hu.insert("headers".into(), Value::Object(headers));
                 }
                 stream.insert("httpupgradeSettings".into(), Value::Object(hu));
             }
@@ -746,6 +763,9 @@ fn build_stream_settings(node: &ProxyNode) -> Option<Value> {
                 );
                 if let Some(host) = &node.host {
                     xh.insert("host".into(), Value::String(host.clone()));
+                    let mut headers = serde_json::Map::new();
+                    headers.insert("Host".into(), Value::String(host.clone()));
+                    xh.insert("headers".into(), Value::Object(headers));
                 }
                 stream.insert("xhttpSettings".into(), Value::Object(xh));
             }

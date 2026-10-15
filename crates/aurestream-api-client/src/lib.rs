@@ -31,6 +31,7 @@ impl ApiClient {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(15))
                 .connect_timeout(std::time::Duration::from_secs(10))
+                .no_proxy()
                 .build()
                 .expect("reqwest client build"),
         }

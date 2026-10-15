@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { getVersion } from "@tauri-apps/api/app"
+import { Info, RefreshCw } from "lucide-react"
 import { useAlert } from "@/contexts/AlertContext"
+import { useUpdateOptional } from "@/components/ForceUpdateGate"
 import MobileTopBar from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
+import { APP_VERSION, formatAppVersionLabel } from "@/lib/app-version"
 import {
   type AppSettings,
   type AutoConnectMode,
@@ -48,13 +52,43 @@ const Icons = {
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { showConfirm, showErrorFromUnknown, showInfo } = useAlert()
+  const { showConfirm, showErrorFromUnknown, showInfo, showError } = useAlert()
+  const updater = useUpdateOptional()
 
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tunHelperReady, setTunHelperReady] = useState(false)
   const [uninstallingHelper, setUninstallingHelper] = useState(false)
+  const [appVersion, setAppVersion] = useState(APP_VERSION)
+
+  useEffect(() => {
+    let cancelled = false
+    void getVersion().then(
+      (v) => {
+        if (!cancelled) setAppVersion(formatAppVersionLabel(v))
+      },
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleCheckUpdate = async () => {
+    if (!updater || updater.isChecking) return
+    try {
+      const update = await updater.checkForUpdate({ interactive: true })
+      if (!update) {
+        showInfo(`当前已是最新版本 (${appVersion})`, "检查更新")
+      }
+    } catch (err) {
+      showError(
+        `检查更新失败：${err instanceof Error ? err.message : String(err)}。若网络受限，请连接节点后再试。`,
+        "检查更新",
+      )
+    }
+  }
 
   const refreshTunHelper = useCallback(async () => {
     try {
@@ -323,6 +357,56 @@ export default function SettingsPage() {
                     {uninstallingHelper ? "卸载中…" : "卸载虚拟网卡特权组件"}
                   </button>
                 ) : null}
+              </div>
+            </div>
+
+            {/* Section 4: About & Updates */}
+            <div className="flex flex-col gap-2">
+              <div className="px-1 text-[12px] font-bold tracking-wider text-[#9aa0a6] uppercase">
+                关于与更新
+              </div>
+              <div className="rounded-2xl border border-[#eceef1] bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:border-border dark:bg-card">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--auth-accent)]/10 text-[var(--auth-accent)]">
+                      <Info className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-bold text-[#1a1d21] dark:text-foreground">
+                        客户端版本
+                      </div>
+                      <div className="text-[12px] font-medium text-[#8b93a0]">
+                        {appVersion}
+                      </div>
+                    </div>
+                  </div>
+                  {updater && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updater.availableUpdate
+                          ? updater.openUpdateModal()
+                          : void handleCheckUpdate()
+                      }
+                      disabled={updater.isChecking}
+                      className={cn(
+                        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-all active:scale-95 disabled:opacity-60",
+                        updater.availableUpdate
+                          ? "border-[#118456]/30 bg-[#e9f8f0] text-[#118456] dark:bg-[#12382b] dark:text-[#5dd39e]"
+                          : "border-border bg-white text-[var(--auth-accent)] hover:bg-muted dark:bg-card",
+                      )}
+                    >
+                      <RefreshCw className={cn("size-3.5", updater.isChecking && "animate-spin")} />
+                      <span>
+                        {updater.isChecking
+                          ? "检测中…"
+                          : updater.availableUpdate
+                            ? `更新到 v${updater.availableUpdate.version}`
+                            : "检查更新"}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

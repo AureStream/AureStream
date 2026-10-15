@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { AuthError } from "@/lib/auth-errors"
 import { cn } from "@/lib/utils"
@@ -190,6 +191,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
 
   // Rust tray / shell errors → same modal.
   useEffect(() => {
+    if (!isTauri()) return
     let unlisten: (() => void) | undefined
     let cancelled = false
     void listen<AppAlertPayload>("app-alert", (event) => {

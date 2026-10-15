@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { useAlert } from "@/contexts/AlertContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -206,11 +207,15 @@ export function SubsProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        // Empty cache is fine; sync will fill.
+        if (!isTauri()) {
+          setNodes([{ tag: "hk-01", name: "香港 01 专线", protocol: "vless" }]);
+        }
       });
 
     // Initial sync after mount/login/restore: update latest subscriptions to local
-    void syncSubscriptions({ force: true, interactive: false });
+    if (isTauri()) {
+      void syncSubscriptions({ force: true, interactive: false });
+    }
 
     return () => {
       cancelled = true;

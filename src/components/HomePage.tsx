@@ -6,6 +6,7 @@ import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { Switch } from "@/components/ui/switch"
 import NodeFlag from "@/components/NodeFlag"
+import { useUpdateOptional } from "@/components/ForceUpdateGate"
 import { formatAppVersionLabel } from "@/lib/app-version"
 import {
   loadProxyPrefs,
@@ -66,6 +67,7 @@ export default function HomePage() {
   const navigate = useNavigate()
   const { nodes, subscriptions, activeId, syncing } = useSubs()
   const { engine, connectedSeconds, start, stop } = useEngine()
+  const updater = useUpdateOptional()
 
   const [smartRouting, setSmartRouting] = useState(true)
   const [enableTun, setEnableTun] = useState(false)
@@ -460,28 +462,44 @@ export default function HomePage() {
           </div>
 
           <footer>
-            <div className="mx-auto flex max-w-[220px] items-center gap-3">
-              <div className="h-px flex-1 bg-[#eceef1]" />
-              <div className="flex items-center gap-1.5">
-                <img
-                  src="/logo.png"
-                  alt=""
-                  className="size-3.5 rounded-[4px] object-cover opacity-80"
-                  draggable={false}
-                />
-                <span className="text-[11px] font-medium tracking-wide text-[#9aa0a6]">
-                  AureStream
-                </span>
-                {appVersion ? (
-                  <>
-                    <span className="text-[11px] text-[#d0d4da]">·</span>
-                    <span className="text-[11px] font-medium tabular-nums text-[#b0b8c4]">
-                      {appVersion}
-                    </span>
-                  </>
-                ) : null}
-              </div>
-              <div className="h-px flex-1 bg-[#eceef1]" />
+            <div className="mx-auto flex max-w-[280px] items-center gap-3">
+              <div className="h-px flex-1 bg-[#eceef1] dark:bg-border/60" />
+              {updater?.availableUpdate ? (
+                <button
+                  type="button"
+                  onClick={() => updater.openUpdateModal()}
+                  className="group inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-600 shadow-xs transition-all hover:bg-emerald-100 active:scale-95 dark:border-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60"
+                  title={`发现新版本 v${updater.availableUpdate.version}，点击更新`}
+                >
+                  <span className="relative flex size-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500"></span>
+                  </span>
+                  <span>发现新版本 v{updater.availableUpdate.version}</span>
+                  <span className="font-semibold underline decoration-emerald-500/50">立即更新</span>
+                </button>
+              ) : (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <img
+                    src="/logo.png"
+                    alt=""
+                    className="size-3.5 rounded-[4px] object-cover opacity-80"
+                    draggable={false}
+                  />
+                  <span className="text-[11px] font-medium tracking-wide text-[#9aa0a6]">
+                    AureStream
+                  </span>
+                  {appVersion ? (
+                    <>
+                      <span className="text-[11px] text-[#d0d4da] dark:text-muted-foreground/40">·</span>
+                      <span className="text-[11px] font-medium tabular-nums text-[#b0b8c4]">
+                        {appVersion}
+                      </span>
+                    </>
+                  ) : null}
+                </div>
+              )}
+              <div className="h-px flex-1 bg-[#eceef1] dark:bg-border/60" />
             </div>
           </footer>
         </div>
