@@ -83,7 +83,7 @@ export default function ProfilePage() {
   const { user, authLoading, logout } = useAuth()
   const { subscriptions, activeId, nodes, syncing } = useSubs()
   const { engine, stop } = useEngine()
-  const { showErrorFromUnknown } = useAlert()
+  const { showErrorFromUnknown, showSuccess, showInfo } = useAlert()
   const [appVersion, setAppVersion] = useState(APP_VERSION)
   const [manualSyncing, setManualSyncing] = useState(false)
 
@@ -124,9 +124,18 @@ export default function ProfilePage() {
     if (manualSyncing || syncing) return
     setManualSyncing(true)
     try {
-      await subsSync()
+      const payload = await subsSync()
+      const subCount = payload.subscriptions?.length ?? 0
+      const nodeCount = payload.nodes?.length ?? 0
+      if (subCount === 0) {
+        showInfo("订阅已刷新，但未获取到有效订阅", "同步提示")
+      } else if (nodeCount === 0) {
+        showInfo(`已同步 ${subCount} 条订阅，但未解析到可用节点`, "同步提示")
+      } else {
+        showSuccess(`订阅同步成功，已解析并保存 ${nodeCount} 个节点`, "同步成功")
+      }
     } catch (err) {
-      showErrorFromUnknown(err, "同步订阅失败", "同步错误")
+      showErrorFromUnknown(err, "同步订阅失败，请检查网络后重试", "同步失败")
     } finally {
       setManualSyncing(false)
     }

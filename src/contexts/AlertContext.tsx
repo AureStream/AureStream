@@ -28,6 +28,7 @@ type AlertContextValue = {
   showAlert: (options: AlertOptions) => void
   showError: (message: string, title?: string) => void
   showInfo: (message: string, title?: string) => void
+  showSuccess: (message: string, title?: string) => void
   showConfirm: (options: ConfirmOptions) => Promise<boolean>
   /** Convert unknown throw / IPC failure into a user-facing dialog. */
   showErrorFromUnknown: (err: unknown, fallback?: string, title?: string) => void
@@ -173,6 +174,13 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     [showAlert],
   )
 
+  const showSuccess = useCallback(
+    (message: string, title = "成功") => {
+      showAlert({ message, title, kind: "success" })
+    },
+    [showAlert],
+  )
+
   const showErrorFromUnknown = useCallback(
     (err: unknown, fallback = "操作失败", title = "错误") => {
       showError(formatUnknownError(err, fallback), title)
@@ -203,8 +211,8 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }, [showAlert])
 
   const value = useMemo(
-    () => ({ showAlert, showError, showInfo, showConfirm, showErrorFromUnknown }),
-    [showAlert, showError, showInfo, showConfirm, showErrorFromUnknown],
+    () => ({ showAlert, showError, showInfo, showSuccess, showConfirm, showErrorFromUnknown }),
+    [showAlert, showError, showInfo, showSuccess, showConfirm, showErrorFromUnknown],
   )
 
   const current = queue[0]
