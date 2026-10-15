@@ -1,7 +1,7 @@
 /** Background subscription refresh policy (no manual UI). */
 
-/** How often to pull remote subscriptions while logged in. */
-export const SUBS_SYNC_INTERVAL_MS = 30 * 60 * 1000
+/** How often to pull remote subscriptions while logged in (1 hour). */
+export const SUBS_SYNC_INTERVAL_MS = 60 * 60 * 1000
 
 /** Ignore a scheduled tick if a successful sync happened more recently. */
 export const SUBS_SYNC_MIN_GAP_MS = 60 * 1000

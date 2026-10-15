@@ -7,7 +7,6 @@ import { useEngine } from "@/contexts/EngineContext"
 import { useSubs } from "@/contexts/SubsContext"
 import MobileTopBar, { topBarIconBtnClass } from "@/components/MobileTopBar"
 import { APP_VERSION, formatAppVersionLabel } from "@/lib/app-version"
-import { subsSync } from "@/lib/ipc"
 import { cn } from "@/lib/utils"
 
 const ONE_GB = 1024 * 1024 * 1024
@@ -81,11 +80,10 @@ const Icons = {
 export default function ProfilePage() {
   const navigate = useNavigate()
   const { user, authLoading, logout } = useAuth()
-  const { subscriptions, activeId, nodes, syncing } = useSubs()
+  const { subscriptions, activeId, nodes, syncing, syncSubscriptions } = useSubs()
   const { engine, stop } = useEngine()
-  const { showErrorFromUnknown, showSuccess, showInfo } = useAlert()
+  const { showErrorFromUnknown } = useAlert()
   const [appVersion, setAppVersion] = useState(APP_VERSION)
-  const [manualSyncing, setManualSyncing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -121,24 +119,8 @@ export default function ProfilePage() {
   const daysInfo = hasSub ? getDaysRemaining(sub!.expireTime) : null
 
   const handleManualSync = async () => {
-    if (manualSyncing || syncing) return
-    setManualSyncing(true)
-    try {
-      const payload = await subsSync()
-      const subCount = payload.subscriptions?.length ?? 0
-      const nodeCount = payload.nodes?.length ?? 0
-      if (subCount === 0) {
-        showInfo("订阅已刷新，但未获取到有效订阅", "同步提示")
-      } else if (nodeCount === 0) {
-        showInfo(`已同步 ${subCount} 条订阅，但未解析到可用节点`, "同步提示")
-      } else {
-        showSuccess(`订阅同步成功，已解析并保存 ${nodeCount} 个节点`, "同步成功")
-      }
-    } catch (err) {
-      showErrorFromUnknown(err, "同步订阅失败，请检查网络后重试", "同步失败")
-    } finally {
-      setManualSyncing(false)
-    }
+    if (syncing) return
+    await syncSubscriptions({ force: true, interactive: true })
   }
 
   const handleLogout = async () => {
@@ -153,7 +135,7 @@ export default function ProfilePage() {
     }
   }
 
-  const isSyncBusy = manualSyncing || syncing
+  const isSyncBusy = syncing
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#fafbfc] animate-fade-in dark:bg-background">

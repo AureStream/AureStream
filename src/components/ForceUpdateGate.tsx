@@ -7,6 +7,7 @@ import { check } from "@tauri-apps/plugin-updater"
 import StartupLoadingScreen from "@/components/StartupLoadingScreen"
 import {
   allowUpdateCheckFailure,
+  STARTUP_PREVIEW_DURATION_MS,
   UPDATE_ENDPOINT_TIMEOUT_MS,
   withUpdateCheckDeadline,
 } from "@/lib/update-check"
@@ -42,16 +43,22 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
   const [contentLength, setContentLength] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!isTauri()) return
-
     let cancelled = false
+
     void getVersion().then(
       (version) => {
         if (!cancelled) setCurrentVersion(version)
       },
       () => {},
     )
-    void checkAtStartup().then((available) => {
+
+    // Preview for 3s while checking for update in parallel
+    const timerPromise = new Promise((resolve) =>
+      setTimeout(resolve, STARTUP_PREVIEW_DURATION_MS),
+    )
+    const checkPromise = isTauri() ? checkAtStartup() : Promise.resolve(null)
+
+    void Promise.all([checkPromise, timerPromise]).then(([available]) => {
       if (cancelled) return
       setError(null)
       if (available) {
@@ -108,9 +115,9 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
           <ShieldCheck className="size-6" strokeWidth={1.8} aria-hidden />
         </div>
 
-        <h1 className="mt-7 text-[22px] font-bold text-foreground">需要更新 AureStream</h1>
+        <h1 className="mt-7 text-[22px] font-bold text-foreground">发现新版本</h1>
         <p className="mt-2 text-sm leading-6 text-[#6b7280] dark:text-muted-foreground">
-          已发布新版本。完成更新并重新启动后才能继续使用。
+          检测到 AureStream 有新版本可用。建议更新以获得最新的功能与节点支持。
         </p>
 
         <div className="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-y border-border py-4 text-center">
@@ -150,19 +157,30 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
           </p>
         ) : null}
 
-        <button
-          type="button"
-          onClick={() => void installUpdate()}
-          disabled={phase === "installing"}
-          className="mt-auto flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[var(--auth-accent)] px-4 text-sm font-semibold text-white transition-opacity disabled:cursor-wait disabled:opacity-70"
-        >
-          {phase === "installing" ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <Download className="size-4" aria-hidden />
+        <div className="mt-auto flex flex-col gap-2.5 pt-6">
+          <button
+            type="button"
+            onClick={() => void installUpdate()}
+            disabled={phase === "installing"}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[var(--auth-accent)] px-4 text-sm font-semibold text-white transition-opacity disabled:cursor-wait disabled:opacity-70"
+          >
+            {phase === "installing" ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <Download className="size-4" aria-hidden />
+            )}
+            {phase === "installing" ? "正在更新" : error ? "重试更新" : "立即更新"}
+          </button>
+          {phase !== "installing" && (
+            <button
+              type="button"
+              onClick={() => setPhase("ready")}
+              className="flex h-10 w-full items-center justify-center rounded-lg text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              暂不更新，进入首页
+            </button>
           )}
-          {phase === "installing" ? "正在更新" : error ? "重试更新" : "立即更新"}
-        </button>
+        </div>
       </div>
     </main>
   )
