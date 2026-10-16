@@ -1,0 +1,51 @@
+{
+  "version": "1.0.4",
+  "notes": "**Full Changelog**: https://github.com/AureStream/AureStream/compare/v1.0.3...v1.0.4",
+  "pub_date": "2026-10-16T03:29:19Z",
+  "platforms": {
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaS84cTdTR3cxVlBnZSs0WU84YUNRdEhTNkNRRzNvc2NINUJIbkpHeHhLMk45TU4xT1NjbjUxb0xPTTB2T0M3L3dnaEFEZHErT0JYUjFrcUxVOWxySUEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyMDczCWZpbGU6QXVyZVN0cmVhbS5hcHAudGFyLmd6CXZlcnNpb246MS4wLjQKd1pnWWUyNnYrcFViYkR5cXYzeVZneDhJSVZWajQrNUhlYkliNFoxM3g5NkI1MTZHelVRYWozQXBqUTRUcSswN2JMdlNuS3JXd0hPbXcwdFF6TGhXQkE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/macos-aarch64-AureStream.app.tar.gz"
+    },
+    "darwin-x86_64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaTFURnl4THlhdWNvVDRLQnlXSmVNNzBYZ0VFOStUekd0Vks0d2xRbUZnQ01pUzNEVEEwL2hNN3crVHdJWnV3cW5hUjRPd1lzMVI1VzU5NUlRVnhlM1FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyNDM1CWZpbGU6QXVyZVN0cmVhbS5hcHAudGFyLmd6CXZlcnNpb246MS4wLjQKTFlUT1poYk1Tby9PTEJ2UG5GaFh4YkZJaXhseHdPN0h4d2FkeGljYzFqS25Ib25oOU9HR2tkSzROREVDakQ2QzRaRkZZM3pIOHdoSXU3a0V4SFVQREE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/macos-x64-AureStream.app.tar.gz"
+    },
+    "linux-x86_64-appimage": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaXh2UWlINnVnY2FWbXY1Vk4rUGk1T3pHTzdNdlF4K0hJVHBaYm14b2lsOC90eUdwOWYxcWdHcTBWUk1OVy9ZQXZUc3R0TS9qRVNPaGZDQ3hVNUR2cFF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyMTEwCWZpbGU6QXVyZVN0cmVhbV8xLjAuNF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC40Ci9YSEFYcmZJTTI2cXQ3enJRRjNyRWRTRFpVbmtlanR2bUVzYkhLQmNxOFlxWGVKQUc3cFExN0dkQ2VMZnFjei9neFhmSm5oaUE4QnBSeDJRTVlTWUJ3PT0K",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream_1.0.4_amd64.AppImage"
+    },
+    "linux-x86_64-deb": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaThneGdSaTNCc0VwVjA0dU4vajBqbWo2N0wvZlBGK25HV0lWbUZJRTNXeTFidmJLL2syK25EOEhPNU1GOTlSQWJaUEVDak45RkNNSzZnV3lvQXdoV2drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyMTEwCWZpbGU6QXVyZVN0cmVhbV8xLjAuNF9hbWQ2NC5kZWIJdmVyc2lvbjoxLjAuNApIcGphY1FZWnFDUThwK3N6WE5sQmpVdVJERm0xdmV2RitVc2Y3d3REcjRGV09XdWJraVVyM0pLY2Y5Qys0OVdETVp1Ry8wOG90TGlxd01FSnJ3cXhDUT09Cg==",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream_1.0.4_amd64.deb"
+    },
+    "linux-x86_64-rpm": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaTNkSVlMNllaelBWRENabldoK3I2YVVPb1ZQbWFLcjJWYlJKZnZkWXZHNU9SREtycTFEQ1hpekNiYUVpVmlqb3VmU2hkNGZDVnY3M05BR0R0K293SFFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyMTEwCWZpbGU6QXVyZVN0cmVhbS0xLjAuNC0xLng4Nl82NC5ycG0JdmVyc2lvbjoxLjAuNApnOXFTUyswREIxRmZtcXYyekx5Vyt0OGNhMEpvR2Vjc0poOXo2OVZaWVpFVDk3T0w1ejRvTzR2REV5a1dPQXJ2aHVURWNyeTE1RlZxajhsbzloaE9BZz09Cg==",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream-1.0.4-1.x86_64.rpm"
+    },
+    "windows-x86_64-msi": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaTRWZWlKaTVFZXh3ZVh1TVk3NU1PWEVBK3VMUzRJM3pXcDkwa1doQmlXS29DczVzS3E1QTJkbFE3UHZLUkZnWXdUZHdwbS95M3JENHdFR0tXTlNMcUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyNDA0CWZpbGU6QXVyZVN0cmVhbV8xLjAuNF94NjRfZW4tVVMubXNpCXZlcnNpb246MS4wLjQKVzNUODFLUjRzSW9DMExLUlFscGRvdzBLN09pTHFleHpYR1NnbkNNK2dkM2NIWlNTNFNURncvYVBjSnJDWENZZ21TL2lubm5Wb0V6RjB3WGdBWTNwQlE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream_1.0.4_x64_en-US.msi"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaTZucitBNjdnNllzR3UzT0hCUGRpWjJoaDQybDdrbEdVQ1BIVnNsb1YwWFlNWDJTUFBhdTlMK09GRWg0dVZDRjhzcVBtY0grc20wSTFPUmo1bkdQbWdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyNDA0CWZpbGU6QXVyZVN0cmVhbV8xLjAuNF94NjQtc2V0dXAuZXhlCXZlcnNpb246MS4wLjQKWjFuem5sQjRRVktXMDRGWmpqREIvZ3c1NnpJNEg1dlZhRUZvMWpXSjZxVmtzWGZoSnBvNVlmSlZPd2VjU2pMbXVqTWcxY0c4YitwZ0d4MkdveTVHQlE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream_1.0.4_x64-setup.exe"
+    },
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaS84cTdTR3cxVlBnZSs0WU84YUNRdEhTNkNRRzNvc2NINUJIbkpHeHhLMk45TU4xT1NjbjUxb0xPTTB2T0M3L3dnaEFEZHErT0JYUjFrcUxVOWxySUEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyMDczCWZpbGU6QXVyZVN0cmVhbS5hcHAudGFyLmd6CXZlcnNpb246MS4wLjQKd1pnWWUyNnYrcFViYkR5cXYzeVZneDhJSVZWajQrNUhlYkliNFoxM3g5NkI1MTZHelVRYWozQXBqUTRUcSswN2JMdlNuS3JXd0hPbXcwdFF6TGhXQkE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/macos-aarch64-AureStream.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaTFURnl4THlhdWNvVDRLQnlXSmVNNzBYZ0VFOStUekd0Vks0d2xRbUZnQ01pUzNEVEEwL2hNN3crVHdJWnV3cW5hUjRPd1lzMVI1VzU5NUlRVnhlM1FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyNDM1CWZpbGU6QXVyZVN0cmVhbS5hcHAudGFyLmd6CXZlcnNpb246MS4wLjQKTFlUT1poYk1Tby9PTEJ2UG5GaFh4YkZJaXhseHdPN0h4d2FkeGljYzFqS25Ib25oOU9HR2tkSzROREVDakQ2QzRaRkZZM3pIOHdoSXU3a0V4SFVQREE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/macos-x64-AureStream.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaXh2UWlINnVnY2FWbXY1Vk4rUGk1T3pHTzdNdlF4K0hJVHBaYm14b2lsOC90eUdwOWYxcWdHcTBWUk1OVy9ZQXZUc3R0TS9qRVNPaGZDQ3hVNUR2cFF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyMTEwCWZpbGU6QXVyZVN0cmVhbV8xLjAuNF9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjEuMC40Ci9YSEFYcmZJTTI2cXQ3enJRRjNyRWRTRFpVbmtlanR2bUVzYkhLQmNxOFlxWGVKQUc3cFExN0dkQ2VMZnFjei9neFhmSm5oaUE4QnBSeDJRTVlTWUJ3PT0K",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream_1.0.4_amd64.AppImage"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSL2FoL0dGNlVnaTZucitBNjdnNllzR3UzT0hCUGRpWjJoaDQybDdrbEdVQ1BIVnNsb1YwWFlNWDJTUFBhdTlMK09GRWg0dVZDRjhzcVBtY0grc20wSTFPUmo1bkdQbWdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMTIyNDA0CWZpbGU6QXVyZVN0cmVhbV8xLjAuNF94NjQtc2V0dXAuZXhlCXZlcnNpb246MS4wLjQKWjFuem5sQjRRVktXMDRGWmpqREIvZ3c1NnpJNEg1dlZhRUZvMWpXSjZxVmtzWGZoSnBvNVlmSlZPd2VjU2pMbXVqTWcxY0c4YitwZ0d4MkdveTVHQlE9PQo=",
+      "url": "https://github.com/AureStream/AureStream/releases/download/v1.0.4/AureStream_1.0.4_x64-setup.exe"
+    }
+  }
+}
