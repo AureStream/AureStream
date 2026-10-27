@@ -1,6 +1,6 @@
 //! Auth IPC: login / register / verify / logout / restore + `auth-changed` events.
 
-use aurestream_api_client::{ApiClient, ApiError, RegisterPending, User};
+use aurestream_api_client::{ApiClient, ApiError, PasswordResetResult, RegisterPending, User};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
@@ -92,6 +92,28 @@ pub async fn auth_verify(email: String, code: String) -> Result<User, AuthIpcErr
     let client = api_client();
     client
         .verify_register(email.trim(), code.trim())
+        .await
+        .map_err(AuthIpcError::from)
+}
+
+#[tauri::command]
+pub async fn auth_password_reset(email: String) -> Result<RegisterPending, AuthIpcError> {
+    let client = api_client();
+    client
+        .request_password_reset(email.trim())
+        .await
+        .map_err(AuthIpcError::from)
+}
+
+#[tauri::command]
+pub async fn auth_password_reset_verify(
+    email: String,
+    code: String,
+    new_password: String,
+) -> Result<PasswordResetResult, AuthIpcError> {
+    let client = api_client();
+    client
+        .verify_password_reset(email.trim(), code.trim(), &new_password)
         .await
         .map_err(AuthIpcError::from)
 }

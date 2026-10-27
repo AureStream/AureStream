@@ -10,7 +10,8 @@ mod tray;
 mod window_util;
 
 use commands::{
-    auth_login, auth_logout, auth_register, auth_restore, auth_verify, auto_connect_on_startup,
+    auth_login, auth_logout, auth_password_reset, auth_password_reset_verify, auth_register,
+    auth_restore, auth_verify, auto_connect_on_startup,
     cleanup_on_exit, engine_get_state, engine_probe_tun, engine_select_node, engine_start,
     engine_stop, engine_uninstall_helper, ping_tcp, reconcile_persisted_state,
     reconcile_stale_runtime, spawn_engine_health_monitor, spawn_traffic_reporter,
@@ -119,6 +120,8 @@ pub fn run() {
             auth_login,
             auth_register,
             auth_verify,
+            auth_password_reset,
+            auth_password_reset_verify,
             auth_logout,
             auth_restore,
             subs_sync,

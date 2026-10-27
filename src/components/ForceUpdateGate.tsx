@@ -94,7 +94,7 @@ export default function ForceUpdateGate({ children }: { children: ReactNode }) {
           ? await checkPromise
           : await allowUpdateCheckFailure(
               withUpdateCheckDeadline(checkPromise),
-              (err) => console.error("update check failed", err),
+              () => {},
             )
 
         if (available) {

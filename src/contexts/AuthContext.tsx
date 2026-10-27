@@ -10,6 +10,8 @@ import { isTauri } from "@tauri-apps/api/core";
 import {
   authLogin,
   authLogout,
+  authPasswordReset,
+  authPasswordResetVerify,
   authRegister,
   authRestore,
   authVerify,
@@ -27,6 +29,12 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<RegisterPending>;
   verifyAndLogin: (email: string, password: string, code: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<RegisterPending>;
+  resetPasswordAndLogin: (
+    email: string,
+    code: string,
+    newPassword: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -37,6 +45,8 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => {},
   register: async () => ({ email: "", expires_in: 0 }),
   verifyAndLogin: async () => {},
+  requestPasswordReset: async () => ({ email: "", expires_in: 0 }),
+  resetPasswordAndLogin: async () => {},
   logout: async () => {},
 });
 
@@ -129,6 +139,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    return authPasswordReset(email);
+  }, []);
+
+  const resetPasswordAndLogin = useCallback(
+    async (email: string, code: string, newPassword: string) => {
+      setAuthLoading(true);
+      try {
+        await authPasswordResetVerify(email, code, newPassword);
+        await authLogin(email, newPassword);
+      } finally {
+        setAuthLoading(false);
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     setAuthLoading(true);
     try {
@@ -147,6 +174,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         verifyAndLogin,
+        requestPasswordReset,
+        resetPasswordAndLogin,
         logout,
       }}
     >

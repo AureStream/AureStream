@@ -26,6 +26,7 @@ describe("authErrorMessage", () => {
     expect(authErrorMessage("code_expired")).toBe("验证码已过期，请重新获取");
     expect(authErrorMessage("invalid_credentials")).toBe("邮箱或密码错误");
     expect(authErrorMessage("invalid_request")).toBe("请求参数无效");
+    expect(authErrorMessage("user_not_found")).toBe("该邮箱尚未注册");
   });
 
   it("falls back for unknown codes", () => {

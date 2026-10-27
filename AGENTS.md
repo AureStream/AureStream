@@ -98,7 +98,7 @@ Capture: `SystemProxy` → `platform-proxy`; `Tun` → elevated helper owns core
 
 ### Frontend
 
-- Public: `/login`, `/register`
+- Public: `/login`, `/register`, `/forgot-password`
 - Protected shell: `/`, `/nodes`, `/profile` (event-driven; no fullscreen sync gate)
 - Global error UI: `AlertProvider` (`src/contexts/AlertContext.tsx`)
 

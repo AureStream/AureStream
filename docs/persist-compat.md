@@ -32,7 +32,6 @@
 |---|---|---|
 | `aurestream.node-latencies.v1` | 节点 TCP 延迟 | 现按稳定 `id` 读写；读侧仍认旧的 tag 键 |
 | `aurestream.pref.*` | 智能分流 / 虚拟网卡等偏好 | 独立 bool，缺省即默认值 |
-| `aurestream.auth.remember` | 记住登录勾选 | 独立 bool |
 
 内核每次启动覆盖自己的配置文件，不在本契约内。
 

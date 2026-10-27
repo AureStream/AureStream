@@ -63,6 +63,23 @@ struct VerifyRegisterResponse {
     user: User,
 }
 
+#[derive(Debug, Serialize)]
+struct PasswordResetRequest<'a> {
+    email: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+struct PasswordResetVerifyRequest<'a> {
+    email: &'a str,
+    code: &'a str,
+    new_password: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PasswordResetResult {
+    pub email: String,
+}
+
 pub(crate) async fn login(
     http: &reqwest::Client,
     base: &str,
@@ -177,4 +194,56 @@ pub(crate) async fn verify_register(
         .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
 
     Ok(body.user)
+}
+
+pub(crate) async fn request_password_reset(
+    http: &reqwest::Client,
+    base: &str,
+    email: &str,
+) -> Result<RegisterPending, ApiError> {
+    let url = format!("{base}/auth/password/reset");
+    let response = http
+        .post(&url)
+        .json(&PasswordResetRequest { email })
+        .send()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
+
+    if !response.status().is_success() {
+        return Err(ApiError::from_response(response).await);
+    }
+
+    response
+        .json::<RegisterPending>()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))
+}
+
+pub(crate) async fn verify_password_reset(
+    http: &reqwest::Client,
+    base: &str,
+    email: &str,
+    code: &str,
+    new_password: &str,
+) -> Result<PasswordResetResult, ApiError> {
+    let url = format!("{base}/auth/password/reset/verify");
+    let response = http
+        .post(&url)
+        .json(&PasswordResetVerifyRequest {
+            email,
+            code,
+            new_password,
+        })
+        .send()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))?;
+
+    if !response.status().is_success() {
+        return Err(ApiError::from_response(response).await);
+    }
+
+    response
+        .json::<PasswordResetResult>()
+        .await
+        .map_err(|_| ApiError::from_code("request_failed", 0, None))
 }

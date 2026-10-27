@@ -2,11 +2,14 @@ mod auth;
 mod error;
 mod subscriptions;
 
-pub use auth::{AuthTokens, RefreshedTokens, RegisterPending, User};
+pub use auth::{AuthTokens, PasswordResetResult, RefreshedTokens, RegisterPending, User};
 pub use error::ApiError;
 pub use subscriptions::{Subscription, UsageResponse};
 
-use auth::{login, logout, refresh, register, verify_register};
+use auth::{
+    login, logout, refresh, register, request_password_reset, verify_password_reset,
+    verify_register,
+};
 use subscriptions::{fetch_subscription_body, list_subscriptions, report_subscription_usage};
 
 pub const DEFAULT_BASE_URL: &str = "https://aurestream-api.chilix.ccwu.cc/api";
@@ -63,6 +66,19 @@ impl ApiClient {
 
     pub async fn verify_register(&self, email: &str, code: &str) -> Result<User, ApiError> {
         verify_register(&self.http, &self.base, email, code).await
+    }
+
+    pub async fn request_password_reset(&self, email: &str) -> Result<RegisterPending, ApiError> {
+        request_password_reset(&self.http, &self.base, email).await
+    }
+
+    pub async fn verify_password_reset(
+        &self,
+        email: &str,
+        code: &str,
+        new_password: &str,
+    ) -> Result<PasswordResetResult, ApiError> {
+        verify_password_reset(&self.http, &self.base, email, code, new_password).await
     }
 
     pub async fn list_subscriptions(

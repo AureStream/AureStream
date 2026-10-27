@@ -36,6 +36,8 @@ export function authErrorMessage(code: string, retryAfter?: number): string {
       return "邮箱或密码错误";
     case "invalid_request":
       return "请求参数无效";
+    case "user_not_found":
+      return "该邮箱尚未注册";
     default:
       return code || "操作失败";
   }

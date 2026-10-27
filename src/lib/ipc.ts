@@ -42,6 +42,22 @@ export async function authVerify(email: string, code: string): Promise<User> {
   return invokeAuth<User>("auth_verify", { email, code });
 }
 
+export async function authPasswordReset(email: string): Promise<RegisterPending> {
+  return invokeAuth<RegisterPending>("auth_password_reset", { email });
+}
+
+export async function authPasswordResetVerify(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<{ email: string }> {
+  return invokeAuth<{ email: string }>("auth_password_reset_verify", {
+    email,
+    code,
+    newPassword,
+  });
+}
+
 export async function authLogout(): Promise<void> {
   try {
     await invoke<void>("auth_logout");

@@ -5,6 +5,8 @@ commands.allow = [
   "auth_login",
   "auth_register",
   "auth_verify",
+  "auth_password_reset",
+  "auth_password_reset_verify",
   "auth_logout",
   "auth_restore"
 ]

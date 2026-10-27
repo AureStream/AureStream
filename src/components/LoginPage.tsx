@@ -6,23 +6,14 @@ import { useAuth } from "@/contexts/AuthContext"
 import { AuthMobileField } from "@/components/auth-mobile-field"
 import { cn } from "@/lib/utils"
 
-const REMEMBER_KEY = "aurestream.auth.remember"
-
 export default function LoginPage() {
   const { user, authLoading, login } = useAuth()
-  const { showErrorFromUnknown, showInfo } = useAlert()
+  const { showErrorFromUnknown } = useAlert()
   const location = useLocation()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [remember, setRemember] = useState(() => {
-    try {
-      return localStorage.getItem(REMEMBER_KEY) === "1"
-    } catch {
-      return false
-    }
-  })
   const [successMessage] = useState(() => {
     const state = location.state as { message?: string } | null
     return state?.message ?? ""
@@ -35,19 +26,10 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     try {
-      try {
-        localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0")
-      } catch {
-        // ignore
-      }
       await login(email.trim(), password)
     } catch (err) {
       showErrorFromUnknown(err, "登录失败", "登录失败")
     }
-  }
-
-  const handleForgot = () => {
-    showInfo("忘记密码功能即将推出，敬请期待。")
   }
 
   return (
@@ -103,23 +85,14 @@ export default function LoginPage() {
               }
             />
 
-            <div className="flex items-center justify-between px-0.5 pt-0.5">
-              <label className="flex cursor-pointer items-center gap-1.5 select-none">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="size-3.5 shrink-0 rounded border-[#cfd3d8] accent-[var(--auth-accent)]"
-                />
-                <span className="text-xs font-medium text-[#6b7280]">记住我</span>
-              </label>
-              <button
-                type="button"
-                onClick={handleForgot}
+            <div className="flex items-center justify-end px-0.5 pt-0.5">
+              <Link
+                to="/forgot-password"
+                state={email.trim() ? { email: email.trim() } : undefined}
                 className="text-xs font-semibold text-[var(--auth-accent)] transition-opacity hover:opacity-80"
               >
                 忘记密码
-              </button>
+              </Link>
             </div>
 
             <button

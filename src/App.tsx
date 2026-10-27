@@ -6,6 +6,7 @@ import HomePage from "@/components/HomePage"
 import LoginPage from "@/components/LoginPage"
 import NodesPage from "@/components/NodesPage"
 import ProfilePage from "@/components/ProfilePage"
+import ForgotPasswordPage from "@/components/ForgotPasswordPage"
 import RegisterPage from "@/components/RegisterPage"
 import SettingsPage from "@/components/SettingsPage"
 import StartupLoadingScreen from "@/components/StartupLoadingScreen"
@@ -68,6 +69,14 @@ function AppRoutes() {
         element={
           <GuestOnly>
             <RegisterPage />
+          </GuestOnly>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <GuestOnly>
+            <ForgotPasswordPage />
           </GuestOnly>
         }
       />
